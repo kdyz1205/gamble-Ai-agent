@@ -6,8 +6,7 @@ export interface Challenge {
   playerA: { name: string; avatar: string };
   playerB: { name: string; avatar: string } | null;
   type: string;
-  stake: string;
-  currency: "USD" | "points";
+  stake: number; // credits
   deadline: string;
   evidence: string;
   status: "open" | "live" | "judging" | "completed";
@@ -136,7 +135,7 @@ export default function ChallengeCard({
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
           <span className="text-xs font-semibold text-text-primary">
-            {challenge.stake}
+            {challenge.stake > 0 ? `${challenge.stake} credits` : "Free"}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-input">

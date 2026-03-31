@@ -1,19 +1,32 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
+import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "@/lib/credits";
 
 /**
- * POST /api/challenges/[id]/judge — Trigger AI judgment
+ * POST /api/challenges/[id]/judge
+ * Body: { tier?: 1|2|3 }
+ *
+ * Burn 1 model token of the chosen tier, then AI judges + settles.
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const payload = getUserFromRequest(req);
-  if (!payload) return unauthorized();
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
 
   const { id } = await params;
+  let tierId: TierId = 1;
+  try {
+    const body = await req.json();
+    if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
+  } catch { /* default to haiku */ }
+
+  const cost = TIER_MULTIPLIER[tierId];
+  const balance = await getCredits(user.userId);
+  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
@@ -26,148 +39,70 @@ export async function POST(
     },
   });
 
-  if (!challenge) {
-    return Response.json({ error: "Challenge not found" }, { status: 404 });
-  }
+  if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
+  if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
+  if (!["live", "judging"].includes(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
 
-  // Only creator or admin can trigger judgment
-  if (challenge.creatorId !== payload.userId) {
-    return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
-  }
+  const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
+  if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
 
-  if (!["live", "judging"].includes(challenge.status)) {
-    return Response.json({ error: "Challenge is not ready for judgment" }, { status: 400 });
-  }
+  const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
+  const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
+  if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
 
-  // Get participants
-  const creator = challenge.participants.find(p => p.role === "creator");
-  const opponent = challenge.participants.find(p => p.role === "opponent");
+  const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
+  const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
 
-  if (!creator) {
-    return Response.json({ error: "Creator participant not found" }, { status: 400 });
-  }
-
-  // Get evidence for each side
-  const evidenceA = challenge.evidence.find(e => e.userId === creator.userId);
-  const evidenceB = opponent ? challenge.evidence.find(e => e.userId === opponent.userId) : null;
-
-  // Run AI judge
-  const result = judgeChallenge(
-    challenge.title,
-    challenge.type,
+  const aiModel = getAiModel(tierId);
+  const result = await judgeChallenge(
+    challenge.title, challenge.type,
     evidenceA ? { description: evidenceA.description, type: evidenceA.type } : null,
     evidenceB ? { description: evidenceB.description, type: evidenceB.type } : null,
-    creator.userId,
-    opponent?.userId || "",
+    creator.userId, opponent?.userId || "",
+    aiModel.model,
   );
 
-  // Record judgment
   const judgment = await prisma.judgment.create({
     data: {
       challengeId: id,
       winnerId: result.winnerId,
       method: "ai",
+      aiModel: aiModel.displayName,
       reasoning: result.reasoning,
       confidence: result.confidence,
       status: "completed",
     },
-    include: {
-      winner: { select: { id: true, username: true } },
-    },
+    include: { winner: { select: { id: true, username: true } } },
   });
 
-  // Settle funds
-  if (challenge.stake > 0 && challenge.currency === "USD") {
-    const totalPot = challenge.stake * challenge.participants.length;
-
-    if (result.winnerId) {
-      // Winner gets the pot
-      await prisma.wallet.update({
-        where: { userId: result.winnerId },
-        data: {
-          balance: { increment: totalPot },
-          escrow: { decrement: challenge.stake },
-          totalWon: { increment: totalPot - challenge.stake },
-        },
-      });
-
-      const winnerWallet = await prisma.wallet.findUnique({ where: { userId: result.winnerId } });
-      await prisma.transaction.create({
-        data: {
-          userId: result.winnerId,
-          type: "win",
-          amount: totalPot,
-          balanceAfter: winnerWallet!.balance,
-          description: `Won "${challenge.title}" — $${totalPot}`,
-          challengeId: id,
-        },
-      });
-
-      // Loser releases escrow
-      const loserId = challenge.participants.find(p => p.userId !== result.winnerId)?.userId;
-      if (loserId) {
-        await prisma.wallet.update({
-          where: { userId: loserId },
-          data: {
-            escrow: { decrement: challenge.stake },
-            totalLost: { increment: challenge.stake },
-          },
-        });
-
-        const loserWallet = await prisma.wallet.findUnique({ where: { userId: loserId } });
-        await prisma.transaction.create({
-          data: {
-            userId: loserId,
-            type: "loss",
-            amount: -challenge.stake,
-            balanceAfter: loserWallet!.balance,
-            description: `Lost "${challenge.title}" — -$${challenge.stake}`,
-            challengeId: id,
-          },
-        });
-      }
-    } else {
-      // Draw / void — refund all participants
-      for (const p of challenge.participants) {
-        await prisma.wallet.update({
-          where: { userId: p.userId },
-          data: {
-            balance: { increment: challenge.stake },
-            escrow: { decrement: challenge.stake },
-          },
-        });
-
-        const refundWallet = await prisma.wallet.findUnique({ where: { userId: p.userId } });
-        await prisma.transaction.create({
-          data: {
-            userId: p.userId,
-            type: "refund",
-            amount: challenge.stake,
-            balanceAfter: refundWallet!.balance,
-            description: `Refund for "${challenge.title}" — draw/void`,
-            challengeId: id,
-          },
-        });
-      }
-    }
+  let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
+  if (challenge.stake > 0) {
+    settlementResult = await settleChallenge(
+      id, result.winnerId, challenge.stake,
+      challenge.participants.map((p: { userId: string }) => ({ userId: p.userId })),
+    );
   }
 
-  // Update challenge status
-  await prisma.challenge.update({
-    where: { id },
-    data: { status: "settled" },
-  });
+  await prisma.challenge.update({ where: { id }, data: { status: "settled", aiModel: aiModel.displayName } });
 
-  // Activity event
   const winnerName = judgment.winner?.username || "No one";
   await prisma.activityEvent.create({
     data: {
       type: "challenge_settled",
-      message: `"${challenge.title}" settled — ${winnerName} wins!${challenge.stake > 0 ? ` $${challenge.stake * 2} pot` : ""}`,
+      message: `"${challenge.title}" judged by ${aiModel.displayName} — ${winnerName} wins!${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}`,
       userId: result.winnerId,
       challengeId: id,
     },
   });
 
-  return Response.json({ judgment, challenge: { id, status: "settled" } });
+  return Response.json({
+    judgment,
+    settlement: settlementResult,
+    challenge: { id, status: "settled" },
+    model: aiModel.displayName,
+    tierId,
+    creditsUsed: cost,
+    creditsRemaining: spend.balance,
+    txHash: spend.txHash || settlementResult.txHash || null,
+  });
 }

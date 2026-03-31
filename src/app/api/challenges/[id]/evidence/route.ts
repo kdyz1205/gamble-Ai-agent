@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { getAuthUser, unauthorized } from "@/lib/auth";
 
 /**
  * POST /api/challenges/[id]/evidence — Submit evidence for a challenge
@@ -9,8 +9,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const payload = getUserFromRequest(req);
-  if (!payload) return unauthorized();
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
 
   const { id } = await params;
   const body = await req.json();
@@ -30,7 +30,7 @@ export async function POST(
     return Response.json({ error: "Challenge is not active" }, { status: 400 });
   }
 
-  const isParticipant = challenge.participants.some(p => p.userId === payload.userId);
+  const isParticipant = challenge.participants.some((p: { userId: string }) => p.userId === user.userId);
   if (!isParticipant) {
     return Response.json({ error: "You are not a participant in this challenge" }, { status: 403 });
   }
@@ -39,7 +39,7 @@ export async function POST(
   const evidence = await prisma.evidence.create({
     data: {
       challengeId: id,
-      userId: payload.userId,
+      userId: user.userId,
       type,
       url,
       description,
@@ -54,8 +54,8 @@ export async function POST(
   await prisma.activityEvent.create({
     data: {
       type: "evidence_submitted",
-      message: `${payload.username} submitted ${type} evidence for "${challenge.title}"`,
-      userId: payload.userId,
+      message: `${user.username} submitted ${type} evidence for "${challenge.title}"`,
+      userId: user.userId,
       challengeId: id,
     },
   });
@@ -66,7 +66,7 @@ export async function POST(
     select: { userId: true },
     distinct: ["userId"],
   });
-  const activeParticipants = challenge.participants.filter(p => p.status === "accepted");
+  const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
 
   if (allEvidenceUsers.length >= activeParticipants.length) {
     // Move to judging
@@ -91,7 +91,7 @@ export async function GET(
   const evidence = await prisma.evidence.findMany({
     where: { challengeId: id },
     include: {
-      user: { select: { id: true, username: true, avatar: true } },
+      user: { select: { id: true, username: true, image: true } },
     },
     orderBy: { createdAt: "desc" },
   });

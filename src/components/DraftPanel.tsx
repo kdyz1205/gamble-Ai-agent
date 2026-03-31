@@ -8,8 +8,7 @@ export interface ChallengeDraft {
   playerA: string;
   playerB: string | null;
   type: string;
-  stake: string;
-  currency: "USD" | "points" | "none";
+  stake: number; // credits
   deadline: string;
   rules: string;
   evidence: string;
@@ -50,6 +49,7 @@ function InfoCell({ icon, label, value }: { icon: string; label: string; value: 
 
 export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
   const colors = TYPE_COLORS[draft.type] ?? TYPE_COLORS.General;
+  const hasStake = draft.stake > 0;
 
   const containerVariants: Variants = {
     hidden: {},
@@ -66,7 +66,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Ready header */}
       <motion.div
         className="flex items-center gap-2.5 mb-4"
         initial={{ opacity: 0, x: -12 }}
@@ -82,7 +81,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
         <span className="text-sm font-bold text-text-secondary">Challenge Draft Ready</span>
       </motion.div>
 
-      {/* Main card */}
       <motion.div
         className="relative rounded-2xl overflow-hidden"
         style={{
@@ -92,7 +90,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
         }}
         whileHover={{ boxShadow: `0 0 0 1px rgba(255,255,255,0.1), 0 24px 70px rgba(0,0,0,0.5), 0 0 80px ${colors.glow.replace("0.4", "0.14")}` }}
       >
-        {/* Gradient top bar */}
         <div className="h-0.5" style={{ background: `linear-gradient(90deg, ${colors.from}, ${colors.to}, ${colors.from})`, backgroundSize: "200% 100%", animation: "gradient-drift 4s linear infinite" }} />
 
         <motion.div
@@ -101,7 +98,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
           initial="hidden"
           animate="visible"
         >
-          {/* Title row */}
           <motion.div className="flex items-start justify-between mb-5" variants={childVariants}>
             <div className="flex-1 pr-4">
               <span
@@ -117,28 +113,30 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
               <h3 className="text-lg font-extrabold text-text-primary leading-snug">{draft.title}</h3>
             </div>
 
-            {/* Stake badge */}
             <div
               className="flex-shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl"
               style={{
-                background: draft.currency === "none"
-                  ? "rgba(0,212,200,0.1)" : "rgba(245,166,35,0.1)",
-                border: draft.currency === "none"
-                  ? "1px solid rgba(0,212,200,0.2)" : "1px solid rgba(245,166,35,0.2)",
+                background: hasStake ? "rgba(245,166,35,0.1)" : "rgba(0,212,200,0.1)",
+                border: hasStake ? "1px solid rgba(245,166,35,0.2)" : "1px solid rgba(0,212,200,0.2)",
               }}
             >
               <span className="text-[9px] font-bold uppercase tracking-wider"
-                    style={{ color: draft.currency === "none" ? "#00d4c8" : "#f5a623" }}>
+                    style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
                 Stake
               </span>
               <span className="text-lg font-black"
-                    style={{ color: draft.currency === "none" ? "#00d4c8" : "#f5a623" }}>
-                {draft.currency === "none" ? "Free" : draft.stake}
+                    style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
+                {hasStake ? `${draft.stake}` : "Free"}
               </span>
+              {hasStake && (
+                <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5"
+                      style={{ color: "rgba(245,166,35,0.6)" }}>
+                  credits
+                </span>
+              )}
             </div>
           </motion.div>
 
-          {/* Players */}
           <motion.div className="flex items-center gap-4 mb-5" variants={childVariants}>
             <PlayerCard name={draft.playerA} role="Challenger" gradient="from-blue-500 to-indigo-600" />
 
@@ -158,7 +156,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
             />
           </motion.div>
 
-          {/* Info grid */}
           <motion.div className="grid grid-cols-2 gap-2.5 mb-5" variants={childVariants}>
             <InfoCell icon="⏰" label="Deadline" value={draft.deadline} />
             <InfoCell icon="📋" label="Rules"    value={draft.rules} />
@@ -166,7 +163,6 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
             <InfoCell icon="🤖" label="Judgment" value={draft.aiReview ? "AI Review" : "Manual"} />
           </motion.div>
 
-          {/* Visibility pill */}
           <motion.div
             className="flex items-center gap-2.5 mb-5 px-4 py-2.5 rounded-xl"
             style={{ background: "rgba(0,232,122,0.06)", border: "1px solid rgba(0,232,122,0.12)" }}
@@ -178,12 +174,11 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
             </div>
             <span className="text-xs font-medium text-text-secondary">
               {draft.isPublic
-                ? "Public — anyone can view and bet on this challenge"
+                ? "Public — anyone can view and join this challenge"
                 : "Private — only invited participants can see this"}
             </span>
           </motion.div>
 
-          {/* Actions */}
           <motion.div className="flex items-center gap-3" variants={childVariants}>
             <motion.button
               onClick={onPublish}
@@ -195,7 +190,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                 boxShadow: `0 4px 24px ${colors.glow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
               }}
             >
-              Publish Challenge
+              Publish Challenge{hasStake ? ` (${draft.stake} credits)` : ""}
             </motion.button>
 
             <motion.button

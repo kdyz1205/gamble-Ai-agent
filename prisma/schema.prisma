@@ -4,7 +4,48 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════
+// NEXTAUTH MODELS
+// ═══════════════════════════════════════
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // ═══════════════════════════════════════
@@ -12,57 +53,54 @@ datasource db {
 // ═══════════════════════════════════════
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  username      String   @unique
-  passwordHash  String
-  avatar        String?
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  username      String    @unique
+  name          String?
+  image         String?
+  passwordHash  String?
   bio           String?
+  credits       Int       @default(10) // starting credits — enough for a few rounds
+  totalCreditsWon  Int    @default(0)
+  totalCreditsLost Int    @default(0)
+  totalCreditsBought Int  @default(0)
+  evmAddress    String?   @unique // EVM wallet for on-chain USAGE tokens
   latitude      Float?
   longitude     Float?
   locationUpdatedAt DateTime?
-  isOnline      Boolean  @default(false)
-  lastSeenAt    DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  wallet        Wallet?
+  accounts      Account[]
+  sessions      Session[]
   challengesCreated  Challenge[]    @relation("ChallengeCreator")
   participations     Participant[]
   evidenceSubmissions Evidence[]
   judgmentsGiven     Judgment[]     @relation("JudgeUser")
   judgmentsWon       Judgment[]     @relation("WinnerUser")
-  transactionsFrom   Transaction[]
+  transactions       CreditTx[]
   activityEvents     ActivityEvent[]
 }
 
 // ═══════════════════════════════════════
-// WALLET & ESCROW
+// CREDIT TRANSACTIONS
 // ═══════════════════════════════════════
 
-model Wallet {
-  id         String   @id @default(uuid())
-  userId     String   @unique
-  balance    Float    @default(0)
-  escrow     Float    @default(0)
-  totalWon   Float    @default(0)
-  totalLost  Float    @default(0)
-  updatedAt  DateTime @updatedAt
-
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Transaction {
-  id           String   @id @default(uuid())
+model CreditTx {
+  id           String   @id @default(cuid())
   userId       String
-  type         String   // deposit | withdraw | stake | win | loss | refund
-  amount       Float
-  balanceAfter Float
+  type         String   // topup | ai_parse | ai_judge | stake | win | loss | refund | bonus
+  amount       Int      // positive = gained, negative = spent
+  balanceAfter Int
   description  String?
   challengeId  String?
+  x402TxHash   String?  // on-chain tx hash for USDC top-ups
   createdAt    DateTime @default(now())
 
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge    Challenge? @relation(fields: [challengeId], references: [id])
 }
 
@@ -71,18 +109,20 @@ model Transaction {
 // ═══════════════════════════════════════
 
 model Challenge {
-  id            String   @id @default(uuid())
+  id            String   @id @default(cuid())
   creatorId     String
   title         String
   description   String?
   type          String   // Fitness | Cooking | Coding | Learning | Games | General
   status        String   @default("draft") // draft | open | matched | live | judging | settled | cancelled | disputed
-  stake         Float    @default(0)
-  currency      String   @default("none") // USD | points | none
+  stake         Int      @default(0) // credits wagered per participant
   deadline      DateTime?
   rules         String?
   evidenceType  String   @default("self_report") // video | photo | gps | self_report
   aiReview      Boolean  @default(true)
+  aiModel       String?  // which model was used for judging
+  escrowTxHash  String?  // on-chain escrow creation tx
+  settleTxHash  String?  // on-chain settlement tx
   isPublic      Boolean  @default(true)
   maxParticipants Int    @default(2)
   createdAt     DateTime @default(now())
@@ -92,12 +132,12 @@ model Challenge {
   participants  Participant[]
   evidence      Evidence[]
   judgments     Judgment[]
-  transactions  Transaction[]
+  creditTxs     CreditTx[]
   activityEvents ActivityEvent[]
 }
 
 model Participant {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   challengeId  String
   userId       String
   role         String   @default("opponent") // creator | opponent | spectator
@@ -115,7 +155,7 @@ model Participant {
 // ═══════════════════════════════════════
 
 model Evidence {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   challengeId  String
   userId       String
   type         String   // video | photo | gps | text
@@ -129,11 +169,12 @@ model Evidence {
 }
 
 model Judgment {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   challengeId  String
   judgeId      String?
   winnerId     String?
   method       String   @default("ai") // ai | manual | community_vote
+  aiModel      String?
   reasoning    String?
   confidence   Float?
   status       String   @default("pending") // pending | completed | disputed
@@ -149,8 +190,8 @@ model Judgment {
 // ═══════════════════════════════════════
 
 model ActivityEvent {
-  id           String   @id @default(uuid())
-  type         String   // challenge_created | challenge_accepted | evidence_submitted | challenge_settled | stake_placed | user_joined
+  id           String   @id @default(cuid())
+  type         String
   message      String
   userId       String?
   challengeId  String?

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSession, signOut } from "next-auth/react";
 import ParticleBackground from "@/components/ParticleBackground";
 import CenteredComposer from "@/components/CenteredComposer";
 import ConversationThread from "@/components/ConversationThread";
@@ -42,11 +43,11 @@ function parseIntent(input: string): ConvoStep[] {
     },
     {
       aiMessage: hasMoney
-        ? "You mentioned a wager. How much do you want to stake?"
-        : "Would you like to add a money stake, or keep it free?",
+        ? "You mentioned a wager. How many credits do you want to stake?"
+        : "Would you like to stake some credits, or keep it free?",
       options: hasMoney
-        ? ["$10", "$20", "$50", "Custom amount"]
-        : ["Free — just for fun", "$10 stake", "$20 stake", "$50 stake"],
+        ? ["5 credits", "10 credits", "20 credits", "Custom amount"]
+        : ["Free — just for fun", "5 credits", "10 credits", "20 credits"],
     },
     {
       aiMessage: "How should we verify the result?",
@@ -65,10 +66,12 @@ function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
   else if (/book|read|study|exam/.test(s))    type = "Learning";
   else if (/chess|game|play/.test(s))         type = "Games";
 
-  let stake = "Free", currency: "USD" | "points" | "none" = "none";
+  let stake = 0;
   for (const a of answers) {
-    const m = a.match(/\$(\d+)/);
-    if (m) { stake = `$${m[1]}`; currency = "USD"; break; }
+    const m = a.match(/(\d+)\s*credit/i);
+    if (m) { stake = parseInt(m[1]); break; }
+    const dollars = a.match(/\$(\d+)/);
+    if (dollars) { stake = parseInt(dollars[1]); break; }
   }
 
   let evidence = "Self-report";
@@ -86,7 +89,7 @@ function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
     title,
     playerA: "You",
     playerB: answers[0]?.toLowerCase().includes("friend") ? "Friend (invite sent)" : null,
-    type, stake, currency,
+    type, stake,
     deadline: "48 hours",
     rules: `Standard ${type.toLowerCase()} rules — AI reviewed`,
     evidence, aiReview: true, isPublic,
@@ -98,6 +101,9 @@ function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
    ═══════════════════════════════════════════════════ */
 
 export default function Home() {
+  const { data: session, update: updateSession } = useSession();
+  const user = session?.user as { id: string; username: string; email: string; credits?: number; image?: string | null } | undefined;
+
   const [appState, setAppState]           = useState<AppState>("idle");
   const [messages, setMessages]           = useState<Message[]>([]);
   const [isTyping, setIsTyping]           = useState(false);
@@ -110,18 +116,8 @@ export default function Home() {
   const [showScanLine, setShowScanLine]   = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
 
-  // Auth
-  const [user, setUser]                   = useState<{ id: string; username: string; email: string } | null>(null);
   const [showAuth, setShowAuth]           = useState(false);
 
-  // Check auth on mount
-  useEffect(() => {
-    if (api.isLoggedIn()) {
-      api.getMe().then(res => setUser(res.user)).catch(() => { /* not logged in */ });
-    }
-  }, []);
-
-  // Scan-line effect on mount
   useEffect(() => {
     const id = setTimeout(() => setShowScanLine(true), 600);
     return () => clearTimeout(id);
@@ -145,14 +141,12 @@ export default function Home() {
     pushMsg("user", input);
     setAppState("clarifying");
 
-    // Try real API if logged in
     if (user) {
       try {
         setIsTyping(true);
         const res = await api.parseChallenge(input);
         setIsTyping(false);
 
-        // Convert API clarifications to ConvoSteps
         const apiSteps: ConvoStep[] = res.clarifications.map(c => ({
           aiMessage: c.question,
           options: c.options,
@@ -163,11 +157,9 @@ export default function Home() {
         return;
       } catch {
         setIsTyping(false);
-        // Fall through to local parsing
       }
     }
 
-    // Fallback: local parsing
     const s = parseIntent(input);
     setSteps(s);
     setStepIdx(0);
@@ -212,8 +204,7 @@ export default function Home() {
         const res = await api.createChallenge({
           title: draft.title,
           type: draft.type,
-          stake: draft.currency === "USD" ? parseFloat(draft.stake.replace("$", "")) : 0,
-          currency: draft.currency,
+          stake: draft.stake,
           deadline: draft.deadline,
           rules: draft.rules,
           evidenceType: draft.evidence.toLowerCase().replace(/ /g, "_"),
@@ -256,34 +247,39 @@ export default function Home() {
 
   const active = appState !== "idle";
 
+  const creditsBadge = user ? (
+    <span className="px-2 py-0.5 rounded-md text-[9px] font-black"
+          style={{
+            background: (user.credits ?? 0) > 0 ? "rgba(0,232,122,0.15)" : "rgba(255,59,48,0.15)",
+            color: (user.credits ?? 0) > 0 ? "#00e87a" : "#ff3b30",
+            border: `1px solid ${(user.credits ?? 0) > 0 ? "rgba(0,232,122,0.3)" : "rgba(255,59,48,0.3)"}`,
+          }}>
+      {user.credits ?? 0} credits
+    </span>
+  ) : null;
+
   return (
     <div className="relative min-h-screen overflow-hidden" style={{ background: "#06060f" }}>
 
-      {/* ── 3-layer particle system ── */}
       <ParticleBackground />
 
-      {/* ── Background gradient volumes ── */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        {/* Deep violet orb — top-left */}
         <motion.div
           className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full"
           style={{ background: "radial-gradient(circle, rgba(124,92,252,0.06) 0%, transparent 70%)" }}
           animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
-        {/* Cyan orb — bottom-right */}
         <motion.div
           className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full"
           style={{ background: "radial-gradient(circle, rgba(0,212,200,0.05) 0%, transparent 70%)" }}
           animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.7, 0.4] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 3 }}
         />
-        {/* Centre ambient haze */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
              style={{ background: "radial-gradient(ellipse, rgba(124,92,252,0.025) 0%, transparent 60%)" }} />
       </div>
 
-      {/* ── Scan line ── */}
       {showScanLine && <div className="scan-line" />}
 
       {/* ── Minimal header (active state only) ── */}
@@ -303,7 +299,6 @@ export default function Home() {
             }}>
               <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
 
-                {/* Logo */}
                 <motion.button
                   onClick={reset}
                   className="flex items-center gap-2.5 group"
@@ -321,7 +316,6 @@ export default function Home() {
                   </span>
                 </motion.button>
 
-                {/* Right side */}
                 <div className="flex items-center gap-2.5">
                   {appState === "live" && (
                     <motion.div
@@ -347,15 +341,19 @@ export default function Home() {
                     New Challenge
                   </motion.button>
 
-                  {/* Auth button */}
                   {user ? (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle"
                          style={{ background: "rgba(255,255,255,0.04)" }}>
-                      <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
-                           style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
-                        {user.username.charAt(0).toUpperCase()}
-                      </div>
+                      {user.image ? (
+                        <img src={user.image} alt="" className="w-5 h-5 rounded-md" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
+                             style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                          {user.username.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <span className="text-xs font-bold text-text-secondary">{user.username}</span>
+                      {creditsBadge}
                     </div>
                   ) : (
                     <motion.button
@@ -380,7 +378,6 @@ export default function Home() {
         active ? "min-h-screen pt-20 pb-32" : "min-h-screen justify-center pb-16"
       }`}>
 
-        {/* Conversation thread */}
         <AnimatePresence>
           {active && (
             <motion.div
@@ -398,7 +395,6 @@ export default function Home() {
           )}
         </AnimatePresence>
 
-        {/* Draft panel */}
         <AnimatePresence>
           {appState === "drafting" && draft && (
             <motion.div
@@ -414,7 +410,6 @@ export default function Home() {
           )}
         </AnimatePresence>
 
-        {/* Published confirmation */}
         <AnimatePresence>
           {published && appState === "live" && draft && (
             <motion.div
@@ -439,14 +434,13 @@ export default function Home() {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    {/* Pulse ring */}
                     <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
                   </div>
                   <div className="flex-1">
                     <h3 className="text-base font-extrabold text-text-primary mb-1">Challenge Published!</h3>
                     <p className="text-sm text-text-secondary mb-3">Scanning for opponents — you&rsquo;ll be notified when someone accepts.</p>
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {[draft.type, draft.stake, draft.evidence].map(tag => (
+                      {[draft.type, draft.stake > 0 ? `${draft.stake} credits` : "Free", draft.evidence].map(tag => (
                         <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-bold"
                               style={{ background: "rgba(255,255,255,0.06)", color: "rgba(240,240,255,0.7)" }}>
                           {tag}
@@ -458,7 +452,6 @@ export default function Home() {
                         Live
                       </span>
                     </div>
-                    {/* Accept / action buttons */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <motion.button
                         whileHover={{ scale: 1.03, y: -1 }}
@@ -504,17 +497,14 @@ export default function Home() {
           )}
         </AnimatePresence>
 
-        {/* Composer — always present */}
         <CenteredComposer
           onSubmit={active ? handleFollowUp : handleInitialSubmit}
           isActive={active}
         />
       </main>
 
-      {/* ── Floating action bar ── */}
       <FloatingActionBar visible={active} />
 
-      {/* ── Idle footer watermark ── */}
       <AnimatePresence>
         {!active && (
           <motion.footer
@@ -536,7 +526,7 @@ export default function Home() {
       <AuthModal
         open={showAuth}
         onClose={() => setShowAuth(false)}
-        onSuccess={(u) => setUser(u)}
+        onSuccess={() => updateSession()}
       />
 
       {/* ── Idle auth prompt (top-right) ── */}
@@ -560,13 +550,18 @@ export default function Home() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
         >
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
-               style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
-            {user.username.charAt(0).toUpperCase()}
-          </div>
+          {user.image ? (
+            <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
+          ) : (
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
+                 style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+              {user.username.charAt(0).toUpperCase()}
+            </div>
+          )}
           <span className="text-xs font-bold text-text-secondary">{user.username}</span>
+          {creditsBadge}
           <button
-            onClick={() => { api.logout(); setUser(null); }}
+            onClick={() => signOut()}
             className="ml-1 text-[10px] text-text-muted hover:text-danger transition-colors"
           >
             ×

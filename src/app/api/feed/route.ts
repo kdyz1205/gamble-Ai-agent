@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       take: limit,
       skip: offset,
       include: {
-        user: { select: { id: true, username: true, avatar: true } },
+        user: { select: { id: true, username: true, image: true } },
         challenge: { select: { id: true, title: true, type: true, status: true, stake: true } },
       },
     }),

@@ -1,29 +1,26 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
+import { getCredits, spendCredits } from "@/lib/credits";
 
-/**
- * GET /api/challenges — Browse/list challenges
- * Query params: status, type, limit, offset, mine
- */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const status = url.searchParams.get("status");       // open, live, settled, etc.
-  const type   = url.searchParams.get("type");          // Fitness, Coding, etc.
+  const status = url.searchParams.get("status");
+  const type   = url.searchParams.get("type");
   const mine   = url.searchParams.get("mine") === "true";
   const limit  = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
-  const payload = getUserFromRequest(req);
+  const user = await getAuthUser();
 
   const where: Record<string, unknown> = { isPublic: true };
   if (status) where.status = status;
   if (type)   where.type = type;
-  if (mine && payload) {
+  if (mine && user) {
     delete where.isPublic;
     where.OR = [
-      { creatorId: payload.userId },
-      { participants: { some: { userId: payload.userId } } },
+      { creatorId: user.userId },
+      { participants: { some: { userId: user.userId } } },
     ];
   }
 
@@ -31,9 +28,9 @@ export async function GET(req: NextRequest) {
     prisma.challenge.findMany({
       where,
       include: {
-        creator: { select: { id: true, username: true, avatar: true } },
+        creator: { select: { id: true, username: true, image: true, credits: true } },
         participants: {
-          include: { user: { select: { id: true, username: true, avatar: true } } },
+          include: { user: { select: { id: true, username: true, image: true } } },
         },
         _count: { select: { evidence: true, judgments: true } },
       },
@@ -47,12 +44,9 @@ export async function GET(req: NextRequest) {
   return Response.json({ challenges, total, limit, offset });
 }
 
-/**
- * POST /api/challenges — Create a new challenge
- */
 export async function POST(req: NextRequest) {
-  const payload = getUserFromRequest(req);
-  if (!payload) return unauthorized();
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
 
   try {
     const body = await req.json();
@@ -61,7 +55,6 @@ export async function POST(req: NextRequest) {
       description,
       type = "General",
       stake = 0,
-      currency = "none",
       deadline,
       rules,
       evidenceType = "self_report",
@@ -69,40 +62,20 @@ export async function POST(req: NextRequest) {
       isPublic = true,
     } = body;
 
-    if (!title) {
-      return Response.json({ error: "title is required" }, { status: 400 });
+    if (!title) return Response.json({ error: "title is required" }, { status: 400 });
+
+    const stakeInt = Math.max(0, Math.floor(stake));
+
+    // Verify creator has enough credits to cover the stake
+    if (stakeInt > 0) {
+      const balance = await getCredits(user.userId);
+      if (balance < stakeInt) return noCredits(stakeInt, balance);
+
+      // Escrow: deduct credits upfront
+      const result = await spendCredits(user.userId, stakeInt, "stake", `Staked ${stakeInt} credits on "${title.slice(0, 40)}"`, undefined);
+      if (!result.success) return noCredits(stakeInt, result.balance);
     }
 
-    // If staking money, check wallet balance & lock funds
-    if (stake > 0 && currency === "USD") {
-      const wallet = await prisma.wallet.findUnique({ where: { userId: payload.userId } });
-      if (!wallet || wallet.balance < stake) {
-        return Response.json({ error: "Insufficient balance for stake" }, { status: 400 });
-      }
-
-      // Lock funds into escrow
-      await prisma.wallet.update({
-        where: { userId: payload.userId },
-        data: {
-          balance: { decrement: stake },
-          escrow: { increment: stake },
-        },
-      });
-
-      // Record transaction
-      const updatedWallet = await prisma.wallet.findUnique({ where: { userId: payload.userId } });
-      await prisma.transaction.create({
-        data: {
-          userId: payload.userId,
-          type: "stake",
-          amount: -stake,
-          balanceAfter: updatedWallet!.balance,
-          description: `Staked $${stake} on: ${title}`,
-        },
-      });
-    }
-
-    // Parse deadline string into Date
     let deadlineDate: Date | null = null;
     if (deadline) {
       const hoursMatch = String(deadline).match(/(\d+)\s*hour/i);
@@ -115,45 +88,39 @@ export async function POST(req: NextRequest) {
       else if (daysMatch) deadlineDate.setDate(deadlineDate.getDate() + parseInt(daysMatch[1]));
       else if (weeksMatch) deadlineDate.setDate(deadlineDate.getDate() + parseInt(weeksMatch[1]) * 7);
       else if (minsMatch) deadlineDate.setMinutes(deadlineDate.getMinutes() + parseInt(minsMatch[1]));
-      else deadlineDate.setHours(deadlineDate.getHours() + 48); // default 48h
+      else deadlineDate.setHours(deadlineDate.getHours() + 48);
     }
 
     const challenge = await prisma.challenge.create({
       data: {
-        creatorId: payload.userId,
+        creatorId: user.userId,
         title,
         description,
         type,
         status: "open",
-        stake,
-        currency,
+        stake: stakeInt,
         deadline: deadlineDate,
         rules,
         evidenceType,
         aiReview,
         isPublic,
         participants: {
-          create: {
-            userId: payload.userId,
-            role: "creator",
-            status: "accepted",
-          },
+          create: { userId: user.userId, role: "creator", status: "accepted" },
         },
       },
       include: {
-        creator: { select: { id: true, username: true, avatar: true } },
+        creator: { select: { id: true, username: true, image: true, credits: true } },
         participants: {
-          include: { user: { select: { id: true, username: true, avatar: true } } },
+          include: { user: { select: { id: true, username: true, image: true } } },
         },
       },
     });
 
-    // Activity event
     await prisma.activityEvent.create({
       data: {
         type: "challenge_created",
-        message: `${payload.username} created "${title}"${stake > 0 ? ` — $${stake} stake` : ""}`,
-        userId: payload.userId,
+        message: `${user.username} created "${title}"${stakeInt > 0 ? ` — ${stakeInt} credits staked` : ""}`,
+        userId: user.userId,
         challengeId: challenge.id,
       },
     });

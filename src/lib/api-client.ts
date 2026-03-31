@@ -1,76 +1,88 @@
 /**
- * Frontend API Client
- * Wraps all backend endpoints with typed functions.
+ * Frontend API Client — Credits-based economy
+ * Uses NextAuth sessions + typed fetch wrappers.
  */
 
 const BASE = "/api";
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("challengeai_token");
-}
-
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options?.headers as Record<string, string> || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers,
-  });
-
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "API Error");
   return data as T;
 }
 
-/* ── Auth ── */
+/* ── USAGE Tokens / Credits ── */
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  username: string;
-  avatar: string | null;
-  wallet: { balance: number; escrow: number; totalWon: number; totalLost: number } | null;
+export interface TierBalance {
+  id: number;
+  name: string;
+  balance: number;
+  valueUsd: number;
 }
 
-export interface AuthResponse {
-  token: string;
-  user: AuthUser;
+export interface TierInfo {
+  id: number;
+  name: string;
+  priceUsd: number;
+  creditCost: number;
+  model: string;
 }
 
-export async function register(email: string, username: string, password: string): Promise<AuthResponse> {
-  const data = await apiFetch<AuthResponse>("/auth/register", {
+export interface TokenData {
+  offChain: {
+    credits: number;
+    stats: { won: number; lost: number; bought: number };
+  };
+  onChain: {
+    balances: TierBalance[];
+    totalValueUsd: number;
+    tokenAddress: string;
+    explorerLink: string | null;
+    network: string;
+  } | null;
+  isOnChainEnabled: boolean;
+  evmAddress: string | null;
+  transactions: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    balanceAfter: number;
+    description: string | null;
+    createdAt: string;
+    challengeId: string | null;
+    x402TxHash: string | null;
+  }>;
+  tiers: {
+    haiku: TierInfo;
+    sonnet: TierInfo;
+    opus: TierInfo;
+  };
+}
+
+export async function getTokenStatus(): Promise<TokenData> {
+  return apiFetch("/tokens");
+}
+
+export async function linkWallet(address: string): Promise<{ success: boolean }> {
+  return apiFetch("/tokens/link-wallet", {
     method: "POST",
-    body: JSON.stringify({ email, username, password }),
+    body: JSON.stringify({ address }),
   });
-  localStorage.setItem("challengeai_token", data.token);
-  return data;
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  const data = await apiFetch<AuthResponse>("/auth/login", {
+export async function topUpCredits(usdcAmount: number, txHash: string): Promise<{
+  credits: number; added: number; usdcPaid: number; rate: string;
+}> {
+  return apiFetch("/credits/topup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ usdcAmount, txHash }),
   });
-  localStorage.setItem("challengeai_token", data.token);
-  return data;
-}
-
-export async function getMe(): Promise<{ user: AuthUser & { activeChallenges: number } }> {
-  return apiFetch("/auth/me");
-}
-
-export function logout() {
-  localStorage.removeItem("challengeai_token");
-}
-
-export function isLoggedIn(): boolean {
-  return !!getToken();
 }
 
 /* ── Challenges ── */
@@ -83,19 +95,18 @@ export interface ChallengeData {
   type: string;
   status: string;
   stake: number;
-  currency: string;
   deadline: string | null;
   rules: string | null;
   evidenceType: string;
   aiReview: boolean;
   isPublic: boolean;
   createdAt: string;
-  creator: { id: string; username: string; avatar: string | null };
+  creator: { id: string; username: string; image: string | null; credits?: number };
   participants: Array<{
     id: string;
     role: string;
     status: string;
-    user: { id: string; username: string; avatar: string | null };
+    user: { id: string; username: string; image: string | null };
   }>;
   _count?: { evidence: number; judgments: number };
 }
@@ -121,7 +132,6 @@ export async function createChallenge(data: {
   description?: string;
   type?: string;
   stake?: number;
-  currency?: string;
   deadline?: string;
   rules?: string;
   evidenceType?: string;
@@ -141,8 +151,19 @@ export async function submitEvidence(id: string, data: {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
 
-export async function judgeChallenge(id: string): Promise<{ judgment: unknown }> {
-  return apiFetch(`/challenges/${id}/judge`, { method: "POST" });
+export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1): Promise<{
+  judgment: unknown;
+  settlement: { success: boolean; error?: string; txHash?: string };
+  model: string;
+  tierId: number;
+  creditsUsed: number;
+  creditsRemaining: number;
+  txHash: string | null;
+}> {
+  return apiFetch(`/challenges/${id}/judge`, {
+    method: "POST",
+    body: JSON.stringify({ tier }),
+  });
 }
 
 /* ── AI Parse ── */
@@ -151,46 +172,25 @@ export interface ParsedChallenge {
   title: string;
   type: string;
   suggestedStake: number;
-  currency: string;
   evidenceType: string;
   rules: string;
   deadline: string;
   isPublic: boolean;
 }
 
-export async function parseChallenge(input: string): Promise<{
+export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promise<{
   parsed: ParsedChallenge;
   clarifications: Array<{ question: string; options: string[] }>;
+  model: string;
+  tierId: number;
+  creditsUsed: number;
+  creditsRemaining: number;
+  txHash: string | null;
 }> {
-  return apiFetch("/challenges/parse", { method: "POST", body: JSON.stringify({ input }) });
-}
-
-/* ── Wallet ── */
-
-export interface WalletData {
-  balance: number;
-  escrow: number;
-  totalWon: number;
-  totalLost: number;
-}
-
-export async function getWallet(): Promise<{ wallet: WalletData }> {
-  return apiFetch("/wallet");
-}
-
-export async function walletAction(action: "deposit" | "withdraw", amount: number): Promise<{ wallet: WalletData }> {
-  return apiFetch("/wallet", { method: "POST", body: JSON.stringify({ action, amount }) });
-}
-
-export async function getTransactions(limit = 20): Promise<{
-  transactions: Array<{
-    id: string; type: string; amount: number; balanceAfter: number;
-    description: string | null; createdAt: string;
-    challenge: { id: string; title: string; type: string } | null;
-  }>;
-  total: number;
-}> {
-  return apiFetch(`/wallet/transactions?limit=${limit}`);
+  return apiFetch("/challenges/parse", {
+    method: "POST",
+    body: JSON.stringify({ input, tier }),
+  });
 }
 
 /* ── Feed ── */
@@ -200,7 +200,7 @@ export interface ActivityEventData {
   type: string;
   message: string;
   createdAt: string;
-  user: { id: string; username: string; avatar: string | null } | null;
+  user: { id: string; username: string; image: string | null } | null;
   challenge: { id: string; title: string; type: string; status: string; stake: number } | null;
 }
 
@@ -212,7 +212,7 @@ export async function getFeed(limit = 20): Promise<{ events: ActivityEventData[]
 
 export async function getNearbyUsers(lat: number, lng: number, radius = 10): Promise<{
   users: Array<{
-    id: string; username: string; avatar: string | null;
+    id: string; username: string; image: string | null;
     distance: number; isOnline: boolean; challengeCount: number;
   }>;
 }> {
