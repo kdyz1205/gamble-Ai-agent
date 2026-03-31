@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ═══════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  passwordHash  String
+  avatar        String?
+  bio           String?
+  latitude      Float?
+  longitude     Float?
+  locationUpdatedAt DateTime?
+  isOnline      Boolean  @default(false)
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  wallet        Wallet?
+  challengesCreated  Challenge[]    @relation("ChallengeCreator")
+  participations     Participant[]
+  evidenceSubmissions Evidence[]
+  judgmentsGiven     Judgment[]     @relation("JudgeUser")
+  judgmentsWon       Judgment[]     @relation("WinnerUser")
+  transactionsFrom   Transaction[]
+  activityEvents     ActivityEvent[]
+}
+
+// ═══════════════════════════════════════
+// WALLET & ESCROW
+// ═══════════════════════════════════════
+
+model Wallet {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  balance    Float    @default(0)
+  escrow     Float    @default(0)
+  totalWon   Float    @default(0)
+  totalLost  Float    @default(0)
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id           String   @id @default(uuid())
+  userId       String
+  type         String   // deposit | withdraw | stake | win | loss | refund
+  amount       Float
+  balanceAfter Float
+  description  String?
+  challengeId  String?
+  createdAt    DateTime @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+}
+
+// ═══════════════════════════════════════
+// CHALLENGES
+// ═══════════════════════════════════════
+
+model Challenge {
+  id            String   @id @default(uuid())
+  creatorId     String
+  title         String
+  description   String?
+  type          String   // Fitness | Cooking | Coding | Learning | Games | General
+  status        String   @default("draft") // draft | open | matched | live | judging | settled | cancelled | disputed
+  stake         Float    @default(0)
+  currency      String   @default("none") // USD | points | none
+  deadline      DateTime?
+  rules         String?
+  evidenceType  String   @default("self_report") // video | photo | gps | self_report
+  aiReview      Boolean  @default(true)
+  isPublic      Boolean  @default(true)
+  maxParticipants Int    @default(2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator       User          @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants  Participant[]
+  evidence      Evidence[]
+  judgments     Judgment[]
+  transactions  Transaction[]
+  activityEvents ActivityEvent[]
+}
+
+model Participant {
+  id           String   @id @default(uuid())
+  challengeId  String
+  userId       String
+  role         String   @default("opponent") // creator | opponent | spectator
+  status       String   @default("pending")  // pending | accepted | declined | completed
+  joinedAt     DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+}
+
+// ═══════════════════════════════════════
+// EVIDENCE & JUDGMENT
+// ═══════════════════════════════════════
+
+model Evidence {
+  id           String   @id @default(uuid())
+  challengeId  String
+  userId       String
+  type         String   // video | photo | gps | text
+  url          String?
+  description  String?
+  metadata     String?  // JSON string
+  createdAt    DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Judgment {
+  id           String   @id @default(uuid())
+  challengeId  String
+  judgeId      String?
+  winnerId     String?
+  method       String   @default("ai") // ai | manual | community_vote
+  reasoning    String?
+  confidence   Float?
+  status       String   @default("pending") // pending | completed | disputed
+  createdAt    DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  judge        User?     @relation("JudgeUser", fields: [judgeId], references: [id])
+  winner       User?     @relation("WinnerUser", fields: [winnerId], references: [id])
+}
+
+// ═══════════════════════════════════════
+// ACTIVITY FEED
+// ═══════════════════════════════════════
+
+model ActivityEvent {
+  id           String   @id @default(uuid())
+  type         String   // challenge_created | challenge_accepted | evidence_submitted | challenge_settled | stake_placed | user_joined
+  message      String
+  userId       String?
+  challengeId  String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  user         User?      @relation(fields: [userId], references: [id])
+  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+}
