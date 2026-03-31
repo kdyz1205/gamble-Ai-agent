@@ -49,6 +49,10 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
   const mouseX                    = useMotionValue(0);
   const mouseY                    = useMotionValue(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
+  // suppress unused warning — kept for future use
+  void mouseX; void mouseY;
 
   // Rotate hints
   useEffect(() => {
@@ -57,16 +61,11 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
     return () => clearInterval(id);
   }, [isActive]);
 
-  // Magnetic card tilt
-  const rotateX = useTransform(mouseY, [-60, 60], [4, -4]);
-  const rotateY = useTransform(mouseX, [-60, 60], [-4, 4]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mouseX.set(e.clientX - rect.left - rect.width  / 2);
-    mouseY.set(e.clientY - rect.top  - rect.height / 2);
-  };
-  const handleMouseLeave = () => { mouseX.set(0); mouseY.set(0); };
+  // No tilt — static composer
+  const rotateX = useTransform(mouseY, [-60, 60], [0, 0]);
+  const rotateY = useTransform(mouseX, [-60, 60], [0, 0]);
+  const handleMouseMove = () => {};
+  const handleMouseLeave = () => {};
 
   const send = () => {
     const v = input.trim();

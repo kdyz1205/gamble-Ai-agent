@@ -354,10 +354,10 @@ export default function Home() {
                     {/* Pulse ring */}
                     <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-base font-extrabold text-text-primary mb-1">Challenge Published!</h3>
                     <p className="text-sm text-text-secondary mb-3">Scanning for opponents — you&rsquo;ll be notified when someone accepts.</p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 mb-4">
                       {[draft.type, draft.stake, draft.evidence].map(tag => (
                         <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-bold"
                               style={{ background: "rgba(255,255,255,0.06)", color: "rgba(240,240,255,0.7)" }}>
@@ -369,6 +369,33 @@ export default function Home() {
                         <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                         Live
                       </span>
+                    </div>
+                    {/* Accept / action buttons */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <motion.button
+                        whileHover={{ scale: 1.03, y: -1 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white"
+                        style={{
+                          background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
+                          boxShadow: "0 4px 20px rgba(124,92,252,0.35)",
+                        }}
+                        onClick={() => pushMsg("ai", "You've accepted your own challenge! Waiting for an opponent to join and match your entry.")}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Accept Challenge
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="px-4 py-2.5 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
+                        style={{ background: "rgba(255,255,255,0.04)" }}
+                        onClick={() => pushMsg("ai", "Share link copied! Send it to your opponent so they can join the challenge.")}
+                      >
+                        Share Link
+                      </motion.button>
                     </div>
                   </div>
                 </div>
