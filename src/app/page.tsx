@@ -9,6 +9,8 @@ import type { Message } from "@/components/ConversationThread";
 import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import { FloatingActionBar } from "@/components/SecondaryPanels";
+import AuthModal from "@/components/AuthModal";
+import * as api from "@/lib/api-client";
 
 /* ═══════════════════════════════════════════════════
    AI CONVERSATION ENGINE
@@ -106,6 +108,18 @@ export default function Home() {
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
   const [published, setPublished]         = useState(false);
   const [showScanLine, setShowScanLine]   = useState(false);
+  const [challengeId, setChallengeId]     = useState<string | null>(null);
+
+  // Auth
+  const [user, setUser]                   = useState<{ id: string; username: string; email: string } | null>(null);
+  const [showAuth, setShowAuth]           = useState(false);
+
+  // Check auth on mount
+  useEffect(() => {
+    if (api.isLoggedIn()) {
+      api.getMe().then(res => setUser(res.user)).catch(() => { /* not logged in */ });
+    }
+  }, []);
 
   // Scan-line effect on mount
   useEffect(() => {
@@ -126,15 +140,39 @@ export default function Home() {
   }, [pushMsg]);
 
   /* ── First submit ── */
-  const handleInitialSubmit = useCallback((input: string) => {
+  const handleInitialSubmit = useCallback(async (input: string) => {
     setOrigInput(input);
     pushMsg("user", input);
     setAppState("clarifying");
+
+    // Try real API if logged in
+    if (user) {
+      try {
+        setIsTyping(true);
+        const res = await api.parseChallenge(input);
+        setIsTyping(false);
+
+        // Convert API clarifications to ConvoSteps
+        const apiSteps: ConvoStep[] = res.clarifications.map(c => ({
+          aiMessage: c.question,
+          options: c.options,
+        }));
+        setSteps(apiSteps);
+        setStepIdx(0);
+        pushMsg("ai", apiSteps[0].aiMessage, apiSteps[0].options);
+        return;
+      } catch {
+        setIsTyping(false);
+        // Fall through to local parsing
+      }
+    }
+
+    // Fallback: local parsing
     const s = parseIntent(input);
     setSteps(s);
     setStepIdx(0);
     aiReply(s[0].aiMessage, s[0].options);
-  }, [pushMsg, aiReply]);
+  }, [pushMsg, aiReply, user]);
 
   /* ── Option / follow-up ── */
   const handleOptionSelect = useCallback((opt: string) => {
@@ -162,15 +200,43 @@ export default function Home() {
   }, [handleOptionSelect]);
 
   /* ── Publish ── */
-  const handlePublish = useCallback(() => {
+  const handlePublish = useCallback(async () => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+
+    if (draft) {
+      try {
+        setIsTyping(true);
+        const res = await api.createChallenge({
+          title: draft.title,
+          type: draft.type,
+          stake: draft.currency === "USD" ? parseFloat(draft.stake.replace("$", "")) : 0,
+          currency: draft.currency,
+          deadline: draft.deadline,
+          rules: draft.rules,
+          evidenceType: draft.evidence.toLowerCase().replace(/ /g, "_"),
+          aiReview: draft.aiReview,
+          isPublic: draft.isPublic,
+        });
+        setChallengeId(res.challenge.id);
+        setIsTyping(false);
+      } catch (err) {
+        setIsTyping(false);
+        pushMsg("ai", `Failed to publish: ${err instanceof Error ? err.message : "Unknown error"}. You can try again.`);
+        return;
+      }
+    }
+
     setPublished(true);
     setAppState("live");
     aiReply(
-      "Your challenge is now **LIVE**. I'm scanning for opponents. I'll notify you the moment someone accepts.",
+      "Your challenge is now **LIVE** and saved to the database. I'm scanning for opponents. I'll notify you the moment someone accepts.",
       ["View Live Activity", "Challenge Another"],
       1200,
     );
-  }, [aiReply]);
+  }, [aiReply, draft, user, pushMsg]);
 
   /* ── Edit ── */
   const handleEdit = useCallback(() => {
@@ -280,6 +346,28 @@ export default function Home() {
                   >
                     New Challenge
                   </motion.button>
+
+                  {/* Auth button */}
+                  {user ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle"
+                         style={{ background: "rgba(255,255,255,0.04)" }}>
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
+                           style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                        {user.username.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-xs font-bold text-text-secondary">{user.username}</span>
+                    </div>
+                  ) : (
+                    <motion.button
+                      onClick={() => setShowAuth(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white"
+                      style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      Sign In
+                    </motion.button>
+                  )}
                 </div>
               </div>
             </div>
@@ -380,7 +468,19 @@ export default function Home() {
                           background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
                           boxShadow: "0 4px 20px rgba(124,92,252,0.35)",
                         }}
-                        onClick={() => pushMsg("ai", "You've accepted your own challenge! Waiting for an opponent to join and match your entry.")}
+                        onClick={async () => {
+                          if (!user) { setShowAuth(true); return; }
+                          if (challengeId) {
+                            try {
+                              await api.acceptChallenge(challengeId);
+                              pushMsg("ai", "Challenge accepted! You're now locked in. Submit your evidence when ready.");
+                            } catch (err) {
+                              pushMsg("ai", `${err instanceof Error ? err.message : "Could not accept"} — this may be your own challenge. Share the link to invite an opponent!`);
+                            }
+                          } else {
+                            pushMsg("ai", "Challenge confirmed! Share the link to invite an opponent.");
+                          }
+                        }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                           <polyline points="20 6 9 17 4 12" />
@@ -431,6 +531,48 @@ export default function Home() {
           </motion.footer>
         )}
       </AnimatePresence>
+
+      {/* ── Auth Modal ── */}
+      <AuthModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        onSuccess={(u) => setUser(u)}
+      />
+
+      {/* ── Idle auth prompt (top-right) ── */}
+      {!active && !user && (
+        <motion.button
+          onClick={() => setShowAuth(true)}
+          className="fixed top-5 right-5 z-20 px-4 py-2 rounded-xl text-xs font-bold text-white"
+          style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 16px rgba(124,92,252,0.3)" }}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+        >
+          Sign In
+        </motion.button>
+      )}
+      {!active && user && (
+        <motion.div
+          className="fixed top-5 right-5 z-20 flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle"
+          style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+        >
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
+               style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+            {user.username.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-xs font-bold text-text-secondary">{user.username}</span>
+          <button
+            onClick={() => { api.logout(); setUser(null); }}
+            className="ml-1 text-[10px] text-text-muted hover:text-danger transition-colors"
+          >
+            ×
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 }
