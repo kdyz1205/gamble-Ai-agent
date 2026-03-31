@@ -68,6 +68,7 @@ def list_strategies() -> list[StrategyInfo]:
         "anti_martingale": "Double bet after each win, reset after loss",
         "kelly": "Bet a fraction of bankroll using the Kelly Criterion",
         "dalembert": "Increase bet by one unit after loss, decrease after win",
+        "percentage": "Bet a fixed percentage of current bankroll",
     }
     return [
         StrategyInfo(name=name, description=descriptions.get(name, ""))

@@ -6,6 +6,7 @@ from gamble_agent.strategies.dalembert import DAlembertStrategy
 from gamble_agent.strategies.fixed import FixedBetStrategy
 from gamble_agent.strategies.kelly import KellyCriterionStrategy
 from gamble_agent.strategies.martingale import MartingaleStrategy
+from gamble_agent.strategies.percentage import PercentageBetStrategy
 from gamble_agent.strategies.registry import StrategyRegistry, get_strategy
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "FixedBetStrategy",
     "KellyCriterionStrategy",
     "MartingaleStrategy",
+    "PercentageBetStrategy",
     "StrategyRegistry",
     "get_strategy",
 ]

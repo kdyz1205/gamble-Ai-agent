@@ -9,6 +9,7 @@ from gamble_agent.strategies.dalembert import DAlembertStrategy
 from gamble_agent.strategies.fixed import FixedBetStrategy
 from gamble_agent.strategies.kelly import KellyCriterionStrategy
 from gamble_agent.strategies.martingale import MartingaleStrategy
+from gamble_agent.strategies.percentage import PercentageBetStrategy
 from gamble_agent.strategies.registry import StrategyRegistry, get_strategy
 
 
@@ -175,6 +176,35 @@ class TestDAlembertStrategy:
             DAlembertStrategy(base_bet=0)
         with pytest.raises(ValueError):
             DAlembertStrategy(unit=0)
+
+
+class TestPercentageBetStrategy:
+    def test_bets_percentage_of_bankroll(self):
+        s = PercentageBetStrategy(percentage=5.0, min_bet=1)
+        bm = BankrollManager(initial_bankroll=1000)
+        assert s.next_bet_amount(bm) == 50.0
+
+    def test_scales_with_bankroll(self):
+        s = PercentageBetStrategy(percentage=10.0, min_bet=1)
+        bm = BankrollManager(initial_bankroll=1000)
+        assert s.next_bet_amount(bm) == 100.0
+        bm.debit(500)
+        assert s.next_bet_amount(bm) == 50.0
+
+    def test_respects_min_bet(self):
+        s = PercentageBetStrategy(percentage=1.0, min_bet=5)
+        bm = BankrollManager(initial_bankroll=100)
+        assert s.next_bet_amount(bm) == 5.0  # 1% of 100 = 1, but min is 5
+
+    def test_reject_invalid_percentage(self):
+        with pytest.raises(ValueError):
+            PercentageBetStrategy(percentage=0)
+        with pytest.raises(ValueError):
+            PercentageBetStrategy(percentage=101)
+
+    def test_reject_invalid_min_bet(self):
+        with pytest.raises(ValueError):
+            PercentageBetStrategy(min_bet=0)
 
 
 class TestStrategyRegistry:

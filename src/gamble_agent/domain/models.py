@@ -36,7 +36,9 @@ class Bet(BaseModel):
     @field_validator("amount")
     @classmethod
     def amount_must_be_finite(cls, v: float) -> float:
-        if not isinstance(v, (int, float)) or v != v:  # NaN check
+        import math
+
+        if not isinstance(v, (int, float)) or math.isnan(v) or math.isinf(v):
             raise ValueError("Bet amount must be a finite number")
         return float(v)
 

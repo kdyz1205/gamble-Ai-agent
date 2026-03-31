@@ -32,6 +32,10 @@ class TestBet:
         with pytest.raises(ValidationError):
             Bet(amount=float("nan"), bet_type="standard")
 
+    def test_reject_inf_amount(self):
+        with pytest.raises(ValidationError):
+            Bet(amount=float("inf"), bet_type="standard")
+
 
 class TestBetResult:
     def test_win_result(self):

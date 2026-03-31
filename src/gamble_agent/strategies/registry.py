@@ -8,6 +8,7 @@ from gamble_agent.strategies.dalembert import DAlembertStrategy
 from gamble_agent.strategies.fixed import FixedBetStrategy
 from gamble_agent.strategies.kelly import KellyCriterionStrategy
 from gamble_agent.strategies.martingale import MartingaleStrategy
+from gamble_agent.strategies.percentage import PercentageBetStrategy
 
 
 class StrategyRegistry:
@@ -19,6 +20,7 @@ class StrategyRegistry:
         "anti_martingale": AntiMartingaleStrategy,
         "kelly": KellyCriterionStrategy,
         "dalembert": DAlembertStrategy,
+        "percentage": PercentageBetStrategy,
     }
 
     @classmethod
