@@ -9,22 +9,11 @@ import structlog
 
 from gamble_agent.domain.bankroll import BankrollManager
 from gamble_agent.domain.models import GameType, SessionStats
-from gamble_agent.games.base import GameEngine
-from gamble_agent.games.blackjack import BlackjackEngine
-from gamble_agent.games.dice import DiceEngine
-from gamble_agent.games.roulette import RouletteEngine
-from gamble_agent.games.slots import SlotsEngine
+from gamble_agent.games.registry import get_engine_class
 from gamble_agent.simulation.engine import SimulationEngine
 from gamble_agent.strategies.base import BettingStrategy
 
 logger = structlog.get_logger()
-
-GAME_ENGINES: dict[GameType, type[GameEngine]] = {
-    GameType.BLACKJACK: BlackjackEngine,
-    GameType.ROULETTE: RouletteEngine,
-    GameType.DICE: DiceEngine,
-    GameType.SLOTS: SlotsEngine,
-}
 
 
 @dataclass
@@ -89,7 +78,7 @@ class SimulationRunner:
     ) -> SessionStats:
         """Run a single simulation."""
         rng = random.Random(config.seed)
-        game_cls = GAME_ENGINES[config.game_type]
+        game_cls = get_engine_class(config.game_type)
         game = game_cls(rng=rng)
 
         bankroll = BankrollManager(

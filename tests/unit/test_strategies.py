@@ -5,6 +5,7 @@ import pytest
 from gamble_agent.domain.bankroll import BankrollManager
 from gamble_agent.domain.models import Bet, BetOutcome, BetResult
 from gamble_agent.strategies.anti_martingale import AntiMartingaleStrategy
+from gamble_agent.strategies.dalembert import DAlembertStrategy
 from gamble_agent.strategies.fixed import FixedBetStrategy
 from gamble_agent.strategies.kelly import KellyCriterionStrategy
 from gamble_agent.strategies.martingale import MartingaleStrategy
@@ -131,6 +132,49 @@ class TestKellyCriterion:
             KellyCriterionStrategy(payout_odds=0)
         with pytest.raises(ValueError):
             KellyCriterionStrategy(fraction=0)
+
+
+class TestDAlembertStrategy:
+    def test_increases_on_loss(self):
+        s = DAlembertStrategy(base_bet=10, unit=5)
+        bm = BankrollManager(initial_bankroll=10000)
+        assert s.next_bet_amount(bm) == 10
+
+        s.update(_make_result(BetOutcome.LOSE))
+        assert s.next_bet_amount(bm) == 15
+
+        s.update(_make_result(BetOutcome.LOSE))
+        assert s.next_bet_amount(bm) == 20
+
+    def test_decreases_on_win(self):
+        s = DAlembertStrategy(base_bet=10, unit=5)
+        bm = BankrollManager(initial_bankroll=10000)
+        s.update(_make_result(BetOutcome.LOSE))
+        s.update(_make_result(BetOutcome.LOSE))
+        assert s.next_bet_amount(bm) == 20
+
+        s.update(_make_result(BetOutcome.WIN))
+        assert s.next_bet_amount(bm) == 15
+
+    def test_never_goes_below_base(self):
+        s = DAlembertStrategy(base_bet=10, unit=5)
+        bm = BankrollManager(initial_bankroll=10000)
+        s.update(_make_result(BetOutcome.WIN))
+        assert s.next_bet_amount(bm) == 10  # stays at base
+
+    def test_reset(self):
+        s = DAlembertStrategy(base_bet=10, unit=5)
+        bm = BankrollManager(initial_bankroll=10000)
+        s.update(_make_result(BetOutcome.LOSE))
+        s.update(_make_result(BetOutcome.LOSE))
+        s.reset()
+        assert s.next_bet_amount(bm) == 10
+
+    def test_reject_invalid_params(self):
+        with pytest.raises(ValueError):
+            DAlembertStrategy(base_bet=0)
+        with pytest.raises(ValueError):
+            DAlembertStrategy(unit=0)
 
 
 class TestStrategyRegistry:

@@ -14,43 +14,28 @@ from gamble_agent.api.schemas import (
     HealthResponse,
     SimulationRequest,
     SimulationResponse,
+    StrategyCompareRequest,
+    StrategyCompareResponse,
+    StrategyCompareResult,
     StrategyInfo,
 )
 from gamble_agent.domain.bankroll import BankrollManager
 from gamble_agent.domain.models import GameType
-from gamble_agent.games.blackjack import BlackjackEngine
-from gamble_agent.games.dice import DiceEngine
-from gamble_agent.games.roulette import RouletteEngine
-from gamble_agent.games.slots import SlotsEngine
+from gamble_agent.games.registry import get_all_engines, get_default_bet_type, get_engine_class
 from gamble_agent.simulation.engine import SimulationEngine
-from gamble_agent.simulation.runner import BatchResult, SimulationConfig, SimulationRunner
+from gamble_agent.simulation.runner import SimulationConfig, SimulationRunner
 from gamble_agent.strategies.registry import StrategyRegistry
 
 router = APIRouter()
 
-GAME_ENGINES = {
-    GameType.BLACKJACK: BlackjackEngine,
-    GameType.ROULETTE: RouletteEngine,
-    GameType.DICE: DiceEngine,
-    GameType.SLOTS: SlotsEngine,
-}
-
-# Default bet types per game for strategies that use "standard"
-GAME_DEFAULT_BET_TYPES = {
-    GameType.BLACKJACK: "standard",
-    GameType.ROULETTE: "red",
-    GameType.DICE: "pass",
-    GameType.SLOTS: "spin",
-}
-
 
 def _resolve_strategy_params(
-    game_type: GameType, strategy_name: str, params: dict[str, object]
+    game_type: GameType, params: dict[str, object]
 ) -> dict[str, object]:
     """Inject the correct bet_type for the game if not specified."""
     resolved = dict(params)
     if "bet_type" not in resolved:
-        resolved["bet_type"] = GAME_DEFAULT_BET_TYPES.get(game_type, "standard")
+        resolved["bet_type"] = get_default_bet_type(game_type)
     return resolved
 
 
@@ -62,7 +47,7 @@ def health_check() -> HealthResponse:
 @router.get("/games", response_model=list[GameInfo])
 def list_games() -> list[GameInfo]:
     result = []
-    for game_type, engine_cls in GAME_ENGINES.items():
+    for game_type, engine_cls in get_all_engines().items():
         engine = engine_cls()
         result.append(
             GameInfo(
@@ -82,6 +67,7 @@ def list_strategies() -> list[StrategyInfo]:
         "martingale": "Double bet after each loss, reset after win",
         "anti_martingale": "Double bet after each win, reset after loss",
         "kelly": "Bet a fraction of bankroll using the Kelly Criterion",
+        "dalembert": "Increase bet by one unit after loss, decrease after win",
     }
     return [
         StrategyInfo(name=name, description=descriptions.get(name, ""))
@@ -92,15 +78,13 @@ def list_strategies() -> list[StrategyInfo]:
 @router.post("/simulate", response_model=SimulationResponse)
 def run_simulation(request: SimulationRequest) -> SimulationResponse:
     try:
-        params = _resolve_strategy_params(
-            request.game_type, request.strategy, request.strategy_params
-        )
+        params = _resolve_strategy_params(request.game_type, request.strategy_params)
         strategy = StrategyRegistry.get(request.strategy, **params)
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}")
 
     rng = random.Random(request.seed)
-    game = GAME_ENGINES[request.game_type](rng=rng)
+    game = get_engine_class(request.game_type)(rng=rng)
     bankroll = BankrollManager(
         initial_bankroll=request.initial_bankroll,
         min_bet=request.min_bet,
@@ -137,9 +121,7 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
 @router.post("/simulate/batch", response_model=BatchSimulationResponse)
 def run_batch_simulation(request: BatchSimulationRequest) -> BatchSimulationResponse:
     try:
-        params = _resolve_strategy_params(
-            request.game_type, request.strategy, request.strategy_params
-        )
+        params = _resolve_strategy_params(request.game_type, request.strategy_params)
         strategy = StrategyRegistry.get(request.strategy, **params)
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}")
@@ -166,4 +148,54 @@ def run_batch_simulation(request: BatchSimulationRequest) -> BatchSimulationResp
         avg_win_rate=round(batch.avg_win_rate, 4),
         avg_roi_pct=round(batch.avg_roi, 2),
         bust_rate=round(batch.bust_rate, 4),
+    )
+
+
+@router.post("/compare", response_model=StrategyCompareResponse)
+def compare_strategies(request: StrategyCompareRequest) -> StrategyCompareResponse:
+    if len(request.strategies) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 strategies required for comparison")
+
+    runner = SimulationRunner()
+    compare_results: list[StrategyCompareResult] = []
+
+    for strat_config in request.strategies:
+        name = str(strat_config.get("name", "fixed"))
+        params = dict(strat_config.get("params", {}) or {})
+
+        try:
+            resolved = _resolve_strategy_params(request.game_type, params)
+            strategy = StrategyRegistry.get(name, **resolved)
+        except (ValueError, TypeError) as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid strategy '{name}': {e}"
+            )
+
+        config = SimulationConfig(
+            game_type=request.game_type,
+            num_rounds=request.num_rounds,
+            initial_bankroll=request.initial_bankroll,
+            min_bet=request.min_bet,
+            max_bet=request.max_bet,
+            seed=request.seed,
+        )
+
+        batch = runner.run_batch(config, strategy, request.num_simulations)
+        compare_results.append(
+            StrategyCompareResult(
+                strategy_name=name,
+                avg_net_profit=round(batch.avg_net_profit, 2),
+                avg_roi_pct=round(batch.avg_roi, 2),
+                avg_win_rate=round(batch.avg_win_rate, 4),
+                bust_rate=round(batch.bust_rate, 4),
+            )
+        )
+
+    best = max(compare_results, key=lambda r: r.avg_net_profit)
+
+    return StrategyCompareResponse(
+        game_type=request.game_type.value,
+        num_simulations=request.num_simulations,
+        results=compare_results,
+        best_strategy=best.strategy_name,
     )

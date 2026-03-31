@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from gamble_agent.strategies.base import BettingStrategy
-from gamble_agent.strategies.fixed import FixedBetStrategy
-from gamble_agent.strategies.martingale import MartingaleStrategy
 from gamble_agent.strategies.anti_martingale import AntiMartingaleStrategy
+from gamble_agent.strategies.base import BettingStrategy
+from gamble_agent.strategies.dalembert import DAlembertStrategy
+from gamble_agent.strategies.fixed import FixedBetStrategy
 from gamble_agent.strategies.kelly import KellyCriterionStrategy
+from gamble_agent.strategies.martingale import MartingaleStrategy
 
 
 class StrategyRegistry:
@@ -17,6 +18,7 @@ class StrategyRegistry:
         "martingale": MartingaleStrategy,
         "anti_martingale": AntiMartingaleStrategy,
         "kelly": KellyCriterionStrategy,
+        "dalembert": DAlembertStrategy,
     }
 
     @classmethod

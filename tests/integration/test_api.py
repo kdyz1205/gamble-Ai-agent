@@ -1,16 +1,5 @@
 """Integration tests for the API layer."""
 
-import pytest
-from fastapi.testclient import TestClient
-
-from gamble_agent.api.app import create_app
-
-
-@pytest.fixture
-def client():
-    app = create_app()
-    return TestClient(app)
-
 
 class TestHealthEndpoint:
     def test_health(self, client):
@@ -128,3 +117,30 @@ class TestBatchSimulateEndpoint:
         assert data["num_simulations"] == 10
         assert "avg_net_profit" in data
         assert "bust_rate" in data
+
+
+class TestCompareEndpoint:
+    def test_compare_strategies(self, client):
+        resp = client.post("/api/v1/compare", json={
+            "game_type": "roulette",
+            "strategies": [
+                {"name": "fixed", "params": {"bet_amount": 10}},
+                {"name": "martingale", "params": {"base_bet": 10}},
+            ],
+            "num_rounds": 50,
+            "num_simulations": 10,
+            "seed": 42,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["results"]) == 2
+        assert data["best_strategy"] in ("fixed", "martingale")
+
+    def test_compare_requires_two_strategies(self, client):
+        resp = client.post("/api/v1/compare", json={
+            "game_type": "roulette",
+            "strategies": [{"name": "fixed"}],
+            "num_rounds": 50,
+            "num_simulations": 5,
+        })
+        assert resp.status_code == 400
