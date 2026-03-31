@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ChallengeAI — AI-Powered Challenge Platform",
   description:
-    "Create, join, and settle challenges with AI. Bet on yourself or compete with friends — powered by intelligent arbitration.",
+    "Create, join, and settle challenges with AI. Describe your challenge in natural language — AI handles the rest.",
 };
 
 export default function RootLayout({
@@ -20,7 +20,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-bg-primary">{children}</body>
+      <body className="min-h-screen bg-bg-primary antialiased">
+        {children}
+      </body>
     </html>
   );
 }
