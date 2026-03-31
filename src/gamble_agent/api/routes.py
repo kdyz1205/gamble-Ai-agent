@@ -82,7 +82,7 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
         params = _resolve_strategy_params(request.game_type, request.strategy_params)
         strategy = StrategyRegistry.get(request.strategy, **params)
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}") from None
 
     rng = random.Random(request.seed)
     game = get_engine_class(request.game_type)(rng=rng)
@@ -125,7 +125,7 @@ def run_batch_simulation(request: BatchSimulationRequest) -> BatchSimulationResp
         params = _resolve_strategy_params(request.game_type, request.strategy_params)
         strategy = StrategyRegistry.get(request.strategy, **params)
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid strategy config: {e}") from None
 
     config = SimulationConfig(
         game_type=request.game_type,
@@ -139,7 +139,7 @@ def run_batch_simulation(request: BatchSimulationRequest) -> BatchSimulationResp
     )
 
     runner = SimulationRunner()
-    batch: BatchResult = runner.run_batch(config, strategy, request.num_simulations)
+    batch = runner.run_batch(config, strategy, request.num_simulations)
 
     return BatchSimulationResponse(
         strategy_name=batch.strategy_name,
@@ -170,7 +170,7 @@ def compare_strategies(request: StrategyCompareRequest) -> StrategyCompareRespon
         except (ValueError, TypeError) as e:
             raise HTTPException(
                 status_code=400, detail=f"Invalid strategy '{name}': {e}"
-            )
+            ) from None
 
         config = SimulationConfig(
             game_type=request.game_type,

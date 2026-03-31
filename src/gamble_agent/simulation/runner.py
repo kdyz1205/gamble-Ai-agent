@@ -29,6 +29,16 @@ class SimulationConfig:
     take_profit_pct: float = 0.0
     seed: int | None = None
 
+    def __post_init__(self) -> None:
+        if self.num_rounds < 1:
+            raise ValueError("num_rounds must be at least 1")
+        if self.initial_bankroll <= 0:
+            raise ValueError("initial_bankroll must be positive")
+        if self.min_bet <= 0 or self.max_bet <= 0:
+            raise ValueError("Bet limits must be positive")
+        if self.min_bet > self.max_bet:
+            raise ValueError("min_bet cannot exceed max_bet")
+
 
 @dataclass
 class BatchResult:

@@ -15,7 +15,12 @@ from gamble_agent.strategies.registry import StrategyRegistry, get_strategy
 
 def _make_result(outcome: BetOutcome, amount: float = 10.0) -> BetResult:
     bet = Bet(amount=amount, bet_type="standard")
-    payout = amount * 2 if outcome == BetOutcome.WIN else (amount if outcome == BetOutcome.PUSH else 0)
+    if outcome == BetOutcome.WIN:
+        payout = amount * 2
+    elif outcome == BetOutcome.PUSH:
+        payout = amount
+    else:
+        payout = 0.0
     return BetResult(bet=bet, outcome=outcome, payout=payout, net=payout - amount)
 
 

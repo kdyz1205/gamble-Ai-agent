@@ -1,10 +1,9 @@
 """Tests for game and strategy registries."""
 
-import pytest
 
 from gamble_agent.domain.models import GameType
-from gamble_agent.games.registry import get_all_engines, get_default_bet_type, get_engine_class
 from gamble_agent.games.base import GameEngine
+from gamble_agent.games.registry import get_all_engines, get_default_bet_type, get_engine_class
 
 
 class TestGameRegistry:

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class GameType(str, Enum):
+class GameType(StrEnum):
     """Supported game types."""
 
     BLACKJACK = "blackjack"
@@ -18,7 +18,7 @@ class GameType(str, Enum):
     SLOTS = "slots"
 
 
-class BetOutcome(str, Enum):
+class BetOutcome(StrEnum):
     """Possible outcomes for a bet."""
 
     WIN = "win"
@@ -65,7 +65,7 @@ class GameRound(BaseModel):
     bets: list[BetResult] = Field(default_factory=list)
     bankroll_before: float = Field(ge=0)
     bankroll_after: float = Field(ge=0)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     details: dict[str, object] = Field(
         default_factory=dict, description="Game-specific round details"
     )
@@ -95,7 +95,7 @@ class SessionStats(BaseModel):
     peak_bankroll: float
     min_bankroll: float
     bust_round: int | None = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def net_profit(self) -> float:

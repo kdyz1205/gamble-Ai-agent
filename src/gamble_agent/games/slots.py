@@ -47,10 +47,7 @@ class SlotsEngine(GameEngine):
         payout_multiplier = self._calculate_payout(reels)
         payout = bet.amount * payout_multiplier
 
-        if payout_multiplier > 0:
-            outcome = BetOutcome.WIN
-        else:
-            outcome = BetOutcome.LOSE
+        outcome = BetOutcome.WIN if payout_multiplier > 0 else BetOutcome.LOSE
 
         result = BetResult(bet=bet, outcome=outcome, payout=payout, net=payout - bet.amount)
         details: dict[str, object] = {

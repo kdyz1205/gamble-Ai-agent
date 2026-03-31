@@ -77,9 +77,7 @@ class BankrollManager:
             return True
         if self._stop_loss > 0 and self._balance <= self._stop_loss:
             return True
-        if self._take_profit > 0 and self._balance >= self._take_profit:
-            return True
-        return False
+        return self._take_profit > 0 and self._balance >= self._take_profit
 
     def validate_bet(self, amount: float) -> float:
         """Validate and clamp a bet amount to allowed range. Returns the valid amount."""

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from gamble_agent.strategies.anti_martingale import AntiMartingaleStrategy
 from gamble_agent.strategies.base import BettingStrategy
 from gamble_agent.strategies.dalembert import DAlembertStrategy
@@ -14,7 +16,7 @@ from gamble_agent.strategies.percentage import PercentageBetStrategy
 class StrategyRegistry:
     """Registry mapping strategy names to factory functions."""
 
-    _strategies: dict[str, type[BettingStrategy]] = {
+    _strategies: ClassVar[dict[str, type[BettingStrategy]]] = {
         "fixed": FixedBetStrategy,
         "martingale": MartingaleStrategy,
         "anti_martingale": AntiMartingaleStrategy,

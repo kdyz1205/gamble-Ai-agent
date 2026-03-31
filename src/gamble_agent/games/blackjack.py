@@ -112,9 +112,7 @@ class BlackjackEngine(GameEngine):
             return False
         if player_val >= 13 and dealer_up_val <= 6:
             return False
-        if player_val == 12 and 4 <= dealer_up_val <= 6:
-            return False
-        return True
+        return not (player_val == 12 and 4 <= dealer_up_val <= 6)
 
     def _dealer_should_hit(self, dealer_hand: list[str]) -> bool:
         """Dealer hits on soft 17 and below."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 import structlog
 
 from gamble_agent.domain.bankroll import BankrollManager, InsufficientFundsError
-from gamble_agent.domain.models import Bet, BetOutcome, GameRound, GameType, SessionStats
+from gamble_agent.domain.models import Bet, BetOutcome, GameRound, SessionStats
 from gamble_agent.games.base import GameEngine
 from gamble_agent.strategies.base import BettingStrategy
 

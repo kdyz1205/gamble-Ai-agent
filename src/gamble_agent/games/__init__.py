@@ -8,9 +8,9 @@ from gamble_agent.games.roulette import RouletteEngine
 from gamble_agent.games.slots import SlotsEngine
 
 __all__ = [
-    "GameEngine",
     "BlackjackEngine",
     "DiceEngine",
+    "GameEngine",
     "RouletteEngine",
     "SlotsEngine",
     "get_all_engines",

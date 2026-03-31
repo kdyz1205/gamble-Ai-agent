@@ -1,15 +1,15 @@
 """Tests for simulation engine and runner."""
 
+import random
+
 import pytest
 
+from gamble_agent.domain.bankroll import BankrollManager
 from gamble_agent.domain.models import GameType
+from gamble_agent.games.roulette import RouletteEngine
 from gamble_agent.simulation.engine import SimulationEngine
 from gamble_agent.simulation.runner import SimulationConfig, SimulationRunner
 from gamble_agent.strategies.fixed import FixedBetStrategy
-from gamble_agent.strategies.martingale import MartingaleStrategy
-from gamble_agent.domain.bankroll import BankrollManager
-from gamble_agent.games.roulette import RouletteEngine
-import random
 
 
 class TestSimulationEngine:
@@ -70,6 +70,24 @@ class TestSimulationEngine:
         assert stats.total_wagered == 50 * 10
         assert stats.game_type == GameType.ROULETTE
         assert stats.strategy_name == "fixed_10"
+
+
+class TestSimulationConfig:
+    def test_valid_config(self):
+        config = SimulationConfig(game_type=GameType.ROULETTE)
+        assert config.num_rounds == 1000
+
+    def test_reject_zero_rounds(self):
+        with pytest.raises(ValueError, match="num_rounds"):
+            SimulationConfig(game_type=GameType.ROULETTE, num_rounds=0)
+
+    def test_reject_negative_bankroll(self):
+        with pytest.raises(ValueError, match="initial_bankroll"):
+            SimulationConfig(game_type=GameType.ROULETTE, initial_bankroll=-100)
+
+    def test_reject_invalid_bet_range(self):
+        with pytest.raises(ValueError, match="min_bet cannot exceed"):
+            SimulationConfig(game_type=GameType.ROULETTE, min_bet=100, max_bet=10)
 
 
 class TestSimulationRunner:

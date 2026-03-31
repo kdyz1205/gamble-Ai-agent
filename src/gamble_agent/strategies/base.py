@@ -42,5 +42,6 @@ class BettingStrategy(ABC):
             result: The result of the completed round.
         """
 
+    @abstractmethod
     def reset(self) -> None:
         """Reset strategy state to initial conditions."""

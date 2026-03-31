@@ -10,7 +10,7 @@ from gamble_agent.games.base import GameEngine
 # American roulette: 0, 00, 1-36
 RED_NUMBERS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
 BLACK_NUMBERS = {2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35}
-ALL_NUMBERS = list(range(0, 37)) + [-1]  # -1 represents "00"
+ALL_NUMBERS = [*list(range(0, 37)), -1]  # -1 represents "00"
 
 BET_TYPES = {
     "red": {"payout": 2, "numbers": RED_NUMBERS},
@@ -72,6 +72,9 @@ class RouletteEngine(GameEngine):
         details: dict[str, object] = {
             "spin_result": spin,
             "spin_display": "00" if spin == -1 else str(spin),
-            "spin_color": "red" if spin in RED_NUMBERS else ("black" if spin in BLACK_NUMBERS else "green"),
+            "spin_color": (
+                "red" if spin in RED_NUMBERS
+                else ("black" if spin in BLACK_NUMBERS else "green")
+            ),
         }
         return result, details
