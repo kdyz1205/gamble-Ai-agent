@@ -13,9 +13,9 @@ export async function GET(
   const challenge = await prisma.challenge.findUnique({
     where: { id },
     include: {
-      creator: { select: { id: true, username: true, avatar: true } },
+      creator: { select: { id: true, username: true, image: true } },
       participants: {
-        include: { user: { select: { id: true, username: true, avatar: true } } },
+        include: { user: { select: { id: true, username: true, image: true } } },
       },
       evidence: {
         include: { user: { select: { id: true, username: true } } },

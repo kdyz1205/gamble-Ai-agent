@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { getAuthUser, unauthorized } from "@/lib/auth";
 
 /**
  * GET /api/users/nearby — Get nearby users
  * Query params: lat, lng, radius (miles, default 10)
  */
 export async function GET(req: NextRequest) {
-  const payload = getUserFromRequest(req);
-  if (!payload) return unauthorized();
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
 
   const url = new URL(req.url);
   const lat = parseFloat(url.searchParams.get("lat") || "0");
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   // Update current user's location
   if (lat !== 0 && lng !== 0) {
     await prisma.user.update({
-      where: { id: payload.userId },
+      where: { id: user.userId },
       data: { latitude: lat, longitude: lng, locationUpdatedAt: new Date() },
     });
   }
@@ -30,14 +30,14 @@ export async function GET(req: NextRequest) {
 
   const users = await prisma.user.findMany({
     where: {
-      id: { not: payload.userId },
+      id: { not: user.userId },
       latitude: { not: null, gte: lat - latRange, lte: lat + latRange },
       longitude: { not: null, gte: lng - lngRange, lte: lng + lngRange },
     },
     select: {
       id: true,
       username: true,
-      avatar: true,
+      image: true,
       latitude: true,
       longitude: true,
       isOnline: true,
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Calculate distance and sort
-  const withDistance = users.map(u => {
+  const withDistance = users.map((u: typeof users[number]) => {
     const dLat = ((u.latitude! - lat) * Math.PI) / 180;
     const dLng = ((u.longitude! - lng) * Math.PI) / 180;
     const a =
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     return {
       id: u.id,
       username: u.username,
-      avatar: u.avatar,
+      image: u.image,
       distance: Math.round(distanceMiles * 10) / 10,
       isOnline: u.isOnline,
       lastSeenAt: u.lastSeenAt,
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  withDistance.sort((a, b) => a.distance - b.distance);
+  withDistance.sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance);
 
   return Response.json({ users: withDistance });
 }

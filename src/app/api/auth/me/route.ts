@@ -1,32 +1,46 @@
-import { NextRequest } from "next/server";
+import { getAuthUser, unauthorized } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { getUserFromRequest, unauthorized } from "@/lib/auth";
 
-export async function GET(req: NextRequest) {
-  const payload = getUserFromRequest(req);
-  if (!payload) return unauthorized();
+export async function GET() {
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      wallet: true,
-      participations: { include: { challenge: true }, take: 10, orderBy: { joinedAt: "desc" } },
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      image: true,
+      bio: true,
+      credits: true,
+      totalCreditsWon: true,
+      totalCreditsLost: true,
+      totalCreditsBought: true,
+      isOnline: true,
+      createdAt: true,
+      _count: { select: { challengesCreated: true, participations: true } },
     },
   });
 
-  if (!user) return unauthorized();
+  if (!dbUser) return unauthorized();
 
   return Response.json({
     user: {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      avatar: user.avatar,
-      bio: user.bio,
-      isOnline: user.isOnline,
-      wallet: user.wallet,
-      activeChallenges: user.participations.filter(p => ["pending", "accepted"].includes(p.status)).length,
-      createdAt: user.createdAt,
+      id: dbUser.id,
+      email: dbUser.email,
+      username: dbUser.username,
+      image: dbUser.image,
+      bio: dbUser.bio,
+      credits: dbUser.credits,
+      stats: {
+        won: dbUser.totalCreditsWon,
+        lost: dbUser.totalCreditsLost,
+        bought: dbUser.totalCreditsBought,
+        challenges: dbUser._count.challengesCreated + dbUser._count.participations,
+      },
+      isOnline: dbUser.isOnline,
+      createdAt: dbUser.createdAt,
     },
   });
 }
