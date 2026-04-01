@@ -8,6 +8,7 @@ import {
   txLink,
   MODEL_TIERS,
   tierById,
+  verdictCommitmentHash,
   type TierId,
   type TierBalance,
 } from "./contracts";
@@ -180,6 +181,7 @@ export async function settleChallenge(
   winnerId: string | null,
   stake: number,
   participants: Array<{ userId: string }>,
+  verdict?: { reasoning: string; confidence: number },
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   if (stake <= 0) return { success: true };
 
@@ -190,7 +192,17 @@ export async function settleChallenge(
       : null;
     if (winner?.evmAddress || !winnerId) {
       try {
-        const txHash = await settleOnChain(challengeId, (winner?.evmAddress as Address) || null);
+        const evidenceHash = verdictCommitmentHash({
+          challengeId,
+          winnerId,
+          reasoning: verdict?.reasoning ?? "",
+          confidence: verdict?.confidence ?? 0,
+        });
+        const txHash = await settleOnChain(
+          challengeId,
+          (winner?.evmAddress as Address) || null,
+          evidenceHash,
+        );
         for (const p of participants) {
           const isWinner = p.userId === winnerId;
           await prisma.creditTx.create({

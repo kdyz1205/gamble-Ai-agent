@@ -1,6 +1,27 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import type { EvidencePayload } from "./evidence-types";
+import { completeOraclePrompt, completeOracleJudgeVision } from "./llm-router";
+import {
+  capJudgeVisuals,
+  prepareParticipantVisuals,
+  type JudgeVisionImage,
+} from "./media/prepare-evidence-visuals";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+function hasProviderApiKey(providerId: string): boolean {
+  const def = getProviderById(providerId);
+  return Boolean(def && process.env[def.envVar]);
+}
+
+function resolveParseOpts(modelOrOpts?: string | ParseChallengeOptions): ParseChallengeOptions {
+  if (modelOrOpts == null) return {};
+  if (typeof modelOrOpts === "string") return { model: modelOrOpts };
+  return modelOrOpts;
+}
+
+export interface ParseChallengeOptions {
+  model?: string;
+  providerId?: string;
+}
 
 export interface ParsedChallenge {
   title: string;
@@ -18,14 +39,14 @@ export interface JudgmentResult {
   confidence: number;
 }
 
-export interface EvidencePayload {
-  description: string | null;
-  type: string;
-  url?: string | null;
-}
+export type { EvidencePayload } from "./evidence-types";
 
 export interface JudgeChallengeParams {
   title: string;
+  /** Original user-facing condition / agreement (from DB `description`). */
+  description?: string | null;
+  /** ISO-8601 UTC deadline when stored on the challenge; informs forfeits and timing. */
+  deadlineIso?: string | null;
   type: string;
   rules: string | null | undefined;
   evidencePolicy: string | null | undefined;
@@ -34,27 +55,38 @@ export interface JudgeChallengeParams {
   participantAId: string;
   participantBId: string | null;
   model?: string;
+  /** LLM backend id from `llm-providers` (default: anthropic). */
+  providerId?: string;
 }
 
-export async function parseChallenge(input: string, model = "claude-haiku-4-20250414"): Promise<ParsedChallenge> {
-  if (!process.env.ANTHROPIC_API_KEY) return parseChallengeFallback(input);
+export async function parseChallenge(
+  input: string,
+  modelOrOpts?: string | ParseChallengeOptions,
+): Promise<ParsedChallenge> {
+  const opts = resolveParseOpts(modelOrOpts);
+  const providerId = opts.providerId ?? DEFAULT_LLM_PROVIDER_ID;
+  const def = getProviderById(providerId);
+  const model = opts.model ?? def?.defaultModel ?? "claude-haiku-4-20250414";
 
-  try {
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 512,
-      messages: [{ role: "user", content: input }],
-      system: `You parse natural language into a structured challenge. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
+  if (!hasProviderApiKey(providerId)) return parseChallengeFallback(input);
+
+  const system = `You parse natural language into a structured challenge. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
 - title (string, max 64 chars, concise)
 - type (one of: Fitness, Cooking, Coding, Learning, Games, Video, General)
 - suggestedStake (integer, credits to wager, 0 if none mentioned. If user says "$5", convert to 500 credits. If user says "10 credits" use 10.)
 - evidenceType ("video" | "photo" | "gps" | "self_report")
 - rules (string, brief rules)
 - deadline (string like "48 hours", "7 days")
-- isPublic (boolean, true unless user says private)`,
-    });
+- isPublic (boolean, true unless user says private)`;
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+  try {
+    const text = await completeOraclePrompt({
+      providerId,
+      model,
+      system,
+      user: input,
+      maxTokens: 512,
+    });
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) return JSON.parse(jsonMatch[0]) as ParsedChallenge;
   } catch {
@@ -74,12 +106,40 @@ function evidenceBlock(label: string, e: EvidencePayload | null): string {
   return `${label}: ${parts.join(" | ")}`;
 }
 
+function challengeContextBlock(p: Pick<JudgeChallengeParams, "description" | "deadlineIso">): string {
+  const desc =
+    p.description && String(p.description).trim() ? String(p.description).trim() : "(none provided)";
+  const dl = p.deadlineIso ? `${p.deadlineIso} (UTC)` : "Not set on challenge record";
+  return `Agreed condition / description: ${desc}
+Recorded submission deadline: ${dl}`;
+}
+
+/** Upgrade to a vision SKU when we attach real pixels (video→JPEG frames or photos). */
+function resolveJudgeVisionModel(providerId: string, userModel: string): string {
+  if (providerId === "anthropic") {
+    if (/claude-(opus|sonnet)/i.test(userModel)) return userModel;
+    if (/haiku/i.test(userModel)) return userModel;
+    return "claude-sonnet-4-20250514";
+  }
+  if (providerId === "openai" || providerId === "azure_openai") {
+    if (/gpt-4|4o|o4|o3|vision/i.test(userModel)) return userModel;
+    return "gpt-4o-mini";
+  }
+  if (providerId === "google") {
+    if (/gemini/i.test(userModel)) return userModel;
+    return "gemini-2.0-flash";
+  }
+  return userModel;
+}
+
 /**
- * AI verdict: compares evidence to challenge rules. Uses Anthropic when API key is set.
+ * AI verdict: compares evidence to challenge rules. Uses configured LLM provider when API key is set.
  */
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
   const {
     title,
+    description,
+    deadlineIso,
     type,
     rules,
     evidencePolicy,
@@ -87,8 +147,13 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
     evidenceB,
     participantAId,
     participantBId,
-    model = "claude-haiku-4-20250414",
+    model: modelParam,
+    providerId: providerIdParam,
   } = params;
+
+  const providerId = providerIdParam ?? DEFAULT_LLM_PROVIDER_ID;
+  const def = getProviderById(providerId);
+  const model = modelParam ?? def?.defaultModel ?? "claude-haiku-4-20250414";
 
   const isDuel = Boolean(participantBId);
 
@@ -100,11 +165,11 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
     };
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasProviderApiKey(providerId)) {
     return judgeChallengeFallback(params);
   }
 
-  const system = `You are the lead AI judge for a challenge platform. Be fair, concrete, and cite what evidence supports each call. Always return ONLY valid JSON with no markdown.
+  const system = `You are a neutral arbitrator for a peer challenge platform (not a lawyer). Be impartial: weigh only the stated rules, the agreed condition, evidence, and the recorded deadline. Be fair, concrete, and cite what supports each call. If the deadline has passed and one side submitted nothing while the other submitted plausible evidence, you may treat missing submission as a forfeit unless the rules say otherwise. Always return ONLY valid JSON with no markdown.
 
 For head-to-head challenges (two participants with evidence), pick exactly one winner unless evidence is equally weak — then use "tie".
 
@@ -115,6 +180,7 @@ For solo challenges (only one participant with evidence), decide if their eviden
   if (isDuel && evidenceA && evidenceB) {
     userPrompt = `Challenge type: ${type}
 Title: ${title}
+${challengeContextBlock({ description, deadlineIso })}
 Rules: ${rules || "Standard rules implied by title."}
 Evidence policy (how results should be proven): ${evidencePolicy || "Not specified"}
 
@@ -132,6 +198,7 @@ Return JSON:
     userPrompt = `Solo / single-sided challenge.
 Type: ${type}
 Title: ${title}
+${challengeContextBlock({ description, deadlineIso })}
 Rules: ${rules || "Standard rules implied by title."}
 Evidence policy: ${evidencePolicy || "Not specified"}
 
@@ -148,6 +215,7 @@ Return JSON:
     userPrompt = `Solo evidence only from participant B.
 Type: ${type}
 Title: ${title}
+${challengeContextBlock({ description, deadlineIso })}
 Rules: ${rules || "Standard rules implied by title."}
 Evidence policy: ${evidencePolicy || "Not specified"}
 
@@ -164,15 +232,63 @@ Return JSON:
     return judgeChallengeFallback(params);
   }
 
-  try {
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 1024,
-      messages: [{ role: "user", content: userPrompt }],
-      system,
-    });
+  let bundleA: { preambleLines: string[]; visuals: JudgeVisionImage[] } = {
+    preambleLines: [],
+    visuals: [],
+  };
+  let bundleB: { preambleLines: string[]; visuals: JudgeVisionImage[] } = {
+    preambleLines: [],
+    visuals: [],
+  };
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+  if (isDuel && evidenceA && evidenceB) {
+    const [a, b] = await Promise.all([
+      prepareParticipantVisuals("Participant A (challenger)", evidenceA),
+      prepareParticipantVisuals("Participant B (opponent)", evidenceB),
+    ]);
+    bundleA = a;
+    bundleB = b;
+  } else if (evidenceA && !evidenceB) {
+    bundleA = await prepareParticipantVisuals("Participant A", evidenceA);
+  } else if (!evidenceA && evidenceB && participantBId) {
+    bundleB = await prepareParticipantVisuals("Participant B", evidenceB);
+  }
+
+  const mediaNotes = [...bundleA.preambleLines, ...bundleB.preambleLines];
+  if (mediaNotes.length) {
+    userPrompt = `Evidence pipeline (automation + URLs):\n${mediaNotes.join("\n")}\n\n---\n\n${userPrompt}`;
+  }
+
+  const visuals = capJudgeVisuals(bundleA.visuals, bundleB.visuals, 24);
+  const visionHint =
+    visuals.length > 0
+      ? " Attached JPEGs may include evenly spaced frames from user videos—use captions for timeline hints."
+      : "";
+  const systemAugmented = system + visionHint;
+
+  try {
+    let text: string;
+    if (visuals.length > 0) {
+      const visionModel = resolveJudgeVisionModel(providerId, model);
+      const legend = visuals.map((v, i) => `[Visual ${i + 1}] ${v.caption}`).join("\n");
+      const userWithLegend = `You have ${visuals.length} image(s) attached in API order. Read pixels for objective facts (reps, form, completion, continuity). Then answer using ONLY the JSON schema below.\n${legend}\n\n---\n\n${userPrompt}`;
+      text = await completeOracleJudgeVision({
+        providerId,
+        model: visionModel,
+        system: systemAugmented,
+        userText: userWithLegend,
+        images: visuals,
+        maxTokens: 1024,
+      });
+    } else {
+      text = await completeOraclePrompt({
+        providerId,
+        model,
+        system: systemAugmented,
+        user: userPrompt,
+        maxTokens: 1024,
+      });
+    }
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return judgeChallengeFallback(params);
 
@@ -330,7 +446,7 @@ function judgeChallengeFallback(params: JudgeChallengeParams): JudgmentResult {
   if (evidenceA && !evidenceB && !participantBId) {
     return {
       winnerId: participantAId,
-      reasoning: `[Demo mode — add ANTHROPIC_API_KEY] Evidence received for "${title}". Treated as completed.`,
+      reasoning: `[Demo mode — set API key for your LLM provider] Evidence received for "${title}". Treated as completed.`,
       confidence: 0.7,
     };
   }
@@ -341,7 +457,7 @@ function judgeChallengeFallback(params: JudgeChallengeParams): JudgmentResult {
     return {
       winnerId,
       confidence,
-      reasoning: `[Demo mode — add ANTHROPIC_API_KEY] Compared ${evidenceA.type} vs ${evidenceB.type} for "${title}". Assigned winner for testing.`,
+      reasoning: `[Demo mode — set API key for your LLM provider] Compared ${evidenceA.type} vs ${evidenceB.type} for "${title}". Assigned winner for testing.`,
     };
   }
   return {

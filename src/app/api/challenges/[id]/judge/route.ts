@@ -1,8 +1,15 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
-import { judgeChallenge } from "@/lib/ai-engine";
-import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "@/lib/credits";
+import {
+  executeChallengeJudgment,
+  type JudgmentExecutionFailure,
+} from "@/lib/challenge-judgment";
+import { getCredits, TIER_MULTIPLIER } from "@/lib/credits";
+
+export const runtime = "nodejs";
+/** Vision + ffmpeg can exceed default Vercel limit; adjust per host. */
+export const maxDuration = 300;
 
 /**
  * POST /api/challenges/[id]/judge
@@ -19,10 +26,16 @@ export async function POST(
 
   const { id } = await params;
   let tierId: TierId = 1;
+  let providerId: string | undefined;
+  let model: string | undefined;
   try {
     const body = await req.json();
     if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
-  } catch { /* default to haiku */ }
+    if (typeof body?.providerId === "string") providerId = body.providerId;
+    if (typeof body?.model === "string") model = body.model;
+  } catch {
+    /* default to haiku */
+  }
 
   const cost = TIER_MULTIPLIER[tierId];
   const balance = await getCredits(user.userId);
@@ -30,17 +43,13 @@ export async function POST(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    include: {
-      participants: {
-        where: { status: "accepted" },
-        include: { user: { select: { id: true, username: true } } },
-      },
-      evidence: true,
-    },
+    select: { creatorId: true, status: true, title: true },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
-  if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
+  if (challenge.creatorId !== user.userId) {
+    return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
+  }
   if (challenge.status !== "judging") {
     return Response.json(
       {
@@ -51,72 +60,31 @@ export async function POST(
     );
   }
 
-  const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
-  if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+  const result = await executeChallengeJudgment(id, tierId, { providerId, model });
 
-  const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
-  const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
-  if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
-
-  const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
-  const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
-  const mapEv = (e: { description: string | null; type: string; url: string | null } | null) =>
-    e ? { description: e.description, type: e.type, url: e.url } : null;
-
-  const aiModel = getAiModel(tierId);
-  const result = await judgeChallenge({
-    title: challenge.title,
-    type: challenge.type,
-    rules: challenge.rules,
-    evidencePolicy: challenge.evidenceType,
-    evidenceA: mapEv(evidenceA ?? null),
-    evidenceB: mapEv(evidenceB ?? null),
-    participantAId: creator.userId,
-    participantBId: opponent?.userId ?? null,
-    model: aiModel.model,
-  });
-
-  const judgment = await prisma.judgment.create({
-    data: {
-      challengeId: id,
-      winnerId: result.winnerId,
-      method: "ai",
-      aiModel: aiModel.displayName,
-      reasoning: result.reasoning,
-      confidence: result.confidence,
-      status: "completed",
-    },
-    include: { winner: { select: { id: true, username: true } } },
-  });
-
-  let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
-  if (challenge.stake > 0) {
-    settlementResult = await settleChallenge(
-      id, result.winnerId, challenge.stake,
-      challenge.participants.map((p: { userId: string }) => ({ userId: p.userId })),
-    );
+  if (!result.ok) {
+    if ("skipped" in result && result.skipped) {
+      return Response.json({ error: "Challenge already judged", reason: result.reason }, { status: 409 });
+    }
+    const fail = result as JudgmentExecutionFailure;
+    if (fail.status === 402) {
+      return noCredits(
+        cost,
+        fail.creditsRemaining ?? (await getCredits(user.userId)),
+        getAiModel(tierId).displayName,
+      );
+    }
+    return Response.json({ error: fail.error }, { status: fail.status });
   }
 
-  await prisma.challenge.update({ where: { id }, data: { status: "settled", aiModel: aiModel.displayName } });
-
-  const winnerName = judgment.winner?.username || "No one";
-  await prisma.activityEvent.create({
-    data: {
-      type: "challenge_settled",
-      message: `"${challenge.title}" judged by ${aiModel.displayName} — ${winnerName} wins!${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}`,
-      userId: result.winnerId,
-      challengeId: id,
-    },
-  });
-
   return Response.json({
-    judgment,
-    settlement: settlementResult,
+    judgment: result.judgment,
+    settlement: result.settlementResult,
     challenge: { id, status: "settled" },
-    model: aiModel.displayName,
-    tierId,
-    creditsUsed: cost,
-    creditsRemaining: spend.balance,
-    txHash: spend.txHash || settlementResult.txHash || null,
+    model: result.model,
+    tierId: result.tierId,
+    creditsUsed: result.creditsUsed,
+    creditsRemaining: result.creditsRemaining,
+    txHash: result.txHash,
   });
 }

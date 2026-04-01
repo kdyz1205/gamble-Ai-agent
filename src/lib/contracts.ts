@@ -7,6 +7,7 @@ import {
   type Hash,
   keccak256,
   toHex,
+  stringToBytes,
 } from "viem";
 import { baseSepolia, base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
@@ -19,16 +20,17 @@ import { privateKeyToAccount } from "viem/accounts";
  *   2 = SONNET  ($0.05/token)  → balanced
  *   3 = OPUS    ($0.25/token)  → most powerful
  *
- * Each token = 1 inference call on that model tier.
- * Tokens are freely tradeable on any ERC-1155 marketplace.
+ * ChallengeEscrow v2: uint256 challenge key = uint256(keccak256(utf8(offChainId))) aligned with `keccak256(toHex(id))` in viem.
  */
 
 const chain = process.env.X402_NETWORK === "base" ? base : baseSepolia;
 
+export const ESCROW_STATES = ["Created", "Active", "Judging", "Settled", "Disputed"] as const;
+
 export const MODEL_TIERS = {
-  HAIKU:  { id: 1, name: "Haiku",  model: "claude-haiku-4-20250414",  priceUsd: 0.01 },
+  HAIKU: { id: 1, name: "Haiku", model: "claude-haiku-4-20250414", priceUsd: 0.01 },
   SONNET: { id: 2, name: "Sonnet", model: "claude-sonnet-4-20250514", priceUsd: 0.05 },
-  OPUS:   { id: 3, name: "Opus",   model: "claude-sonnet-4-20250514", priceUsd: 0.25 },
+  OPUS: { id: 3, name: "Opus", model: "claude-sonnet-4-20250514", priceUsd: 0.25 },
 } as const;
 
 export type TierName = keyof typeof MODEL_TIERS;
@@ -57,13 +59,17 @@ const USAGE_TOKEN_ABI = parseAbi([
 ]);
 
 const ESCROW_ABI = parseAbi([
-  "function createChallenge(bytes32 challengeId, uint256 modelId, uint256 stake) external",
-  "function acceptChallenge(bytes32 challengeId) external",
-  "function settle(bytes32 challengeId, address winner) external",
-  "function cancel(bytes32 challengeId) external",
-  "function challenges(bytes32) view returns (bytes32 id, address creator, address opponent, uint256 modelId, uint256 stake, uint8 status, address winner)",
-  "event ChallengeCreated(bytes32 indexed id, address indexed creator, uint256 modelId, uint256 stake)",
-  "event ChallengeSettled(bytes32 indexed id, address indexed winner, uint256 modelId, uint256 payout)",
+  "function createChallenge(uint256 challengeId, uint256 modelId, uint256 stake) external",
+  "function acceptChallenge(uint256 challengeId) external",
+  "function cancel(uint256 challengeId) external",
+  "function beginJudging(uint256 challengeId) external",
+  "function settle(uint256 challengeId, address winner, bytes32 evidenceHash) external",
+  "function markDisputed(uint256 challengeId) external",
+  "function resolveDispute(uint256 challengeId, address winner, bytes32 evidenceHash) external",
+  "function challenges(uint256) view returns (uint256 id, address creator, address opponent, uint256 modelId, uint256 stake, uint8 state, address winner, bytes32 evidenceHash)",
+  "function judgeAddress() view returns (address)",
+  "event ChallengeCreated(uint256 indexed id, address indexed creator, uint256 modelId, uint256 stake)",
+  "event ChallengeSettled(uint256 indexed id, address indexed winner, uint256 modelId, uint256 payout, bytes32 evidenceHash)",
 ]);
 
 const USAGE_TOKEN_ADDRESS = (process.env.USAGE_TOKEN_ADDRESS || "") as Address;
@@ -97,9 +103,9 @@ export async function getAllBalances(userAddress: Address): Promise<TierBalance[
   });
 
   return [
-    { id: 1, name: "Haiku",  balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
+    { id: 1, name: "Haiku", balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
     { id: 2, name: "Sonnet", balance: Number(balances[1]), valueUsd: Number(balances[1]) * 0.05 },
-    { id: 3, name: "Opus",   balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
+    { id: 3, name: "Opus", balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
   ];
 }
 
@@ -134,36 +140,76 @@ export async function burnForInference(
   return { txHash, requestId };
 }
 
-// ── Escrow ──
+// ── Escrow (AI oracle wallet = onlyJudge) ──
 
-export function challengeIdToBytes32(id: string): `0x${string}` {
-  return keccak256(toHex(id));
+/** Same as historical bytes32 id: keccak over UTF-8 string hex; cast to uint256 for the new escrow ABI. */
+export function challengeIdToUint256(id: string): bigint {
+  return BigInt(keccak256(toHex(id)));
+}
+
+/** Commitment stored on-chain with settle() — binds verdict payload without putting full text on-chain. */
+export function verdictCommitmentHash(parts: {
+  challengeId: string;
+  winnerId: string | null;
+  reasoning: string;
+  confidence: number;
+}): `0x${string}` {
+  const payload = JSON.stringify({
+    v: 1,
+    challengeId: parts.challengeId,
+    winnerId: parts.winnerId,
+    reasoning: parts.reasoning.slice(0, 4000),
+    confidence: parts.confidence,
+  });
+  return keccak256(stringToBytes(payload));
 }
 
 export async function settleOnChain(
   challengeId: string,
   winnerAddress: Address | null,
+  evidenceHash: `0x${string}`,
 ): Promise<Hash> {
   const wallet = getServerWallet();
-  const bytes32Id = challengeIdToBytes32(challengeId);
+  const numericId = challengeIdToUint256(challengeId);
   const winner = winnerAddress || ("0x0000000000000000000000000000000000000000" as Address);
+
+  const row = await publicClient.readContract({
+    address: ESCROW_ADDRESS,
+    abi: ESCROW_ABI,
+    functionName: "challenges",
+    args: [numericId],
+  });
+
+  const state = Number(row[5]);
+  // 1 = Active → oracle must lock before settle
+  if (state === 1) {
+    const beginHash = await wallet.writeContract({
+      address: ESCROW_ADDRESS,
+      abi: ESCROW_ABI,
+      functionName: "beginJudging",
+      args: [numericId],
+    });
+    await publicClient.waitForTransactionReceipt({ hash: beginHash });
+  }
+
   return wallet.writeContract({
     address: ESCROW_ADDRESS,
     abi: ESCROW_ABI,
     functionName: "settle",
-    args: [bytes32Id, winner],
+    args: [numericId, winner, evidenceHash],
   });
 }
 
 export async function getOnChainChallenge(challengeId: string) {
-  const bytes32Id = challengeIdToBytes32(challengeId);
+  const numericId = challengeIdToUint256(challengeId);
   const r = await publicClient.readContract({
     address: ESCROW_ADDRESS,
     abi: ESCROW_ABI,
     functionName: "challenges",
-    args: [bytes32Id],
+    args: [numericId],
   });
   const tier = tierById(Number(r[3]) as TierId);
+  const stateIdx = Number(r[5]) as 0 | 1 | 2 | 3 | 4;
   return {
     id: r[0],
     creator: r[1],
@@ -172,8 +218,9 @@ export async function getOnChainChallenge(challengeId: string) {
     modelName: tier.name,
     stake: Number(r[4]),
     stakeValueUsd: Number(r[4]) * tier.priceUsd,
-    status: ["Open", "Live", "Settled", "Cancelled"][r[5]],
+    status: ESCROW_STATES[stateIdx] ?? `Unknown(${stateIdx})`,
     winner: r[6],
+    evidenceHash: r[7],
   };
 }
 

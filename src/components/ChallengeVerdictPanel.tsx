@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
+import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -111,7 +112,11 @@ export default function ChallengeVerdictPanel({
     setBusy(true);
     setVerdictErr("");
     try {
-      await api.judgeChallenge(challenge.id, tier);
+      const prefs = readOracleLlmPrefs();
+      await api.judgeChallenge(challenge.id, tier, {
+        providerId: prefs.providerId,
+        ...(prefs.model ? { model: prefs.model } : {}),
+      });
       await refresh();
       onCreditsMayChange();
     } catch (e) {
@@ -302,7 +307,7 @@ export default function ChallengeVerdictPanel({
               <input
                 value={evidenceUrl}
                 onChange={(e) => setEvidenceUrl(e.target.value)}
-                placeholder="Optional: link (YouTube, Drive, Strava, image URL…)"
+                placeholder="HTTPS link to image or direct MP4/WebM (for AI vision). YouTube watch pages are text-only unless you host a raw file."
                 className="w-full rounded-xl px-4 py-3 text-sm font-medium text-text-primary placeholder:text-text-muted bg-bg-input border border-border-subtle focus:border-accent focus:outline-none"
               />
               <motion.button

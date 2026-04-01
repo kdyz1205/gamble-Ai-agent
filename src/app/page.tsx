@@ -13,7 +13,9 @@ import type { ChallengeDraft } from "@/components/DraftPanel";
 import { FloatingActionBar } from "@/components/SecondaryPanels";
 import AuthModal from "@/components/AuthModal";
 import ChallengeVerdictPanel from "@/components/ChallengeVerdictPanel";
+import AiOracleSettingsPanel from "@/components/AiOracleSettingsPanel";
 import * as api from "@/lib/api-client";
+import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 
 /* ═══════════════════════════════════════════════════
    AI CONVERSATION ENGINE
@@ -155,7 +157,11 @@ export default function Home() {
     if (user) {
       try {
         setIsTyping(true);
-        const res = await api.parseChallenge(input);
+        const prefs = readOracleLlmPrefs();
+        const res = await api.parseChallenge(input, 1, {
+          providerId: prefs.providerId,
+          ...(prefs.model ? { model: prefs.model } : {}),
+        });
         setIsTyping(false);
 
         const apiSteps: ConvoStep[] = res.clarifications.map(c => ({
@@ -508,6 +514,8 @@ export default function Home() {
       </AnimatePresence>
 
       {/* ── Auth Modal ── */}
+      <AiOracleSettingsPanel />
+
       <AuthModal
         open={showAuth}
         onClose={() => setShowAuth(false)}

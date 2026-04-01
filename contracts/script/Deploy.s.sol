@@ -20,13 +20,13 @@ contract Deploy is Script {
         console.log("  OPUS   (id=3): $0.25/token");
 
         // 2. Deploy escrow for token-staked challenges
-        ChallengeEscrow escrow = new ChallengeEscrow(address(token));
+        ChallengeEscrow escrow = new ChallengeEscrow(address(token), serverWallet);
         console.log("ChallengeEscrow deployed at:", address(escrow));
+        console.log("  Oracle judge wallet (onlyJudge):", serverWallet);
 
-        // 3. Authorize server as burner + judge
+        // 3. Authorize server as burner; escrow pulls stakes
         token.setAuthorizedBurner(serverWallet, true);
         token.setAuthorizedBurner(address(escrow), true);
-        escrow.setAuthorizedJudge(serverWallet, true);
 
         console.log("Server authorized:", serverWallet);
 

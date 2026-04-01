@@ -181,7 +181,11 @@ export async function submitEvidence(id: string, data: {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
 
-export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1): Promise<{
+export async function judgeChallenge(
+  id: string,
+  tier: 1 | 2 | 3 = 1,
+  opts?: { providerId?: string; model?: string },
+): Promise<{
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
   model: string;
@@ -192,7 +196,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1): Promise<{
 }> {
   return apiFetch(`/challenges/${id}/judge`, {
     method: "POST",
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify({ tier, ...opts }),
   });
 }
 
@@ -208,7 +212,11 @@ export interface ParsedChallenge {
   isPublic: boolean;
 }
 
-export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promise<{
+export async function parseChallenge(
+  input: string,
+  tier: 1 | 2 | 3 = 1,
+  opts?: { providerId?: string; model?: string },
+): Promise<{
   parsed: ParsedChallenge;
   clarifications: Array<{ question: string; options: string[] }>;
   model: string;
@@ -219,7 +227,7 @@ export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promis
 }> {
   return apiFetch("/challenges/parse", {
     method: "POST",
-    body: JSON.stringify({ input, tier }),
+    body: JSON.stringify({ input, tier, ...opts }),
   });
 }
 

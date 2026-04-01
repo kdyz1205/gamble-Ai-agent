@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { parseChallenge, generateClarifications } from "@/lib/ai-engine";
 import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 
 /**
  * POST /api/challenges/parse
@@ -16,10 +17,14 @@ export async function POST(req: NextRequest) {
   if (!user) return unauthorized();
 
   try {
-    const { input, tier: rawTier } = await req.json();
+    const { input, tier: rawTier, providerId: rawPid, model: rawModel } = await req.json();
     if (!input || typeof input !== "string") {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
+
+    const providerId =
+      typeof rawPid === "string" && getProviderById(rawPid) ? rawPid : DEFAULT_LLM_PROVIDER_ID;
+    const pdef = getProviderById(providerId)!;
 
     const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
     const cost = TIER_MULTIPLIER[tierId];
@@ -29,13 +34,20 @@ export async function POST(req: NextRequest) {
     const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${input.slice(0, 50)}…"`);
     if (!result.success) return noCredits(cost, result.balance, getAiModel(tierId).displayName);
 
-    const parsed = await parseChallenge(input, result.model);
+    const parseModel =
+      typeof rawModel === "string" && rawModel.trim()
+        ? rawModel.trim()
+        : providerId === DEFAULT_LLM_PROVIDER_ID
+          ? result.model
+          : pdef.defaultModel;
+
+    const parsed = await parseChallenge(input, { model: parseModel, providerId });
     const clarifications = generateClarifications(parsed);
 
     return Response.json({
       parsed,
       clarifications,
-      model: getAiModel(tierId).displayName,
+      model: `${pdef.shortLabel} / ${parseModel}`,
       tierId,
       creditsUsed: cost,
       creditsRemaining: result.balance,
