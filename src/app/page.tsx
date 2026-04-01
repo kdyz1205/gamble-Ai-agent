@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -496,6 +497,8 @@ export default function Home() {
             exit={{ opacity: 0, y: 8, transition: { duration: 0.3 } }}
           >
             <span>Terms</span>
+            <span className="text-text-muted/20">·</span>
+            <Link href="/pricing" className="hover:text-text-muted transition-colors">Pricing lab</Link>
             <span className="text-text-muted/20">·</span>
             <span>AI-Powered Challenge OS</span>
             <span className="text-text-muted/20">·</span>
