@@ -221,7 +221,17 @@ export async function settleChallenge(
   }
 
   const loserId = participants.find(p => p.userId !== winnerId)?.userId;
-  if (!loserId) return { success: true };
+
+  if (!loserId) {
+    await addCredits(
+      winnerId,
+      stake,
+      "win",
+      `Solo challenge — stake returned (+${stake} credits)`,
+      challengeId,
+    );
+    return { success: true };
+  }
 
   const loser = await prisma.user.findUnique({ where: { id: loserId }, select: { credits: true } });
   await prisma.creditTx.create({

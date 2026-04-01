@@ -18,6 +18,24 @@ export interface JudgmentResult {
   confidence: number;
 }
 
+export interface EvidencePayload {
+  description: string | null;
+  type: string;
+  url?: string | null;
+}
+
+export interface JudgeChallengeParams {
+  title: string;
+  type: string;
+  rules: string | null | undefined;
+  evidencePolicy: string | null | undefined;
+  evidenceA: EvidencePayload | null;
+  evidenceB: EvidencePayload | null;
+  participantAId: string;
+  participantBId: string | null;
+  model?: string;
+}
+
 export async function parseChallenge(input: string, model = "claude-haiku-4-20250414"): Promise<ParsedChallenge> {
   if (!process.env.ANTHROPIC_API_KEY) return parseChallengeFallback(input);
 
@@ -46,58 +64,167 @@ export async function parseChallenge(input: string, model = "claude-haiku-4-2025
   return parseChallengeFallback(input);
 }
 
-export async function judgeChallenge(
-  challengeTitle: string,
-  challengeType: string,
-  evidenceA: { description: string | null; type: string } | null,
-  evidenceB: { description: string | null; type: string } | null,
-  participantAId: string,
-  participantBId: string,
-  model = "claude-haiku-4-20250414",
-): Promise<JudgmentResult> {
+function evidenceBlock(label: string, e: EvidencePayload | null): string {
+  if (!e) return `${label}: (none submitted)`;
+  const parts = [
+    `type=${e.type}`,
+    e.description ? `description=${e.description}` : null,
+    e.url ? `url=${e.url}` : null,
+  ].filter(Boolean);
+  return `${label}: ${parts.join(" | ")}`;
+}
+
+/**
+ * AI verdict: compares evidence to challenge rules. Uses Anthropic when API key is set.
+ */
+export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
+  const {
+    title,
+    type,
+    rules,
+    evidencePolicy,
+    evidenceA,
+    evidenceB,
+    participantAId,
+    participantBId,
+    model = "claude-haiku-4-20250414",
+  } = params;
+
+  const isDuel = Boolean(participantBId);
+
   if (!evidenceA && !evidenceB) {
-    return { winnerId: null, reasoning: "Neither participant submitted evidence. Challenge voided — credits refunded.", confidence: 0.95 };
-  }
-  if (evidenceA && !evidenceB) {
-    return { winnerId: participantAId, reasoning: `Only participant A submitted ${evidenceA.type} evidence. Winner by default.`, confidence: 0.85 };
-  }
-  if (!evidenceA && evidenceB) {
-    return { winnerId: participantBId, reasoning: `Only participant B submitted ${evidenceB.type} evidence. Winner by default.`, confidence: 0.85 };
+    return {
+      winnerId: null,
+      reasoning: "No evidence from any participant. Challenge voided — stakes refunded.",
+      confidence: 0.99,
+    };
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) return judgeChallengeFallback(challengeTitle, evidenceA!, evidenceB!, participantAId, participantBId);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return judgeChallengeFallback(params);
+  }
+
+  const system = `You are the lead AI judge for a challenge platform. Be fair, concrete, and cite what evidence supports each call. Always return ONLY valid JSON with no markdown.
+
+For head-to-head challenges (two participants with evidence), pick exactly one winner unless evidence is equally weak — then use "tie".
+
+For solo challenges (only one participant with evidence), decide if their evidence plausibly satisfies the challenge under the stated rules. "satisfied" means the user likely completed the challenge; "not_satisfied" means the evidence contradicts or is clearly insufficient; "insufficient" means you cannot tell and need more proof.`;
+
+  let userPrompt: string;
+
+  if (isDuel && evidenceA && evidenceB) {
+    userPrompt = `Challenge type: ${type}
+Title: ${title}
+Rules: ${rules || "Standard rules implied by title."}
+Evidence policy (how results should be proven): ${evidencePolicy || "Not specified"}
+
+${evidenceBlock("Participant A (challenger)", evidenceA)}
+${evidenceBlock("Participant B (opponent)", evidenceB)}
+
+Return JSON:
+{
+  "winner": "A" | "B" | "tie",
+  "reasoning": "2-5 sentences explaining who satisfied the challenge better and why",
+  "confidence": number from 0 to 1,
+  "key_factors": ["short bullet", "..."]
+}`;
+  } else if (evidenceA && !evidenceB) {
+    userPrompt = `Solo / single-sided challenge.
+Type: ${type}
+Title: ${title}
+Rules: ${rules || "Standard rules implied by title."}
+Evidence policy: ${evidencePolicy || "Not specified"}
+
+${evidenceBlock("Participant A", evidenceA)}
+
+Return JSON:
+{
+  "outcome": "satisfied" | "not_satisfied" | "insufficient",
+  "reasoning": "2-5 sentences on whether the evidence meets the challenge",
+  "confidence": number from 0 to 1,
+  "key_factors": ["short bullet", "..."]
+}`;
+  } else if (!evidenceA && evidenceB && participantBId) {
+    userPrompt = `Solo evidence only from participant B.
+Type: ${type}
+Title: ${title}
+Rules: ${rules || "Standard rules implied by title."}
+Evidence policy: ${evidencePolicy || "Not specified"}
+
+${evidenceBlock("Participant B", evidenceB)}
+
+Return JSON:
+{
+  "outcome": "satisfied" | "not_satisfied" | "insufficient",
+  "reasoning": "...",
+  "confidence": number from 0 to 1,
+  "key_factors": ["..."]
+}`;
+  } else {
+    return judgeChallengeFallback(params);
+  }
 
   try {
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 512,
-      messages: [{
-        role: "user",
-        content: `Judge this "${challengeType}" challenge: "${challengeTitle}"
-
-Participant A evidence (${evidenceA!.type}): ${evidenceA!.description || "No description"}
-Participant B evidence (${evidenceB!.type}): ${evidenceB!.description || "No description"}
-
-Return JSON: { "winner": "A" or "B", "reasoning": "...", "confidence": 0.0-1.0 }`,
-      }],
-      system: "You are a fair AI judge for challenges. Analyze evidence objectively. Return ONLY valid JSON.",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: userPrompt }],
+      system,
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
+    if (!jsonMatch) return judgeChallengeFallback(params);
+
+    const result = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+
+    if (isDuel && evidenceA && evidenceB) {
+      const w = result.winner;
+      let winnerId: string | null = null;
+      if (w === "A") winnerId = participantAId;
+      else if (w === "B" && participantBId) winnerId = participantBId;
+      else winnerId = null;
+
+      let reasoning = String(result.reasoning || "");
+      const factors = result.key_factors;
+      if (Array.isArray(factors) && factors.length) {
+        reasoning += `\n\nKey factors: ${factors.map(String).join("; ")}`;
+      }
+
       return {
-        winnerId: result.winner === "A" ? participantAId : participantBId,
-        reasoning: result.reasoning,
-        confidence: result.confidence,
+        winnerId,
+        reasoning: reasoning || "AI could not produce reasoning.",
+        confidence: typeof result.confidence === "number" ? Math.min(1, Math.max(0, result.confidence)) : 0.75,
       };
     }
-  } catch {
-    // fall through
-  }
 
-  return judgeChallengeFallback(challengeTitle, evidenceA!, evidenceB!, participantAId, participantBId);
+    const outcome = String(result.outcome || "").toLowerCase();
+    let winnerId: string | null = null;
+    if (outcome === "satisfied") {
+      winnerId = evidenceA ? participantAId : participantBId;
+    } else {
+      winnerId = null;
+    }
+
+    let reasoning = String(result.reasoning || "");
+    const factors = result.key_factors;
+    if (Array.isArray(factors) && factors.length) {
+      reasoning += `\n\nKey factors: ${factors.map(String).join("; ")}`;
+    }
+    if (outcome === "insufficient") {
+      reasoning = `[Insufficient evidence] ${reasoning}`;
+    } else if (outcome === "not_satisfied") {
+      reasoning = `[Challenge not satisfied] ${reasoning}`;
+    }
+
+    return {
+      winnerId,
+      reasoning: reasoning || "AI could not produce reasoning.",
+      confidence: typeof result.confidence === "number" ? Math.min(1, Math.max(0, result.confidence)) : 0.75,
+    };
+  } catch {
+    return judgeChallengeFallback(params);
+  }
 }
 
 export function generateClarifications(parsed: ParsedChallenge): Array<{ question: string; options: string[] }> {
@@ -127,18 +254,21 @@ export function generateClarifications(parsed: ParsedChallenge): Array<{ questio
 /* ── Fallback parsers (no API key) ── */
 
 const TYPE_PATTERNS: Record<string, RegExp> = {
-  Fitness:  /pushup|push-up|run|jog|gym|workout|plank|squat|exercise|mile|km|bench|deadlift|pullup|pull-up|burpee|cycling|swim|marathon|sprint|fitness/i,
-  Cooking:  /cook|bake|food|pasta|recipe|dish|meal|kitchen|chef|cake|bread|grill|bbq/i,
-  Coding:   /code|coding|program|leetcode|dev|developer|bug|algorithm|hack|github|commit|debug|api|software/i,
+  Fitness: /pushup|push-up|run|jog|gym|workout|plank|squat|exercise|mile|km|bench|deadlift|pullup|pull-up|burpee|cycling|swim|marathon|sprint|fitness/i,
+  Cooking: /cook|bake|food|pasta|recipe|dish|meal|kitchen|chef|cake|bread|grill|bbq/i,
+  Coding: /code|coding|program|leetcode|dev|developer|bug|algorithm|hack|github|commit|debug|api|software/i,
   Learning: /read|book|study|learn|exam|test|quiz|course|gpa|grade|class|homework|essay|paper/i,
-  Games:    /chess|game|play|match|tournament|poker|board|card|esport|fortnite|valorant|league|rank/i,
-  Video:    /video|film|tiktok|youtube|stream|record|dance|sing|perform/i,
+  Games: /chess|game|play|match|tournament|poker|board|card|esport|fortnite|valorant|league|rank/i,
+  Video: /video|film|tiktok|youtube|stream|record|dance|sing|perform/i,
 };
 
 function parseChallengeFallback(input: string): ParsedChallenge {
   let type = "General";
   for (const [t, pattern] of Object.entries(TYPE_PATTERNS)) {
-    if (pattern.test(input)) { type = t; break; }
+    if (pattern.test(input)) {
+      type = t;
+      break;
+    }
   }
 
   let amount = 0;
@@ -168,24 +298,55 @@ function parseChallengeFallback(input: string): ParsedChallenge {
   if (title.length > 64) title = title.slice(0, 61) + "…";
 
   return {
-    title, type, suggestedStake: amount, evidenceType,
+    title,
+    type,
+    suggestedStake: amount,
+    evidenceType,
     rules: `Standard ${type.toLowerCase()} challenge — AI reviewed`,
-    deadline, isPublic: !/private|secret|just us|between us/i.test(input),
+    deadline,
+    isPublic: !/private|secret|just us|between us/i.test(input),
   };
 }
 
-function judgeChallengeFallback(
-  challengeTitle: string,
-  evidenceA: { description: string | null; type: string },
-  evidenceB: { description: string | null; type: string },
-  participantAId: string,
-  participantBId: string,
-): JudgmentResult {
-  const random = Math.random();
-  const winnerId = random > 0.5 ? participantAId : participantBId;
-  const confidence = 0.65 + Math.random() * 0.25;
+function judgeChallengeFallback(params: JudgeChallengeParams): JudgmentResult {
+  const { title, evidenceA, evidenceB, participantAId, participantBId } = params;
+  if (!evidenceA && !evidenceB) {
+    return { winnerId: null, reasoning: "No evidence submitted.", confidence: 0.9 };
+  }
+  if (evidenceA && !evidenceB && participantBId) {
+    return {
+      winnerId: participantAId,
+      reasoning: `Only the challenger submitted evidence for "${title}". Opponent defaulted.`,
+      confidence: 0.82,
+    };
+  }
+  if (!evidenceA && evidenceB && participantBId) {
+    return {
+      winnerId: participantBId,
+      reasoning: `Only the opponent submitted evidence for "${title}". Challenger defaulted.`,
+      confidence: 0.82,
+    };
+  }
+  if (evidenceA && !evidenceB && !participantBId) {
+    return {
+      winnerId: participantAId,
+      reasoning: `[Demo mode — add ANTHROPIC_API_KEY] Evidence received for "${title}". Treated as completed.`,
+      confidence: 0.7,
+    };
+  }
+  if (evidenceA && evidenceB && participantAId && participantBId) {
+    const random = Math.random();
+    const winnerId = random > 0.5 ? participantAId : participantBId;
+    const confidence = 0.65 + Math.random() * 0.2;
+    return {
+      winnerId,
+      confidence,
+      reasoning: `[Demo mode — add ANTHROPIC_API_KEY] Compared ${evidenceA.type} vs ${evidenceB.type} for "${title}". Assigned winner for testing.`,
+    };
+  }
   return {
-    winnerId, confidence,
-    reasoning: `AI analyzed evidence from both participants for "${challengeTitle}". Based on ${evidenceA.type} and ${evidenceB.type} submissions, the winner was determined with ${(confidence * 100).toFixed(0)}% confidence.`,
+    winnerId: participantAId,
+    reasoning: "Could not evaluate — fallback.",
+    confidence: 0.5,
   };
 }

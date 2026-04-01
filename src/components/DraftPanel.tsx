@@ -203,6 +203,9 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
               Edit
             </motion.button>
           </motion.div>
+          <p className="text-[10px] text-text-muted/90 text-center leading-relaxed px-2">
+            Next: submit proof in the <span className="text-accent font-bold">AI Verdict</span> panel — Claude compares evidence to your rules, then credits move automatically.
+          </p>
         </motion.div>
       </motion.div>
     </motion.div>

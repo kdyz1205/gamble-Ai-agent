@@ -41,7 +41,15 @@ export async function POST(
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
-  if (!["live", "judging"].includes(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
+  if (challenge.status !== "judging") {
+    return Response.json(
+      {
+        error:
+          "AI verdict is unlocked after every player submits evidence. Submit yours below — when all sides are in, status becomes Judging.",
+      },
+      { status: 400 },
+    );
+  }
 
   const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
   if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
@@ -52,15 +60,21 @@ export async function POST(
 
   const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
+  const mapEv = (e: { description: string | null; type: string; url: string | null } | null) =>
+    e ? { description: e.description, type: e.type, url: e.url } : null;
 
   const aiModel = getAiModel(tierId);
-  const result = await judgeChallenge(
-    challenge.title, challenge.type,
-    evidenceA ? { description: evidenceA.description, type: evidenceA.type } : null,
-    evidenceB ? { description: evidenceB.description, type: evidenceB.type } : null,
-    creator.userId, opponent?.userId || "",
-    aiModel.model,
-  );
+  const result = await judgeChallenge({
+    title: challenge.title,
+    type: challenge.type,
+    rules: challenge.rules,
+    evidencePolicy: challenge.evidenceType,
+    evidenceA: mapEv(evidenceA ?? null),
+    evidenceB: mapEv(evidenceB ?? null),
+    participantAId: creator.userId,
+    participantBId: opponent?.userId ?? null,
+    model: aiModel.model,
+  });
 
   const judgment = await prisma.judgment.create({
     data: {

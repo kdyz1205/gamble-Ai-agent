@@ -11,6 +11,7 @@ import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import { FloatingActionBar } from "@/components/SecondaryPanels";
 import AuthModal from "@/components/AuthModal";
+import ChallengeVerdictPanel from "@/components/ChallengeVerdictPanel";
 import * as api from "@/lib/api-client";
 
 /* ═══════════════════════════════════════════════════
@@ -123,6 +124,15 @@ export default function Home() {
     return () => clearTimeout(id);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !user?.id) return;
+    const id = new URLSearchParams(window.location.search).get("challenge");
+    if (!id) return;
+    setChallengeId(id);
+    setPublished(true);
+    setAppState("live");
+  }, [user?.id]);
+
   const pushMsg = useCallback((role: "user"|"ai", content: string, options?: string[]) => {
     setMessages(prev => [...prev, {
       id: `${Date.now()}-${Math.random()}`,
@@ -223,7 +233,7 @@ export default function Home() {
     setPublished(true);
     setAppState("live");
     aiReply(
-      "Your challenge is now **LIVE** and saved to the database. I'm scanning for opponents. I'll notify you the moment someone accepts.",
+      "Your challenge is **saved**. Use the command panel below: **submit evidence** (you can start solo — the AI will judge when everyone has posted). When all sides are in, tap **Run AI verdict** to let Claude rule and settle credits.",
       ["View Live Activity", "Challenge Another"],
       1200,
     );
@@ -243,6 +253,12 @@ export default function Home() {
     setAppState("idle");
     setMessages([]); setSteps([]); setStepIdx(0);
     setAnswers([]); setOrigInput(""); setDraft(null); setPublished(false);
+    setChallengeId(null);
+    if (typeof window !== "undefined" && window.history.replaceState) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("challenge");
+      window.history.replaceState({}, "", u.pathname + u.search);
+    }
   }, []);
 
   const active = appState !== "idle";
@@ -411,87 +427,53 @@ export default function Home() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {published && appState === "live" && draft && (
+          {published && appState === "live" && challengeId && user && (
             <motion.div
               key="published"
-              className="w-full max-w-2xl mb-5"
+              className="w-full max-w-2xl mb-5 space-y-4"
               initial={{ opacity: 0, y: 20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div
-                className="rounded-2xl p-5"
-                style={{
-                  background: "rgba(0,232,122,0.06)",
-                  border: "1px solid rgba(0,232,122,0.15)",
-                  boxShadow: "0 0 30px rgba(0,232,122,0.06)",
-                }}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                       style={{ background: "rgba(0,232,122,0.12)" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-base font-extrabold text-text-primary mb-1">Challenge Published!</h3>
-                    <p className="text-sm text-text-secondary mb-3">Scanning for opponents — you&rsquo;ll be notified when someone accepts.</p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {[draft.type, draft.stake > 0 ? `${draft.stake} credits` : "Free", draft.evidence].map(tag => (
-                        <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-bold"
-                              style={{ background: "rgba(255,255,255,0.06)", color: "rgba(240,240,255,0.7)" }}>
-                          {tag}
-                        </span>
-                      ))}
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
-                            style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a" }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                        Live
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <motion.button
-                        whileHover={{ scale: 1.03, y: -1 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white"
-                        style={{
-                          background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                          boxShadow: "0 4px 20px rgba(124,92,252,0.35)",
-                        }}
-                        onClick={async () => {
-                          if (!user) { setShowAuth(true); return; }
-                          if (challengeId) {
-                            try {
-                              await api.acceptChallenge(challengeId);
-                              pushMsg("ai", "Challenge accepted! You're now locked in. Submit your evidence when ready.");
-                            } catch (err) {
-                              pushMsg("ai", `${err instanceof Error ? err.message : "Could not accept"} — this may be your own challenge. Share the link to invite an opponent!`);
-                            }
-                          } else {
-                            pushMsg("ai", "Challenge confirmed! Share the link to invite an opponent.");
-                          }
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Accept Challenge
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="px-4 py-2.5 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
-                        style={{ background: "rgba(255,255,255,0.04)" }}
-                        onClick={() => pushMsg("ai", "Share link copied! Send it to your opponent so they can join the challenge.")}
-                      >
-                        Share Link
-                      </motion.button>
-                    </div>
-                  </div>
+              {draft && (
+                <div
+                  className="rounded-xl px-4 py-3 flex flex-wrap items-center gap-2"
+                  style={{
+                    background: "rgba(0,232,122,0.06)",
+                    border: "1px solid rgba(0,232,122,0.12)",
+                  }}
+                >
+                  <span className="text-xs font-extrabold text-[#00e87a]">Saved</span>
+                  <span className="text-xs text-text-secondary">
+                    Submit evidence below, then run the AI judge when everyone has sent proof.
+                  </span>
                 </div>
+              )}
+              <ChallengeVerdictPanel
+                challengeId={challengeId}
+                userId={user.id}
+                credits={user.credits ?? 0}
+                onCreditsMayChange={() => updateSession()}
+              />
+              <div className="flex flex-wrap gap-2 justify-center">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white"
+                  style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}
+                  onClick={async () => {
+                    if (!user) { setShowAuth(true); return; }
+                    try {
+                      await api.acceptChallenge(challengeId);
+                      pushMsg("ai", "You joined the challenge. Add your evidence in the panel above.");
+                    } catch (err) {
+                      pushMsg("ai", err instanceof Error ? err.message : "Could not join — try the invite link as another account, or this may be your own challenge.");
+                    }
+                  }}
+                >
+                  I’m the opponent — Accept
+                </motion.button>
               </div>
             </motion.div>
           )}

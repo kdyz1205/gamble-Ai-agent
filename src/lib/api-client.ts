@@ -100,6 +100,7 @@ export interface ChallengeData {
   evidenceType: string;
   aiReview: boolean;
   isPublic: boolean;
+  aiModel?: string | null;
   createdAt: string;
   creator: { id: string; username: string; image: string | null; credits?: number };
   participants: Array<{
@@ -123,7 +124,36 @@ export async function listChallenges(params?: {
   return apiFetch(`/challenges?${q.toString()}`);
 }
 
-export async function getChallenge(id: string): Promise<{ challenge: ChallengeData }> {
+/** Full challenge for verdict / evidence UI (matches GET /api/challenges/[id]) */
+export interface EvidenceRow {
+  id: string;
+  type: string;
+  description: string | null;
+  url: string | null;
+  userId: string;
+  createdAt: string;
+  user: { id: string; username: string; image: string | null };
+}
+
+export interface JudgmentRow {
+  id: string;
+  winnerId: string | null;
+  method: string;
+  aiModel: string | null;
+  reasoning: string | null;
+  confidence: number | null;
+  status: string;
+  createdAt: string;
+  winner?: { id: string; username: string } | null;
+}
+
+export type ChallengeDetail = Omit<ChallengeData, "_count"> & {
+  evidence: EvidenceRow[];
+  judgments: JudgmentRow[];
+  _count?: { evidence: number; participants: number; judgments?: number };
+};
+
+export async function getChallenge(id: string): Promise<{ challenge: ChallengeDetail }> {
   return apiFetch(`/challenges/${id}`);
 }
 
