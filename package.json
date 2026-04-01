@@ -11,7 +11,8 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "pricing": "npx tsx scripts/print-pricing.ts"
   },
   "repository": {
     "type": "git",
@@ -50,6 +51,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.20.0",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.1"
+    "eslint-config-next": "^16.2.1",
+    "tsx": "^4.21.0"
   }
 }
