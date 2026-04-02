@@ -1,8 +1,9 @@
 {
+  "buildCommand": "npm run build:vercel",
   "crons": [
     {
       "path": "/api/cron/challenge-judgment",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
