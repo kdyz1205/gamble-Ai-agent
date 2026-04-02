@@ -79,9 +79,11 @@ Escrow ABI changed from `bytes32` + `settle(bytes32,address)` to **`uint256` key
 
 ### Related sites / consoles (checklist)
 
+**This app on Vercel (dashboard):** [gamble-ai-agent — kdyz1205s-projects](https://vercel.com/kdyz1205s-projects/gamble-ai-agent) — use **Settings → Environment Variables**, **Deployments** (production URL for `NEXTAUTH_URL`), and connect **Git** to `kdyz1205/gamble-Ai-agent` if the checklist still shows “Connect Git Repository”.
+
 | Where | What to align with production |
 |--------|-------------------------------|
-| **Vercel** | Set `DATABASE_URL`, `NEXTAUTH_SECRET`, `CRON_SECRET` (generate locally: `npm run gen:cron-secret`). **`npm run build:vercel` now runs `prisma migrate deploy`** so each production deploy applies migrations. `trustHost: true` in NextAuth helps previews; **production should still set `NEXTAUTH_URL` to your canonical domain** (stable OAuth + links). |
+| **Vercel** | Set `DATABASE_URL`, `NEXTAUTH_SECRET`, `CRON_SECRET` (generate locally: `npm run gen:cron-secret`). **`npm run build:vercel` now runs `prisma migrate deploy`** so each production deploy applies migrations. `trustHost: true` in NextAuth helps previews; **production should still set `NEXTAUTH_URL` to your canonical domain** (copy from **Domains** on the project — e.g. `https://…vercel.app` or your custom domain). |
 | **Google Cloud OAuth** | Authorized redirect URI: `https://<your-domain>/api/auth/callback/google` |
 | **Supabase** (if using Realtime) | Same project as DB when possible; run **`scripts/sql/supabase-realtime-publication.sql`** in SQL Editor (adds `"Challenge"` / `"Participant"` to `supabase_realtime`); set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
 | **Vercel Cron** | `CRON_SECRET` env; cron hits `/api/cron/challenge-judgment` with `Authorization: Bearer <CRON_SECRET>` (see `vercel.json`). |
