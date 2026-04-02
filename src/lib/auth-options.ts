@@ -7,14 +7,21 @@ import prisma from "./db";
 import bcrypt from "bcryptjs";
 import { COSTS } from "./credits";
 
+const googleId = process.env.GOOGLE_CLIENT_ID?.trim();
+const googleSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: true,
-    }),
+    ...(googleId && googleSecret
+      ? [
+          GoogleProvider({
+            clientId: googleId,
+            clientSecret: googleSecret,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
     CredentialsProvider({
       name: "credentials",
       credentials: {

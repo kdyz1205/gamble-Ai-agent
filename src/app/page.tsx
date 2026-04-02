@@ -182,6 +182,9 @@ export default function Home() {
         });
         setIsTyping(false);
 
+        if (res.confirmationPrompt?.trim()) {
+          pushMsg("ai", res.confirmationPrompt.trim());
+        }
         const apiSteps: ConvoStep[] = res.clarifications.map(c => ({
           aiMessage: c.question,
           options: c.options,

@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
-import { parseChallenge, generateClarifications } from "@/lib/ai-engine";
+import {
+  parseChallenge,
+  generateClarifications,
+  type ParsedChallenge,
+} from "@/lib/ai-engine";
+import { safeParseBetDraft } from "@/lib/parse-bet-schema";
 import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 
@@ -41,10 +46,41 @@ export async function POST(req: NextRequest) {
           ? result.model
           : pdef.defaultModel;
 
-    const parsed = await parseChallenge(input, { model: parseModel, providerId });
+    let parsed = await parseChallenge(input, { model: parseModel, providerId });
+    const schemaOk = safeParseBetDraft(parsed);
+    if (!schemaOk) {
+      return Response.json(
+        { error: "Parse output failed schema validation — retry or use a different tier." },
+        { status: 502 },
+      );
+    }
+    parsed = schemaOk as ParsedChallenge;
     const clarifications = generateClarifications(parsed);
 
+    const judgingLabel =
+      parsed.judgingMethod === "api"
+        ? "外部数据 / API"
+        : parsed.judgingMethod === "vision"
+          ? "视频或图片（视觉裁决）"
+          : "视觉 + 外部数据";
+    const confirmationPrompt = [
+      "AI 认为你想发起这样一个赌局，对吗？",
+      "",
+      `标题：${parsed.title}`,
+      `规则边界：${parsed.rules}`,
+      `押金：${parsed.suggestedStake} credits`,
+      `判定方式：${judgingLabel}`,
+      `证据类型：${parsed.evidenceType}`,
+    ].join("\n");
+
+    const betDraft: ParsedChallenge & { stake: number } = {
+      ...parsed,
+      stake: parsed.suggestedStake,
+    };
+
     return Response.json({
+      betDraft,
+      confirmationPrompt,
       parsed,
       clarifications,
       model: `${pdef.shortLabel} / ${parseModel}`,

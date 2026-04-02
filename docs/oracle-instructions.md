@@ -38,6 +38,52 @@ This app treats the AI backend as an **off-chain oracle**: the model produces a 
 - Env: `ORACLE_DEFAULT_PROVIDER` optional default for cron/automation when the UI does not send `providerId`.
 - Optional LLM keys: see `src/lib/llm-providers.ts` (`OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`, `GROQ_API_KEY`, …).
 
+## App 录制 → 判定 → 结算（推荐闭环）
+
+1. **直传对象存储（可选）**  
+   `POST /api/uploads/evidence-presign`（需配置 AWS + bucket）→ App **PUT** 到 `uploadUrl` → 把返回的 **`publicUrl`** 写入证据 `url`（不要经 Node 收整段 MP4）。
+
+2. **触发裁决**  
+   - **同步**：`POST /api/challenges/[id]/judge`（等待 ffmpeg + 多模态 + 结算）。  
+   - **异步（推荐 App）**：`POST /api/challenges/[id]/judge/async` → **202** `{ status: "processing", jobId, pollUrl }`，服务端用 Next `after()` 跑 `runJudgeJob`；客户端轮询 **`GET /api/judge-jobs/[jobId]`** 或传 **`webhookUrl`**（公网 HTTPS，走与证据相同的 SSRF 规则）。
+
+3. **防伪 / 元数据**  
+   App 端可在录制时写入时间戳、GPS 等到证据 **`metadata`**（JSON）；后端已支持存库，判词 prompt 仍以 `description` + 视觉帧为主，可按产品需要把 metadata 拼进 prompt。
+
+4. **部署**  
+   Vercel 上 `ffmpeg-static` 体积与 `after()` 行为需自行验证；重负载时可将「抽帧 + 调用模型」拆到 **Cloud Run / Lambda 容器**。
+
 ## Breaking change note
 
 Escrow ABI changed from `bytes32` + `settle(bytes32,address)` to **`uint256` keys** + **`settle(uint256,address,bytes32)`**. Redeploy contracts and update `ESCROW_ADDRESS`.
+
+## Phase 5 — Discovery, state machine, parse schema, audit
+
+### Challenge-level discovery (creator geo)
+
+- On **create**, the API snapshots `discoveryLat` / `discoveryLng` from the creator’s `User` row (if present).
+- **`GET /api/challenges/discover?lat=&lng=&limit=`** — sorts open public challenges by distance: snapshot first, else creator’s current profile lat/lng.
+- **`GET /api/users/nearby`** — still returns nearby users; challenge list includes optional `discovery: { distanceMiles, source }` when GPS is sent.
+
+### Status enums (PostgreSQL)
+
+- `ChallengeStatus`, `ParticipantRole`, `ParticipantStatus` are native enums in Prisma; illegal transitions throw in accept / evidence / judgment paths (`src/lib/challenge-state-machine.ts`).
+
+### AI parse — fixed JSON
+
+- LLM output must match **`src/lib/parse-bet-schema.ts`** (Zod `.strict()`). `POST /api/challenges/parse` rejects invalid payloads with **502**.
+
+### AuditLog
+
+- Append-only rows for create, accept, evidence, status→judging, judgment complete, and cron deadline transitions. Query table `AuditLog` in SQL / Studio for investigations.
+
+### Related sites / consoles (checklist)
+
+| Where | What to align with production |
+|--------|-------------------------------|
+| **Vercel** | `NEXTAUTH_URL` = exact site URL; `DATABASE_URL`; run `prisma migrate deploy` on build (`build` script already includes it). |
+| **Google Cloud OAuth** | Authorized redirect URI: `https://<your-domain>/api/auth/callback/google` |
+| **Supabase** (if using Realtime) | Same project as DB when possible; enable replication on `"Challenge"` and `"Participant"`; set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
+| **Vercel Cron** | `CRON_SECRET` env; cron hits `/api/cron/challenge-judgment` with `Authorization: Bearer <CRON_SECRET>` (see `vercel.json`). |
+| **Pricing microsite** (optional) | Set `NEXT_PUBLIC_PRICING_SITE_URL` to the deployed pricing app so the main app shows the finance link. |
+| **S3 / CDN** (optional uploads) | `AWS_*` + `S3_EVIDENCE_BUCKET` + `S3_PUBLIC_BASE_URL` for presigned evidence. |

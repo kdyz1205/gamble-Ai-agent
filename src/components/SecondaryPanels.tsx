@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import * as api from "@/lib/api-client";
 import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
+import { LiveChallengeCard } from "@/components/ChallengeCard";
 
 /* ── Drawer shell ── */
 function Drawer({ open, onClose, title, children }: {
@@ -137,78 +139,144 @@ function LiveContent() {
   );
 }
 
-/* ── Nearby People (real /api/users/nearby + geolocation) ── */
+/* ── Nearby + plaza (GET /api/users/nearby — challenges always when DB has open slots) ── */
 const STATUS_COLOR: Record<string, string> = { online: "#00e87a", idle: "#f5a623", offline: "#ffffff20" };
 
-function NearbyContent() {
-  const { status } = useSession();
+function NearbyContent({ onRequireAuth }: { onRequireAuth?: () => void }) {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const uid = (session?.user as { id?: string } | undefined)?.id;
+
   const [users, setUsers] = useState<Array<{
     id: string; username: string; image: string | null; distance: number; isOnline: boolean; challengeCount: number;
   }>>([]);
-  const [hint, setHint] = useState<string | null>("Locating…");
+  const [challenges, setChallenges] = useState<ChallengeData[]>([]);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+
+  const loadBundle = useCallback(async (lat?: number, lng?: number) => {
+    setLoadErr(null);
+    try {
+      const r = await api.getDiscoverNearby(
+        lat != null && lng != null ? { lat, lng, radius: 25 } : undefined,
+      );
+      setUsers(r.users);
+      setChallenges(r.challenges);
+      if (r.reason === "anonymous") {
+        setBanner("Browsing the plaza — sign in to accept a challenge.");
+      } else if (r.reason === "no_coordinates") {
+        setBanner("No GPS fix — showing latest open challenges everywhere.");
+      } else if (r.mode === "nearby_challenges") {
+        setBanner("Nearby creators first, then global open challenges.");
+      } else if (r.users.length === 0) {
+        setBanner(null);
+      } else {
+        setBanner(null);
+      }
+    } catch {
+      setLoadErr("Could not load nearby / plaza.");
+    }
+  }, []);
 
   useEffect(() => {
-    if (status !== "authenticated") {
-      setHint("Sign in and allow location to see nearby challengers.");
-      return;
-    }
-    if (!navigator.geolocation) {
-      setHint("Location not available in this browser.");
-      return;
-    }
+    void loadBundle();
+  }, [loadBundle]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const r = await api.getNearbyUsers(pos.coords.latitude, pos.coords.longitude, 25);
-          setUsers(r.users);
-          setHint(r.users.length ? null : "No one with saved location nearby yet.");
-        } catch {
-          setHint("Could not load nearby users.");
-        }
+      (pos) => {
+        void loadBundle(pos.coords.latitude, pos.coords.longitude);
       },
-      () => setHint("Location denied — enable it in the browser to use Nearby."),
+      () => {
+        void loadBundle();
+      },
       { enableHighAccuracy: false, timeout: 12_000 },
     );
-  }, [status]);
+  }, [status, loadBundle]);
 
-  if (status !== "authenticated") {
-    return <p className="text-sm text-text-muted">Sign in to find people near you (we save rough location when you open this panel).</p>;
-  }
-  if (hint && users.length === 0) {
-    return <p className="text-sm text-text-muted">{hint}</p>;
-  }
+  const goVersus = async (challengeId: string) => {
+    if (!uid) {
+      onRequireAuth?.();
+      return;
+    }
+    setAcceptingId(challengeId);
+    try {
+      await api.acceptChallenge(challengeId);
+      router.push(`/challenge/${challengeId}/versus`);
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Accept failed");
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  if (loadErr) return <p className="text-sm text-text-muted">{loadErr}</p>;
 
   return (
-    <div className="space-y-1">
-      {hint && <p className="text-[11px] text-text-muted mb-2">{hint}</p>}
-      {users.map((u, i) => (
-        <motion.div
-          key={u.id}
-          className="group flex items-center gap-3 px-3 py-3 rounded-xl"
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.05, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          whileHover={{ background: "rgba(255,255,255,0.04)" }}
-        >
-          <div className="relative flex-shrink-0">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-              style={{ background: "linear-gradient(135deg, rgba(124,92,252,0.3), rgba(0,212,200,0.2))" }}
-            >
-              {u.image ? <img src={u.image} alt="" className="w-full h-full object-cover" /> : u.username.slice(0, 2).toUpperCase()}
-            </div>
-            <div
-              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
-              style={{ background: STATUS_COLOR[u.isOnline ? "online" : "offline"], borderColor: "rgba(8,8,20,0.97)" }}
-            />
+    <LayoutGroup>
+      <div className="space-y-4">
+        {banner && <p className="text-[11px] text-text-muted leading-relaxed">{banner}</p>}
+
+        <div>
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Open challenges</p>
+          {challenges.length === 0 ? (
+            <p className="text-sm text-text-muted">No waiting challenges yet — be the first to publish one from chat.</p>
+          ) : (
+            challenges.map((c) => (
+              <LiveChallengeCard
+                key={c.id}
+                apiChallenge={c}
+                currentUserId={uid}
+                accepting={acceptingId === c.id}
+                onAcceptVersus={goVersus}
+              />
+            ))
+          )}
+        </div>
+
+        {status === "authenticated" && (
+          <div>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">People near you</p>
+            {users.length === 0 ? (
+              <p className="text-sm text-text-muted">No one with a saved location in range yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {users.map((u, i) => (
+                  <motion.div
+                    key={u.id}
+                    className="group flex items-center gap-3 px-3 py-3 rounded-xl"
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    whileHover={{ background: "rgba(255,255,255,0.04)" }}
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
+                        style={{ background: "linear-gradient(135deg, rgba(124,92,252,0.3), rgba(0,212,200,0.2))" }}
+                      >
+                        {u.image ? <img src={u.image} alt="" className="w-full h-full object-cover" /> : u.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div
+                        className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+                        style={{ background: STATUS_COLOR[u.isOnline ? "online" : "offline"], borderColor: "rgba(8,8,20,0.97)" }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-text-primary">{u.username}</p>
+                      <p className="text-[11px] text-text-muted">{u.distance} mi · {u.challengeCount} challenges</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-text-primary">{u.username}</p>
-            <p className="text-[11px] text-text-muted">{u.distance} mi · {u.challengeCount} challenges</p>
-          </div>
-        </motion.div>
-      ))}
-    </div>
+        )}
+      </div>
+    </LayoutGroup>
   );
 }
 
@@ -216,10 +284,13 @@ function NearbyContent() {
 function DiscoverContent({
   onRequireAuth,
   onOpenChallenge,
+  onCloseDrawer,
 }: {
   onRequireAuth: () => void;
   onOpenChallenge: (challengeId: string) => void;
+  onCloseDrawer?: () => void;
 }) {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const uid = (session?.user as { id?: string } | undefined)?.id;
   const [rows, setRows] = useState<ChallengeData[]>([]);
@@ -255,12 +326,14 @@ function DiscoverContent({
       return;
     }
     if (c.participants.some((p) => p.user.id === uid)) {
-      onOpenChallenge(c.id);
+      onCloseDrawer?.();
+      router.push(`/challenge/${c.id}/versus`);
       return;
     }
     try {
       await api.acceptChallenge(c.id);
-      onOpenChallenge(c.id);
+      onCloseDrawer?.();
+      router.push(`/challenge/${c.id}/versus`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Could not join");
     }
@@ -505,13 +578,14 @@ export function FloatingActionBar({
             onOpenChallenge?.(id);
             setActive(null);
           }}
+          onCloseDrawer={() => setActive(null)}
         />
       </Drawer>
       <Drawer open={active === "live"} onClose={() => setActive(null)} title="Live Activity">
         <LiveContent />
       </Drawer>
-      <Drawer open={active === "nearby"} onClose={() => setActive(null)} title="Nearby People">
-        <NearbyContent />
+      <Drawer open={active === "nearby"} onClose={() => setActive(null)} title="Nearby & plaza">
+        <NearbyContent onRequireAuth={() => onRequireAuth?.()} />
       </Drawer>
       <Drawer open={active === "wallet"} onClose={() => setActive(null)} title="Wallet & Escrow">
         <WalletContent />

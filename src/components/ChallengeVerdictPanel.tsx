@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
@@ -40,6 +40,8 @@ export default function ChallengeVerdictPanel({
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictErr, setVerdictErr] = useState("");
+  const [asyncHint, setAsyncHint] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!challengeId) return;
@@ -55,6 +57,12 @@ export default function ChallengeVerdictPanel({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const me = challenge?.participants.find(p => p.user.id === userId);
   const creator = challenge?.participants.find(p => p.role === "creator");
@@ -122,6 +130,51 @@ export default function ChallengeVerdictPanel({
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "AI verdict failed");
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const runVerdictAsync = async () => {
+    if (!challenge) return;
+    const cost = TIER_COST[tier];
+    if (credits < cost) {
+      setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
+      return;
+    }
+    setBusy(true);
+    setVerdictErr("");
+    setAsyncHint("");
+    try {
+      const prefs = readOracleLlmPrefs();
+      const res = await api.judgeChallengeAsync(challenge.id, tier, {
+        providerId: prefs.providerId,
+        ...(prefs.model ? { model: prefs.model } : {}),
+      });
+      setAsyncHint("AI is processing (video frames + vision)… you can leave this screen.");
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        try {
+          const j = await api.getJudgeJob(res.jobId);
+          if (j.status === "completed" || j.status === "failed") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            setBusy(false);
+            setAsyncHint("");
+            if (j.status === "failed") {
+              setVerdictErr(j.error || "Background verdict failed");
+            }
+            await refresh();
+            onCreditsMayChange();
+          }
+        } catch {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setBusy(false);
+          setAsyncHint("");
+        }
+      }, 2000);
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not start background verdict");
       setBusy(false);
     }
   };
@@ -373,6 +426,20 @@ export default function ChallengeVerdictPanel({
                 >
                   {busy ? "AI is judging…" : `Run AI verdict (${TIER_COST[tier]} credits)`}
                 </motion.button>
+                <motion.button
+                  type="button"
+                  disabled={busy || !canRunAi}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => void runVerdictAsync()}
+                  className="w-full py-3 rounded-xl text-xs font-extrabold border border-amber-400/40 text-amber-100/90 disabled:opacity-40"
+                  style={{ background: "rgba(245,166,35,0.08)" }}
+                >
+                  Background verdict (recommended for video) — same cost, poll until done
+                </motion.button>
+                {asyncHint && (
+                  <p className="text-[11px] font-bold text-amber-200/90 text-center">{asyncHint}</p>
+                )}
               </>
             )}
             {!isCreator && (

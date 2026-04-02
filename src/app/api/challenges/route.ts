@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits } from "@/lib/credits";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -91,6 +92,11 @@ export async function POST(req: NextRequest) {
       else deadlineDate.setHours(deadlineDate.getHours() + 48);
     }
 
+    const creatorGeo = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { latitude: true, longitude: true },
+    });
+
     const challenge = await prisma.challenge.create({
       data: {
         creatorId: user.userId,
@@ -104,6 +110,10 @@ export async function POST(req: NextRequest) {
         evidenceType,
         aiReview,
         isPublic,
+        discoveryLat: creatorGeo?.latitude ?? null,
+        discoveryLng: creatorGeo?.longitude ?? null,
+        discoveryCapturedAt:
+          creatorGeo?.latitude != null && creatorGeo?.longitude != null ? new Date() : null,
         participants: {
           create: { userId: user.userId, role: "creator", status: "accepted" },
         },
@@ -122,6 +132,19 @@ export async function POST(req: NextRequest) {
         message: `${user.username} created "${title}"${stakeInt > 0 ? ` — ${stakeInt} credits staked` : ""}`,
         userId: user.userId,
         challengeId: challenge.id,
+      },
+    });
+
+    await appendAuditLog({
+      action: AuditActions.CHALLENGE_CREATED,
+      actorUserId: user.userId,
+      challengeId: challenge.id,
+      payload: {
+        title,
+        stake: stakeInt,
+        status: challenge.status,
+        isPublic,
+        evidenceType,
       },
     });
 

@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
+import { ChallengeStatus } from "@/generated/prisma/enums";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -25,15 +27,22 @@ async function runCron() {
 
   const transitioned = await prisma.challenge.updateMany({
     where: {
-      status: { in: ["live", "matched"] },
+      status: { in: [ChallengeStatus.live, ChallengeStatus.matched] },
       deadline: { not: null, lte: now },
     },
-    data: { status: "judging" },
+    data: { status: ChallengeStatus.judging },
   });
+
+  if (transitioned.count > 0) {
+    await appendAuditLog({
+      action: AuditActions.CRON_TRANSITION,
+      payload: { count: transitioned.count, at: now.toISOString() },
+    });
+  }
 
   const pending = await prisma.challenge.findMany({
     where: {
-      status: "judging",
+      status: ChallengeStatus.judging,
       judgments: { none: { status: "completed" } },
     },
     select: { id: true, title: true },

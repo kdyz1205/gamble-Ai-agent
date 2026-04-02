@@ -28,6 +28,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1022.0",
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",
+    "@supabase/supabase-js": "^2.101.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
@@ -50,7 +51,8 @@
     "sharp": "^0.34.5",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
-    "viem": "^2.47.6"
+    "viem": "^2.47.6",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

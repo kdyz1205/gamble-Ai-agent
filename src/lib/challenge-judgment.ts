@@ -1,4 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { ChallengeStatus } from "@/generated/prisma/enums";
+import { assertChallengeTransition } from "@/lib/challenge-state-machine";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import prisma from "./db";
 import { judgeChallenge } from "./ai-engine";
 import { getAiModel, type TierId } from "./auth";
@@ -117,17 +120,31 @@ export async function executeChallengeJudgment(
   const mapEv = (e: (typeof challenge.evidence)[0] | null | undefined) =>
     e ? { description: e.description, type: e.type, url: e.url } : null;
 
+  const bothHaveVideoUrl =
+    evidenceA?.type === "video" &&
+    evidenceB?.type === "video" &&
+    Boolean(String(evidenceA?.url ?? "").trim()) &&
+    Boolean(String(evidenceB?.url ?? "").trim());
+  const googleVisionReady =
+    Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
+
   const tierMeta = getAiModel(tierId);
   const envDefault = process.env.ORACLE_DEFAULT_PROVIDER;
-  const providerId =
+  let providerId =
     options?.providerId ??
     (envDefault && getProviderById(envDefault) ? envDefault : DEFAULT_LLM_PROVIDER_ID);
+  if (!options?.providerId && bothHaveVideoUrl && googleVisionReady) {
+    providerId = "google";
+  }
   const pdef = getProviderById(providerId);
-  const judgeModel =
+  let judgeModel =
     options?.model?.trim() ||
     (providerId === DEFAULT_LLM_PROVIDER_ID
       ? tierMeta.model
       : (pdef?.defaultModel ?? tierMeta.model));
+  if (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady) {
+    judgeModel = "gemini-2.0-flash";
+  }
   const aiModelLabel = `${pdef?.shortLabel ?? "LLM"} · ${judgeModel}`;
 
   const result = await judgeChallenge({
@@ -169,9 +186,22 @@ export async function executeChallengeJudgment(
     );
   }
 
+  assertChallengeTransition(challenge.status, ChallengeStatus.settled);
   await prisma.challenge.update({
     where: { id: challengeId },
-    data: { status: "settled", aiModel: aiModelLabel },
+    data: { status: ChallengeStatus.settled, aiModel: aiModelLabel },
+  });
+
+  await appendAuditLog({
+    action: AuditActions.JUDGMENT_COMPLETED,
+    actorUserId: payerUserId,
+    challengeId,
+    payload: {
+      winnerId: result.winnerId,
+      judgmentId: judgment.id,
+      confidence: result.confidence,
+      settlementOk: settlementResult.success,
+    },
   });
 
   const winnerName = judgment.winner?.username || "No one";

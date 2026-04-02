@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits } from "@/lib/credits";
+import { ChallengeStatus } from "@/generated/prisma/enums";
+import { assertChallengeTransition } from "@/lib/challenge-state-machine";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 
 export async function POST(
   req: NextRequest,
@@ -43,7 +46,14 @@ export async function POST(
     },
   });
 
-  const newStatus = challenge.participants.length + 1 >= challenge.maxParticipants ? "live" : "open";
+  const newStatus =
+    challenge.participants.length + 1 >= challenge.maxParticipants
+      ? ChallengeStatus.live
+      : ChallengeStatus.open;
+
+  if (newStatus !== challenge.status) {
+    assertChallengeTransition(challenge.status, newStatus);
+  }
 
   const updated = await prisma.challenge.update({
     where: { id },
@@ -63,6 +73,13 @@ export async function POST(
       userId: user.userId,
       challengeId: challenge.id,
     },
+  });
+
+  await appendAuditLog({
+    action: AuditActions.CHALLENGE_ACCEPTED,
+    actorUserId: user.userId,
+    challengeId: challenge.id,
+    payload: { previousStatus: challenge.status, newStatus: updated.status, stake: challenge.stake },
   });
 
   return Response.json({ challenge: updated });

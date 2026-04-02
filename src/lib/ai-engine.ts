@@ -1,3 +1,4 @@
+import { safeParseBetDraft } from "./parse-bet-schema";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
 import type { EvidencePayload } from "./evidence-types";
 import { completeOraclePrompt, completeOracleJudgeVision } from "./llm-router";
@@ -23,6 +24,8 @@ export interface ParseChallengeOptions {
   providerId?: string;
 }
 
+export type JudgingMethod = "vision" | "api" | "hybrid";
+
 export interface ParsedChallenge {
   title: string;
   type: string;
@@ -31,6 +34,8 @@ export interface ParsedChallenge {
   rules: string;
   deadline: string;
   isPublic: boolean;
+  /** How the outcome should be verified: pixels vs external data. */
+  judgingMethod: JudgingMethod;
 }
 
 export interface JudgmentResult {
@@ -70,14 +75,15 @@ export async function parseChallenge(
 
   if (!hasProviderApiKey(providerId)) return parseChallengeFallback(input);
 
-  const system = `You parse natural language into a structured challenge. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
+  const system = `You parse natural language into a structured bet/challenge. Think like a sharp bookmaker: crisp win conditions, no ambiguity. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
 - title (string, max 64 chars, concise)
 - type (one of: Fitness, Cooking, Coding, Learning, Games, Video, General)
-- suggestedStake (integer, credits to wager, 0 if none mentioned. If user says "$5", convert to 500 credits. If user says "10 credits" use 10.)
+- suggestedStake (integer, credits to wager, 0 if none mentioned. If user says "$5" or "5U", convert to 500 credits. If user says "10 credits" use 10.)
 - evidenceType ("video" | "photo" | "gps" | "self_report")
-- rules (string, brief rules)
-- deadline (string like "48 hours", "7 days")
-- isPublic (boolean, true unless user says private)`;
+- rules (string, concrete boundaries: time limits, what counts as success, colors/objects if applicable)
+- deadline (string like "48 hours", "7 days", "1 minute" when user implies a short window)
+- isPublic (boolean, true unless user says private)
+- judgingMethod ("vision" | "api" | "hybrid"): "vision" if video/photo must decide (pushups, car color, form); "api" if an external feed/price/sports API would decide; "hybrid" if both could apply.`;
 
   try {
     const text = await completeOraclePrompt({
@@ -88,7 +94,12 @@ export async function parseChallenge(
       maxTokens: 512,
     });
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]) as ParsedChallenge;
+    if (jsonMatch) {
+      const raw = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      const normalized = normalizeParsedChallenge(raw);
+      const validated = safeParseBetDraft(normalized);
+      if (validated) return validated;
+    }
   } catch {
     // fall through
   }
@@ -343,6 +354,32 @@ Return JSON:
   }
 }
 
+function coerceJudgingMethod(
+  v: unknown,
+  evidenceType: string,
+): JudgingMethod {
+  const s = String(v ?? "").toLowerCase();
+  if (s === "vision" || s === "api" || s === "hybrid") return s;
+  if (evidenceType === "video" || evidenceType === "photo") return "vision";
+  if (evidenceType === "gps") return "api";
+  return "hybrid";
+}
+
+function normalizeParsedChallenge(raw: Record<string, unknown>): ParsedChallenge {
+  const evidenceType = String(raw.evidenceType ?? "self_report");
+  const judgingSource = raw.judgingMethod ?? raw.judging_method;
+  return {
+    title: String(raw.title ?? "Challenge").slice(0, 64),
+    type: String(raw.type ?? "General"),
+    suggestedStake: Math.max(0, Math.floor(Number(raw.suggestedStake ?? 0))),
+    evidenceType,
+    rules: String(raw.rules ?? ""),
+    deadline: String(raw.deadline ?? "48 hours"),
+    isPublic: raw.isPublic !== false,
+    judgingMethod: coerceJudgingMethod(judgingSource, evidenceType),
+  };
+}
+
 export function generateClarifications(parsed: ParsedChallenge): Array<{ question: string; options: string[] }> {
   const questions = [];
   questions.push({
@@ -413,7 +450,7 @@ function parseChallengeFallback(input: string): ParsedChallenge {
   title = title.charAt(0).toUpperCase() + title.slice(1);
   if (title.length > 64) title = title.slice(0, 61) + "…";
 
-  return {
+  const candidate: ParsedChallenge = {
     title,
     type,
     suggestedStake: amount,
@@ -421,7 +458,9 @@ function parseChallengeFallback(input: string): ParsedChallenge {
     rules: `Standard ${type.toLowerCase()} challenge — AI reviewed`,
     deadline,
     isPublic: !/private|secret|just us|between us/i.test(input),
+    judgingMethod: coerceJudgingMethod(undefined, evidenceType),
   };
+  return safeParseBetDraft(candidate) ?? candidate;
 }
 
 function judgeChallengeFallback(params: JudgeChallengeParams): JudgmentResult {

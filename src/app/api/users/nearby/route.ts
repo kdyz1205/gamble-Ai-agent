@@ -1,34 +1,77 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getAuthUser, unauthorized } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
+import {
+  discoveryMetaForChallenge,
+  fetchWaitingChallengesWithCreatorGeo,
+  sortChallengesByDiscovery,
+} from "@/lib/challenge-discovery";
 
 /**
- * GET /api/users/nearby — Get nearby users
- * Query params: lat, lng, radius (miles, default 10)
+ * GET /api/users/nearby — Nearby users + discoverable challenges (sorted by challenge creator geo when GPS present).
  */
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
-  if (!user) return unauthorized();
-
   const url = new URL(req.url);
-  const lat = parseFloat(url.searchParams.get("lat") || "0");
-  const lng = parseFloat(url.searchParams.get("lng") || "0");
-  const radiusMiles = parseFloat(url.searchParams.get("radius") || "10");
+  const radiusRaw = parseFloat(url.searchParams.get("radius") || "25");
+  const radiusMiles = Number.isFinite(radiusRaw)
+    ? Math.min(500, Math.max(1, radiusRaw))
+    : 25;
 
-  // Update current user's location
-  if (lat !== 0 && lng !== 0) {
-    await prisma.user.update({
-      where: { id: user.userId },
-      data: { latitude: lat, longitude: lng, locationUpdatedAt: new Date() },
+  const latRaw = url.searchParams.get("lat");
+  const lngRaw = url.searchParams.get("lng");
+  const lat = latRaw != null && latRaw !== "" ? Number(latRaw) : NaN;
+  const lng = lngRaw != null && lngRaw !== "" ? Number(lngRaw) : NaN;
+  const hasGeo =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180;
+
+  const take = 24;
+  const baseRows = await fetchWaitingChallengesWithCreatorGeo(take);
+
+  const attachDiscovery = (rows: typeof baseRows) =>
+    hasGeo
+      ? sortChallengesByDiscovery(
+          rows.map((row) => ({
+            row,
+            meta: discoveryMetaForChallenge(row, lat, lng),
+          })),
+        ).map(({ row, meta }) => ({ ...row, discovery: meta }))
+      : rows.map((row) => ({
+          ...row,
+          discovery: { distanceMiles: null as number | null, source: "none" as const },
+        }));
+
+  if (!user) {
+    return Response.json({
+      users: [],
+      challenges: attachDiscovery(baseRows),
+      mode: "global_fallback",
+      reason: "anonymous",
     });
   }
 
-  // SQLite doesn't have geo functions, so we do a rough bounding box then filter
-  // 1 degree latitude ≈ 69 miles
-  const latRange = radiusMiles / 69;
-  const lngRange = radiusMiles / (69 * Math.cos((lat * Math.PI) / 180) || 69);
+  if (!hasGeo) {
+    return Response.json({
+      users: [],
+      challenges: attachDiscovery(baseRows),
+      mode: "global_no_location",
+      reason: "no_coordinates",
+    });
+  }
 
-  const users = await prisma.user.findMany({
+  await prisma.user.update({
+    where: { id: user.userId },
+    data: { latitude: lat, longitude: lng, locationUpdatedAt: new Date() },
+  });
+
+  const latRange = radiusMiles / 69;
+  const lngCos = Math.cos((lat * Math.PI) / 180) || 1;
+  const lngRange = radiusMiles / (69 * lngCos);
+
+  const nearbyUserRows = await prisma.user.findMany({
     where: {
       id: { not: user.userId },
       latitude: { not: null, gte: lat - latRange, lte: lat + latRange },
@@ -47,8 +90,7 @@ export async function GET(req: NextRequest) {
     take: 20,
   });
 
-  // Calculate distance and sort
-  const withDistance = users.map((u: typeof users[number]) => {
+  const withDistance = nearbyUserRows.map((u) => {
     const dLat = ((u.latitude! - lat) * Math.PI) / 180;
     const dLng = ((u.longitude! - lng) * Math.PI) / 180;
     const a =
@@ -57,8 +99,7 @@ export async function GET(req: NextRequest) {
         Math.cos((u.latitude! * Math.PI) / 180) *
         Math.sin(dLng / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distanceMiles = 3959 * c; // Earth radius in miles
-
+    const distanceMiles = 3959 * c;
     return {
       id: u.id,
       username: u.username,
@@ -70,7 +111,31 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  withDistance.sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance);
+  withDistance.sort((a, b) => a.distance - b.distance);
 
-  return Response.json({ users: withDistance });
+  const challenges = attachDiscovery(baseRows);
+  const nearFirstIds = new Set(withDistance.map((u) => u.id));
+  const reordered = [...challenges].sort((a, b) => {
+    const aNear = nearFirstIds.has(a.creatorId) ? 0 : 1;
+    const bNear = nearFirstIds.has(b.creatorId) ? 0 : 1;
+    if (aNear !== bNear) return aNear - bNear;
+    const da = a.discovery?.distanceMiles;
+    const db = b.discovery?.distanceMiles;
+    if (da != null && db != null && da !== db) return da - db;
+    if (da != null && db == null) return -1;
+    if (da == null && db != null) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const mode =
+    reordered.some((c) => nearFirstIds.has(c.creatorId))
+      ? "nearby_challenges"
+      : "global_with_nearby_users";
+
+  return Response.json({
+    users: withDistance,
+    challenges: reordered.slice(0, take),
+    mode,
+    reason: "geo",
+  });
 }

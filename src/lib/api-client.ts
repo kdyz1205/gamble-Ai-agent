@@ -87,6 +87,11 @@ export async function topUpCredits(usdcAmount: number, txHash: string): Promise<
 
 /* ── Challenges ── */
 
+export type ChallengeDiscoveryMeta = {
+  distanceMiles: number | null;
+  source: "snapshot" | "creator_live" | "none";
+};
+
 export interface ChallengeData {
   id: string;
   creatorId: string;
@@ -103,7 +108,19 @@ export interface ChallengeData {
   maxParticipants: number;
   aiModel?: string | null;
   createdAt: string;
-  creator: { id: string; username: string; image: string | null; credits?: number };
+  discoveryLat?: number | null;
+  discoveryLng?: number | null;
+  discoveryCapturedAt?: string | null;
+  /** Present on /api/users/nearby and /api/challenges/discover when geo sorting applies. */
+  discovery?: ChallengeDiscoveryMeta;
+  creator: {
+    id: string;
+    username: string;
+    image: string | null;
+    credits?: number;
+    latitude?: number | null;
+    longitude?: number | null;
+  };
   participants: Array<{
     id: string;
     role: string;
@@ -111,6 +128,22 @@ export interface ChallengeData {
     user: { id: string; username: string; image: string | null };
   }>;
   _count?: { evidence: number; judgments: number };
+}
+
+export async function discoverChallenges(params?: {
+  lat?: number;
+  lng?: number;
+  limit?: number;
+}): Promise<{
+  challenges: ChallengeData[];
+  mode: string;
+  reason: string;
+}> {
+  const q = new URLSearchParams();
+  if (params?.lat != null && Number.isFinite(params.lat)) q.set("lat", String(params.lat));
+  if (params?.lng != null && Number.isFinite(params.lng)) q.set("lng", String(params.lng));
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  return apiFetch(`/challenges/discover?${q.toString()}`);
 }
 
 export async function listChallenges(params?: {
@@ -254,6 +287,8 @@ export async function presignEvidenceUpload(body: {
 
 /* ── AI Parse ── */
 
+export type JudgingMethod = "vision" | "api" | "hybrid";
+
 export interface ParsedChallenge {
   title: string;
   type: string;
@@ -262,6 +297,7 @@ export interface ParsedChallenge {
   rules: string;
   deadline: string;
   isPublic: boolean;
+  judgingMethod: JudgingMethod;
 }
 
 export async function parseChallenge(
@@ -269,6 +305,8 @@ export async function parseChallenge(
   tier: 1 | 2 | 3 = 1,
   opts?: { providerId?: string; model?: string },
 ): Promise<{
+  betDraft: ParsedChallenge & { stake: number };
+  confirmationPrompt: string;
   parsed: ParsedChallenge;
   clarifications: Array<{ question: string; options: string[] }>;
   model: string;
@@ -300,11 +338,32 @@ export async function getFeed(limit = 20): Promise<{ events: ActivityEventData[]
 
 /* ── Nearby ── */
 
-export async function getNearbyUsers(lat: number, lng: number, radius = 10): Promise<{
+export type DiscoverReason = "anonymous" | "no_coordinates" | "geo";
+
+export async function getDiscoverNearby(params?: {
+  lat?: number;
+  lng?: number;
+  radius?: number;
+}): Promise<{
   users: Array<{
-    id: string; username: string; image: string | null;
-    distance: number; isOnline: boolean; challengeCount: number;
+    id: string;
+    username: string;
+    image: string | null;
+    distance: number;
+    isOnline: boolean;
+    challengeCount: number;
   }>;
+  challenges: ChallengeData[];
+  mode: string;
+  reason: DiscoverReason | string;
 }> {
-  return apiFetch(`/users/nearby?lat=${lat}&lng=${lng}&radius=${radius}`);
+  const q = new URLSearchParams();
+  if (params?.lat != null && Number.isFinite(params.lat)) q.set("lat", String(params.lat));
+  if (params?.lng != null && Number.isFinite(params.lng)) q.set("lng", String(params.lng));
+  if (params?.radius != null) q.set("radius", String(params.radius));
+  return apiFetch(`/users/nearby?${q.toString()}`);
+}
+
+export async function getNearbyUsers(lat: number, lng: number, radius = 10) {
+  return getDiscoverNearby({ lat, lng, radius });
 }
