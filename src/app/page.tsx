@@ -17,6 +17,8 @@ import AiOracleSettingsPanel from "@/components/AiOracleSettingsPanel";
 import * as api from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 
+const PRICING_SITE_URL = (process.env.NEXT_PUBLIC_PRICING_SITE_URL ?? "").trim();
+
 /* ═══════════════════════════════════════════════════
    AI CONVERSATION ENGINE
    ═══════════════════════════════════════════════════ */
@@ -494,6 +496,19 @@ export default function Home() {
 
       <FloatingActionBar visible={active} />
 
+      {/* 财务测算在独立站点；配置 NEXT_PUBLIC_PRICING_SITE_URL */}
+      {active && PRICING_SITE_URL && (
+        <a
+          href={PRICING_SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-5 left-5 z-[35] text-[10px] font-bold uppercase tracking-[0.14em] text-text-muted/50 transition-colors hover:text-text-muted"
+          style={{ textShadow: "0 1px 12px rgba(0,0,0,0.9)" }}
+        >
+          财务测算
+        </a>
+      )}
+
       <AnimatePresence>
         {!active && (
           <motion.footer
@@ -504,7 +519,16 @@ export default function Home() {
           >
             <span>Terms</span>
             <span className="text-text-muted/20">·</span>
-            <Link href="/pricing" className="hover:text-text-muted transition-colors">Pricing lab</Link>
+            {PRICING_SITE_URL ? (
+              <a
+                href={PRICING_SITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-text-muted transition-colors"
+              >
+                财务测算
+              </a>
+            ) : null}
             <span className="text-text-muted/20">·</span>
             <span>AI-Powered Challenge OS</span>
             <span className="text-text-muted/20">·</span>
