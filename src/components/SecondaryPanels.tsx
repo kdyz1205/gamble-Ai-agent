@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSession } from "next-auth/react";
+import * as api from "@/lib/api-client";
+import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
 
 /* ── Drawer shell ── */
 function Drawer({ open, onClose, title, children }: {
@@ -63,54 +66,145 @@ function Drawer({ open, onClose, title, children }: {
   );
 }
 
-/* ── Live Activity ── */
-const LIVE_EVENTS = [
-  { id:"1", text:"Alex just challenged Sam — 50 pushups in 2 min", time:"just now", type:"new",      stake:"$20" },
-  { id:"2", text:"Morgan completed a 5K run in 23:12",              time:"4m ago",  type:"complete",  stake:null  },
-  { id:"3", text:"Priya vs Taylor — cooking battle is LIVE",         time:"8m ago",  type:"live",      stake:"500 pts" },
-  { id:"4", text:"David won the chess blitz speed match!",           time:"13m ago", type:"result",    stake:"$10" },
-  { id:"5", text:"Ravi opened a 100-line coding challenge",          time:"16m ago", type:"new",       stake:"$25" },
-  { id:"6", text:"$50 staked on the Saturday 5K run",               time:"21m ago", type:"stake",     stake:"$50" },
-  { id:"7", text:"AI judged pasta challenge — Priya wins!",          time:"26m ago", type:"result",    stake:null  },
-];
-
+/* ── Live Activity (real /api/feed) ── */
 const DOT_COLOR: Record<string, string> = {
-  live:     "#ff4757",
-  complete: "#00e87a",
-  result:   "#00e87a",
-  stake:    "#f5a623",
-  new:      "#7c5cfc",
+  challenge_created: "#7c5cfc",
+  challenge_accepted: "#00d4c8",
+  user_joined: "#00e87a",
+  live: "#ff4757",
+  default: "#7c5cfc",
 };
 
+function formatAgo(iso: string): string {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 function LiveContent() {
+  const [events, setEvents] = useState<ActivityEventData[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getFeed(25)
+      .then((r) => { if (!cancelled) setEvents(r.events); })
+      .catch(() => { if (!cancelled) setErr("Could not load feed"); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (err) return <p className="text-sm text-text-muted">{err}</p>;
+  if (events.length === 0) {
+    return <p className="text-sm text-text-muted">No activity yet — publish a public challenge to see it here.</p>;
+  }
+
   return (
     <div className="space-y-1">
-      {LIVE_EVENTS.map((e, i) => (
+      {events.map((e, i) => {
+        const dot = DOT_COLOR[e.type] ?? DOT_COLOR.default;
+        return (
+          <motion.div
+            key={e.id}
+            className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default"
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.04, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ background: "rgba(255,255,255,0.04)" }}
+          >
+            <div className="relative mt-1.5 flex-shrink-0">
+              <div className="w-2 h-2 rounded-full" style={{ background: dot }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-text-secondary leading-snug">{e.message}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] text-text-muted">{formatAgo(e.createdAt)}</span>
+                {e.challenge && e.challenge.stake > 0 && (
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: "rgba(245,166,35,0.1)", color: "#f5a623" }}
+                  >
+                    {e.challenge.stake} cr
+                  </span>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Nearby People (real /api/users/nearby + geolocation) ── */
+const STATUS_COLOR: Record<string, string> = { online: "#00e87a", idle: "#f5a623", offline: "#ffffff20" };
+
+function NearbyContent() {
+  const { status } = useSession();
+  const [users, setUsers] = useState<Array<{
+    id: string; username: string; image: string | null; distance: number; isOnline: boolean; challengeCount: number;
+  }>>([]);
+  const [hint, setHint] = useState<string | null>("Locating…");
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      setHint("Sign in and allow location to see nearby challengers.");
+      return;
+    }
+    if (!navigator.geolocation) {
+      setHint("Location not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const r = await api.getNearbyUsers(pos.coords.latitude, pos.coords.longitude, 25);
+          setUsers(r.users);
+          setHint(r.users.length ? null : "No one with saved location nearby yet.");
+        } catch {
+          setHint("Could not load nearby users.");
+        }
+      },
+      () => setHint("Location denied — enable it in the browser to use Nearby."),
+      { enableHighAccuracy: false, timeout: 12_000 },
+    );
+  }, [status]);
+
+  if (status !== "authenticated") {
+    return <p className="text-sm text-text-muted">Sign in to find people near you (we save rough location when you open this panel).</p>;
+  }
+  if (hint && users.length === 0) {
+    return <p className="text-sm text-text-muted">{hint}</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      {hint && <p className="text-[11px] text-text-muted mb-2">{hint}</p>}
+      {users.map((u, i) => (
         <motion.div
-          key={e.id}
-          className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default"
+          key={u.id}
+          className="group flex items-center gap-3 px-3 py-3 rounded-xl"
           initial={{ opacity: 0, x: 12 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.06, duration: 0.4, ease: [0.22,1,0.36,1] }}
+          transition={{ delay: i * 0.05, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           whileHover={{ background: "rgba(255,255,255,0.04)" }}
         >
-          <div className="relative mt-1.5 flex-shrink-0">
-            <div className="w-2 h-2 rounded-full" style={{ background: DOT_COLOR[e.type] }} />
-            {e.type === "live" && (
-              <div className="absolute inset-0 rounded-full animate-ping" style={{ background: DOT_COLOR[e.type], opacity: 0.4 }} />
-            )}
+          <div className="relative flex-shrink-0">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
+              style={{ background: "linear-gradient(135deg, rgba(124,92,252,0.3), rgba(0,212,200,0.2))" }}
+            >
+              {u.image ? <img src={u.image} alt="" className="w-full h-full object-cover" /> : u.username.slice(0, 2).toUpperCase()}
+            </div>
+            <div
+              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+              style={{ background: STATUS_COLOR[u.isOnline ? "online" : "offline"], borderColor: "rgba(8,8,20,0.97)" }}
+            />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-text-secondary leading-snug">{e.text}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] text-text-muted">{e.time}</span>
-              {e.stake && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                      style={{ background: "rgba(245,166,35,0.1)", color: "#f5a623" }}>
-                  {e.stake}
-                </span>
-              )}
-            </div>
+            <p className="text-sm font-bold text-text-primary">{u.username}</p>
+            <p className="text-[11px] text-text-muted">{u.distance} mi · {u.challengeCount} challenges</p>
           </div>
         </motion.div>
       ))}
@@ -118,52 +212,124 @@ function LiveContent() {
   );
 }
 
-/* ── Nearby People ── */
-const NEARBY = [
-  { id:"1", name:"Alex Chen",  dist:"0.2 mi", status:"online",  n:3  },
-  { id:"2", name:"Sam Kim",    dist:"0.5 mi", status:"online",  n:7  },
-  { id:"3", name:"Jamie Lee",  dist:"1.2 mi", status:"idle",    n:2  },
-  { id:"4", name:"Morgan R.",  dist:"2.1 mi", status:"online",  n:12 },
-  { id:"5", name:"Casey W.",   dist:"3.4 mi", status:"offline", n:5  },
-];
-const STATUS_COLOR: Record<string, string> = { online:"#00e87a", idle:"#f5a623", offline:"#ffffff20" };
+/* ── Discover open challenges ── */
+function DiscoverContent({
+  onRequireAuth,
+  onOpenChallenge,
+}: {
+  onRequireAuth: () => void;
+  onOpenChallenge: (challengeId: string) => void;
+}) {
+  const { data: session, status } = useSession();
+  const uid = (session?.user as { id?: string } | undefined)?.id;
+  const [rows, setRows] = useState<ChallengeData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
 
-function NearbyContent() {
-  return (
-    <div className="space-y-1">
-      {NEARBY.map((u, i) => (
-        <motion.div
-          key={u.id}
-          className="group flex items-center gap-3 px-3 py-3 rounded-xl"
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.07, duration: 0.4, ease: [0.22,1,0.36,1] }}
-          whileHover={{ background: "rgba(255,255,255,0.04)" }}
+  const load = useCallback(() => {
+    setLoading(true);
+    setMsg(null);
+    api
+      .listChallenges({ status: "open", limit: 40 })
+      .then((r) => {
+        const joinable = r.challenges.filter(
+          (c) => c.status === "open" && c.participants.length < (c.maxParticipants ?? 2),
+        );
+        setRows(joinable);
+      })
+      .catch(() => setMsg("Could not load challenges."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const join = async (c: ChallengeData) => {
+    if (status !== "authenticated" || !uid) {
+      onRequireAuth();
+      return;
+    }
+    if (c.creatorId === uid) {
+      setMsg("This is your challenge — share the link for a friend to join.");
+      return;
+    }
+    if (c.participants.some((p) => p.user.id === uid)) {
+      onOpenChallenge(c.id);
+      return;
+    }
+    try {
+      await api.acceptChallenge(c.id);
+      onOpenChallenge(c.id);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Could not join");
+    }
+  };
+
+  if (loading) return <p className="text-sm text-text-muted">Loading open challenges…</p>;
+  if (rows.length === 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-text-muted">No open slots right now. Ask a friend to publish a public challenge, or create one from the chat.</p>
+        <motion.button
+          type="button"
+          onClick={load}
+          className="text-xs font-bold text-accent"
+          whileTap={{ scale: 0.97 }}
         >
-          <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white"
-                 style={{ background: "linear-gradient(135deg, rgba(124,92,252,0.3), rgba(0,212,200,0.2))" }}>
-              {u.name.split(" ").map(n=>n[0]).join("")}
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
-                 style={{ background: STATUS_COLOR[u.status], borderColor: "rgba(8,8,20,0.97)" }} />
-          </div>
+          Refresh
+        </motion.button>
+      </div>
+    );
+  }
 
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-text-primary">{u.name}</p>
-            <p className="text-[11px] text-text-muted">{u.dist} · {u.n} challenges</p>
-          </div>
-
-          <motion.button
-            className="opacity-0 group-hover:opacity-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-            style={{ background: "rgba(124,92,252,0.15)", color: "#a78bfa", border: "1px solid rgba(124,92,252,0.25)" }}
-            whileHover={{ background: "rgba(124,92,252,0.3)" }}
-            whileTap={{ scale: 0.95 }}
+  return (
+    <div className="space-y-2">
+      {msg && <p className="text-xs font-bold text-[#ff4757]">{msg}</p>}
+      {rows.map((c, i) => {
+        const mine = Boolean(uid && c.creatorId === uid);
+        const joined = Boolean(uid && c.participants.some((p) => p.user.id === uid));
+        return (
+          <motion.div
+            key={c.id}
+            className="rounded-xl px-3 py-3 space-y-2"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04 }}
           >
-            Challenge
-          </motion.button>
-        </motion.div>
-      ))}
+            <p className="text-sm font-bold text-text-primary leading-snug">{c.title}</p>
+            <p className="text-[11px] text-text-muted">
+              by @{c.creator.username}
+              {c.stake > 0 ? ` · ${c.stake} credits stake` : ""} · {c.participants.length}/{c.maxParticipants ?? 2} players
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={() => join(c)}
+                disabled={mine}
+                className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
+                style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
+              >
+                {mine ? "Yours" : joined ? "Open room" : "Join as opponent"}
+              </motion.button>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  void navigator.clipboard.writeText(`${window.location.origin}/?challenge=${c.id}`);
+                  setMsg("Link copied — send it to your opponent.");
+                  setTimeout(() => setMsg(null), 2500);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold border border-border-subtle text-text-muted"
+              >
+                Copy invite link
+              </motion.button>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
@@ -267,13 +433,22 @@ function WalletContent() {
 
 /* ── Floating Action Bar ── */
 const ACTIONS = [
-  { key:"live",   icon:"⚡", label:"Live",   badge:"3",  dotColor:"#ff4757" },
-  { key:"nearby", icon:"◎",  label:"Nearby", badge:"5",  dotColor:"#00e87a" },
-  { key:"wallet", icon:"◈",  label:"Wallet", badge:null, dotColor:null       },
+  { key: "discover", icon: "◎", label: "Discover", badge: null as string | null, dotColor: "#7c5cfc" },
+  { key: "live", icon: "⚡", label: "Live", badge: null as string | null, dotColor: "#ff4757" },
+  { key: "nearby", icon: "📍", label: "Nearby", badge: null as string | null, dotColor: "#00e87a" },
+  { key: "wallet", icon: "◈", label: "Wallet", badge: null as string | null, dotColor: null as string | null },
 ];
 
-export function FloatingActionBar({ visible }: { visible: boolean }) {
-  const [active, setActive] = useState<string|null>(null);
+export function FloatingActionBar({
+  visible,
+  onRequireAuth,
+  onOpenChallenge,
+}: {
+  visible: boolean;
+  onRequireAuth?: () => void;
+  onOpenChallenge?: (challengeId: string) => void;
+}) {
+  const [active, setActive] = useState<string | null>(null);
 
   return (
     <>
@@ -308,14 +483,14 @@ export function FloatingActionBar({ visible }: { visible: boolean }) {
                 >
                   <span className="text-base">{a.icon}</span>
                   <span>{a.label}</span>
-                  {a.badge && (
+                  {a.badge ? (
                     <span
                       className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black text-white flex items-center justify-center"
                       style={{ background: a.dotColor ?? "#7c5cfc" }}
                     >
                       {a.badge}
                     </span>
-                  )}
+                  ) : null}
                 </motion.button>
               ))}
             </div>
@@ -323,13 +498,22 @@ export function FloatingActionBar({ visible }: { visible: boolean }) {
         )}
       </AnimatePresence>
 
-      <Drawer open={active==="live"}   onClose={()=>setActive(null)} title="Live Activity">
+      <Drawer open={active === "discover"} onClose={() => setActive(null)} title="Open challenges">
+        <DiscoverContent
+          onRequireAuth={() => onRequireAuth?.()}
+          onOpenChallenge={(id) => {
+            onOpenChallenge?.(id);
+            setActive(null);
+          }}
+        />
+      </Drawer>
+      <Drawer open={active === "live"} onClose={() => setActive(null)} title="Live Activity">
         <LiveContent />
       </Drawer>
-      <Drawer open={active==="nearby"} onClose={()=>setActive(null)} title="Nearby People">
+      <Drawer open={active === "nearby"} onClose={() => setActive(null)} title="Nearby People">
         <NearbyContent />
       </Drawer>
-      <Drawer open={active==="wallet"} onClose={()=>setActive(null)} title="Wallet & Escrow">
+      <Drawer open={active === "wallet"} onClose={() => setActive(null)} title="Wallet & Escrow">
         <WalletContent />
       </Drawer>
     </>

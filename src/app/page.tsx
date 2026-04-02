@@ -136,7 +136,23 @@ export default function Home() {
     setChallengeId(id);
     setPublished(true);
     setAppState("live");
+    setDraft(null);
   }, [user?.id]);
+
+  const openChallengeRoom = useCallback(
+    (id: string) => {
+      setChallengeId(id);
+      setPublished(true);
+      setAppState("live");
+      setDraft(null);
+      if (typeof window !== "undefined" && window.history.replaceState) {
+        const u = new URL(window.location.href);
+        u.searchParams.set("challenge", id);
+        window.history.replaceState({}, "", u.pathname + u.search);
+      }
+    },
+    [],
+  );
 
   const pushMsg = useCallback((role: "user"|"ai", content: string, options?: string[]) => {
     setMessages(prev => [...prev, {
@@ -494,7 +510,11 @@ export default function Home() {
         />
       </main>
 
-      <FloatingActionBar visible={active} />
+      <FloatingActionBar
+        visible
+        onRequireAuth={() => setShowAuth(true)}
+        onOpenChallenge={openChallengeRoom}
+      />
 
       {/* 财务测算在独立站点；配置 NEXT_PUBLIC_PRICING_SITE_URL */}
       {active && PRICING_SITE_URL && (

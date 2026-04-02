@@ -100,6 +100,7 @@ export interface ChallengeData {
   evidenceType: string;
   aiReview: boolean;
   isPublic: boolean;
+  maxParticipants: number;
   aiModel?: string | null;
   createdAt: string;
   creator: { id: string; username: string; image: string | null; credits?: number };
@@ -197,6 +198,57 @@ export async function judgeChallenge(
   return apiFetch(`/challenges/${id}/judge`, {
     method: "POST",
     body: JSON.stringify({ tier, ...opts }),
+  });
+}
+
+/** 202 + background job (ffmpeg/vision/settle). Poll `getJudgeJob`. */
+export async function judgeChallengeAsync(
+  id: string,
+  tier: 1 | 2 | 3 = 1,
+  opts?: { providerId?: string; model?: string; webhookUrl?: string },
+): Promise<{
+  status: string;
+  jobId: string;
+  pollUrl: string;
+  pollUrlAbsolute?: string;
+  message?: string;
+}> {
+  return apiFetch(`/challenges/${id}/judge/async`, {
+    method: "POST",
+    body: JSON.stringify({ tier, ...opts }),
+  });
+}
+
+export async function getJudgeJob(jobId: string): Promise<{
+  jobId: string;
+  challengeId: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  result: unknown;
+}> {
+  return apiFetch(`/judge-jobs/${jobId}`);
+}
+
+/** Presigned PUT for direct-to-S3 upload (optional; 503 if not configured). */
+export async function presignEvidenceUpload(body: {
+  challengeId: string;
+  contentType: string;
+  filename?: string;
+}): Promise<{
+  configured: boolean;
+  uploadUrl?: string;
+  publicUrl?: string;
+  key?: string;
+  expiresIn?: number;
+  method?: string;
+  headers?: Record<string, string>;
+  error?: string;
+}> {
+  return apiFetch("/uploads/evidence-presign", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 
