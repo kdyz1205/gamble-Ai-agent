@@ -81,9 +81,9 @@ Escrow ABI changed from `bytes32` + `settle(bytes32,address)` to **`uint256` key
 
 | Where | What to align with production |
 |--------|-------------------------------|
-| **Vercel** | `NEXTAUTH_URL` = exact site URL; `DATABASE_URL`; run `prisma migrate deploy` on build (`build` script already includes it). |
+| **Vercel** | Set `DATABASE_URL`, `NEXTAUTH_SECRET`, `CRON_SECRET` (generate locally: `npm run gen:cron-secret`). **`npm run build:vercel` now runs `prisma migrate deploy`** so each production deploy applies migrations. `trustHost: true` in NextAuth helps previews; **production should still set `NEXTAUTH_URL` to your canonical domain** (stable OAuth + links). |
 | **Google Cloud OAuth** | Authorized redirect URI: `https://<your-domain>/api/auth/callback/google` |
-| **Supabase** (if using Realtime) | Same project as DB when possible; enable replication on `"Challenge"` and `"Participant"`; set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
+| **Supabase** (if using Realtime) | Same project as DB when possible; run **`scripts/sql/supabase-realtime-publication.sql`** in SQL Editor (adds `"Challenge"` / `"Participant"` to `supabase_realtime`); set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
 | **Vercel Cron** | `CRON_SECRET` env; cron hits `/api/cron/challenge-judgment` with `Authorization: Bearer <CRON_SECRET>` (see `vercel.json`). |
 | **Pricing microsite** (optional) | Set `NEXT_PUBLIC_PRICING_SITE_URL` to the deployed pricing app so the main app shows the finance link. |
 | **S3 / CDN** (optional uploads) | `AWS_*` + `S3_EVIDENCE_BUCKET` + `S3_PUBLIC_BASE_URL` for presigned evidence. |

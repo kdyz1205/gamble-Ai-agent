@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
-    "build:vercel": "prisma generate && next build",
+    "build:vercel": "prisma generate && prisma migrate deploy && next build",
+    "gen:cron-secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
+    "gen:nextauth-secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",

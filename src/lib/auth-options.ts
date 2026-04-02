@@ -11,6 +11,8 @@ const googleId = process.env.GOOGLE_CLIENT_ID?.trim();
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
 export const authOptions: NextAuthOptions = {
+  /** Vercel / multi-host: use request Host for OAuth callbacks when NEXTAUTH_URL is unset or preview URL. */
+  trustHost: true,
   adapter: PrismaAdapter(prisma) as Adapter,
   providers: [
     ...(googleId && googleSecret
