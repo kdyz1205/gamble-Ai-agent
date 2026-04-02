@@ -1,24 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LLM_PROVIDERS, getProviderById, DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
-import { ORACLE_LS_MODEL, ORACLE_LS_PROVIDER, readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
+import { LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
+import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 
 /**
  * Collapsed-by-default panel: pick LLM vendor + model for parse / AI judge calls.
  */
+function initialOraclePrefs() {
+  const p = readOracleLlmPrefs();
+  const def = getProviderById(p.providerId);
+  return {
+    providerId: p.providerId,
+    model: p.model ?? def?.defaultModel ?? "",
+  };
+}
+
 export default function AiOracleSettingsPanel() {
   const [open, setOpen] = useState(false);
-  const [providerId, setProviderId] = useState(DEFAULT_LLM_PROVIDER_ID);
-  const [model, setModel] = useState("");
-
-  useEffect(() => {
-    const p = readOracleLlmPrefs();
-    setProviderId(p.providerId);
-    const def = getProviderById(p.providerId);
-    setModel(p.model ?? def?.defaultModel ?? "");
-  }, []);
+  const [providerId, setProviderId] = useState(() => initialOraclePrefs().providerId);
+  const [model, setModel] = useState(() => initialOraclePrefs().model);
 
   const provider = getProviderById(providerId);
 

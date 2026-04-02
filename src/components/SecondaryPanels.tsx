@@ -283,10 +283,11 @@ function NearbyContent({ onRequireAuth }: { onRequireAuth?: () => void }) {
 /* ── Discover open challenges ── */
 function DiscoverContent({
   onRequireAuth,
-  onOpenChallenge,
+  onOpenChallenge: _onOpenChallenge,
   onCloseDrawer,
 }: {
   onRequireAuth: () => void;
+  /** Parent may sync home state; join flow uses router to /challenge/[id]/versus */
   onOpenChallenge: (challengeId: string) => void;
   onCloseDrawer?: () => void;
 }) {

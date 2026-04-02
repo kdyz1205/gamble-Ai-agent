@@ -36,7 +36,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     if (!challenge || challenge.status === "settled") return;
     const t = setInterval(() => void refresh(), 5000);
     return () => clearInterval(t);
-  }, [challenge?.status, refresh]);
+  }, [challenge, refresh]);
 
   const creator = challenge?.participants.find((p) => p.role === "creator");
   const opponent = challenge?.participants.find((p) => p.role === "opponent");

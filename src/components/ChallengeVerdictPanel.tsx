@@ -65,8 +65,6 @@ export default function ChallengeVerdictPanel({
   }, []);
 
   const me = challenge?.participants.find(p => p.user.id === userId);
-  const creator = challenge?.participants.find(p => p.role === "creator");
-  const opponent = challenge?.participants.find(p => p.role === "opponent");
 
   const accepted = challenge?.participants.filter(p => p.status === "accepted") ?? [];
   const evidenceByUser = new Map((challenge?.evidence ?? []).map(e => [e.userId, e] as const));

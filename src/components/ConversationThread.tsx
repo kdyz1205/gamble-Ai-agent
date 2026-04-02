@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Variants } from "framer-motion";
 
 export interface Message {
   id: string;

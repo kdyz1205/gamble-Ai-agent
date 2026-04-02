@@ -39,7 +39,6 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - run: npm run lint
 
-      # next lint (may differ by platform); fails CI if ESLint reports issues
-      - run: npx next lint
+      - run: npm run build

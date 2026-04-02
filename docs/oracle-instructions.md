@@ -83,7 +83,7 @@ Escrow ABI changed from `bytes32` + `settle(bytes32,address)` to **`uint256` key
 
 | Where | What to align with production |
 |--------|-------------------------------|
-| **Vercel** | Set `DATABASE_URL`, `NEXTAUTH_SECRET`, `CRON_SECRET` (generate locally: `npm run gen:cron-secret`). **`npm run build:vercel` now runs `prisma migrate deploy`** so each production deploy applies migrations. `trustHost: true` in NextAuth helps previews; **production should still set `NEXTAUTH_URL` to your canonical domain** (copy from **Domains** on the project — e.g. `https://…vercel.app` or your custom domain). |
+| **Vercel** | Set `DATABASE_URL`, `NEXTAUTH_SECRET`, `CRON_SECRET` (generate locally: `npm run gen:cron-secret`). **`npm run build:vercel` now runs `prisma migrate deploy`** so each production deploy applies migrations. **Set `NEXTAUTH_URL` to your canonical domain** (copy from **Domains** — e.g. `https://…vercel.app` or custom domain); preview deployments should set `NEXTAUTH_URL` to that preview URL if you test Google sign-in there. |
 | **Google Cloud OAuth** | Authorized redirect URI: `https://<your-domain>/api/auth/callback/google` |
 | **Supabase** (if using Realtime) | Same project as DB when possible; run **`scripts/sql/supabase-realtime-publication.sql`** in SQL Editor (adds `"Challenge"` / `"Participant"` to `supabase_realtime`); set `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
 | **Vercel Cron** | `CRON_SECRET` env; cron hits `/api/cron/challenge-judgment` with `Authorization: Bearer <CRON_SECRET>` (see `vercel.json`). |

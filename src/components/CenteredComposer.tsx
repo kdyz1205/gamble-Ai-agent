@@ -49,7 +49,6 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
   const mouseX                    = useMotionValue(0);
   const mouseY                    = useMotionValue(0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
   // suppress unused warning — kept for future use
   void mouseX; void mouseY;

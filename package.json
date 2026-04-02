@@ -10,7 +10,7 @@
     "gen:cron-secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
     "gen:nextauth-secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 0",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
