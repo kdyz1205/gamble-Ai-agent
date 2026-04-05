@@ -211,6 +211,13 @@ export async function executeChallengeJudgment(
 
   let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
   if (challenge.stake > 0) {
+    // Move to pending_settlement BEFORE attempting on-chain tx
+    assertChallengeTransition(challenge.status, ChallengeStatus.pending_settlement);
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: ChallengeStatus.pending_settlement, aiModel: aiModelLabel },
+    });
+
     settlementResult = await settleChallenge(
       challengeId,
       result.winnerId,
@@ -218,9 +225,42 @@ export async function executeChallengeJudgment(
       challenge.participants.map((p) => ({ userId: p.userId })),
       { reasoning: result.reasoning, confidence: result.confidence },
     );
+
+    if (!settlementResult.success) {
+      // Settlement failed (blockchain reverted, out of gas, etc.)
+      // Stay in pending_settlement — DO NOT mark as settled.
+      // A retry job or admin can resolve this later.
+      await appendAuditLog({
+        action: AuditActions.JUDGMENT_COMPLETED,
+        actorUserId: payerUserId,
+        challengeId,
+        payload: {
+          winnerId: result.winnerId,
+          judgmentId: judgment.id,
+          confidence: result.confidence,
+          settlementOk: false,
+          settlementError: settlementResult.error,
+          reasoning: result.reasoning?.slice(0, 500),
+        },
+      });
+
+      return {
+        ok: true,
+        judgment,
+        settlementResult,
+        challengeId,
+        model: aiModelLabel,
+        tierId,
+        creditsUsed: cost,
+        creditsRemaining: spend.balance,
+        txHash: null,
+      };
+    }
   }
 
-  assertChallengeTransition(challenge.status, ChallengeStatus.settled);
+  // Only reach here if settlement succeeded (or no stake)
+  const fromStatus = challenge.stake > 0 ? ChallengeStatus.pending_settlement : challenge.status;
+  assertChallengeTransition(fromStatus, ChallengeStatus.settled);
   await prisma.challenge.update({
     where: { id: challengeId },
     data: { status: ChallengeStatus.settled, aiModel: aiModelLabel },
@@ -235,7 +275,7 @@ export async function executeChallengeJudgment(
       judgmentId: judgment.id,
       confidence: result.confidence,
       settlementOk: settlementResult.success,
-      reasoning: result.reasoning?.slice(0, 500), // first 500 chars
+      reasoning: result.reasoning?.slice(0, 500),
     },
   });
 

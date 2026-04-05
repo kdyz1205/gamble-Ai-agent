@@ -21,7 +21,7 @@ export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
   const opponent = c.participants.find((p) => p.role === "opponent");
   let status: Challenge["status"] = "open";
   if (c.status === "settled" || c.status === "cancelled") status = "completed";
-  else if (c.status === "judging") status = "judging";
+  else if (c.status === "judging" || c.status === "pending_settlement") status = "judging";
   else if (c.status === "live" || c.status === "matched") status = "live";
 
   const deadlineStr = c.deadline

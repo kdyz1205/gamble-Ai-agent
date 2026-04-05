@@ -22,6 +22,12 @@ const EDGES: Record<ChallengeStatus, ReadonlySet<ChallengeStatus>> = {
     ChallengeStatus.disputed,
   ]),
   [ChallengeStatus.judging]: new Set([
+    ChallengeStatus.pending_settlement,
+    ChallengeStatus.settled,
+    ChallengeStatus.disputed,
+    ChallengeStatus.cancelled,
+  ]),
+  [ChallengeStatus.pending_settlement]: new Set([
     ChallengeStatus.settled,
     ChallengeStatus.disputed,
     ChallengeStatus.cancelled,

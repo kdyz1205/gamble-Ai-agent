@@ -20,6 +20,7 @@ function statusLabel(s: string): string {
     live: "In progress",
     matched: "Matched",
     judging: "Ready for AI verdict",
+    pending_settlement: "Settling on-chain\u2026",
     settled: "Settled",
     cancelled: "Cancelled",
     draft: "Draft",
@@ -32,8 +33,9 @@ function statusColor(s: string) {
     open:    { color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
     live:    { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     matched: { color: "#00d4c8", bg: "rgba(0,212,200,0.1)",   border: "rgba(0,212,200,0.25)" },
-    judging: { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
-    settled: { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    judging:            { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
+    pending_settlement: { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
+    settled:            { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
   };
   return m[s] ?? m.open;
 }

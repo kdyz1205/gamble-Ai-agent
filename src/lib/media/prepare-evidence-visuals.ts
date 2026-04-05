@@ -16,7 +16,7 @@ import {
   looksLikeVideoMime,
 } from "./evidence-url";
 import { planVideoVisuals } from "./video-strategy";
-import { ffprobeDurationFromUrl, extractScreenshotsFromUrl, ffmpegAvailable } from "./ffmpeg-helpers";
+import { ffprobeDurationFromUrl, extractScreenshotsFromUrl, extractSceneChangeFrames, ffmpegAvailable } from "./ffmpeg-helpers";
 
 export interface JudgeVisionImage {
   caption: string;
@@ -94,7 +94,21 @@ async function runVideoPipeline(
 
   const tmp = await mkdtemp(join(tmpdir(), "evidence-vid-"));
   try {
-    const paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
+    let paths: string[];
+    let extractionLabel: string;
+
+    if (plan.extractionMode === "scene_change") {
+      const result = await extractSceneChangeFrames(url, plan.frameCount, tmp);
+      paths = result.paths;
+      extractionLabel = result.mode === "scene_change"
+        ? "scene-change detected"
+        : "uniform fallback (scene detection yielded too few)";
+    } else {
+      paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
+      extractionLabel = "evenly spaced";
+    }
+    preambleLines.push(`  → Extraction mode: ${extractionLabel}, ${paths.length} frames captured.`);
+
     const n = paths.length;
     for (let i = 0; i < n; i++) {
       const buf = await readFile(paths[i]);
@@ -102,8 +116,8 @@ async function runVideoPipeline(
         duration != null && n > 0 ? Math.round(((i + 1) / (n + 1)) * duration) : i + 1;
       const cap =
         duration != null
-          ? `${participantLabel} — video frame ${i + 1}/${n} (~${approxSec}s of ~${Math.round(duration)}s)`
-          : `${participantLabel} — video frame ${i + 1}/${n}`;
+          ? `${participantLabel} — video frame ${i + 1}/${n} (~${approxSec}s of ~${Math.round(duration)}s) [${extractionLabel}]`
+          : `${participantLabel} — video frame ${i + 1}/${n} [${extractionLabel}]`;
       const img = await bufferToVisionImage(buf, cap);
       if (img) visuals.push(img);
     }

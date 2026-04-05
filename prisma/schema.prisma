@@ -116,6 +116,7 @@ enum ChallengeStatus {
   matched
   live
   judging
+  pending_settlement
   settled
   cancelled
   disputed
