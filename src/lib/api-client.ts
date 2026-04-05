@@ -279,10 +279,38 @@ export async function presignEvidenceUpload(body: {
   headers?: Record<string, string>;
   error?: string;
 }> {
-  return apiFetch("/uploads/evidence-presign", {
+  const res = await fetch(`${BASE}/uploads/evidence-presign`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(body),
   });
+  const data = (await res.json()) as {
+    configured?: boolean;
+    error?: string;
+    uploadUrl?: string;
+    publicUrl?: string;
+    key?: string;
+    expiresIn?: number;
+    method?: string;
+    headers?: Record<string, string>;
+  };
+  if (res.status === 503 && data.configured === false) {
+    return { configured: false, error: data.error };
+  }
+  if (!res.ok) {
+    throw new Error(data.error || "API Error");
+  }
+  return data as {
+    configured: boolean;
+    uploadUrl?: string;
+    publicUrl?: string;
+    key?: string;
+    expiresIn?: number;
+    method?: string;
+    headers?: Record<string, string>;
+    error?: string;
+  };
 }
 
 /* ── AI Parse ── */

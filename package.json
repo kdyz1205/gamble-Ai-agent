@@ -34,6 +34,7 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
+    "@vercel/blob": "^2.3.2",
     "@x402/core": "^2.8.0",
     "@x402/evm": "^2.8.0",
     "@x402/next": "^2.8.0",

@@ -306,6 +306,7 @@ export default function Home() {
 
       <ParticleBackground />
 
+      {/* Ambient energy orbs */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full"
@@ -318,6 +319,12 @@ export default function Home() {
           style={{ background: "radial-gradient(circle, rgba(0,212,200,0.05) 0%, transparent 70%)" }}
           animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.7, 0.4] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+        />
+        <motion.div
+          className="absolute top-1/3 right-1/4 w-[400px] h-[400px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(124,92,252,0.03) 0%, transparent 70%)" }}
+          animate={{ scale: [1, 1.15, 1], x: [0, 30, 0], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 5 }}
         />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
              style={{ background: "radial-gradient(ellipse, rgba(124,92,252,0.025) 0%, transparent 60%)" }} />
@@ -335,11 +342,8 @@ export default function Home() {
             exit={{ y: -60, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
           >
-            <div style={{
-              background: "rgba(6,6,15,0.8)",
-              backdropFilter: "blur(20px)",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
-            }}>
+            <div className="glass-panel" style={{ borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+              <div className="plasma-line" />
               <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
 
                 <motion.button
@@ -572,11 +576,14 @@ export default function Home() {
       {!active && !user && (
         <motion.button
           onClick={() => setShowAuth(true)}
-          className="fixed top-5 right-5 z-20 px-4 py-2 rounded-xl text-xs font-bold text-white"
-          style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 16px rgba(124,92,252,0.3)" }}
+          className="shimmer-btn fixed top-5 right-5 z-20 px-5 py-2.5 rounded-xl text-xs font-extrabold text-white"
+          style={{
+            background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
+            boxShadow: "0 4px 20px rgba(124,92,252,0.35), 0 0 40px rgba(124,92,252,0.08)",
+          }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
-          whileHover={{ scale: 1.04 }}
+          whileHover={{ scale: 1.04, boxShadow: "0 6px 28px rgba(124,92,252,0.45), 0 0 50px rgba(124,92,252,0.12)" }}
           whileTap={{ scale: 0.96 }}
         >
           Sign In
@@ -584,8 +591,7 @@ export default function Home() {
       )}
       {!active && user && (
         <motion.div
-          className="fixed top-5 right-5 z-20 flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle"
-          style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
+          className="fixed top-5 right-5 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-xl glass-panel"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
         >
@@ -593,7 +599,7 @@ export default function Home() {
             <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
           ) : (
             <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
-                 style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                 style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 10px rgba(124,92,252,0.3)" }}>
               {user.username.charAt(0).toUpperCase()}
             </div>
           )}
@@ -601,9 +607,11 @@ export default function Home() {
           {creditsBadge}
           <button
             onClick={() => signOut()}
-            className="ml-1 text-[10px] text-text-muted hover:text-danger transition-colors"
+            className="ml-0.5 w-5 h-5 rounded-md flex items-center justify-center text-[10px] text-text-muted hover:text-danger hover:bg-danger/10 transition-all"
           >
-            ×
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </motion.div>
       )}

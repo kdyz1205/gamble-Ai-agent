@@ -28,11 +28,15 @@ function TypingIndicator() {
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
       <AIAvatar />
-      <div className="px-4 py-3.5 rounded-2xl rounded-tl-md border border-border-subtle"
-           style={{ background: "rgba(19,19,38,0.9)", backdropFilter: "blur(12px)" }}>
+      <div className="px-4 py-3.5 rounded-2xl rounded-tl-md glass-card border border-border-subtle">
         <div className="flex items-center gap-1.5">
           {[0, 1, 2].map(i => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-accent/60 typing-dot" />
+            <motion.div
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-accent"
+              animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+            />
           ))}
         </div>
       </div>
@@ -48,12 +52,26 @@ function AIAvatar() {
         background: "linear-gradient(135deg, #7c5cfc, #00d4c8)",
         boxShadow: "0 0 20px rgba(124,92,252,0.35)"
       }}
-      animate={{ boxShadow: ["0 0 20px rgba(124,92,252,0.35)", "0 0 30px rgba(124,92,252,0.5)", "0 0 20px rgba(124,92,252,0.35)"] }}
+      animate={{
+        boxShadow: [
+          "0 0 16px rgba(124,92,252,0.25)",
+          "0 0 24px rgba(124,92,252,0.45)",
+          "0 0 16px rgba(124,92,252,0.25)"
+        ]
+      }}
       transition={{ duration: 3, repeat: Infinity }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
       </svg>
+      {/* Subtle orbiting dot */}
+      <motion.div
+        className="absolute w-1.5 h-1.5 rounded-full bg-teal"
+        style={{ boxShadow: "0 0 6px rgba(0,212,200,0.8)" }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+        initial={{ x: 14, y: 0 }}
+      />
     </motion.div>
   );
 }
@@ -61,7 +79,10 @@ function AIAvatar() {
 function UserAvatar() {
   return (
     <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
-         style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}>
+         style={{
+           background: "linear-gradient(135deg, #3b82f6, #6366f1)",
+           boxShadow: "0 0 12px rgba(99,102,241,0.25)"
+         }}>
       <span className="text-xs font-bold text-white">Y</span>
     </div>
   );
@@ -85,22 +106,29 @@ function MessageBubble({ message, onOptionSelect, index }: {
 
       <div className={`flex flex-col gap-2.5 max-w-[82%] ${isAI ? "" : "items-end"}`}>
         {/* Bubble */}
-        <div
+        <motion.div
           className={`px-4 py-3 text-sm leading-relaxed font-medium rounded-2xl ${
             isAI
-              ? "rounded-tl-md border border-border-subtle text-text-primary"
+              ? "rounded-tl-md glass-card border border-border-subtle text-text-primary"
               : "rounded-tr-md text-white"
           }`}
           style={isAI
-            ? { background: "rgba(19,19,38,0.9)", backdropFilter: "blur(12px)" }
+            ? {}
             : {
                 background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
                 boxShadow: "0 4px 20px rgba(124,92,252,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
               }
           }
+          whileHover={isAI ? { borderColor: "rgba(124,92,252,0.15)" } : {}}
         >
-          {message.content}
-        </div>
+          {/* Render markdown-style bold */}
+          {message.content.split(/(\*\*.*?\*\*)/).map((part, i) => {
+            if (part.startsWith("**") && part.endsWith("**")) {
+              return <strong key={i} className="font-extrabold text-accent">{part.slice(2, -2)}</strong>;
+            }
+            return <span key={i}>{part}</span>;
+          })}
+        </motion.div>
 
         {/* Option pills */}
         {isAI && message.options && message.options.length > 0 && (
@@ -114,25 +142,19 @@ function MessageBubble({ message, onOptionSelect, index }: {
               <motion.button
                 key={opt}
                 onClick={() => onOptionSelect(opt)}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1, transition: { delay: 0.3 + i * 0.06 } }}
-                whileHover={{ scale: 1.05, y: -2 }}
+                initial={{ opacity: 0, scale: 0.9, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0, transition: { delay: 0.3 + i * 0.06 } }}
+                whileHover={{
+                  scale: 1.05,
+                  y: -2,
+                  boxShadow: "0 4px 20px rgba(124,92,252,0.2)",
+                }}
                 whileTap={{ scale: 0.95 }}
                 className="shimmer-btn px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-300"
                 style={{
                   background: "rgba(124,92,252,0.08)",
                   borderColor: "rgba(124,92,252,0.25)",
                   color: "rgba(167,139,250,0.9)",
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(124,92,252,0.2)";
-                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(124,92,252,0.5)";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,92,252,0.2)";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(124,92,252,0.08)";
-                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(124,92,252,0.25)";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
                 }}
               >
                 {opt}
@@ -153,7 +175,8 @@ export default function ConversationThread({ messages, isTyping, onOptionSelect 
   }, [messages, isTyping]);
 
   return (
-    <div className="flex flex-col gap-5 max-h-[45vh] overflow-y-auto pr-2 pb-1">
+    <div className="flex flex-col gap-5 max-h-[50vh] overflow-y-auto pr-2 pb-1"
+         style={{ scrollbarGutter: "stable" }}>
       <AnimatePresence initial={false}>
         {messages.map((msg, i) => (
           <MessageBubble
