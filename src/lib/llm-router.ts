@@ -8,9 +8,10 @@ export interface LlmCompleteParams {
   system: string;
   user: string;
   maxTokens?: number;
+  temperature?: number;
 }
 
-async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number) {
+async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number, temperature?: number) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
   const client = new Anthropic({ apiKey: key });
@@ -19,6 +20,7 @@ async function anthropicComplete(def: LlmProviderDefinition, model: string, syst
     max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: user }],
+    ...(temperature !== undefined ? { temperature } : {}),
   });
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
@@ -32,6 +34,7 @@ async function openAiCompatibleComplete(
   user: string,
   maxTokens: number,
   querySuffix = "",
+  temperature?: number,
 ) {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const res = await fetch(url, {
@@ -47,6 +50,7 @@ async function openAiCompatibleComplete(
         { role: "system", content: system },
         { role: "user", content: user },
       ],
+      ...(temperature !== undefined ? { temperature } : {}),
     }),
   });
   if (!res.ok) {
@@ -59,7 +63,7 @@ async function openAiCompatibleComplete(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-async function googleComplete(model: string, system: string, user: string, maxTokens: number, apiKey: string) {
+async function googleComplete(model: string, system: string, user: string, maxTokens: number, apiKey: string, temperature?: number) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
@@ -67,7 +71,7 @@ async function googleComplete(model: string, system: string, user: string, maxTo
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: maxTokens },
+      generationConfig: { maxOutputTokens: maxTokens, ...(temperature !== undefined ? { temperature } : {}) },
     }),
   });
   if (!res.ok) {
@@ -88,6 +92,7 @@ async function googleCompleteVision(
   images: JudgeVisionImage[],
   maxTokens: number,
   apiKey: string,
+  temperature?: number,
 ) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [{ text: userText }];
@@ -100,7 +105,7 @@ async function googleCompleteVision(
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts }],
-      generationConfig: { maxOutputTokens: maxTokens },
+      generationConfig: { maxOutputTokens: maxTokens, ...(temperature !== undefined ? { temperature } : {}) },
     }),
   });
   if (!res.ok) {
@@ -121,6 +126,7 @@ async function anthropicCompleteVision(
   userText: string,
   images: JudgeVisionImage[],
   maxTokens: number,
+  temperature?: number,
 ) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
@@ -143,6 +149,7 @@ async function anthropicCompleteVision(
     max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content }],
+    ...(temperature !== undefined ? { temperature } : {}),
   });
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
@@ -157,6 +164,7 @@ async function openAiCompatibleVisionComplete(
   images: JudgeVisionImage[],
   maxTokens: number,
   querySuffix = "",
+  temperature?: number,
 ) {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const userContent: Array<
@@ -181,6 +189,7 @@ async function openAiCompatibleVisionComplete(
         { role: "system", content: system },
         { role: "user", content: userContent },
       ],
+      ...(temperature !== undefined ? { temperature } : {}),
     }),
   });
   if (!res.ok) {
@@ -201,11 +210,12 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
   const maxTokens = params.maxTokens ?? 1024;
+  const temperature = params.temperature;
   const key = process.env[def.envVar];
 
   switch (def.kind) {
     case "anthropic":
-      return anthropicComplete(def, params.model, params.system, params.user, maxTokens);
+      return anthropicComplete(def, params.model, params.system, params.user, maxTokens, temperature);
     case "openai_compat": {
       if (!key) throw new Error(`${def.envVar} is not set`);
       let baseUrl = def.baseUrl;
@@ -225,11 +235,12 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
         params.user,
         maxTokens,
         querySuffix,
+        temperature,
       );
     }
     case "google": {
       if (!key) throw new Error(`${def.envVar} is not set`);
-      return googleComplete(params.model, params.system, params.user, maxTokens, key);
+      return googleComplete(params.model, params.system, params.user, maxTokens, key, temperature);
     }
     default:
       throw new Error(`Unsupported backend: ${def.kind}`);
@@ -246,11 +257,13 @@ export async function completeOracleJudgeVision(params: {
   userText: string;
   images: JudgeVisionImage[];
   maxTokens?: number;
+  temperature?: number;
 }): Promise<string> {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
   const maxTokens = params.maxTokens ?? 1024;
+  const temperature = params.temperature;
   const key = process.env[def.envVar];
 
   if (params.images.length === 0) {
@@ -260,12 +273,13 @@ export async function completeOracleJudgeVision(params: {
       system: params.system,
       user: params.userText,
       maxTokens,
+      temperature,
     });
   }
 
   switch (def.kind) {
     case "anthropic":
-      return anthropicCompleteVision(def, params.model, params.system, params.userText, params.images, maxTokens);
+      return anthropicCompleteVision(def, params.model, params.system, params.userText, params.images, maxTokens, temperature);
     case "openai_compat": {
       if (!key) throw new Error(`${def.envVar} is not set`);
       let baseUrl = def.baseUrl;
@@ -286,6 +300,7 @@ export async function completeOracleJudgeVision(params: {
         params.images,
         maxTokens,
         querySuffix,
+        temperature,
       );
     }
     case "google": {
@@ -297,6 +312,7 @@ export async function completeOracleJudgeVision(params: {
         params.images,
         maxTokens,
         key,
+        temperature,
       );
     }
     default:

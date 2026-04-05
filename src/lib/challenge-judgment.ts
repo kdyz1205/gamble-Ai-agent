@@ -160,6 +160,7 @@ export async function executeChallengeJudgment(
     participantBId: opponent?.userId ?? null,
     model: judgeModel,
     providerId,
+    livenessPrompt: challenge.livenessPrompt,
   });
 
   const judgment = await prisma.judgment.create({
@@ -174,6 +175,39 @@ export async function executeChallengeJudgment(
     },
     include: { winner: { select: { id: true, username: true } } },
   });
+
+  // Low confidence — don't settle, mark as disputed
+  if (result.confidence < 0.85) {
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: ChallengeStatus.disputed },
+    });
+
+    await appendAuditLog({
+      action: AuditActions.CHALLENGE_STATUS,
+      actorUserId: payerUserId,
+      challengeId,
+      payload: {
+        previousStatus: "judging",
+        newStatus: "disputed",
+        reason: "low_confidence",
+        confidence: result.confidence,
+        judgmentId: judgment.id,
+      },
+    });
+
+    return {
+      ok: true,
+      judgment,
+      settlementResult: { success: false, error: "Low confidence — marked for review" },
+      challengeId,
+      model: aiModelLabel,
+      tierId,
+      creditsUsed: cost,
+      creditsRemaining: spend.balance,
+      txHash: null,
+    };
+  }
 
   let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
   if (challenge.stake > 0) {
@@ -201,6 +235,7 @@ export async function executeChallengeJudgment(
       judgmentId: judgment.id,
       confidence: result.confidence,
       settlementOk: settlementResult.success,
+      reasoning: result.reasoning?.slice(0, 500), // first 500 chars
     },
   });
 

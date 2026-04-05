@@ -64,6 +64,7 @@ export interface JudgeChallengeParams {
   model?: string;
   /** LLM backend id from `llm-providers` (default: anthropic). */
   providerId?: string;
+  livenessPrompt?: string | null;
 }
 
 export async function parseChallenge(
@@ -176,6 +177,7 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
     participantBId,
     model: modelParam,
     providerId: providerIdParam,
+    livenessPrompt,
   } = params;
 
   const providerId = providerIdParam ?? DEFAULT_LLM_PROVIDER_ID;
@@ -196,7 +198,15 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
     return judgeChallengeFallback(params);
   }
 
-  const system = `You are a neutral arbitrator for a peer challenge platform (not a lawyer). Be impartial: weigh only the stated rules, the agreed condition, evidence, and the recorded deadline. Be fair, concrete, and cite what supports each call. If the deadline has passed and one side submitted nothing while the other submitted plausible evidence, you may treat missing submission as a forfeit unless the rules say otherwise. Always return ONLY valid JSON with no markdown.
+  const livenessBlock = `CRITICAL FIRST CHECK — LIVENESS VERIFICATION:
+Before evaluating ANYTHING else, check if the anti-cheat liveness prompt was followed.
+The liveness prompt for this challenge is: "${livenessPrompt ?? ""}"
+If a participant's video does NOT show the required gesture/action in the first few seconds, that participant AUTOMATICALLY FAILS regardless of their performance. Set their result to failed with reason "LIVENESS_CHECK_FAILED".
+If no liveness prompt was set, skip this check.
+
+`;
+
+  const system = `${livenessPrompt ? livenessBlock : ""}You are a neutral arbitrator for a peer challenge platform (not a lawyer). Be impartial: weigh only the stated rules, the agreed condition, evidence, and the recorded deadline. Be fair, concrete, and cite what supports each call. If the deadline has passed and one side submitted nothing while the other submitted plausible evidence, you may treat missing submission as a forfeit unless the rules say otherwise. Always return ONLY valid JSON with no markdown.
 
 For head-to-head challenges (two participants with evidence), pick exactly one winner unless evidence is equally weak — then use "tie".
 
@@ -306,6 +316,7 @@ Return JSON:
         userText: userWithLegend,
         images: visuals,
         maxTokens: 1024,
+        temperature: 0,
       });
     } else {
       text = await completeOraclePrompt({
@@ -314,6 +325,7 @@ Return JSON:
         system: systemAugmented,
         user: userPrompt,
         maxTokens: 1024,
+        temperature: 0,
       });
     }
     const jsonMatch = text.match(/\{[\s\S]*\}/);
