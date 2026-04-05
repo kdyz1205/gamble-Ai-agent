@@ -98,6 +98,8 @@ function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
     deadline: "48 hours",
     rules: `Standard ${type.toLowerCase()} rules — AI reviewed`,
     evidence, aiReview: true, isPublic,
+    currency: "credits",
+    durationMinutes: 2880,
   };
 }
 
@@ -120,6 +122,7 @@ export default function Home() {
   const [published, setPublished]         = useState(false);
   const [showScanLine, setShowScanLine]   = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
+  const [isParsing, setIsParsing]         = useState(false);
 
   const [showAuth, setShowAuth]           = useState(false);
 
@@ -173,12 +176,14 @@ export default function Home() {
 
     if (user) {
       try {
+        setIsParsing(true);
         setIsTyping(true);
         const prefs = readOracleLlmPrefs();
         const res = await api.parseChallenge(input, 1, {
           providerId: prefs.providerId,
           ...(prefs.model ? { model: prefs.model } : {}),
         });
+        setIsParsing(false);
         setIsTyping(false);
 
         if (res.confirmationPrompt?.trim()) {
@@ -192,8 +197,16 @@ export default function Home() {
         setStepIdx(0);
         pushMsg("ai", apiSteps[0].aiMessage, apiSteps[0].options);
         return;
-      } catch {
+      } catch (err) {
+        setIsParsing(false);
         setIsTyping(false);
+        if (err instanceof Error && err.message) {
+          pushMsg("ai", err.message);
+        } else {
+          pushMsg("ai", "I couldn't parse that. Try something like: 'Bet 5 credits I can do 30 pushups in 2 min'");
+        }
+        setAppState("idle");
+        return;
       }
     }
 
@@ -229,42 +242,53 @@ export default function Home() {
   }, [handleOptionSelect]);
 
   /* ── Publish ── */
-  const handlePublish = useCallback(async () => {
+  const handlePublish = useCallback(async (editedDraft?: ChallengeDraft) => {
     if (!user) {
       setShowAuth(true);
       return;
     }
 
-    if (draft) {
-      try {
-        setIsTyping(true);
-        const res = await api.createChallenge({
-          title: draft.title,
-          type: draft.type,
-          stake: draft.stake,
-          deadline: draft.deadline,
-          rules: draft.rules,
-          evidenceType: draft.evidence.toLowerCase().replace(/ /g, "_"),
-          aiReview: draft.aiReview,
-          isPublic: draft.isPublic,
-        });
-        setChallengeId(res.challenge.id);
-        setIsTyping(false);
-      } catch (err) {
-        setIsTyping(false);
-        pushMsg("ai", `Failed to publish: ${err instanceof Error ? err.message : "Unknown error"}. You can try again.`);
+    const finalDraft = editedDraft ?? draft;
+    if (!finalDraft) return;
+
+    // Pre-flight balance check
+    if (finalDraft.stake > 0) {
+      const currentCredits = user.credits ?? 0;
+      if (currentCredits < finalDraft.stake) {
+        pushMsg("ai", `Insufficient credits. You need ${finalDraft.stake} credits but have ${currentCredits}. Please top up first.`);
         return;
       }
+    }
+
+    try {
+      setIsTyping(true);
+      const res = await api.createChallenge({
+        title: finalDraft.title,
+        type: finalDraft.type,
+        stake: finalDraft.stake,
+        deadline: finalDraft.deadline,
+        rules: finalDraft.rules,
+        evidenceType: finalDraft.evidence.toLowerCase().replace(/ /g, "_"),
+        aiReview: finalDraft.aiReview,
+        isPublic: finalDraft.isPublic,
+      });
+      setChallengeId(res.challenge.id);
+      setIsTyping(false);
+      await updateSession();
+    } catch (err) {
+      setIsTyping(false);
+      pushMsg("ai", `Failed to publish: ${err instanceof Error ? err.message : "Unknown error"}. You can try again.`);
+      return;
     }
 
     setPublished(true);
     setAppState("live");
     aiReply(
-      "Your challenge is **saved**. Use the command panel below: **submit evidence** (you can start solo — the AI will judge when everyone has posted). When all sides are in, tap **Run AI verdict** to let Claude rule and settle credits.",
+      "Your challenge is **live**! Use the command panel below to submit evidence. When both sides are in, tap **Run AI verdict** to let the AI judge and settle credits.",
       ["View Live Activity", "Challenge Another"],
       1200,
     );
-  }, [aiReply, draft, user, pushMsg]);
+  }, [aiReply, draft, user, pushMsg, updateSession]);
 
   /* ── Edit ── */
   const handleEdit = useCallback(() => {
@@ -513,6 +537,7 @@ export default function Home() {
         <CenteredComposer
           onSubmit={active ? handleFollowUp : handleInitialSubmit}
           isActive={active}
+          isParsing={isParsing}
         />
       </main>
 

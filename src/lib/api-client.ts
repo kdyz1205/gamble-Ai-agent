@@ -321,6 +321,8 @@ export interface ParsedChallenge {
   title: string;
   type: string;
   suggestedStake: number;
+  currency: string;
+  durationMinutes: number;
   evidenceType: string;
   rules: string;
   deadline: string;
@@ -343,10 +345,16 @@ export async function parseChallenge(
   creditsRemaining: number;
   txHash: string | null;
 }> {
-  return apiFetch("/challenges/parse", {
+  const res = await fetch(`${BASE}/challenges/parse`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ input, tier, ...opts }),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.suggestion || data.error || "Failed to parse challenge");
+  }
+  return res.json();
 }
 
 /* ── Feed ── */
