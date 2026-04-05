@@ -147,6 +147,7 @@ model Challenge {
   evidenceType  String   @default("self_report") // video | photo | gps | self_report
   aiReview      Boolean  @default(true)
   aiModel       String?  // which model was used for judging
+  livenessPrompt String? // random anti-cheat gesture prompt shown when challenge goes live
   escrowTxHash  String?  // on-chain escrow creation tx
   settleTxHash  String?  // on-chain settlement tx
   isPublic      Boolean  @default(true)

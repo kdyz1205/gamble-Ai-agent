@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits } from "@/lib/credits";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import { generateLivenessPrompt } from "@/lib/liveness";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
         evidenceType,
         aiReview,
         isPublic,
+        livenessPrompt: generateLivenessPrompt(),
         discoveryLat: creatorGeo?.latitude ?? null,
         discoveryLng: creatorGeo?.longitude ?? null,
         discoveryCapturedAt:
