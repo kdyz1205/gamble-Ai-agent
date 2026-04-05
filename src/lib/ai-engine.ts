@@ -30,9 +30,11 @@ export interface ParsedChallenge {
   title: string;
   type: string;
   suggestedStake: number; // credits
+  currency: "USDC" | "ETH" | "USDT" | "credits";
   evidenceType: string;
   rules: string;
   deadline: string;
+  durationMinutes: number;
   isPublic: boolean;
   /** How the outcome should be verified: pixels vs external data. */
   judgingMethod: JudgingMethod;
@@ -75,15 +77,29 @@ export async function parseChallenge(
 
   if (!hasProviderApiKey(providerId)) return parseChallengeFallback(input);
 
-  const system = `You parse natural language into a structured bet/challenge. Think like a sharp bookmaker: crisp win conditions, no ambiguity. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
-- title (string, max 64 chars, concise)
-- type (one of: Fitness, Cooking, Coding, Learning, Games, Video, General)
-- suggestedStake (integer, credits to wager, 0 if none mentioned. If user says "$5" or "5U", convert to 500 credits. If user says "10 credits" use 10.)
-- evidenceType ("video" | "photo" | "gps" | "self_report")
-- rules (string, concrete boundaries: time limits, what counts as success, colors/objects if applicable)
-- deadline (string like "48 hours", "7 days", "1 minute" when user implies a short window)
-- isPublic (boolean, true unless user says private)
-- judgingMethod ("vision" | "api" | "hybrid"): "vision" if video/photo must decide (pushups, car color, form); "api" if an external feed/price/sports API would decide; "hybrid" if both could apply.`;
+  const system = `You are a professional betting actuary. Your job is to convert casual spoken bets into precise smart-contract parameters. Be exhaustive in your rules — leave zero room for dispute.
+
+RULES FOR PARSING:
+- If user doesn't specify an amount, set suggestedStake to 0.
+- If user doesn't specify currency, default to "credits".
+- Currency mapping: "$5" or "5U" or "5USDC" → currency:"USDC", suggestedStake:5. "10 credits" → currency:"credits", suggestedStake:10.
+- If no duration stated, infer from common sense: spotting a car color = 60 min, a fitness rep challenge = 10 min, weight loss = 43200 min (30 days), a sports game = 180 min.
+- Rules MUST be exhaustive judgment boundaries. Examples: "Video must be continuous and uncut. Pushups must show full extension and chest touching ground. Counter starts at first rep." or "Car body must be >50% red by visible surface area. Taxis and emergency vehicles excluded."
+- evidenceType: "video" for anything requiring motion proof, "photo" for static proof, "gps" for location-based, "self_report" only if nothing else fits.
+
+Return ONLY valid JSON:
+{
+  "title": "string (max 64 chars, concise)",
+  "type": "Fitness|Cooking|Coding|Learning|Games|Video|General",
+  "suggestedStake": 0,
+  "currency": "credits|USDC|ETH|USDT",
+  "evidenceType": "video|photo|gps|self_report",
+  "rules": "exhaustive judgment boundaries string",
+  "deadline": "human string like '48 hours' or '7 days'",
+  "durationMinutes": 2880,
+  "isPublic": true,
+  "judgingMethod": "vision|api|hybrid"
+}`;
 
   try {
     const text = await completeOraclePrompt({
@@ -368,13 +384,21 @@ function coerceJudgingMethod(
 function normalizeParsedChallenge(raw: Record<string, unknown>): ParsedChallenge {
   const evidenceType = String(raw.evidenceType ?? "self_report");
   const judgingSource = raw.judgingMethod ?? raw.judging_method;
+  const currencyRaw = String(raw.currency ?? "credits").toLowerCase();
+  const validCurrencies = ["usdc", "eth", "usdt", "credits"];
+  const currency = validCurrencies.includes(currencyRaw)
+    ? (currencyRaw === "credits" ? "credits" : currencyRaw.toUpperCase())
+    : "credits";
+
   return {
     title: String(raw.title ?? "Challenge").slice(0, 64),
     type: String(raw.type ?? "General"),
     suggestedStake: Math.max(0, Math.floor(Number(raw.suggestedStake ?? 0))),
+    currency: currency as ParsedChallenge["currency"],
     evidenceType,
     rules: String(raw.rules ?? ""),
     deadline: String(raw.deadline ?? "48 hours"),
+    durationMinutes: Math.max(1, Math.floor(Number(raw.durationMinutes ?? 2880))),
     isPublic: raw.isPublic !== false,
     judgingMethod: coerceJudgingMethod(judgingSource, evidenceType),
   };
@@ -454,9 +478,11 @@ function parseChallengeFallback(input: string): ParsedChallenge {
     title,
     type,
     suggestedStake: amount,
+    currency: "credits",
     evidenceType,
     rules: `Standard ${type.toLowerCase()} challenge — AI reviewed`,
     deadline,
+    durationMinutes: 2880,
     isPublic: !/private|secret|just us|between us/i.test(input),
     judgingMethod: coerceJudgingMethod(undefined, evidenceType),
   };
