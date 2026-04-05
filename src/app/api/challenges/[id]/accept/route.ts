@@ -28,7 +28,7 @@ export async function POST(
   if (existing) return Response.json({ error: "You are already in this challenge" }, { status: 400 });
   if (challenge.participants.length >= challenge.maxParticipants) return Response.json({ error: "Challenge is full" }, { status: 400 });
 
-  // Escrow: deduct staked credits upfront
+  // Escrow: deduct staked credits upfront (must happen BEFORE the transaction)
   if (challenge.stake > 0) {
     const balance = await getCredits(user.userId);
     if (balance < challenge.stake) return noCredits(challenge.stake, balance);
@@ -37,34 +37,50 @@ export async function POST(
     if (!result.success) return noCredits(challenge.stake, result.balance);
   }
 
-  await prisma.participant.create({
-    data: {
-      challengeId: challenge.id,
-      userId: user.userId,
-      role: "opponent",
-      status: "accepted",
-    },
-  });
+  // Wrap participant creation + status update in a transaction to prevent race conditions
+  let updated: Awaited<ReturnType<typeof prisma.challenge.update>>;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.challenge.findUnique({
+        where: { id },
+        include: { participants: true },
+      });
+      if (!fresh || fresh.status !== "open") throw new Error("Already taken");
+      if (fresh.participants.length >= fresh.maxParticipants) throw new Error("Already taken");
+      if (fresh.participants.some((p: { userId: string }) => p.userId === user.userId)) {
+        throw new Error("You are already in this challenge");
+      }
 
-  const newStatus =
-    challenge.participants.length + 1 >= challenge.maxParticipants
-      ? ChallengeStatus.live
-      : ChallengeStatus.open;
+      await tx.participant.create({
+        data: { challengeId: id, userId: user.userId, role: "opponent", status: "accepted" },
+      });
 
-  if (newStatus !== challenge.status) {
-    assertChallengeTransition(challenge.status, newStatus);
+      const newStatus =
+        fresh.participants.length + 1 >= fresh.maxParticipants
+          ? ChallengeStatus.live
+          : ChallengeStatus.open;
+
+      if (newStatus !== fresh.status) {
+        assertChallengeTransition(fresh.status, newStatus);
+      }
+
+      return tx.challenge.update({
+        where: { id },
+        data: { status: newStatus },
+        include: {
+          creator: { select: { id: true, username: true, image: true } },
+          participants: {
+            include: { user: { select: { id: true, username: true, image: true } } },
+          },
+        },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.message === "Already taken" || err.message === "You are already in this challenge")) {
+      return Response.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
   }
-
-  const updated = await prisma.challenge.update({
-    where: { id },
-    data: { status: newStatus },
-    include: {
-      creator: { select: { id: true, username: true, image: true } },
-      participants: {
-        include: { user: { select: { id: true, username: true, image: true } } },
-      },
-    },
-  });
 
   await prisma.activityEvent.create({
     data: {
