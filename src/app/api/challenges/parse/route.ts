@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
     const trimmed = input.trim();
-    if (trimmed.length < 4) {
+    // Sanitize: strip zero-width chars, RLO, and other Unicode control characters
+    const sanitized = trimmed
+      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2060-\u2064\u2066-\u2069]/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    if (sanitized.length < 4) {
       return Response.json(
         {
           error: "too_short",
@@ -46,7 +50,7 @@ export async function POST(req: NextRequest) {
     const balance = await getCredits(user.userId);
     if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
-    const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${input.slice(0, 50)}…"`);
+    const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${sanitized.slice(0, 50)}…"`);
     if (!result.success) return noCredits(cost, result.balance, getAiModel(tierId).displayName);
 
     const parseModel =
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
           ? result.model
           : pdef.defaultModel;
 
-    let parsed = await parseChallenge(input, { model: parseModel, providerId });
+    let parsed = await parseChallenge(sanitized, { model: parseModel, providerId });
     const schemaOk = safeParseBetDraft(parsed);
     if (!schemaOk) {
       return Response.json(

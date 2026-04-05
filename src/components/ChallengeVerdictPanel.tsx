@@ -614,6 +614,89 @@ export default function ChallengeVerdictPanel({
           )}
         </AnimatePresence>
 
+        {/* Verdict Receipt Card */}
+        {verdictRow && challenge.status === "settled" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 rounded-2xl overflow-hidden"
+            style={{
+              background: "rgba(13,13,30,0.95)",
+              border: "1px solid rgba(124,92,252,0.2)",
+              boxShadow: "0 0 40px rgba(124,92,252,0.08)",
+            }}
+          >
+            <div className="h-0.5 bg-gradient-to-r from-accent via-teal to-accent" />
+            <div className="p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
+                  AI Verdict Receipt
+                </span>
+                <span className="text-[10px] text-text-muted">
+                  {verdictRow.aiModel}
+                </span>
+              </div>
+
+              <h4 className="text-base font-extrabold text-text-primary">
+                {challenge.title}
+              </h4>
+
+              {verdictRow.winner && (
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                  style={{ background: "rgba(0,232,122,0.08)", border: "1px solid rgba(0,232,122,0.15)" }}
+                >
+                  <span className="text-lg">&#127942;</span>
+                  <span className="text-sm font-extrabold text-[#00e87a]">
+                    {verdictRow.winner.username} wins!
+                  </span>
+                </div>
+              )}
+
+              {verdictRow.reasoning && (
+                <p className="text-xs text-text-secondary leading-relaxed italic">
+                  &ldquo;{verdictRow.reasoning}&rdquo;
+                </p>
+              )}
+
+              {verdictRow.confidence != null && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] text-text-muted">
+                    <span>Confidence</span>
+                    <span>{Math.round(verdictRow.confidence * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{
+                        background: verdictRow.confidence >= 0.85
+                          ? "linear-gradient(90deg, #00e87a, #00d4c8)"
+                          : "linear-gradient(90deg, #f5a623, #ff3b30)",
+                      }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${verdictRow.confidence * 100}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <motion.button
+                onClick={() => {
+                  const text = `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins! (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
+                  void navigator.clipboard.writeText(text);
+                }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-text-secondary border border-border-subtle transition-all hover:border-accent/30 hover:text-text-primary"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              >
+                Share Result
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Bottom actions */}
         <div className="flex flex-wrap gap-2 pt-1">
           <motion.button
