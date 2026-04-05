@@ -9,9 +9,11 @@ export const betParseJsonSchema = z
     title: z.string().max(64),
     type: z.enum(["Fitness", "Cooking", "Coding", "Learning", "Games", "Video", "General"]),
     suggestedStake: z.number().int().min(0).max(1_000_000_000),
+    currency: z.enum(["USDC", "ETH", "USDT", "credits"]).default("credits"),
     evidenceType: z.enum(["video", "photo", "gps", "self_report"]),
     rules: z.string().max(8000),
     deadline: z.string().max(128),
+    durationMinutes: z.number().int().min(1).max(525600).default(2880),
     isPublic: z.boolean(),
     judgingMethod: z.enum(["vision", "api", "hybrid"]),
   })
