@@ -107,6 +107,7 @@ export interface ChallengeData {
   isPublic: boolean;
   maxParticipants: number;
   aiModel?: string | null;
+  livenessPrompt?: string | null;
   createdAt: string;
   discoveryLat?: number | null;
   discoveryLng?: number | null;

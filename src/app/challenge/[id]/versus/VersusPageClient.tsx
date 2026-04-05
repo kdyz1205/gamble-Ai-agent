@@ -252,6 +252,15 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [copied, setCopied] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Camera recording state
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [cameraError, setCameraError] = useState("");
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
   const showNote = (msg: string, type: "error" | "success" | "info" = "info") => {
     setNote(msg);
     setNoteType(type);
@@ -449,6 +458,55 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     void navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const startCamera = async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: true,
+      });
+      setCameraStream(stream);
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+      }
+    } catch {
+      setCameraError("Camera access required for fair play. Please allow camera access to submit evidence.");
+    }
+  };
+
+  const startRecording = () => {
+    if (!cameraStream) return;
+    chunksRef.current = [];
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : "video/webm";
+    const recorder = new MediaRecorder(cameraStream, { mimeType });
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      setRecordedBlob(blob);
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    };
+    mediaRecorderRef.current = recorder;
+    recorder.start(1000);
+    setIsRecording(true);
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const submitRecordedVideo = async () => {
+    if (!recordedBlob) return;
+    const file = new File([recordedBlob], `evidence-${Date.now()}.webm`, { type: "video/webm" });
+    setRecordedBlob(null);
+    await uploadFile(file);
   };
 
   /* ── Auth guard ── */
@@ -686,6 +744,22 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             >
               <div className="plasma-line" />
               <div className="p-5 md:p-6 space-y-4">
+                {/* Liveness prompt */}
+                {challenge?.livenessPrompt && (
+                  <div className="px-4 py-3 rounded-xl text-center"
+                       style={{ background: "rgba(245,166,35,0.15)", border: "2px solid rgba(245,166,35,0.4)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+                      Anti-Cheat Verification Required
+                    </p>
+                    <p className="text-sm font-extrabold text-amber-200">
+                      {challenge.livenessPrompt}
+                    </p>
+                    <p className="text-[10px] text-amber-400/60 mt-1">
+                      If this action is not visible in your video, AI will rule against you
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                        style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
@@ -697,53 +771,124 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </div>
                   <div>
                     <p className="text-sm font-extrabold text-text-primary">Submit Your Evidence</p>
-                    <p className="text-[10px] text-text-muted">Upload video/photo or paste a public URL</p>
+                    <p className="text-[10px] text-text-muted">Record live video or paste a public URL</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Camera/file upload */}
-                  <label className="shine-card flex flex-col items-center justify-center gap-2 p-6 rounded-xl cursor-pointer transition-all hover:border-accent/30"
-                    style={{ background: "rgba(124,92,252,0.06)", border: "1px dashed rgba(124,92,252,0.25)" }}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(124,92,252,0.15)" }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round">
-                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                        <circle cx="12" cy="13" r="4" />
-                      </svg>
-                    </div>
-                    <span className="text-xs font-bold text-accent">Camera / File</span>
-                    <span className="text-[10px] text-text-muted">Tap to capture or browse</span>
-                    <input type="file" accept="video/*,image/*" capture="environment" className="hidden" disabled={busy}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) void uploadFile(f); e.target.value = ""; }} />
-                  </label>
-
-                  {/* URL paste */}
-                  <div className="flex flex-col gap-2 p-4 rounded-xl" style={{ background: "rgba(0,212,200,0.04)", border: "1px solid rgba(0,212,200,0.12)" }}>
-                    <div className="flex items-center gap-2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d4c8" strokeWidth="2" strokeLinecap="round">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                      </svg>
-                      <span className="text-xs font-bold text-teal">Paste URL</span>
-                    </div>
-                    <input
-                      value={pasteUrl}
-                      onChange={e => setPasteUrl(e.target.value)}
-                      placeholder="https://... video or image URL"
-                      className="w-full rounded-lg px-3 py-2.5 text-xs bg-bg-input border border-border-subtle text-text-primary placeholder:text-text-muted focus:border-teal/50"
-                    />
-                    <motion.button
-                      type="button"
-                      disabled={busy || !pasteUrl.trim()}
-                      onClick={() => void submitUrl()}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full py-2.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
-                      style={{ background: "linear-gradient(135deg, #00d4c8, #0d9488)" }}
-                    >
-                      {busy ? "Uploading..." : "Submit URL"}
-                    </motion.button>
+                {/* Camera permission error */}
+                {cameraError && (
+                  <div className="px-4 py-3 rounded-xl"
+                       style={{ background: "rgba(255,71,87,0.12)", border: "1px solid rgba(255,71,87,0.35)" }}>
+                    <p className="text-xs font-bold text-red-400">{cameraError}</p>
                   </div>
+                )}
+
+                {/* Camera Recording Section */}
+                <div className="space-y-3">
+                  {!cameraStream && !recordedBlob && (
+                    <motion.button
+                      onClick={() => void startCamera()}
+                      disabled={busy}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full py-4 rounded-xl text-sm font-extrabold text-white disabled:opacity-40"
+                      style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}
+                    >
+                      Open Camera to Record Evidence
+                    </motion.button>
+                  )}
+
+                  {cameraStream && (
+                    <div className="space-y-3">
+                      <video
+                        ref={videoPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="w-full rounded-xl"
+                        style={{ maxHeight: 300, background: "#000" }}
+                      />
+                      {!isRecording ? (
+                        <motion.button
+                          onClick={startRecording}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                          className="w-full py-3 rounded-xl text-sm font-bold text-white"
+                          style={{ background: "#dc2626" }}
+                        >
+                          Start Recording
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          onClick={stopRecording}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                          className="w-full py-3 rounded-xl text-sm font-bold text-white animate-pulse"
+                          style={{ background: "#991b1b" }}
+                        >
+                          Stop Recording
+                        </motion.button>
+                      )}
+                    </div>
+                  )}
+
+                  {recordedBlob && (
+                    <div className="space-y-3">
+                      <div className="text-center text-sm text-text-secondary px-3 py-2 rounded-xl"
+                           style={{ background: "rgba(0,232,122,0.06)", border: "1px solid rgba(0,232,122,0.15)" }}>
+                        Video recorded ({(recordedBlob.size / 1024 / 1024).toFixed(1)} MB). Ready to submit.
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <motion.button
+                          onClick={() => setRecordedBlob(null)}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                          className="py-2.5 rounded-xl text-xs font-bold border border-border-subtle"
+                          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(240,240,255,0.7)" }}
+                        >
+                          Re-record
+                        </motion.button>
+                        <motion.button
+                          onClick={() => void submitRecordedVideo()}
+                          disabled={busy}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                          className="py-2.5 rounded-xl text-xs font-extrabold text-white disabled:opacity-40"
+                          style={{ background: "linear-gradient(135deg, #00e87a, #00d4c8)" }}
+                        >
+                          {busy ? "Uploading..." : "Submit Video"}
+                        </motion.button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* URL paste fallback */}
+                <div className="flex flex-col gap-2 p-4 rounded-xl" style={{ background: "rgba(0,212,200,0.04)", border: "1px solid rgba(0,212,200,0.12)" }}>
+                  <div className="flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d4c8" strokeWidth="2" strokeLinecap="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    <span className="text-xs font-bold text-teal">Paste URL (fallback)</span>
+                  </div>
+                  <input
+                    value={pasteUrl}
+                    onChange={e => setPasteUrl(e.target.value)}
+                    placeholder="https://... video or image URL"
+                    className="w-full rounded-lg px-3 py-2.5 text-xs bg-bg-input border border-border-subtle text-text-primary placeholder:text-text-muted focus:border-teal/50"
+                  />
+                  <motion.button
+                    type="button"
+                    disabled={busy || !pasteUrl.trim()}
+                    onClick={() => void submitUrl()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-2.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
+                    style={{ background: "linear-gradient(135deg, #00d4c8, #0d9488)" }}
+                  >
+                    {busy ? "Uploading..." : "Submit URL"}
+                  </motion.button>
                 </div>
               </div>
             </motion.div>
