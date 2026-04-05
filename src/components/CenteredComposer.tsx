@@ -7,13 +7,16 @@ import type { Variants } from "framer-motion";
 interface Props {
   onSubmit: (message: string) => void;
   isActive: boolean;
+  isParsing?: boolean;
 }
 
-const SUGGESTIONS = [
-  "I bet my friend I can do 50 pushups in 2 min",
-  "Who can run 5K faster this Saturday?",
-  "Cooking battle — best pasta, community vote",
-  "Let's bet on who finishes the book first",
+const PLACEHOLDER_HINTS = [
+  "I bet 5 credits I can do 30 pushups in 2 min",
+  "Bet 10U the next car outside is red",
+  "Challenge: who can cook better pasta, video proof",
+  "I bet my friend can't solve this LeetCode in 15 min",
+  "Race to finish reading Chapter 5 — loser buys coffee",
+  "Wager 20 credits on tonight's Lakers game",
 ];
 
 const QUICK_ACTIONS = [
@@ -44,12 +47,19 @@ const itemVariants: Variants = {
   visible: { opacity: 1, y: 0 },
 };
 
-export default function CenteredComposer({ onSubmit, isActive }: Props) {
+export default function CenteredComposer({ onSubmit, isActive, isParsing }: Props) {
   const [input, setInput]         = useState("");
   const [focused, setFocused]     = useState(false);
   const [hintIdx, setHintIdx]     = useState(0);
   const [sendPulse, setSendPulse] = useState(false);
   const [composerHovered, setComposerHovered] = useState(false);
+  const [showWand, setShowWand] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+    setShowWand(val.trim().length >= 5);
+  };
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
   const composerRef               = useRef<HTMLDivElement>(null);
   const mouseX                    = useMotionValue(0);
@@ -58,7 +68,7 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
   // Rotate hints
   useEffect(() => {
     if (isActive) return;
-    const id = setInterval(() => setHintIdx(i => (i + 1) % SUGGESTIONS.length), 4500);
+    const id = setInterval(() => setHintIdx(i => (i + 1) % PLACEHOLDER_HINTS.length), 4500);
     return () => clearInterval(id);
   }, [isActive]);
 
@@ -231,6 +241,43 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
           {/* Top accent line */}
           <div className="h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" />
 
+          {/* Parsing overlay */}
+          <AnimatePresence>
+            {isParsing && (
+              <motion.div
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl"
+                style={{ background: "rgba(6,6,15,0.92)", backdropFilter: "blur(8px)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-teal flex items-center justify-center mb-4"
+                  animate={{
+                    scale: [1, 1.1, 1],
+                    boxShadow: [
+                      "0 0 20px rgba(124,92,252,0.3)",
+                      "0 0 40px rgba(124,92,252,0.6)",
+                      "0 0 20px rgba(124,92,252,0.3)",
+                    ],
+                  }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                </motion.div>
+                <motion.p
+                  className="text-sm font-bold text-text-secondary"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  AI is structuring your challenge...
+                </motion.p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Header row */}
           <div className="flex items-center gap-2.5 px-5 pt-4 pb-2">
             <div className="relative flex items-center gap-1.5">
@@ -242,6 +289,16 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
               <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-[0.12em]">
                 AI Challenge Creator
               </span>
+              {showWand && !isActive && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.5, rotate: -30 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  className="ml-1.5 text-sm"
+                  title="AI is ready to parse your challenge"
+                >
+                  &#10024;
+                </motion.span>
+              )}
             </div>
             <div className="ml-auto flex items-center gap-1">
               {[0,1,2].map(i => (
@@ -254,11 +311,12 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={handleInputChange}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={handleKey}
-            placeholder={isActive ? "Continue the conversation..." : SUGGESTIONS[hintIdx]}
+            placeholder={isActive ? "Continue the conversation..." : PLACEHOLDER_HINTS[hintIdx]}
+            disabled={isParsing}
             rows={isActive ? 2 : 3}
             className="w-full bg-transparent px-5 py-3 text-[15px] text-text-primary placeholder:text-text-muted/60 resize-none focus:outline-none leading-relaxed font-medium relative z-10"
             style={{ caretColor: "rgb(124,92,252)" }}
@@ -285,7 +343,7 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
             {/* Send button */}
             <motion.button
               onClick={send}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isParsing}
               whileHover={input.trim() ? { scale: 1.04 } : {}}
               whileTap={input.trim() ? { scale: 0.96 } : {}}
               className={`shimmer-btn flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ${
@@ -373,7 +431,7 @@ export default function CenteredComposer({ onSubmit, isActive }: Props) {
               Try saying
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {SUGGESTIONS.map((s, i) => (
+              {PLACEHOLDER_HINTS.map((s, i) => (
                 <motion.button
                   key={s}
                   onClick={() => onSubmit(s)}

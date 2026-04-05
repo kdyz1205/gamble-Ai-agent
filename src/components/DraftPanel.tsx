@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 
@@ -8,8 +9,10 @@ export interface ChallengeDraft {
   playerA: string;
   playerB: string | null;
   type: string;
-  stake: number; // credits
+  stake: number;
+  currency: string;
   deadline: string;
+  durationMinutes: number;
   rules: string;
   evidence: string;
   aiReview: boolean;
@@ -18,7 +21,7 @@ export interface ChallengeDraft {
 
 interface Props {
   draft: ChallengeDraft;
-  onPublish: () => void;
+  onPublish: (editedDraft: ChallengeDraft) => void;
   onEdit: () => void;
 }
 
@@ -71,8 +74,17 @@ function InfoCell({ icon, label, value }: { icon: string; label: string; value: 
 }
 
 export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
-  const colors = TYPE_COLORS[draft.type] ?? TYPE_COLORS.General;
-  const hasStake = draft.stake > 0;
+  const [editDraft, setEditDraft] = useState<ChallengeDraft>(draft);
+  const colors = TYPE_COLORS[editDraft.type] ?? TYPE_COLORS.General;
+  const hasStake = editDraft.stake > 0;
+
+  useEffect(() => {
+    setEditDraft(draft);
+  }, [draft]);
+
+  const updateField = <K extends keyof ChallengeDraft>(key: K, value: ChallengeDraft[K]) => {
+    setEditDraft(prev => ({ ...prev, [key]: value }));
+  };
 
   const containerVariants: Variants = {
     hidden: {},
@@ -147,9 +159,15 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                   color: colors.from,
                 }}
               >
-                {draft.type}
+                {editDraft.type}
               </span>
-              <h3 className="text-lg font-extrabold text-text-primary leading-snug">{draft.title}</h3>
+              <input
+                type="text"
+                value={editDraft.title}
+                onChange={e => updateField("title", e.target.value)}
+                maxLength={64}
+                className="text-lg font-extrabold text-text-primary leading-snug bg-transparent border-b border-transparent hover:border-border-subtle focus:border-accent focus:outline-none transition-colors w-full"
+              />
             </div>
 
             <motion.div
@@ -164,10 +182,14 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                     style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
                 Stake
               </span>
-              <span className="text-xl font-black"
-                    style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
-                {hasStake ? `${draft.stake}` : "Free"}
-              </span>
+              <input
+                type="number"
+                min={0}
+                value={editDraft.stake}
+                onChange={e => updateField("stake", Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-16 text-xl font-black text-center bg-transparent border-b border-transparent hover:border-border-subtle focus:border-accent focus:outline-none transition-colors"
+                style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}
+              />
               {hasStake && (
                 <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5"
                       style={{ color: "rgba(245,166,35,0.5)" }}>
@@ -179,7 +201,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
 
           {/* Players */}
           <motion.div className="flex items-center gap-4 mb-5" variants={childVariants}>
-            <PlayerCard name={draft.playerA} role="Challenger" gradient="from-[#7c5cfc] to-[#5b3fd9]" color="#7c5cfc" />
+            <PlayerCard name={editDraft.playerA} role="Challenger" gradient="from-[#7c5cfc] to-[#5b3fd9]" color="#7c5cfc" />
 
             <div className="flex-shrink-0 flex flex-col items-center gap-1">
               <motion.div
@@ -198,41 +220,83 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
             </div>
 
             <PlayerCard
-              name={draft.playerB ?? "Open Slot"}
-              role={draft.playerB ? "Opponent" : "Anyone can join"}
-              gradient={draft.playerB ? "from-[#00d4c8] to-[#0d9488]" : ""}
-              color={draft.playerB ? "#00d4c8" : undefined}
-              open={!draft.playerB}
+              name={editDraft.playerB ?? "Open Slot"}
+              role={editDraft.playerB ? "Opponent" : "Anyone can join"}
+              gradient={editDraft.playerB ? "from-[#00d4c8] to-[#0d9488]" : ""}
+              color={editDraft.playerB ? "#00d4c8" : undefined}
+              open={!editDraft.playerB}
             />
           </motion.div>
 
           {/* Info grid */}
-          <motion.div className="grid grid-cols-2 gap-2.5 mb-5" variants={childVariants}>
-            <InfoCell icon="⏰" label="Deadline" value={draft.deadline} />
-            <InfoCell icon="📋" label="Rules"    value={draft.rules} />
-            <InfoCell icon="📸" label="Evidence" value={draft.evidence} />
-            <InfoCell icon="🤖" label="Judgment" value={draft.aiReview ? "AI Review" : "Manual"} />
+          <motion.div className="grid grid-cols-3 gap-2.5 mb-5" variants={childVariants}>
+            <div className="relative flex flex-col gap-1.5 px-3.5 py-3 rounded-xl"
+                 style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex items-center gap-1.5 text-text-muted">
+                {INFO_ICONS.Deadline}
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em]">Deadline</span>
+              </div>
+              <input
+                type="text"
+                value={editDraft.deadline}
+                onChange={e => updateField("deadline", e.target.value)}
+                className="text-sm font-bold text-text-primary bg-transparent border-b border-transparent hover:border-border-subtle focus:border-accent focus:outline-none transition-colors"
+              />
+            </div>
+            <InfoCell icon="📸" label="Evidence" value={editDraft.evidence} />
+            <InfoCell icon="🤖" label="Judgment" value={editDraft.aiReview ? "AI Review" : "Manual"} />
+          </motion.div>
+
+          {/* Rules highlight block */}
+          <motion.div
+            className="mb-5 px-4 py-3.5 rounded-xl relative"
+            style={{
+              background: "rgba(245,166,35,0.06)",
+              border: "1px solid rgba(245,166,35,0.2)",
+            }}
+            variants={childVariants}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              {INFO_ICONS.Rules}
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-amber-400">
+                Judgment Rules
+              </span>
+              <div className="group relative ml-1">
+                <span className="cursor-help text-amber-400/60 text-xs">&#9432;</span>
+                <div className="absolute bottom-full left-0 mb-1 px-3 py-2 rounded-lg text-[11px] text-text-secondary w-56 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30"
+                     style={{ background: "rgba(13,13,30,0.98)", border: "1px solid rgba(245,166,35,0.2)" }}>
+                  AI judge will decide strictly based on these rules. Be as specific as possible.
+                </div>
+              </div>
+            </div>
+            <textarea
+              value={editDraft.rules}
+              onChange={e => updateField("rules", e.target.value)}
+              rows={3}
+              className="w-full text-sm font-bold text-amber-200 bg-transparent resize-none focus:outline-none leading-relaxed"
+              style={{ caretColor: "#f5a623" }}
+            />
           </motion.div>
 
           {/* Visibility badge */}
           <motion.div
             className="flex items-center gap-2.5 mb-5 px-4 py-2.5 rounded-xl"
             style={{
-              background: draft.isPublic ? "rgba(0,232,122,0.06)" : "rgba(124,92,252,0.06)",
-              border: draft.isPublic ? "1px solid rgba(0,232,122,0.12)" : "1px solid rgba(124,92,252,0.12)",
+              background: editDraft.isPublic ? "rgba(0,232,122,0.06)" : "rgba(124,92,252,0.06)",
+              border: editDraft.isPublic ? "1px solid rgba(0,232,122,0.12)" : "1px solid rgba(124,92,252,0.12)",
             }}
             variants={childVariants}
           >
             <div className="relative w-2 h-2">
               <motion.div
                 className="absolute inset-0 rounded-full"
-                style={{ background: draft.isPublic ? "#00e87a" : "#7c5cfc" }}
+                style={{ background: editDraft.isPublic ? "#00e87a" : "#7c5cfc" }}
                 animate={{ opacity: [0.5, 1, 0.5], scale: [0.8, 1.2, 0.8] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </div>
             <span className="text-xs font-medium text-text-secondary">
-              {draft.isPublic
+              {editDraft.isPublic
                 ? "Public — anyone can view and join this challenge"
                 : "Private — only invited participants can see this"}
             </span>
@@ -241,7 +305,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
           {/* Action buttons */}
           <motion.div className="flex items-center gap-3" variants={childVariants}>
             <motion.button
-              onClick={onPublish}
+              onClick={() => onPublish(editDraft)}
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.97 }}
               className="shimmer-btn flex-1 py-3.5 rounded-xl text-sm font-extrabold text-white relative overflow-hidden"
@@ -250,7 +314,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                 boxShadow: `0 4px 24px ${colors.glow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
               }}
             >
-              Publish Challenge{hasStake ? ` (${draft.stake} credits)` : ""}
+              Publish Challenge{hasStake ? ` (${editDraft.stake} credits)` : ""}
             </motion.button>
 
             <motion.button
