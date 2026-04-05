@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import * as api from "@/lib/api-client";
 import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
 import { LiveChallengeCard } from "@/components/ChallengeCard";
+import PlazaSection from "@/components/PlazaSection";
 
 /* ── Drawer shell ── */
 function Drawer({ open, onClose, title, children }: {
@@ -726,8 +727,14 @@ export function FloatingActionBar({
       <Drawer open={active === "live"} onClose={() => setActive(null)} title="Live Activity">
         <LiveContent />
       </Drawer>
-      <Drawer open={active === "nearby"} onClose={() => setActive(null)} title="Nearby & plaza">
-        <NearbyContent onRequireAuth={() => onRequireAuth?.()} />
+      <Drawer open={active === "nearby"} onClose={() => setActive(null)} title="Arena">
+        <PlazaSection
+          onAccept={(id) => {
+            onOpenChallenge?.(id);
+            setActive(null);
+          }}
+          onRequireAuth={() => onRequireAuth?.()}
+        />
       </Drawer>
       <Drawer open={active === "wallet"} onClose={() => setActive(null)} title="Wallet & Escrow">
         <WalletContent />
