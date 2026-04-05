@@ -26,6 +26,16 @@ export async function POST(req: NextRequest) {
     if (!input || typeof input !== "string") {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
+    const trimmed = input.trim();
+    if (trimmed.length < 4) {
+      return Response.json(
+        {
+          error: "too_short",
+          suggestion: "Tell me more! For example: 'I bet 5 credits I can do 30 pushups in 2 minutes'",
+        },
+        { status: 400 },
+      );
+    }
 
     const providerId =
       typeof rawPid === "string" && getProviderById(rawPid) ? rawPid : DEFAULT_LLM_PROVIDER_ID;
@@ -50,8 +60,11 @@ export async function POST(req: NextRequest) {
     const schemaOk = safeParseBetDraft(parsed);
     if (!schemaOk) {
       return Response.json(
-        { error: "Parse output failed schema validation — retry or use a different tier." },
-        { status: 502 },
+        {
+          error: "parse_unclear",
+          suggestion: "I couldn't quite understand that as a challenge. Try something like: 'Bet 10 credits the next car is red' or 'Challenge: 50 pushups in 2 min'",
+        },
+        { status: 400 },
       );
     }
     parsed = schemaOk as ParsedChallenge;
@@ -91,6 +104,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Parse error:", err);
-    return Response.json({ error: "Failed to parse challenge" }, { status: 500 });
+    return Response.json(
+      {
+        error: "parse_failed",
+        suggestion: "Something went wrong parsing your challenge. Try rephrasing — for example: 'I bet I can run 5km in under 30 min'",
+      },
+      { status: 400 },
+    );
   }
 }
