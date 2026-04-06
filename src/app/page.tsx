@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -69,7 +69,6 @@ export default function Home() {
   const [messages, setMessages]           = useState<Message[]>([]);
   const [isTyping, setIsTyping]           = useState(false);
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
-  const [published, setPublished]         = useState(false);
   const [showScanLine, setShowScanLine]   = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
   const [shareLink, setShareLink]         = useState<string | null>(null);
@@ -81,6 +80,30 @@ export default function Home() {
     const id = setTimeout(() => setShowScanLine(true), 600);
     return () => clearTimeout(id);
   }, []);
+
+  // Legacy ?challenge= URL → redirect to /challenge/[id]
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("challenge");
+    if (id) router.replace(`/challenge/${id}`);
+  }, [router]);
+
+  // Reset conversation state only on explicit logout (not during session loading)
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated" && appState !== "idle") {
+      setAppState("idle");
+      setMessages([]); setSteps([]); setStepIdx(0);
+      setAnswers([]); setOrigInput(""); setDraft(null);
+      aiDraftRef.current = null;
+    }
+  }, [sessionStatus, appState]);
+
+  const openChallengeRoom = useCallback(
+    (id: string) => {
+      router.push(`/challenge/${id}`);
+    },
+    [router],
+  );
 
   const pushMsg = useCallback((role: "user"|"ai", content: string, options?: string[]) => {
     setMessages(prev => [...prev, {
@@ -241,11 +264,8 @@ export default function Home() {
             exit={{ y: -60, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
           >
-            <div style={{
-              background: "rgba(6,6,15,0.8)",
-              backdropFilter: "blur(20px)",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
-            }}>
+            <div className="glass-panel" style={{ borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+              <div className="plasma-line" />
               <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
 
                 <motion.button
@@ -266,20 +286,6 @@ export default function Home() {
                 </motion.button>
 
                 <div className="flex items-center gap-2.5">
-                  {appState === "live" && (
-                    <motion.div
-                      className="relative flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold"
-                      style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a", border: "1px solid rgba(0,232,122,0.2)" }}
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                      <div className="absolute inset-0 rounded-full animate-ping"
-                           style={{ border: "1px solid rgba(0,232,122,0.3)", animationDuration: "1.5s" }} />
-                      LIVE
-                    </motion.div>
-                  )}
-
                   <motion.button
                     onClick={reset}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold text-text-muted border border-border-subtle"
@@ -447,6 +453,7 @@ export default function Home() {
         <CenteredComposer
           onSubmit={active ? handleFollowUp : handleInitialSubmit}
           isActive={active}
+          isParsing={isParsing}
         />
       </main>
 
@@ -461,6 +468,17 @@ export default function Home() {
             exit={{ opacity: 0, y: 8, transition: { duration: 0.3 } }}
           >
             <span>Terms</span>
+            <span className="text-text-muted/20">·</span>
+            {PRICING_SITE_URL ? (
+              <a
+                href={PRICING_SITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-text-muted transition-colors"
+              >
+                财务测算
+              </a>
+            ) : null}
             <span className="text-text-muted/20">·</span>
             <span>AI-Powered Challenge OS</span>
             <span className="text-text-muted/20">·</span>

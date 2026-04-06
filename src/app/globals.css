@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
-   DESIGN SYSTEM — ChallengeAI Premium
+   DESIGN SYSTEM — ChallengeAI · Quantum Arena
+   Premium dark-mode with energy field aesthetics
    ═══════════════════════════════════════════════════ */
 
 @theme {
@@ -67,6 +68,22 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* App-like: disable text selection globally */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow selection only in form inputs and textareas */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -102,6 +119,13 @@ body {
   background: rgba(15, 15, 30, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-panel {
+  background: rgba(10, 10, 24, 0.92);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -142,8 +166,14 @@ body {
     0 0 20px rgba(0,232,122,0.12);
 }
 
+.glow-danger {
+  box-shadow:
+    0 0 0 1px rgba(255,71,87,0.25),
+    0 0 20px rgba(255,71,87,0.12);
+}
+
 /* ═══════════════════════════════════════════════════
-   KEYFRAMES
+   KEYFRAMES — Core
    ═══════════════════════════════════════════════════ */
 
 /* Breathing glow on idle composer */
@@ -235,7 +265,139 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════
-   UTILITY CLASSES
+   KEYFRAMES — Premium Effects
+   ═══════════════════════════════════════════════════ */
+
+/* Click ripple effect */
+@keyframes ripple-expand {
+  0%   { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+/* Energy burst on success */
+@keyframes energy-burst {
+  0%   { transform: scale(0.3); opacity: 1; filter: blur(0px); }
+  50%  { transform: scale(1.5); opacity: 0.6; filter: blur(4px); }
+  100% { transform: scale(2.5); opacity: 0; filter: blur(12px); }
+}
+
+/* Orbiting particle */
+@keyframes orbit {
+  0%   { transform: rotate(0deg) translateX(28px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(28px) rotate(-360deg); }
+}
+
+/* Slow orbit for larger elements */
+@keyframes orbit-slow {
+  0%   { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
+}
+
+/* Plasma flow along border */
+@keyframes plasma-flow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Heartbeat for live indicators */
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14%      { transform: scale(1.15); }
+  28%      { transform: scale(1); }
+  42%      { transform: scale(1.08); }
+  56%      { transform: scale(1); }
+}
+
+/* Glow fade in */
+@keyframes glow-in {
+  0%   { opacity: 0; filter: blur(20px); transform: scale(0.8); }
+  100% { opacity: 1; filter: blur(0px); transform: scale(1); }
+}
+
+/* Verdict reveal — dramatic entrance */
+@keyframes verdict-reveal {
+  0%   { clip-path: inset(50% 50% 50% 50%); opacity: 0; }
+  40%  { clip-path: inset(0% 50% 0% 50%); opacity: 0.5; }
+  100% { clip-path: inset(0% 0% 0% 0%); opacity: 1; }
+}
+
+/* Typewriter cursor blink */
+@keyframes cursor-blink {
+  0%, 50% { border-color: rgba(124,92,252,0.8); }
+  51%, 100% { border-color: transparent; }
+}
+
+/* VS clash animation */
+@keyframes vs-clash {
+  0%   { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+  50%  { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  70%  { transform: scale(0.95) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Slide up with fade */
+@keyframes slide-up-fade {
+  0%   { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0px); opacity: 1; }
+}
+
+/* Pulse ring for battle */
+@keyframes battle-ring {
+  0%   { transform: scale(0.8); opacity: 0.6; }
+  50%  { transform: scale(1.2); opacity: 0.2; }
+  100% { transform: scale(0.8); opacity: 0.6; }
+}
+
+/* Border glow rotate */
+@keyframes border-glow-rotate {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+/* Stagger reveal for lists */
+@keyframes stagger-in {
+  0%   { transform: translateY(12px) scale(0.96); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Number counter tick */
+@keyframes counter-tick {
+  0%   { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Magnetic hover lift */
+@keyframes hover-lift {
+  0%   { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-4px) scale(1.01); }
+}
+
+/* Shine sweep for cards */
+@keyframes shine-sweep {
+  0%   { transform: translateX(-100%) rotate(25deg); }
+  100% { transform: translateX(200%) rotate(25deg); }
+}
+
+/* Energy charge bar */
+@keyframes charge-bar {
+  0%   { width: 0%; background: rgba(124,92,252,0.6); }
+  50%  { background: rgba(0,212,200,0.6); }
+  100% { width: 100%; background: rgba(0,232,122,0.6); }
+}
+
+/* Wiggle for attention */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  10%      { transform: rotate(-2deg); }
+  20%      { transform: rotate(2deg); }
+  30%      { transform: rotate(-1deg); }
+  40%      { transform: rotate(1deg); }
+  50%      { transform: rotate(0deg); }
+}
+
+/* ═══════════════════════════════════════════════════
+   UTILITY CLASSES — Core
    ═══════════════════════════════════════════════════ */
 
 .animate-breathe-glow  { animation: breathe-glow 4s ease-in-out infinite; }
@@ -260,6 +422,10 @@ body {
   pointer-events: none;
 }
 
+/* ═══════════════════════════════════════════════════
+   UTILITY CLASSES — Premium
+   ═══════════════════════════════════════════════════ */
+
 /* Shimmer button overlay */
 .shimmer-btn {
   position: relative;
@@ -278,7 +444,39 @@ body {
   animation: shimmer-sweep 0.6s ease-out forwards;
 }
 
-/* Gradient border */
+/* Energy button — pulses on hover */
+.energy-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.energy-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.15), transparent 60%);
+}
+.energy-btn:hover::before {
+  opacity: 1;
+}
+.energy-btn:active {
+  transform: scale(0.97);
+}
+.energy-btn:active::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transform: translate(-50%, -50%);
+  animation: ripple-expand 0.5s ease-out forwards;
+}
+
+/* Gradient border with animation */
 .gradient-border {
   position: relative;
 }
@@ -293,6 +491,212 @@ body {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* Animated gradient border */
+.gradient-border-animated {
+  position: relative;
+}
+.gradient-border-animated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #7c5cfc, #00d4c8, #7c5cfc, #00d4c8);
+  background-size: 300% 300%;
+  animation: plasma-flow 4s ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Shine card on hover */
+.shine-card {
+  position: relative;
+  overflow: hidden;
+}
+.shine-card::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 40%; height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  transform: translateX(-100%) rotate(25deg);
+  transition: none;
+}
+.shine-card:hover::after {
+  animation: shine-sweep 0.8s ease-out forwards;
+}
+
+/* Verdict card dramatic entrance */
+.verdict-enter {
+  animation: verdict-reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* VS clash entrance */
+.vs-clash {
+  animation: vs-clash 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Stagger children animation */
+.stagger-item {
+  animation: stagger-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-item:nth-child(1) { animation-delay: 0.05s; }
+.stagger-item:nth-child(2) { animation-delay: 0.10s; }
+.stagger-item:nth-child(3) { animation-delay: 0.15s; }
+.stagger-item:nth-child(4) { animation-delay: 0.20s; }
+.stagger-item:nth-child(5) { animation-delay: 0.25s; }
+.stagger-item:nth-child(6) { animation-delay: 0.30s; }
+.stagger-item:nth-child(7) { animation-delay: 0.35s; }
+.stagger-item:nth-child(8) { animation-delay: 0.40s; }
+
+/* Typewriter cursor */
+.typewriter-cursor {
+  border-right: 2px solid rgba(124,92,252,0.8);
+  animation: cursor-blink 1s infinite;
+}
+
+/* Battle pulse ring */
+.battle-pulse {
+  animation: battle-ring 2s ease-in-out infinite;
+}
+
+/* Heartbeat for live */
+.animate-heartbeat {
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+/* Wiggle attention */
+.animate-wiggle {
+  animation: wiggle 1s ease-in-out;
+}
+
+/* Orbit particle */
+.animate-orbit {
+  animation: orbit 8s linear infinite;
+}
+.animate-orbit-slow {
+  animation: orbit-slow 12s linear infinite;
+}
+.animate-orbit-reverse {
+  animation: orbit 10s linear infinite reverse;
+}
+
+/* Glow entry */
+.animate-glow-in {
+  animation: glow-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Charge bar */
+.animate-charge {
+  animation: charge-bar 2s ease-in-out forwards;
+}
+
+/* Hover magnetic lift */
+.hover-lift {
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+
+/* ═══════════════════════════════════════════════════
+   PLASMA ACCENT LINE — top of cards
+   ═══════════════════════════════════════════════════ */
+.plasma-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #7c5cfc, #00d4c8, #7c5cfc, transparent);
+  background-size: 200% 100%;
+  animation: plasma-flow 3s ease infinite;
+}
+
+.plasma-line-gold {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #f5a623, #ff6b35, #f5a623, transparent);
+  background-size: 200% 100%;
+  animation: plasma-flow 3s ease infinite;
+}
+
+.plasma-line-success {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00e87a, #00d4c8, #00e87a, transparent);
+  background-size: 200% 100%;
+  animation: plasma-flow 3s ease infinite;
+}
+
+.plasma-line-danger {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff4757, #ff6b81, #ff4757, transparent);
+  background-size: 200% 100%;
+  animation: plasma-flow 3s ease infinite;
+}
+
+/* ═══════════════════════════════════════════════════
+   BATTLE-SPECIFIC STYLES
+   ═══════════════════════════════════════════════════ */
+
+/* Split screen divider */
+.battle-divider {
+  position: relative;
+  width: 3px;
+  background: linear-gradient(180deg, transparent, #7c5cfc, #00d4c8, #7c5cfc, transparent);
+  background-size: 100% 200%;
+  animation: plasma-flow 3s ease infinite;
+}
+.battle-divider::before,
+.battle-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,92,252,0.2), transparent 70%);
+}
+.battle-divider::before { top: 30%; }
+.battle-divider::after  { bottom: 30%; }
+
+/* Player side glow */
+.player-side-left {
+  background: linear-gradient(135deg, rgba(124,92,252,0.04) 0%, transparent 60%);
+}
+.player-side-right {
+  background: linear-gradient(225deg, rgba(0,212,200,0.04) 0%, transparent 60%);
+}
+
+/* Evidence card with status indicator */
+.evidence-card {
+  position: relative;
+  overflow: hidden;
+}
+.evidence-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--evidence-color, #7c5cfc), transparent);
+  opacity: 0.8;
+}
+
+/* ═══════════════════════════════════════════════════
+   INTERACTIVE FOCUS STATES
+   ═══════════════════════════════════════════════════ */
+
+/* Input focus glow */
+input:focus, textarea:focus, select:focus {
+  border-color: rgba(124,92,252,0.5) !important;
+  box-shadow: 0 0 0 3px rgba(124,92,252,0.1), 0 0 20px rgba(124,92,252,0.05);
+  outline: none;
+}
+
+/* Button press feedback */
+button:active:not(:disabled) {
+  transition: transform 0.1s;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -322,4 +726,20 @@ body {
   z-index: 100;
   pointer-events: none;
   animation: scan-line 12s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE — mobile touch feedback
+   ═══════════════════════════════════════════════════ */
+@media (hover: none) {
+  .shimmer-btn:hover::after { animation: none; }
+  .shine-card:hover::after  { animation: none; }
+  .hover-lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  /* Tap feedback instead */
+  .shimmer-btn:active::after {
+    animation: shimmer-sweep 0.4s ease-out forwards;
+  }
 }

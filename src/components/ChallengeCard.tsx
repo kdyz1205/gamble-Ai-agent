@@ -1,5 +1,8 @@
 "use client";
 
+import { motion } from "framer-motion";
+import type { ChallengeData } from "@/lib/api-client";
+
 export interface Challenge {
   id: string;
   title: string;
@@ -12,6 +15,37 @@ export interface Challenge {
   status: "open" | "live" | "judging" | "completed";
   participants: number;
   aiReview: boolean;
+}
+
+export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
+  const opponent = c.participants.find((p) => p.role === "opponent");
+  let status: Challenge["status"] = "open";
+  if (c.status === "settled" || c.status === "cancelled") status = "completed";
+  else if (c.status === "judging" || c.status === "pending_settlement") status = "judging";
+  else if (c.status === "live") status = "live";
+
+  const deadlineStr = c.deadline
+    ? new Date(c.deadline).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    : "—";
+
+  return {
+    id: c.id,
+    title: c.title,
+    playerA: {
+      name: `@${c.creator.username}`,
+      avatar: c.creator.image || "🥊",
+    },
+    playerB: opponent
+      ? { name: `@${opponent.user.username}`, avatar: opponent.user.image || "🥊" }
+      : null,
+    type: c.type,
+    stake: c.stake,
+    deadline: deadlineStr,
+    evidence: c.evidenceType.replace(/_/g, " "),
+    status,
+    participants: c.participants.length,
+    aiReview: c.aiReview,
+  };
 }
 
 function StatusBadge({ status }: { status: Challenge["status"] }) {
@@ -39,14 +73,37 @@ function StatusBadge({ status }: { status: Challenge["status"] }) {
 
 export default function ChallengeCard({
   challenge,
+  tone = "light",
+  onAcceptChallenge,
+  acceptChallengePending = false,
 }: {
   challenge: Challenge;
+  tone?: "light" | "dark";
+  onAcceptChallenge?: () => void | Promise<void>;
+  acceptChallengePending?: boolean;
 }) {
+  const isDark = tone === "dark";
   return (
-    <div className="group bg-white rounded-2xl border border-border-subtle p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-float-up">
+    <div
+      className={`group rounded-2xl border p-5 transition-all duration-300 animate-float-up ${
+        isDark
+          ? "hover:shadow-lg"
+          : "bg-white border-border-subtle hover:shadow-lg hover:-translate-y-0.5"
+      }`}
+      style={
+        isDark
+          ? {
+              background: "rgba(255,255,255,0.04)",
+              borderColor: "rgba(255,255,255,0.08)",
+            }
+          : undefined
+      }
+    >
       {/* Top row: type + status */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+        <span
+          className={`text-xs font-medium uppercase tracking-wider ${isDark ? "text-text-muted" : "text-text-tertiary"}`}
+        >
           {challenge.type}
         </span>
         <StatusBadge status={challenge.status} />
@@ -199,8 +256,13 @@ export default function ChallengeCard({
       {/* Action buttons */}
       <div className="flex gap-2">
         {challenge.status === "open" && !challenge.playerB && (
-          <button className="flex-1 py-2.5 text-sm font-semibold text-white bg-accent rounded-xl hover:bg-accent-dark transition-colors shadow-sm hover:shadow-md">
-            Accept Challenge
+          <button
+            type="button"
+            onClick={() => void onAcceptChallenge?.()}
+            disabled={!onAcceptChallenge || acceptChallengePending}
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-accent rounded-xl hover:bg-accent-dark transition-colors shadow-sm hover:shadow-md disabled:opacity-45 disabled:pointer-events-none"
+          >
+            {acceptChallengePending ? "Accepting…" : "Accept Challenge"}
           </button>
         )}
         {challenge.status === "live" && (
@@ -227,5 +289,34 @@ export default function ChallengeCard({
         )}
       </div>
     </div>
+  );
+}
+
+/** Real API row + optional Accept → versus handoff (shared layoutId for motion). */
+export function LiveChallengeCard({
+  apiChallenge,
+  currentUserId,
+  onAcceptVersus,
+  accepting,
+}: {
+  apiChallenge: ChallengeData;
+  currentUserId?: string;
+  onAcceptVersus: (id: string) => void | Promise<void>;
+  accepting: boolean;
+}) {
+  const ch = mapChallengeDataToChallenge(apiChallenge);
+  const joinable =
+    apiChallenge.status === "open" &&
+    apiChallenge.participants.length < (apiChallenge.maxParticipants ?? 2) &&
+    apiChallenge.creatorId !== currentUserId;
+  return (
+    <motion.div layout layoutId={`challenge-card-${apiChallenge.id}`} className="mb-3">
+      <ChallengeCard
+        challenge={ch}
+        tone="dark"
+        onAcceptChallenge={joinable ? () => void onAcceptVersus(apiChallenge.id) : undefined}
+        acceptChallengePending={accepting}
+      />
+    </motion.div>
   );
 }
