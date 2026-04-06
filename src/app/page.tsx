@@ -138,6 +138,16 @@ export default function Home() {
     if (id) router.replace(`/challenge/${id}`);
   }, [router]);
 
+  // Reset conversation state when user logs out mid-flow
+  useEffect(() => {
+    if (!user && appState !== "idle") {
+      setAppState("idle");
+      setMessages([]); setSteps([]); setStepIdx(0);
+      setAnswers([]); setOrigInput(""); setDraft(null);
+      aiDraftRef.current = null;
+    }
+  }, [user, appState]);
+
   const openChallengeRoom = useCallback(
     (id: string) => {
       router.push(`/challenge/${id}`);
