@@ -78,7 +78,7 @@ export async function parseChallenge(
   const opts = resolveParseOpts(modelOrOpts);
   const providerId = opts.providerId ?? DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
-  const model = opts.model ?? def?.defaultModel ?? "claude-haiku-4-20250414";
+  const model = opts.model ?? def?.defaultModel ?? "claude-haiku-4-5-20251001";
 
   if (!hasProviderApiKey(providerId)) return parseChallengeFallback(input);
 
@@ -202,7 +202,7 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
 
   const providerId = providerIdParam ?? DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
-  const model = modelParam ?? def?.defaultModel ?? "claude-haiku-4-20250414";
+  const model = modelParam ?? def?.defaultModel ?? "claude-haiku-4-5-20251001";
 
   const isDuel = Boolean(participantBId);
 
@@ -404,7 +404,8 @@ Return JSON:
       reasoning: reasoning || "AI could not produce reasoning.",
       confidence: typeof result.confidence === "number" ? Math.min(1, Math.max(0, result.confidence)) : 0.75,
     };
-  } catch {
+  } catch (err) {
+    console.error("[judgeChallenge] API call failed, falling back:", err);
     return judgeChallengeFallback(params);
   }
 }

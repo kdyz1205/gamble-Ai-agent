@@ -116,16 +116,16 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
             onClick={onClose}
           />
 
-          {/* center wrapper */}
+          {/* center wrapper — scrollable on small screens */}
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             {/* card */}
             <motion.div
-              className="gradient-border-animated w-full max-w-sm rounded-2xl overflow-hidden"
+              className="gradient-border-animated w-full max-w-sm rounded-2xl overflow-hidden shrink-0 my-auto"
               style={{
                 background: "rgba(13,13,30,0.97)",
                 boxShadow:

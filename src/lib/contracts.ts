@@ -28,9 +28,9 @@ const chain = process.env.X402_NETWORK === "base" ? base : baseSepolia;
 export const ESCROW_STATES = ["Created", "Active", "Judging", "Settled", "Disputed"] as const;
 
 export const MODEL_TIERS = {
-  HAIKU: { id: 1, name: "Haiku", model: "claude-haiku-4-20250414", priceUsd: 0.01 },
+  HAIKU: { id: 1, name: "Haiku", model: "claude-haiku-4-5-20251001", priceUsd: 0.01 },
   SONNET: { id: 2, name: "Sonnet", model: "claude-sonnet-4-20250514", priceUsd: 0.05 },
-  OPUS: { id: 3, name: "Opus", model: "claude-sonnet-4-20250514", priceUsd: 0.25 },
+  OPUS: { id: 3, name: "Opus", model: "claude-opus-4-20250514", priceUsd: 0.25 },
 } as const;
 
 export type TierName = keyof typeof MODEL_TIERS;

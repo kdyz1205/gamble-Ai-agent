@@ -25,8 +25,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Anthropic",
     kind: "anthropic",
     envVar: "ANTHROPIC_API_KEY",
-    defaultModel: "claude-haiku-4-20250414",
-    models: ["claude-haiku-4-20250414", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
+    defaultModel: "claude-haiku-4-5-20251001",
+    models: ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
     docsUrl: "https://docs.anthropic.com",
   },
   {
