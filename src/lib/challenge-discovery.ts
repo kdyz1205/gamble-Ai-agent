@@ -1,5 +1,5 @@
 import prisma from "@/lib/db";
-import { ChallengeStatus } from "@/generated/prisma/enums";
+import { ChallengeStatus } from "@/lib/enums";
 
 const CHALLENGE_LIST_INCLUDE = {
   creator: {

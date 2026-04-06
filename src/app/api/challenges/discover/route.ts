@@ -4,7 +4,7 @@ import {
   discoveryMetaForChallenge,
   sortChallengesByDiscovery,
 } from "@/lib/challenge-discovery";
-import { ChallengeStatus } from "@/generated/prisma/enums";
+import { ChallengeStatus } from "@/lib/enums";
 
 /**
  * GET /api/challenges/discover — 3-level waterfall discovery.

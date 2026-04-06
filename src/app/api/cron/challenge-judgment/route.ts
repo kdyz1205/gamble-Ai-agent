@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { ChallengeStatus } from "@/generated/prisma/enums";
+import { ChallengeStatus } from "@/lib/enums";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 

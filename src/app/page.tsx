@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -52,6 +52,7 @@ function instantDraft(userInput: string): ChallengeDraft {
     playerB: null,
     type, stake,
     deadline: "24 hours",
+    durationMinutes: 1440,
     rules: `${type} challenge — AI judges the result`,
     evidence, aiReview: true, isPublic: false,
   };
@@ -70,6 +71,7 @@ export default function Home() {
   const [isTyping, setIsTyping]           = useState(false);
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
   const [showScanLine, setShowScanLine]   = useState(false);
+  const [published, setPublished]         = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
   const [shareLink, setShareLink]         = useState<string | null>(null);
   const [copied, setCopied]              = useState(false);
@@ -80,30 +82,6 @@ export default function Home() {
     const id = setTimeout(() => setShowScanLine(true), 600);
     return () => clearTimeout(id);
   }, []);
-
-  // Legacy ?challenge= URL → redirect to /challenge/[id]
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const id = new URLSearchParams(window.location.search).get("challenge");
-    if (id) router.replace(`/challenge/${id}`);
-  }, [router]);
-
-  // Reset conversation state only on explicit logout (not during session loading)
-  useEffect(() => {
-    if (sessionStatus === "unauthenticated" && appState !== "idle") {
-      setAppState("idle");
-      setMessages([]); setSteps([]); setStepIdx(0);
-      setAnswers([]); setOrigInput(""); setDraft(null);
-      aiDraftRef.current = null;
-    }
-  }, [sessionStatus, appState]);
-
-  const openChallengeRoom = useCallback(
-    (id: string) => {
-      router.push(`/challenge/${id}`);
-    },
-    [router],
-  );
 
   const pushMsg = useCallback((role: "user"|"ai", content: string, options?: string[]) => {
     setMessages(prev => [...prev, {
@@ -157,24 +135,27 @@ export default function Home() {
   }, [pushMsg, aiReply, draft]);
 
   /* ── Publish ── */
-  const handlePublish = useCallback(async () => {
+  const handlePublish = useCallback(async (editedDraft?: ChallengeDraft) => {
     if (!user) {
       setShowAuth(true);
       return;
     }
 
-    if (draft) {
+    const d = editedDraft || draft;
+    if (d && d !== draft) setDraft(d);
+
+    if (d) {
       try {
         setIsTyping(true);
         const res = await api.createChallenge({
-          title: draft.title,
-          type: draft.type,
-          stake: draft.stake,
-          deadline: draft.deadline,
-          rules: draft.rules,
-          evidenceType: draft.evidence.toLowerCase().replace(/ /g, "_"),
-          aiReview: draft.aiReview,
-          isPublic: draft.isPublic,
+          title: d.title,
+          type: d.type,
+          stake: d.stake,
+          deadline: d.deadline,
+          rules: d.rules,
+          evidenceType: d.evidence.toLowerCase().replace(/ /g, "_"),
+          aiReview: d.aiReview,
+          isPublic: d.isPublic,
         });
         const id = res.challenge.id;
         setChallengeId(id);
@@ -453,7 +434,7 @@ export default function Home() {
         <CenteredComposer
           onSubmit={active ? handleFollowUp : handleInitialSubmit}
           isActive={active}
-          isParsing={isParsing}
+          isParsing={isTyping}
         />
       </main>
 
@@ -468,17 +449,6 @@ export default function Home() {
             exit={{ opacity: 0, y: 8, transition: { duration: 0.3 } }}
           >
             <span>Terms</span>
-            <span className="text-text-muted/20">·</span>
-            {PRICING_SITE_URL ? (
-              <a
-                href={PRICING_SITE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-text-muted transition-colors"
-              >
-                财务测算
-              </a>
-            ) : null}
             <span className="text-text-muted/20">·</span>
             <span>AI-Powered Challenge OS</span>
             <span className="text-text-muted/20">·</span>

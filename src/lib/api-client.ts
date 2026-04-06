@@ -100,6 +100,7 @@ export interface ChallengeData {
   evidenceType: string;
   aiReview: boolean;
   isPublic: boolean;
+  maxParticipants: number;
   createdAt: string;
   creator: { id: string; username: string; image: string | null; credits?: number };
   participants: Array<{
@@ -217,4 +218,26 @@ export async function getNearbyUsers(lat: number, lng: number, radius = 10): Pro
   }>;
 }> {
   return apiFetch(`/users/nearby?lat=${lat}&lng=${lng}&radius=${radius}`);
+}
+
+/* ── Type aliases for backwards compat ── */
+export type ChallengeDetail = ChallengeData;
+
+/* ── Stubs for features not yet wired ── */
+export async function presignEvidenceUpload(_challengeId: string, _filename: string): Promise<{ url: string; pathname: string }> {
+  return apiFetch(`/uploads/evidence-presign`, {
+    method: "POST",
+    body: JSON.stringify({ challengeId: _challengeId, filename: _filename }),
+  });
+}
+
+export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, _prefs?: Record<string, unknown>): Promise<{ jobId: string }> {
+  return apiFetch(`/challenges/${id}/judge/async`, {
+    method: "POST",
+    body: JSON.stringify({ tier }),
+  });
+}
+
+export async function getJudgeJob(jobId: string): Promise<{ job: { id: string; status: string; resultJson?: string; error?: string } }> {
+  return apiFetch(`/judge-jobs/${jobId}`);
 }

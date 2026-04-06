@@ -73,8 +73,15 @@ function InfoCell({ icon, label, value }: { icon: string; label: string; value: 
 }
 
 export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
-  const colors = TYPE_COLORS[draft.type] ?? TYPE_COLORS.General;
-  const hasStake = draft.stake > 0;
+  const [editDraft, setEditDraft] = useState<ChallengeDraft>(draft);
+  useEffect(() => setEditDraft(draft), [draft]);
+
+  const updateField = <K extends keyof ChallengeDraft>(key: K, value: ChallengeDraft[K]) => {
+    setEditDraft(prev => ({ ...prev, [key]: value }));
+  };
+
+  const colors = TYPE_COLORS[editDraft.type] ?? TYPE_COLORS.General;
+  const hasStake = editDraft.stake > 0;
 
   const containerVariants: Variants = {
     hidden: {},
@@ -151,7 +158,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
               />
             </div>
 
-            <div
+            <motion.div
               className="flex-shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl"
               style={{
                 background: hasStake ? "rgba(245,166,35,0.1)" : "rgba(0,212,200,0.1)",
@@ -173,7 +180,7 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                   credits
                 </span>
               )}
-            </div>
+            </motion.div>
           </motion.div>
 
           <motion.div className="flex items-center gap-4 mb-5" variants={childVariants}>

@@ -82,6 +82,9 @@ model User {
   judgmentsWon       Judgment[]     @relation("WinnerUser")
   transactions       CreditTx[]
   activityEvents     ActivityEvent[]
+  judgeJobsRequested JudgeJob[]     @relation("JudgeJobRequester")
+  auditLogsActor     AuditLog[]     @relation("AuditLogActor")
+  auditLogsTarget    AuditLog[]     @relation("AuditLogTarget")
 }
 
 // ═══════════════════════════════════════
@@ -127,12 +130,18 @@ model Challenge {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  discoveryLat        Float?
+  discoveryLng        Float?
+  discoveryCapturedAt DateTime?
+
   creator       User          @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   participants  Participant[]
   evidence      Evidence[]
   judgments     Judgment[]
   creditTxs     CreditTx[]
   activityEvents ActivityEvent[]
+  judgeJobs     JudgeJob[]
+  auditLogs     AuditLog[]    @relation("AuditLogChallenge")
 }
 
 model Participant {
@@ -182,6 +191,58 @@ model Judgment {
   challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   judge        User?     @relation("JudgeUser", fields: [judgeId], references: [id])
   winner       User?     @relation("WinnerUser", fields: [winnerId], references: [id])
+  judgeJobs    JudgeJob[]
+}
+
+// ═══════════════════════════════════════
+// JUDGE JOBS (async AI judgment)
+// ═══════════════════════════════════════
+
+model JudgeJob {
+  id                String   @id @default(cuid())
+  challengeId       String
+  requestedByUserId String
+  status            String   @default("pending") // pending | processing | completed | failed
+  tierId            Int      @default(1)
+  providerId        String?
+  model             String?
+  webhookUrl        String?
+  error             String?
+  resultJson        String?
+  judgmentId        String?
+  creditsUsed       Int?
+  creditsRemaining  Int?
+  txHash            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  challenge         Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  requestedBy       User      @relation("JudgeJobRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  judgment          Judgment? @relation(fields: [judgmentId], references: [id])
+
+  @@index([challengeId, status])
+}
+
+// ═══════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  action       String
+  actorUserId  String?
+  targetUserId String?
+  challengeId  String?
+  payload      String?  // JSON string (SQLite doesn't support JSONB)
+  createdAt    DateTime @default(now())
+
+  actor        User?      @relation("AuditLogActor", fields: [actorUserId], references: [id])
+  target       User?      @relation("AuditLogTarget", fields: [targetUserId], references: [id])
+  challenge    Challenge? @relation("AuditLogChallenge", fields: [challengeId], references: [id])
+
+  @@index([challengeId])
+  @@index([actorUserId])
+  @@index([createdAt])
 }
 
 // ═══════════════════════════════════════

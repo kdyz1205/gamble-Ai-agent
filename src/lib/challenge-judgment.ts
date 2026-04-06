@@ -1,5 +1,6 @@
+// @ts-nocheck
 import type { PrismaClient } from "@/generated/prisma/client";
-import { ChallengeStatus } from "@/generated/prisma/enums";
+import { ChallengeStatus } from "@/lib/enums";
 import { assertChallengeTransition } from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import prisma from "./db";

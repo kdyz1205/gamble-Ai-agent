@@ -1,10 +1,11 @@
-import { ChallengeStatus } from "@/generated/prisma/enums";
+import { ChallengeStatus } from "@/lib/enums";
 
 /**
  * Allowed challenge status transitions (server-side). Same-status "transition" is always allowed (no-op).
  */
 const EDGES: Record<ChallengeStatus, ReadonlySet<ChallengeStatus>> = {
   [ChallengeStatus.draft]: new Set([ChallengeStatus.open, ChallengeStatus.cancelled]),
+  [ChallengeStatus.matched]: new Set([ChallengeStatus.live, ChallengeStatus.cancelled]),
   [ChallengeStatus.open]: new Set([
     ChallengeStatus.live,
     ChallengeStatus.judging,

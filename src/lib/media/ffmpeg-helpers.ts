@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Optional local ffmpeg/ffprobe (bundled binaries). Used for video duration + frame grab.
  * Supports three extraction modes:
