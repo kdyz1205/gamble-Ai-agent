@@ -30,7 +30,6 @@ const TIER_DESC: Record<1 | 2 | 3, string> = {
 function statusConfig(s: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
     open:      { label: "Awaiting Opponent",  color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
-    matched:   { label: "Matched — Fight!",   color: "#00d4c8", bg: "rgba(0,212,200,0.1)",   border: "rgba(0,212,200,0.25)" },
     live:      { label: "Battle in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     judging:   { label: "AI Analyzing...",    color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     settled:   { label: "Battle Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
@@ -301,7 +300,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const opponent = challenge?.participants.find((p) => p.role === "opponent");
   const myEvidence = challenge?.evidence.find((e) => e.userId === uid);
   const isCreator = uid && challenge?.creatorId === uid;
-  const canCapture = challenge && ["open", "live", "matched"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
+  const canCapture = challenge && ["open", "live"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
   const canJoin = challenge && challenge.status === "open" && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
 
   const uploadFile = async (file: File) => {

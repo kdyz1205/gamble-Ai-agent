@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import * as api from "@/lib/api-client";
 import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
-import { LiveChallengeCard } from "@/components/ChallengeCard";
 import PlazaSection from "@/components/PlazaSection";
 
 /* ── Drawer shell ── */

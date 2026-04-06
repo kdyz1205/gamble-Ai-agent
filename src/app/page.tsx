@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import ParticleBackground from "@/components/ParticleBackground";
 import CenteredComposer from "@/components/CenteredComposer";
 import ConversationThread from "@/components/ConversationThread";
@@ -11,7 +12,6 @@ import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import { FloatingActionBar } from "@/components/SecondaryPanels";
 import AuthModal from "@/components/AuthModal";
-import ChallengeVerdictPanel from "@/components/ChallengeVerdictPanel";
 import AiOracleSettingsPanel from "@/components/AiOracleSettingsPanel";
 import * as api from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
@@ -22,7 +22,7 @@ const PRICING_SITE_URL = (process.env.NEXT_PUBLIC_PRICING_SITE_URL ?? "").trim()
    AI CONVERSATION ENGINE
    ═══════════════════════════════════════════════════ */
 
-type AppState = "idle" | "clarifying" | "drafting" | "live";
+type AppState = "idle" | "clarifying" | "drafting";
 
 interface ConvoStep { aiMessage: string; options?: string[]; }
 
@@ -119,42 +119,30 @@ export default function Home() {
   const [answers, setAnswers]             = useState<string[]>([]);
   const [origInput, setOrigInput]         = useState("");
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
-  const [published, setPublished]         = useState(false);
   const [showScanLine, setShowScanLine]   = useState(false);
-  const [challengeId, setChallengeId]     = useState<string | null>(null);
   const [isParsing, setIsParsing]         = useState(false);
   const aiDraftRef                        = useRef<ChallengeDraft | null>(null);
 
   const [showAuth, setShowAuth]           = useState(false);
+  const router                            = useRouter();
 
   useEffect(() => {
     const id = setTimeout(() => setShowScanLine(true), 600);
     return () => clearTimeout(id);
   }, []);
 
+  // Legacy ?challenge= URL → redirect to /challenge/[id]
   useEffect(() => {
-    if (typeof window === "undefined" || !user?.id) return;
+    if (typeof window === "undefined") return;
     const id = new URLSearchParams(window.location.search).get("challenge");
-    if (!id) return;
-    setChallengeId(id);
-    setPublished(true);
-    setAppState("live");
-    setDraft(null);
-  }, [user?.id]);
+    if (id) router.replace(`/challenge/${id}`);
+  }, [router]);
 
   const openChallengeRoom = useCallback(
     (id: string) => {
-      setChallengeId(id);
-      setPublished(true);
-      setAppState("live");
-      setDraft(null);
-      if (typeof window !== "undefined" && window.history.replaceState) {
-        const u = new URL(window.location.href);
-        u.searchParams.set("challenge", id);
-        window.history.replaceState({}, "", u.pathname + u.search);
-      }
+      router.push(`/challenge/${id}`);
     },
-    [],
+    [router],
   );
 
   const pushMsg = useCallback((role: "user"|"ai", content: string, options?: string[]) => {
@@ -371,23 +359,16 @@ export default function Home() {
         aiReview: finalDraft.aiReview,
         isPublic: finalDraft.isPublic,
       });
-      setChallengeId(res.challenge.id);
       setIsTyping(false);
       await updateSession();
+      // Navigate to the independent Challenge Room
+      router.push(`/challenge/${res.challenge.id}`);
     } catch (err) {
       setIsTyping(false);
       pushMsg("ai", `Failed to publish: ${err instanceof Error ? err.message : "Unknown error"}. You can try again.`);
       return;
     }
-
-    setPublished(true);
-    setAppState("live");
-    aiReply(
-      "Your challenge is **live**! Use the command panel below to submit evidence. When both sides are in, tap **Run AI verdict** to let the AI judge and settle credits.",
-      ["View Live Activity", "Challenge Another"],
-      1200,
-    );
-  }, [aiReply, draft, user, pushMsg, updateSession]);
+  }, [draft, user, pushMsg, updateSession, router]);
 
   /* ── Edit ── */
   const handleEdit = useCallback(() => {
@@ -402,8 +383,7 @@ export default function Home() {
   const reset = useCallback(() => {
     setAppState("idle");
     setMessages([]); setSteps([]); setStepIdx(0);
-    setAnswers([]); setOrigInput(""); setDraft(null); setPublished(false);
-    setChallengeId(null);
+    setAnswers([]); setOrigInput(""); setDraft(null);
     aiDraftRef.current = null;
     if (typeof window !== "undefined" && window.history.replaceState) {
       const u = new URL(window.location.href);
@@ -488,20 +468,6 @@ export default function Home() {
                 </motion.button>
 
                 <div className="flex items-center gap-2.5">
-                  {appState === "live" && (
-                    <motion.div
-                      className="relative flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold"
-                      style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a", border: "1px solid rgba(0,232,122,0.2)" }}
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                      <div className="absolute inset-0 rounded-full animate-ping"
-                           style={{ border: "1px solid rgba(0,232,122,0.3)", animationDuration: "1.5s" }} />
-                      LIVE
-                    </motion.div>
-                  )}
-
                   <motion.button
                     onClick={reset}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold text-text-muted border border-border-subtle"
@@ -581,58 +547,7 @@ export default function Home() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {published && appState === "live" && challengeId && user && (
-            <motion.div
-              key="published"
-              className="w-full max-w-2xl mb-5 space-y-4"
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {draft && (
-                <div
-                  className="rounded-xl px-4 py-3 flex flex-wrap items-center gap-2"
-                  style={{
-                    background: "rgba(0,232,122,0.06)",
-                    border: "1px solid rgba(0,232,122,0.12)",
-                  }}
-                >
-                  <span className="text-xs font-extrabold text-[#00e87a]">Saved</span>
-                  <span className="text-xs text-text-secondary">
-                    Submit evidence below, then run the AI judge when everyone has sent proof.
-                  </span>
-                </div>
-              )}
-              <ChallengeVerdictPanel
-                challengeId={challengeId}
-                userId={user.id}
-                credits={user.credits ?? 0}
-                onCreditsMayChange={() => updateSession()}
-              />
-              <div className="flex flex-wrap gap-2 justify-center">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white"
-                  style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}
-                  onClick={async () => {
-                    if (!user) { setShowAuth(true); return; }
-                    try {
-                      await api.acceptChallenge(challengeId);
-                      pushMsg("ai", "You joined the challenge. Add your evidence in the panel above.");
-                    } catch (err) {
-                      pushMsg("ai", err instanceof Error ? err.message : "Could not join — try the invite link as another account, or this may be your own challenge.");
-                    }
-                  }}
-                >
-                  I’m the opponent — Accept
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Challenge Room is now at /challenge/[id] — publish redirects there */}
 
         <CenteredComposer
           onSubmit={active ? handleFollowUp : handleInitialSubmit}

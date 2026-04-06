@@ -50,7 +50,7 @@ export async function POST(
     if (!challenge) {
       return Response.json({ error: "Challenge not found" }, { status: 404 });
     }
-    if (!["open", "live", "matched"].includes(challenge.status)) {
+    if (!["open", "live"].includes(challenge.status)) {
       return Response.json(
         { error: "Evidence locked — challenge is judging, settled, or closed." },
         { status: 400 },

@@ -122,7 +122,6 @@ Challenge state is a core system and must be treated like a state machine, not a
 The lifecycle currently includes:
 - draft
 - open
-- matched
 - live
 - judging
 - pending_settlement

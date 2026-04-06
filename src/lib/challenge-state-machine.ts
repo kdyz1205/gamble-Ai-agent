@@ -7,12 +7,6 @@ const EDGES: Record<ChallengeStatus, ReadonlySet<ChallengeStatus>> = {
   [ChallengeStatus.draft]: new Set([ChallengeStatus.open, ChallengeStatus.cancelled]),
   [ChallengeStatus.open]: new Set([
     ChallengeStatus.live,
-    ChallengeStatus.matched,
-    ChallengeStatus.judging,
-    ChallengeStatus.cancelled,
-  ]),
-  [ChallengeStatus.matched]: new Set([
-    ChallengeStatus.live,
     ChallengeStatus.judging,
     ChallengeStatus.cancelled,
   ]),

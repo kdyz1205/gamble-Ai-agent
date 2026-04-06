@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { getAuthUser } from "@/lib/auth";
 import {
   discoveryMetaForChallenge,
   sortChallengesByDiscovery,
@@ -41,15 +40,6 @@ export async function GET(req: NextRequest) {
     Number.isFinite(lng) &&
     Math.abs(lat) <= 90 &&
     Math.abs(lng) <= 180;
-
-  // Update authenticated user's location when geo is available.
-  const user = await getAuthUser();
-  if (user && hasGeo) {
-    await prisma.user.update({
-      where: { id: user.userId },
-      data: { latitude: lat, longitude: lng, locationUpdatedAt: new Date() },
-    });
-  }
 
   // ── Level 1: precise geo sort ─────────────────────────────────────────────
   if (hasGeo) {

@@ -18,7 +18,6 @@ function statusLabel(s: string): string {
   const m: Record<string, string> = {
     open: "Waiting for opponent",
     live: "In progress",
-    matched: "Matched",
     judging: "Ready for AI verdict",
     pending_settlement: "Settling on-chain\u2026",
     settled: "Settled",
@@ -32,7 +31,6 @@ function statusColor(s: string) {
   const m: Record<string, { color: string; bg: string; border: string }> = {
     open:    { color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
     live:    { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
-    matched: { color: "#00d4c8", bg: "rgba(0,212,200,0.1)",   border: "rgba(0,212,200,0.25)" },
     judging:            { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     pending_settlement: { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     settled:            { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
@@ -123,7 +121,7 @@ export default function ChallengeVerdictPanel({
   const allSubmitted = challenge && accepted.length > 0 && accepted.every(p => evidenceByUser.has(p.user.id));
 
   const isCreator = challenge?.creatorId === userId;
-  const canSubmitEvidence = challenge && ["open", "live", "matched"].includes(challenge.status) && !!me && !myEvidence;
+  const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
   const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
   const settled = challenge?.status === "settled";
 
@@ -216,7 +214,7 @@ export default function ChallengeVerdictPanel({
   };
 
   const copyLink = () => {
-    const url = `${window.location.origin}/?challenge=${challengeId}`;
+    const url = `${window.location.origin}/challenge/${challengeId}`;
     void navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

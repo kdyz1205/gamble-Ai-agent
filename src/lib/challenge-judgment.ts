@@ -211,8 +211,37 @@ export async function executeChallengeJudgment(
 
   let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
   if (challenge.stake > 0) {
+    // Re-read challenge status to guard against concurrent settlement
+    const freshChallenge = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { status: true },
+    });
+    if (freshChallenge?.status === ChallengeStatus.settled) {
+      await appendAuditLog({
+        action: AuditActions.CHALLENGE_STATUS,
+        actorUserId: payerUserId,
+        challengeId,
+        payload: {
+          event: "duplicate_settlement_skipped",
+          currentStatus: freshChallenge.status,
+          judgmentId: judgment.id,
+        },
+      });
+      return {
+        ok: true,
+        judgment,
+        settlementResult: { success: true },
+        challengeId,
+        model: aiModelLabel,
+        tierId,
+        creditsUsed: cost,
+        creditsRemaining: spend.balance,
+        txHash: null,
+      };
+    }
+
     // Move to pending_settlement BEFORE attempting on-chain tx
-    assertChallengeTransition(challenge.status, ChallengeStatus.pending_settlement);
+    assertChallengeTransition(freshChallenge?.status ?? challenge.status, ChallengeStatus.pending_settlement);
     await prisma.challenge.update({
       where: { id: challengeId },
       data: { status: ChallengeStatus.pending_settlement, aiModel: aiModelLabel },
@@ -261,10 +290,26 @@ export async function executeChallengeJudgment(
   // Only reach here if settlement succeeded (or no stake)
   const fromStatus = challenge.stake > 0 ? ChallengeStatus.pending_settlement : challenge.status;
   assertChallengeTransition(fromStatus, ChallengeStatus.settled);
-  await prisma.challenge.update({
-    where: { id: challengeId },
+
+  // Use updateMany with status guard to prevent race-condition double-settle
+  const updateResult = await prisma.challenge.updateMany({
+    where: { id: challengeId, status: fromStatus },
     data: { status: ChallengeStatus.settled, aiModel: aiModelLabel },
   });
+
+  if (updateResult.count === 0) {
+    // Another process already moved the status — log and continue gracefully
+    await appendAuditLog({
+      action: AuditActions.CHALLENGE_STATUS,
+      actorUserId: payerUserId,
+      challengeId,
+      payload: {
+        event: "duplicate_settlement_skipped",
+        expectedStatus: fromStatus,
+        judgmentId: judgment.id,
+      },
+    });
+  }
 
   await appendAuditLog({
     action: AuditActions.JUDGMENT_COMPLETED,

@@ -185,6 +185,16 @@ export async function settleChallenge(
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   if (stake <= 0) return { success: true };
 
+  // Idempotency guard: if a win or refund CreditTx already exists for this
+  // challenge, settlement already happened — return success as a no-op.
+  const existingSettlement = await prisma.creditTx.findFirst({
+    where: { challengeId, type: { in: ["win", "refund"] } },
+    select: { id: true },
+  });
+  if (existingSettlement) {
+    return { success: true };
+  }
+
   // On-chain
   if (isOnChainEnabled()) {
     const winner = winnerId

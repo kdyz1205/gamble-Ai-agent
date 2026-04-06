@@ -11,7 +11,7 @@ export const maxDuration = 300;
  * GET/POST /api/cron/challenge-judgment
  *
  * Secured with Authorization: Bearer <CRON_SECRET>.
- * 1) Moves `live` / `matched` challenges past `deadline` into `judging`.
+ * 1) Moves `live` challenges past `deadline` into `judging`.
  * 2) Runs AI judgment for every `judging` challenge that has no completed judgment yet.
  *
  * Inference cost is charged to the challenge creator (same as manual POST /judge).
@@ -27,7 +27,7 @@ async function runCron() {
 
   const transitioned = await prisma.challenge.updateMany({
     where: {
-      status: { in: [ChallengeStatus.live, ChallengeStatus.matched] },
+      status: { in: [ChallengeStatus.live] },
       deadline: { not: null, lte: now },
     },
     data: { status: ChallengeStatus.judging },

@@ -17,6 +17,30 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
+/* ── Credits ── */
+
+export interface CreditsData {
+  credits: number;
+  available: number;
+  lockedInStake: number;
+  aiSpend: number;
+  stats: { won: number; lost: number; bought: number };
+  transactions: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    balanceAfter: number;
+    description: string | null;
+    createdAt: string;
+    challengeId: string | null;
+    x402TxHash: string | null;
+  }>;
+}
+
+export async function getCreditsBreakdown(): Promise<CreditsData> {
+  return apiFetch("/credits");
+}
+
 /* ── USAGE Tokens / Credits ── */
 
 export interface TierBalance {
@@ -387,6 +411,15 @@ export interface ActivityEventData {
 
 export async function getFeed(limit = 20): Promise<{ events: ActivityEventData[]; total: number }> {
   return apiFetch(`/feed?limit=${limit}`);
+}
+
+/* ── Location ── */
+
+export async function updateLocation(lat: number, lng: number): Promise<{ success: boolean }> {
+  return apiFetch("/me/location", {
+    method: "POST",
+    body: JSON.stringify({ lat, lng }),
+  });
 }
 
 /* ── Nearby ── */
