@@ -358,6 +358,22 @@ export async function parseChallenge(
   return res.json();
 }
 
+/* ── Draft Adjustment (AI-powered, free) ── */
+
+export async function adjustDraft(
+  instruction: string,
+  draft: { title: string; type: string; stake: number; deadline: string; rules: string; evidence: string; isPublic: boolean },
+): Promise<{
+  changes: Record<string, unknown>;
+  message: string;
+  credits?: number;
+}> {
+  return apiFetch("/challenges/adjust-draft", {
+    method: "POST",
+    body: JSON.stringify({ instruction, draft }),
+  });
+}
+
 /* ── Feed ── */
 
 export interface ActivityEventData {

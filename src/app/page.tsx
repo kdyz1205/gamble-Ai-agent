@@ -283,69 +283,51 @@ export default function Home() {
     }
   }, [pushMsg, answers, stepIdx, steps, aiReply, origInput]);
 
-  const handleFollowUp = useCallback((input: string) => {
-    // In drafting state, interpret input as draft modification
+  const handleFollowUp = useCallback(async (input: string) => {
+    // In drafting state, use AI to interpret any natural language adjustment
     if (appState === "drafting" && draft) {
       pushMsg("user", input);
-      const lower = input.toLowerCase();
+      setIsTyping(true);
 
-      // Stake adjustment: "change to 5", "lower stake to 3", "5 credits", "make it 2", "set stake 10"
-      const stakeMatch = lower.match(/(\d+)\s*(?:credit|token|coin)/i)
-        || lower.match(/(?:stake|bet|wager|lower|change|set|make\s*it)\s*(?:to\s+)?(\d+)/i)
-        || lower.match(/^(\d+)$/);
-      if (stakeMatch) {
-        const newStake = parseInt(stakeMatch[1]);
-        setDraft(prev => prev ? { ...prev, stake: Math.max(0, newStake) } : prev);
-        const credits = user?.credits ?? 0;
-        if (newStake > credits) {
-          aiReply(
-            `Stake updated to **${newStake} credits**, but you only have **${credits}**. Try a lower amount or top up.`,
-            [`${Math.floor(credits * 0.8)} credits`, `${Math.floor(credits * 0.5)} credits`, "Free — no stake", "Top up credits"],
-          );
-        } else {
-          aiReply(`Stake updated to **${newStake} credits**. Review the draft and publish when ready.`);
+      try {
+        const res = await api.adjustDraft(input, {
+          title: draft.title,
+          type: draft.type,
+          stake: draft.stake,
+          deadline: draft.deadline,
+          rules: draft.rules,
+          evidence: draft.evidence,
+          isPublic: draft.isPublic,
+        });
+
+        setIsTyping(false);
+        const { changes, message } = res;
+
+        if (changes && Object.keys(changes).length > 0) {
+          setDraft(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            if ("title" in changes && typeof changes.title === "string") updated.title = changes.title;
+            if ("type" in changes && typeof changes.type === "string") updated.type = changes.type;
+            if ("stake" in changes && typeof changes.stake === "number") updated.stake = Math.max(0, changes.stake);
+            if ("deadline" in changes && typeof changes.deadline === "string") updated.deadline = changes.deadline;
+            if ("rules" in changes && typeof changes.rules === "string") updated.rules = changes.rules;
+            if ("evidence" in changes && typeof changes.evidence === "string") updated.evidence = changes.evidence;
+            if ("isPublic" in changes && typeof changes.isPublic === "boolean") updated.isPublic = changes.isPublic;
+            return updated;
+          });
         }
-        return;
-      }
 
-      // Free / remove stake: "free", "no stake", "remove stake"
-      if (/\b(free|no\s*stake|remove\s*stake|zero|0\s*credit)\b/.test(lower)) {
-        setDraft(prev => prev ? { ...prev, stake: 0 } : prev);
-        aiReply("Stake removed — this is now a free challenge. Publish when ready.");
-        return;
+        pushMsg("ai", message);
+      } catch {
+        setIsTyping(false);
+        pushMsg("ai", "Could not process that adjustment. You can also edit the draft fields directly.");
       }
-
-      // Deadline adjustment
-      const deadlineMatch = lower.match(/(\d+)\s*(hour|min|day|week)/i);
-      if (deadlineMatch && /deadline|time|duration/.test(lower)) {
-        const newDeadline = `${deadlineMatch[1]} ${deadlineMatch[2]}s`;
-        setDraft(prev => prev ? { ...prev, deadline: newDeadline } : prev);
-        aiReply(`Deadline updated to **${newDeadline}**.`);
-        return;
-      }
-
-      // Evidence type change
-      if (/video/.test(lower) && /evidence|proof|change/.test(lower)) {
-        setDraft(prev => prev ? { ...prev, evidence: "Video proof" } : prev);
-        aiReply("Evidence type changed to **Video proof**.");
-        return;
-      }
-      if (/photo/.test(lower) && /evidence|proof|change/.test(lower)) {
-        setDraft(prev => prev ? { ...prev, evidence: "Photo evidence" } : prev);
-        aiReply("Evidence type changed to **Photo evidence**.");
-        return;
-      }
-
-      // Unrecognized — suggest common adjustments
-      aiReply(
-        "I can adjust your draft. Try something like:",
-        ["Lower stake to 5", "Make it free", "Change deadline to 1 hour", "Change to photo evidence"],
-      );
       return;
     }
 
     handleOptionSelect(input);
-  }, [handleOptionSelect, appState, draft, pushMsg, aiReply, user?.credits]);
+  }, [handleOptionSelect, appState, draft, pushMsg]);
 
   /* ── Publish ── */
   const handlePublish = useCallback(async (editedDraft?: ChallengeDraft) => {
@@ -357,21 +339,21 @@ export default function Home() {
     const finalDraft = editedDraft ?? draft;
     if (!finalDraft) return;
 
-    // Pre-flight balance check — offer adjustment options instead of dead-end
+    // Pre-flight balance check — offer adjustment options
     if (finalDraft.stake > 0) {
       const currentCredits = user.credits ?? 0;
       if (currentCredits < finalDraft.stake) {
-        const suggestions: string[] = [];
+        const opts: string[] = [];
         if (currentCredits > 0) {
           const safe = Math.floor(currentCredits * 0.8);
-          if (safe > 0) suggestions.push(`${safe} credits`);
-          if (currentCredits >= 2) suggestions.push(`${Math.floor(currentCredits / 2)} credits`);
+          if (safe > 0) opts.push(`Change stake to ${safe} credits`);
+          if (currentCredits >= 2) opts.push(`Change stake to ${Math.floor(currentCredits / 2)} credits`);
         }
-        suggestions.push("Free — no stake");
-        suggestions.push("Top up credits");
+        opts.push("Make it free");
+        opts.push("Top up credits");
         pushMsg("ai",
-          `Not enough credits — you need **${finalDraft.stake}** but have **${currentCredits}**. Adjust your stake or top up:`,
-          suggestions,
+          `Not enough credits — you need **${finalDraft.stake}** but have **${currentCredits}**. You can adjust below or tell me what you'd like:`,
+          opts,
         );
         return;
       }
