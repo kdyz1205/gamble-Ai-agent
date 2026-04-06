@@ -78,6 +78,7 @@ export default function Home() {
   const [copied, setCopied]              = useState(false);
 
   const [showAuth, setShowAuth]           = useState(false);
+  const [showProfile, setShowProfile]     = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setShowScanLine(true), 600);
@@ -213,7 +214,7 @@ export default function Home() {
   ) : null;
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ background: "#06060f" }}>
+    <div className="relative min-h-screen overflow-hidden" style={{ background: "#06060f" }} onClick={() => showProfile && setShowProfile(false)}>
 
       <ParticleBackground />
 
@@ -279,8 +280,13 @@ export default function Home() {
                   </motion.button>
 
                   {user ? (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle"
-                         style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <motion.button
+                      onClick={() => setShowProfile(!showProfile)}
+                      className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle cursor-pointer"
+                      style={{ background: "rgba(255,255,255,0.04)" }}
+                      whileHover={{ borderColor: "rgba(124,92,252,0.3)", background: "rgba(255,255,255,0.08)" }}
+                      whileTap={{ scale: 0.97 }}
+                    >
                       {user.image ? (
                         <img src={user.image} alt="" className="w-5 h-5 rounded-md" />
                       ) : (
@@ -291,7 +297,7 @@ export default function Home() {
                       )}
                       <span className="text-xs font-bold text-text-secondary">{user.username}</span>
                       {creditsBadge}
-                    </div>
+                    </motion.button>
                   ) : (
                     <motion.button
                       onClick={() => setShowAuth(true)}
@@ -488,27 +494,81 @@ export default function Home() {
       )}
       {!active && user && (
         <motion.div
-          className="fixed top-5 right-5 z-20 flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle"
-          style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
+          className="fixed top-5 right-5 z-20"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 0.3 } }}
         >
-          {user.image ? (
-            <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
-          ) : (
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
-                 style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
-              {user.username.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <span className="text-xs font-bold text-text-secondary">{user.username}</span>
-          {creditsBadge}
-          <button
-            onClick={() => { signOut(); reset(); }}
-            className="ml-1 text-[10px] text-text-muted hover:text-danger transition-colors"
+          <motion.button
+            onClick={() => setShowProfile(!showProfile)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle cursor-pointer"
+            style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
+            whileHover={{ borderColor: "rgba(124,92,252,0.3)", background: "rgba(10,10,24,0.95)" }}
+            whileTap={{ scale: 0.97 }}
           >
-            ×
-          </button>
+            {user.image ? (
+              <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
+            ) : (
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
+                   style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span className="text-xs font-bold text-text-secondary">{user.username}</span>
+            {creditsBadge}
+          </motion.button>
+
+          {/* Profile dropdown */}
+          <AnimatePresence>
+            {showProfile && (
+              <motion.div
+                className="absolute top-full right-0 mt-2 w-56 rounded-xl overflow-hidden"
+                style={{
+                  background: "rgba(13,13,30,0.97)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.5), 0 0 40px rgba(124,92,252,0.06)",
+                  backdropFilter: "blur(20px)",
+                }}
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="p-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white"
+                         style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                      {user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-text-primary">{user.username}</p>
+                      <p className="text-[10px] text-text-muted">{user.email || "Player"}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center justify-between px-2 py-2 rounded-lg"
+                       style={{ background: "rgba(0,232,122,0.06)" }}>
+                    <span className="text-xs font-bold text-text-secondary">Credits</span>
+                    <span className="text-sm font-black" style={{ color: "#00e87a" }}>{user.credits ?? 0}</span>
+                  </div>
+                </div>
+                <div className="p-2">
+                  <motion.button
+                    onClick={() => { setShowProfile(false); signOut(); reset(); }}
+                    whileHover={{ background: "rgba(255,71,87,0.1)" }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold text-text-muted hover:text-danger transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    Sign Out
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
     </div>
