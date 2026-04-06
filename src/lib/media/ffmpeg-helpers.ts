@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 /**
  * Optional local ffmpeg/ffprobe (bundled binaries). Used for video duration + frame grab.

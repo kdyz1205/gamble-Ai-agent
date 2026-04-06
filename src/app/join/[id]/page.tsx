@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 
@@ -70,7 +71,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "#06060f" }}>
         <p className="text-lg font-bold text-red-400">{error}</p>
-        <a href="/" className="text-sm text-text-secondary underline">Create your own challenge</a>
+        <Link href="/" className="text-sm text-text-secondary underline">Create your own challenge</Link>
       </div>
     );
   }

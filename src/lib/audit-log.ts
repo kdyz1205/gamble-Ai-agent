@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db";

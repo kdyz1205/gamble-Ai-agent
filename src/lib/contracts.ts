@@ -119,7 +119,7 @@ export async function burnForInference(
   userAddress: Address,
   modelId: TierId,
   action: string,
-  challengeId?: string,
+  _challengeId?: string,
 ): Promise<{ txHash: Hash; requestId: string }> {
   const wallet = getServerWallet();
   const requestId = keccak256(toHex(`${userAddress}-${modelId}-${action}-${Date.now()}-${Math.random()}`));

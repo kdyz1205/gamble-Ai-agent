@@ -72,7 +72,7 @@ export default function Home() {
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
   const [showScanLine, setShowScanLine]   = useState(false);
   const [published, setPublished]         = useState(false);
-  const [challengeId, setChallengeId]     = useState<string | null>(null);
+  const [_challengeId, setChallengeId]     = useState<string | null>(null);
   const [shareLink, setShareLink]         = useState<string | null>(null);
   const [copied, setCopied]              = useState(false);
 

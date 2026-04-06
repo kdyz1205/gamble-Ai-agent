@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import type { PrismaClient } from "@/generated/prisma/client";
 import { ChallengeStatus } from "@/lib/enums";

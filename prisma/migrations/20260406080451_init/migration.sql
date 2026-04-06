@@ -94,6 +94,9 @@ CREATE TABLE "Challenge" (
     "maxParticipants" INTEGER NOT NULL DEFAULT 2,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "discoveryLat" DOUBLE PRECISION,
+    "discoveryLng" DOUBLE PRECISION,
+    "discoveryCapturedAt" TIMESTAMP(3),
 
     CONSTRAINT "Challenge_pkey" PRIMARY KEY ("id")
 );
@@ -141,6 +144,41 @@ CREATE TABLE "Judgment" (
 );
 
 -- CreateTable
+CREATE TABLE "JudgeJob" (
+    "id" TEXT NOT NULL,
+    "challengeId" TEXT NOT NULL,
+    "requestedByUserId" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "tierId" INTEGER NOT NULL DEFAULT 1,
+    "providerId" TEXT,
+    "model" TEXT,
+    "webhookUrl" TEXT,
+    "error" TEXT,
+    "resultJson" TEXT,
+    "judgmentId" TEXT,
+    "creditsUsed" INTEGER,
+    "creditsRemaining" INTEGER,
+    "txHash" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "JudgeJob_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "actorUserId" TEXT,
+    "targetUserId" TEXT,
+    "challengeId" TEXT,
+    "payload" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ActivityEvent" (
     "id" TEXT NOT NULL,
     "type" TEXT NOT NULL,
@@ -177,6 +215,18 @@ CREATE UNIQUE INDEX "User_evmAddress_key" ON "User"("evmAddress");
 -- CreateIndex
 CREATE UNIQUE INDEX "Participant_challengeId_userId_key" ON "Participant"("challengeId", "userId");
 
+-- CreateIndex
+CREATE INDEX "JudgeJob_challengeId_status_idx" ON "JudgeJob"("challengeId", "status");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_challengeId_idx" ON "AuditLog"("challengeId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_actorUserId_idx" ON "AuditLog"("actorUserId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+
 -- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -212,6 +262,24 @@ ALTER TABLE "Judgment" ADD CONSTRAINT "Judgment_judgeId_fkey" FOREIGN KEY ("judg
 
 -- AddForeignKey
 ALTER TABLE "Judgment" ADD CONSTRAINT "Judgment_winnerId_fkey" FOREIGN KEY ("winnerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "JudgeJob" ADD CONSTRAINT "JudgeJob_challengeId_fkey" FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "JudgeJob" ADD CONSTRAINT "JudgeJob_requestedByUserId_fkey" FOREIGN KEY ("requestedByUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "JudgeJob" ADD CONSTRAINT "JudgeJob_judgmentId_fkey" FOREIGN KEY ("judgmentId") REFERENCES "Judgment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_targetUserId_fkey" FOREIGN KEY ("targetUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_challengeId_fkey" FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ActivityEvent" ADD CONSTRAINT "ActivityEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

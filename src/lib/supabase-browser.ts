@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
