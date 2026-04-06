@@ -14,85 +14,46 @@ import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 
 /* ═══════════════════════════════════════════════════
-   AI CONVERSATION ENGINE
+   INSTANT DRAFT ENGINE — no Q&A, straight to draft
    ═══════════════════════════════════════════════════ */
 
-type AppState = "idle" | "clarifying" | "drafting" | "live";
+type AppState = "idle" | "drafting" | "live";
 
-interface ConvoStep { aiMessage: string; options?: string[]; }
-
-function parseIntent(input: string): ConvoStep[] {
-  const s = input.toLowerCase();
-
-  let type = "General";
-  if (/pushup|run|fitness|exercise|plank|squat|gym|workout/.test(s)) type = "Fitness";
-  else if (/cook|bake|food|pasta|recipe|dish/.test(s))                 type = "Cooking";
-  else if (/code|coding|program|leetcode|dev|developer/.test(s))       type = "Coding";
-  else if (/read|book|study|learn|exam|test|quiz/.test(s))             type = "Learning";
-  else if (/chess|game|play|match|tournament/.test(s))                 type = "Games";
-
-  const hasMoney    = /\$\d+|money|stake|bet|wager|dollar/.test(s);
-  const hasOpponent = /friend|someone|opponent|buddy|\bvs\b|and\s+\w+/.test(s);
-
-  return [
-    {
-      aiMessage: `Got it — a **${type}** challenge. ${hasOpponent ? "Sounds like you have someone in mind." : "Let's set you up."}\n\nWho's your opponent?`,
-      options: hasOpponent
-        ? ["A specific friend", "Anyone nearby", "Open to public"]
-        : ["Invite a friend", "Anyone nearby", "Open to public"],
-    },
-    {
-      aiMessage: hasMoney
-        ? "You mentioned a wager. How many credits do you want to stake?"
-        : "Would you like to stake some credits, or keep it free?",
-      options: hasMoney
-        ? ["5 credits", "10 credits", "20 credits", "Custom amount"]
-        : ["Free — just for fun", "5 credits", "10 credits", "20 credits"],
-    },
-    {
-      aiMessage: "How should we verify the result?",
-      options: ["Video proof", "Photo evidence", "GPS tracking", "Self-report"],
-    },
-  ];
-}
-
-function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
+function instantDraft(userInput: string): ChallengeDraft {
   const s = userInput.toLowerCase();
 
   let type = "General";
-  if (/pushup|run|fitness|exercise/.test(s)) type = "Fitness";
-  else if (/cook|pasta|bake/.test(s))         type = "Cooking";
-  else if (/code|coding|program/.test(s))     type = "Coding";
-  else if (/book|read|study|exam/.test(s))    type = "Learning";
-  else if (/chess|game|play/.test(s))         type = "Games";
+  if (/pushup|run|fitness|exercise|plank|squat|gym|workout|mile|km|walk|jog/.test(s)) type = "Fitness";
+  else if (/cook|bake|food|pasta|recipe|dish|meal/.test(s))   type = "Cooking";
+  else if (/code|coding|program|leetcode|dev|hack/.test(s))   type = "Coding";
+  else if (/read|book|study|learn|exam|test|quiz/.test(s))    type = "Learning";
+  else if (/chess|game|play|match|tournament|bet|赌|比/.test(s)) type = "Games";
 
+  // Extract credits from input like "10 credits", "$10", "10c"
   let stake = 0;
-  for (const a of answers) {
-    const m = a.match(/(\d+)\s*credit/i);
-    if (m) { stake = parseInt(m[1]); break; }
-    const dollars = a.match(/\$(\d+)/);
-    if (dollars) { stake = parseInt(dollars[1]); break; }
-  }
+  const creditMatch = s.match(/(\d+)\s*credit/i);
+  const dollarMatch = s.match(/\$(\d+)/);
+  if (creditMatch) stake = parseInt(creditMatch[1]);
+  else if (dollarMatch) stake = parseInt(dollarMatch[1]);
 
+  // Smart evidence detection
   let evidence = "Self-report";
-  for (const a of answers) {
-    if (/video/.test(a.toLowerCase()))  { evidence = "Video proof";   break; }
-    if (/photo/.test(a.toLowerCase()))  { evidence = "Photo evidence"; break; }
-    if (/gps/.test(a.toLowerCase()))    { evidence = "GPS tracking";   break; }
-  }
+  if (/video|录像|拍/.test(s))       evidence = "Video proof";
+  else if (/photo|照片|pic/.test(s)) evidence = "Photo evidence";
+  else if (/gps|location|跑/.test(s)) evidence = "GPS tracking";
+  else if (type === "Fitness")        evidence = "Video proof";
 
-  const isPublic = answers.some(a => /public|nearby/.test(a.toLowerCase()));
   let title = userInput.charAt(0).toUpperCase() + userInput.slice(1);
   if (title.length > 64) title = title.slice(0, 61) + "…";
 
   return {
     title,
     playerA: "You",
-    playerB: answers[0]?.toLowerCase().includes("friend") ? "Friend (invite sent)" : null,
+    playerB: null,
     type, stake,
-    deadline: "48 hours",
-    rules: `Standard ${type.toLowerCase()} rules — AI reviewed`,
-    evidence, aiReview: true, isPublic,
+    deadline: "24 hours",
+    rules: `${type} challenge — AI judges the result`,
+    evidence, aiReview: true, isPublic: false,
   };
 }
 
@@ -107,14 +68,12 @@ export default function Home() {
   const [appState, setAppState]           = useState<AppState>("idle");
   const [messages, setMessages]           = useState<Message[]>([]);
   const [isTyping, setIsTyping]           = useState(false);
-  const [steps, setSteps]                 = useState<ConvoStep[]>([]);
-  const [stepIdx, setStepIdx]             = useState(0);
-  const [answers, setAnswers]             = useState<string[]>([]);
-  const [origInput, setOrigInput]         = useState("");
   const [draft, setDraft]                 = useState<ChallengeDraft | null>(null);
   const [published, setPublished]         = useState(false);
   const [showScanLine, setShowScanLine]   = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
+  const [shareLink, setShareLink]         = useState<string | null>(null);
+  const [copied, setCopied]              = useState(false);
 
   const [showAuth, setShowAuth]           = useState(false);
 
@@ -135,61 +94,44 @@ export default function Home() {
     setTimeout(() => { setIsTyping(false); pushMsg("ai", content, options); }, delay);
   }, [pushMsg]);
 
-  /* ── First submit ── */
-  const handleInitialSubmit = useCallback(async (input: string) => {
-    setOrigInput(input);
+  /* ── Submit → instant draft (no Q&A) ── */
+  const handleInitialSubmit = useCallback((input: string) => {
     pushMsg("user", input);
-    setAppState("clarifying");
+    setIsTyping(true);
+    setTimeout(() => {
+      setIsTyping(false);
+      const d = instantDraft(input);
+      setDraft(d);
+      pushMsg("ai", `**${d.type}** challenge ready — ${d.stake > 0 ? `${d.stake} credits` : "free"} — ${d.evidence}. Hit **Publish** to get a share link, or edit below.`);
+      setAppState("drafting");
+    }, 600);
+  }, [pushMsg]);
 
-    if (user) {
-      try {
-        setIsTyping(true);
-        const res = await api.parseChallenge(input);
-        setIsTyping(false);
-
-        const apiSteps: ConvoStep[] = res.clarifications.map(c => ({
-          aiMessage: c.question,
-          options: c.options,
-        }));
-        setSteps(apiSteps);
-        setStepIdx(0);
-        pushMsg("ai", apiSteps[0].aiMessage, apiSteps[0].options);
-        return;
-      } catch {
-        setIsTyping(false);
-      }
-    }
-
-    const s = parseIntent(input);
-    setSteps(s);
-    setStepIdx(0);
-    aiReply(s[0].aiMessage, s[0].options);
-  }, [pushMsg, aiReply, user]);
-
-  /* ── Option / follow-up ── */
-  const handleOptionSelect = useCallback((opt: string) => {
-    pushMsg("user", opt);
-    const next = [...answers, opt];
-    setAnswers(next);
-    const nextIdx = stepIdx + 1;
-
-    if (nextIdx < steps.length) {
-      setStepIdx(nextIdx);
-      aiReply(steps[nextIdx].aiMessage, steps[nextIdx].options);
-    } else {
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        pushMsg("ai", "I've structured your challenge. Review the draft below and publish when you're ready.");
-        setDraft(buildDraft(origInput, next));
-        setAppState("drafting");
-      }, 1400);
-    }
-  }, [pushMsg, answers, stepIdx, steps, aiReply, origInput]);
-
+  /* ── Follow-up in draft mode (edit via text) ── */
   const handleFollowUp = useCallback((input: string) => {
-    handleOptionSelect(input);
-  }, [handleOptionSelect]);
+    pushMsg("user", input);
+    if (!draft) return;
+    const s = input.toLowerCase();
+    const updated = { ...draft };
+
+    // Parse inline edits
+    const creditMatch = s.match(/(\d+)\s*credit/i);
+    const dollarMatch = s.match(/\$(\d+)/);
+    if (creditMatch) updated.stake = parseInt(creditMatch[1]);
+    else if (dollarMatch) updated.stake = parseInt(dollarMatch[1]);
+    if (/free|免费|no.?stake/.test(s)) updated.stake = 0;
+    if (/video|录像/.test(s)) updated.evidence = "Video proof";
+    if (/photo|照片/.test(s)) updated.evidence = "Photo evidence";
+    if (/gps/.test(s)) updated.evidence = "GPS tracking";
+    if (/self.?report|自己报/.test(s)) updated.evidence = "Self-report";
+    if (/1.?hour|1小时/.test(s)) updated.deadline = "1 hour";
+    if (/24.?h|一天/.test(s)) updated.deadline = "24 hours";
+    if (/48.?h|两天/.test(s)) updated.deadline = "48 hours";
+    if (/1.?week|一周/.test(s)) updated.deadline = "1 week";
+
+    setDraft(updated);
+    aiReply(`Updated — ${updated.stake > 0 ? `${updated.stake} credits` : "free"}, ${updated.evidence}, deadline ${updated.deadline}. Publish when ready.`);
+  }, [pushMsg, aiReply, draft]);
 
   /* ── Publish ── */
   const handlePublish = useCallback(async () => {
@@ -211,7 +153,9 @@ export default function Home() {
           aiReview: draft.aiReview,
           isPublic: draft.isPublic,
         });
-        setChallengeId(res.challenge.id);
+        const id = res.challenge.id;
+        setChallengeId(id);
+        setShareLink(`${window.location.origin}/join/${id}`);
         setIsTyping(false);
       } catch (err) {
         setIsTyping(false);
@@ -223,26 +167,31 @@ export default function Home() {
     setPublished(true);
     setAppState("live");
     aiReply(
-      "Your challenge is now **LIVE** and saved to the database. I'm scanning for opponents. I'll notify you the moment someone accepts.",
-      ["View Live Activity", "Challenge Another"],
-      1200,
+      "Challenge is **LIVE**! Copy the link below and send it to your friend — they can join in one click.",
+      undefined,
+      600,
     );
   }, [aiReply, draft, user, pushMsg]);
 
+  /* ── Copy share link ── */
+  const copyShareLink = useCallback(() => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [shareLink]);
+
   /* ── Edit ── */
   const handleEdit = useCallback(() => {
-    setDraft(null);
-    setAppState("clarifying");
-    aiReply("Sure — what would you like to change?", [
-      "Change stake amount", "Change deadline", "Change evidence type", "Change opponent",
-    ], 700);
+    aiReply("Type what you want to change — e.g. \"10 credits\" or \"video proof\" or \"1 hour deadline\"", undefined, 400);
   }, [aiReply]);
 
   /* ── Reset ── */
   const reset = useCallback(() => {
     setAppState("idle");
-    setMessages([]); setSteps([]); setStepIdx(0);
-    setAnswers([]); setOrigInput(""); setDraft(null); setPublished(false);
+    setMessages([]); setDraft(null); setPublished(false);
+    setChallengeId(null); setShareLink(null); setCopied(false);
   }, []);
 
   const active = appState !== "idle";
@@ -389,7 +338,7 @@ export default function Home() {
               <ConversationThread
                 messages={messages}
                 isTyping={isTyping}
-                onOptionSelect={handleOptionSelect}
+                onOptionSelect={() => {}}
               />
             </motion.div>
           )}
@@ -410,6 +359,7 @@ export default function Home() {
           )}
         </AnimatePresence>
 
+        {/* Published — share link card */}
         <AnimatePresence>
           {published && appState === "live" && draft && (
             <motion.div
@@ -428,70 +378,67 @@ export default function Home() {
                   boxShadow: "0 0 30px rgba(0,232,122,0.06)",
                 }}
               >
-                <div className="flex items-start gap-4">
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                        style={{ background: "rgba(0,232,122,0.12)" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                     <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-base font-extrabold text-text-primary mb-1">Challenge Published!</h3>
-                    <p className="text-sm text-text-secondary mb-3">Scanning for opponents — you&rsquo;ll be notified when someone accepts.</p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {[draft.type, draft.stake > 0 ? `${draft.stake} credits` : "Free", draft.evidence].map(tag => (
-                        <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-bold"
-                              style={{ background: "rgba(255,255,255,0.06)", color: "rgba(240,240,255,0.7)" }}>
-                          {tag}
-                        </span>
-                      ))}
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
-                            style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a" }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                        Live
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                  <div>
+                    <h3 className="text-base font-extrabold text-text-primary">Challenge Live!</h3>
+                    <p className="text-xs text-text-secondary">Send the link to your friend</p>
+                  </div>
+                  <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
+                        style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a" }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    Live
+                  </span>
+                </div>
+
+                {/* Share link — the key UX */}
+                {shareLink && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 rounded-xl overflow-hidden"
+                         style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <input
+                        type="text"
+                        readOnly
+                        value={shareLink}
+                        className="flex-1 bg-transparent px-4 py-3 text-sm text-text-primary font-mono focus:outline-none truncate"
+                      />
                       <motion.button
-                        whileHover={{ scale: 1.03, y: -1 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white"
-                        style={{
-                          background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                          boxShadow: "0 4px 20px rgba(124,92,252,0.35)",
-                        }}
-                        onClick={async () => {
-                          if (!user) { setShowAuth(true); return; }
-                          if (challengeId) {
-                            try {
-                              await api.acceptChallenge(challengeId);
-                              pushMsg("ai", "Challenge accepted! You're now locked in. Submit your evidence when ready.");
-                            } catch (err) {
-                              pushMsg("ai", `${err instanceof Error ? err.message : "Could not accept"} — this may be your own challenge. Share the link to invite an opponent!`);
-                            }
-                          } else {
-                            pushMsg("ai", "Challenge confirmed! Share the link to invite an opponent.");
-                          }
-                        }}
+                        onClick={copyShareLink}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex-shrink-0 px-4 py-3 text-sm font-extrabold text-white"
+                        style={{ background: copied ? "rgba(0,232,122,0.3)" : "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Accept Challenge
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="px-4 py-2.5 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
-                        style={{ background: "rgba(255,255,255,0.04)" }}
-                        onClick={() => pushMsg("ai", "Share link copied! Send it to your opponent so they can join the challenge.")}
-                      >
-                        Share Link
+                        {copied ? "Copied!" : "Copy"}
                       </motion.button>
                     </div>
                   </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {[draft.type, draft.stake > 0 ? `${draft.stake} credits` : "Free", draft.evidence].map(tag => (
+                    <span key={tag} className="px-2.5 py-1 rounded-lg text-xs font-bold"
+                          style={{ background: "rgba(255,255,255,0.06)", color: "rgba(240,240,255,0.7)" }}>
+                      {tag}
+                    </span>
+                  ))}
                 </div>
+
+                <motion.button
+                  onClick={reset}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full py-3 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
+                  style={{ background: "rgba(255,255,255,0.04)" }}
+                >
+                  Create Another Challenge
+                </motion.button>
               </div>
             </motion.div>
           )}
