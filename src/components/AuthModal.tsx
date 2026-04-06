@@ -53,20 +53,23 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
     }
   };
 
-  const inputClass = "w-full px-4 py-3 rounded-xl text-sm font-medium text-text-primary placeholder:text-text-muted input-premium border border-border-subtle focus:border-accent focus:outline-none";
+  const inputClass =
+    "w-full px-4 py-3 rounded-md text-sm font-mono tracking-wide bg-[#111113] text-[#E5E0D8] placeholder:text-[#8b8b83] border border-[#D4AF37]/20 focus:border-[#D4AF37]/60 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]/30 transition-colors";
 
   return (
     <AnimatePresence>
       {open && (
         <>
+          {/* Backdrop */}
           <motion.div
             className="fixed inset-0 z-50"
-            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)" }}
+            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(10px)" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
+
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
@@ -74,59 +77,75 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-sm rounded-2xl overflow-hidden"
+              className="w-full max-w-sm rounded-lg overflow-hidden relative"
               style={{
-                background: "rgba(13,13,30,0.97)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 60px rgba(124,92,252,0.08)",
+                background: "#0A0A0B",
+                border: "1px solid rgba(212,175,55,0.18)",
+                boxShadow:
+                  "0 24px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06), inset 0 1px 0 rgba(212,175,55,0.08)",
               }}
               initial={{ scale: 0.92, y: 24, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.92, y: 24, opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              {/* Gradient top accent */}
-              <div className="h-0.5" style={{ background: "linear-gradient(90deg, #7c5cfc, #00d4c8, #7c5cfc)", backgroundSize: "200% 100%", animation: "gradient-drift 4s linear infinite" }} />
+              {/* Gold gradient top accent */}
+              <div
+                className="h-[2px]"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, #D4AF37, #C5993A, #D4AF37, transparent)",
+                }}
+              />
 
               <div className="p-6">
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
                     <motion.div
-                      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl"
-                      style={{ background: "rgba(13,13,30,0.98)" }}
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg"
+                      style={{ background: "rgba(10,10,11,0.98)" }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                     >
                       <motion.div
-                        className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-                        style={{ background: "rgba(0,232,122,0.15)" }}
+                        className="w-16 h-16 rounded-lg flex items-center justify-center mb-4"
+                        style={{
+                          background: "rgba(212,175,55,0.1)",
+                          border: "1px solid rgba(212,175,55,0.25)",
+                        }}
                         initial={{ scale: 0, rotate: -45 }}
                         animate={{ scale: 1, rotate: 0 }}
                         transition={{ type: "spring", damping: 15, stiffness: 200 }}
                       >
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
+                        <span className="text-3xl">&#9878;</span>
                       </motion.div>
-                      <p className="text-sm font-bold text-success">Welcome to ChallengeAI!</p>
+                      <p className="text-sm font-serif font-bold text-[#D4AF37]">
+                        The Tribunal recognizes you.
+                      </p>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Header with crossfade */}
+                {/* Header */}
                 <div className="text-center mb-6">
                   <motion.div
-                    className="inline-flex w-12 h-12 rounded-xl items-center justify-center mb-3 relative"
-                    style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 24px rgba(124,92,252,0.3)" }}
+                    className="inline-flex w-14 h-14 rounded-lg items-center justify-center mb-3 relative"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse at center, rgba(212,175,55,0.12) 0%, rgba(10,10,11,0.9) 70%)",
+                      border: "1px solid rgba(212,175,55,0.25)",
+                      boxShadow: "0 0 20px rgba(212,175,55,0.1)",
+                    }}
                     whileHover={{ scale: 1.05 }}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                    </svg>
+                    <span className="text-2xl" style={{ color: "#D4AF37" }}>
+                      &#9878;
+                    </span>
                   </motion.div>
+
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={mode}
@@ -135,11 +154,15 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <h2 className="text-lg font-extrabold text-text-primary">
-                        {mode === "register" ? "Create Account" : "Welcome Back"}
+                      <h2 className="text-lg font-serif font-bold text-[#E5E0D8] tracking-wide">
+                        {mode === "register"
+                          ? "Enter the Tribunal"
+                          : "Return to the Tribunal"}
                       </h2>
-                      <p className="text-xs text-text-muted mt-1">
-                        {mode === "register" ? "Join ChallengeAI — 10 seconds to start" : "Sign in to continue"}
+                      <p className="text-xs font-mono text-[#8b8b83] mt-1.5 tracking-wider uppercase">
+                        {mode === "register"
+                          ? "Lex Divina awaits your challenge"
+                          : "Your seat at the bench remains"}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -149,40 +172,70 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
-                  whileHover={{ scale: 1.02, borderColor: "rgba(124,92,252,0.3)", background: "rgba(255,255,255,0.09)" }}
+                  whileHover={{
+                    scale: 1.02,
+                    borderColor: "rgba(212,175,55,0.4)",
+                    background: "rgba(212,175,55,0.06)",
+                  }}
                   whileTap={{ scale: 0.97 }}
-                  className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-bold text-white mb-4 transition-colors"
+                  className="w-full flex items-center justify-center gap-3 py-3 rounded-md text-sm font-mono font-bold text-[#E5E0D8] mb-4 transition-colors"
                   style={{
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(212,175,55,0.15)",
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    <path
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      fill="#EA4335"
+                    />
                   </svg>
                   Continue with Google
                 </motion.button>
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">or</span>
-                  <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                  <div
+                    className="flex-1 h-px"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)",
+                    }}
+                  />
+                  <span className="text-[10px] font-mono font-bold text-[#8b8b83] uppercase tracking-widest">
+                    or
+                  </span>
+                  <div
+                    className="flex-1 h-px"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)",
+                    }}
+                  />
                 </div>
 
-                {/* Error with shake */}
+                {/* Error */}
                 <AnimatePresence>
                   {error && (
                     <motion.div
-                      className="animate-error-shake mb-4 px-3 py-2.5 rounded-xl text-xs font-bold"
+                      className="animate-error-shake mb-4 px-3 py-2.5 rounded-md text-xs font-mono font-bold"
                       style={{
-                        background: "rgba(255,71,87,0.1)",
-                        color: "#ff4757",
-                        border: "1px solid rgba(255,71,87,0.2)",
-                        borderLeft: "3px solid #ff4757",
+                        background: "rgba(163,31,52,0.1)",
+                        color: "#A31F34",
+                        border: "1px solid rgba(163,31,52,0.2)",
+                        borderLeft: "3px solid #A31F34",
                       }}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -193,15 +246,22 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                   )}
                 </AnimatePresence>
 
+                {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-3">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="Email"
-                    required
-                    className={inputClass}
-                  />
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="advocate@tribunal.law"
+                      required
+                      className={inputClass}
+                    />
+                  </div>
+
                   {/* Username field with expand/collapse animation */}
                   <AnimatePresence>
                     {mode === "register" && (
@@ -212,59 +272,92 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                         className="overflow-hidden"
                       >
-                        <input
-                          type="text"
-                          value={username}
-                          onChange={e => setUsername(e.target.value)}
-                          placeholder="Username"
-                          required
-                          className={inputClass}
-                        />
+                        <div>
+                          <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
+                            Title
+                          </label>
+                          <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="Your chosen name"
+                            required
+                            className={inputClass}
+                          />
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Password"
-                    required
-                    minLength={6}
-                    className={inputClass}
-                  />
+
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
+                      Passphrase
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Your sealed word"
+                      required
+                      minLength={6}
+                      className={inputClass}
+                    />
+                  </div>
 
                   <motion.button
                     type="submit"
                     disabled={loading}
-                    whileHover={!loading ? { scale: 1.02, boxShadow: "0 6px 28px rgba(124,92,252,0.4)" } : {}}
+                    whileHover={
+                      !loading
+                        ? {
+                            scale: 1.02,
+                            boxShadow:
+                              "0 6px 28px rgba(212,175,55,0.25), inset 0 1px 0 rgba(212,175,55,0.2)",
+                          }
+                        : {}
+                    }
                     whileTap={!loading ? { scale: 0.97 } : {}}
-                    className="shimmer-btn w-full py-3.5 rounded-xl text-sm font-extrabold text-white disabled:opacity-60 transition-shadow"
+                    className="w-full py-3.5 rounded-md text-sm font-serif font-bold text-[#0A0A0B] disabled:opacity-60 transition-shadow tracking-wide"
                     style={{
-                      background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                      boxShadow: "0 4px 20px rgba(124,92,252,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
+                      background:
+                        "linear-gradient(135deg, #D4AF37, #B8963A, #D4AF37)",
+                      boxShadow:
+                        "0 4px 20px rgba(212,175,55,0.2), inset 0 1px 0 rgba(255,255,255,0.15)",
                     }}
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
                         <motion.span
-                          className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block"
+                          className="w-4 h-4 border-2 border-[#0A0A0B]/30 border-t-[#0A0A0B] rounded-full inline-block"
                           animate={{ rotate: 360 }}
-                          transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                          transition={{
+                            duration: 0.8,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
                         />
-                        {mode === "register" ? "Creating..." : "Signing in..."}
+                        {mode === "register" ? "Sealing..." : "Entering..."}
                       </span>
+                    ) : mode === "register" ? (
+                      "Seal Your Oath"
                     ) : (
-                      mode === "register" ? "Create Account" : "Sign In"
+                      "Enter"
                     )}
                   </motion.button>
                 </form>
 
-                <div className="mt-4 text-center">
+                {/* Toggle mode */}
+                <div className="mt-5 text-center">
                   <button
-                    onClick={() => { setMode(mode === "register" ? "login" : "register"); setError(""); }}
-                    className="text-xs font-medium text-text-muted hover:text-accent transition-colors"
+                    onClick={() => {
+                      setMode(mode === "register" ? "login" : "register");
+                      setError("");
+                    }}
+                    className="text-xs font-mono text-[#8b8b83] hover:text-[#D4AF37] transition-colors tracking-wide"
                   >
-                    {mode === "register" ? "Already have an account? Sign in" : "Don't have an account? Register"}
+                    {mode === "register"
+                      ? "Already sworn in? Return to the Tribunal"
+                      : "No oath yet? Enter the Tribunal"}
                   </button>
                 </div>
               </div>

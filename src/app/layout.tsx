@@ -4,9 +4,9 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ChallengeAI — AI-Powered Challenge Platform",
+  title: "Lex Divina — AI Oracle Tribunal",
   description:
-    "Describe a challenge. AI structures rules, finds opponents, and judges results. Stake credits, submit evidence, let the AI decide.",
+    "Sacred contracts. AI judgment. Divine settlement. Challenge anyone, stake your credits, let the Oracle decide.",
 };
 
 export const viewport: Viewport = {
@@ -14,7 +14,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#06060f",
+  themeColor: "#0A0A0B",
   colorScheme: "dark",
 };
 
@@ -46,11 +46,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased" style={{ background: "#06060f" }}>
+      <body className="min-h-screen antialiased" style={{ background: "#0A0A0B" }}>
         <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
       </body>
     </html>

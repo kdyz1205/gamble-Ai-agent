@@ -1,59 +1,61 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
-   DESIGN SYSTEM — ChallengeAI · Quantum Arena
-   Premium dark-mode with energy field aesthetics
+   DESIGN SYSTEM — Lex Divina · Cyber-Gothic Oracle Tribunal
+   Bronze vault aesthetic with mechanical precision
    ═══════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Backgrounds ── */
-  --color-bg-void:    #06060f;
-  --color-bg-primary: #0a0a18;
-  --color-bg-surface: #0f0f1e;
-  --color-bg-card:    #131326;
-  --color-bg-raised:  #181830;
-  --color-bg-input:   #1a1a35;
-  --color-bg-hover:   #1f1f3d;
+  /* ── Backgrounds — Obsidian & Titanium ── */
+  --color-bg-void:    #0A0A0B;
+  --color-bg-primary: #0B0B0A;
+  --color-bg-surface: #111110;
+  --color-bg-card:    #16160F;
+  --color-bg-raised:  #1C1C14;
+  --color-bg-input:   #1A1A12;
+  --color-bg-hover:   #22221A;
 
-  /* ── Borders ── */
-  --color-border-subtle: rgba(255,255,255,0.06);
-  --color-border-mid:    rgba(255,255,255,0.10);
-  --color-border-bright: rgba(255,255,255,0.18);
-  --color-border-focus:  rgba(124,92,252,0.8);
+  /* ── Borders — Laser-etched precision ── */
+  --color-border-subtle: rgba(212,175,55,0.08);
+  --color-border-mid:    rgba(212,175,55,0.15);
+  --color-border-bright: rgba(212,175,55,0.25);
+  --color-border-focus:  rgba(212,175,55,0.6);
 
-  /* ── Accent — Electric Violet ── */
-  --color-accent:         #7c5cfc;
-  --color-accent-light:   rgba(124,92,252,0.15);
-  --color-accent-dim:     rgba(124,92,252,0.08);
-  --color-accent-dark:    #5b3fd9;
-  --color-accent-glow:    rgba(124,92,252,0.4);
-  --color-accent-plasma:  rgba(124,92,252,0.6);
+  /* ── Accent — Antique Gold ── */
+  --color-accent:         #D4AF37;
+  --color-accent-light:   rgba(212,175,55,0.15);
+  --color-accent-dim:     rgba(212,175,55,0.08);
+  --color-accent-dark:    #A38829;
+  --color-accent-glow:    rgba(212,175,55,0.3);
+  --color-accent-plasma:  rgba(212,175,55,0.5);
 
-  /* ── Cyan / Teal ── */
-  --color-teal:           #00d4c8;
-  --color-teal-light:     rgba(0,212,200,0.15);
-  --color-teal-dim:       rgba(0,212,200,0.08);
-  --color-teal-glow:      rgba(0,212,200,0.35);
+  /* ── Oracle Blue — Deep Sea ── */
+  --color-teal:           #005F6F;
+  --color-teal-light:     rgba(0,95,111,0.15);
+  --color-teal-dim:       rgba(0,95,111,0.08);
+  --color-teal-glow:      rgba(0,95,111,0.3);
 
-  /* ── Gold / Amber ── */
-  --color-gold:           #f5a623;
-  --color-gold-light:     rgba(245,166,35,0.15);
-  --color-gold-dim:       rgba(245,166,35,0.08);
+  /* ── Bronze Green — Victory ── */
+  --color-gold:           #639A67;
+  --color-gold-light:     rgba(99,154,103,0.15);
+  --color-gold-dim:       rgba(99,154,103,0.08);
 
   /* ── Status ── */
-  --color-success:        #00e87a;
-  --color-success-light:  rgba(0,232,122,0.12);
-  --color-danger:         #ff4757;
-  --color-danger-light:   rgba(255,71,87,0.12);
+  --color-success:        #639A67;
+  --color-success-light:  rgba(99,154,103,0.12);
+  --color-danger:         #A31F34;
+  --color-danger-light:   rgba(163,31,52,0.12);
 
-  /* ── Text ── */
-  --color-text-primary:   #f0f0ff;
-  --color-text-secondary: rgba(240,240,255,0.60);
-  --color-text-tertiary:  rgba(240,240,255,0.35);
-  --color-text-muted:     rgba(240,240,255,0.20);
+  /* ── Text — Parchment & Linen ── */
+  --color-text-primary:   #E5E0D8;
+  --color-text-secondary: rgba(229,224,216,0.60);
+  --color-text-tertiary:  rgba(229,224,216,0.35);
+  --color-text-muted:     rgba(229,224,216,0.20);
 
-  /* ── Font ── */
+  /* ── Fonts — Heritage serif + precision mono ── */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Cormorant Garamond", "Playfair Display", "Georgia", serif;
+  --font-mono: "Space Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ═══════════════════════════════════════════════════
