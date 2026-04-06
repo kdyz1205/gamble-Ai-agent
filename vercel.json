@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:vercel",
+  "buildCommand": "prisma generate && next build",
   "crons": [
     {
       "path": "/api/cron/challenge-judgment",
