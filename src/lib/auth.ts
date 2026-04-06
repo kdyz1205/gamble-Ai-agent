@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "./auth-options";
-import { MODEL_TIERS, type TierId, tierById } from "./contracts";
+import { MODEL_TIERS, type TierId, tierById } from "./model-tiers";
 
 export interface AuthUser {
   userId: string;

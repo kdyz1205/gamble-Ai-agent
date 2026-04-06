@@ -497,7 +497,7 @@ export default function Home() {
           <span className="text-xs font-bold text-text-secondary">{user.username}</span>
           {creditsBadge}
           <button
-            onClick={() => signOut()}
+            onClick={() => { signOut(); reset(); }}
             className="ml-1 text-[10px] text-text-muted hover:text-danger transition-colors"
           >
             ×

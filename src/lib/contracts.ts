@@ -25,23 +25,9 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const chain = process.env.X402_NETWORK === "base" ? base : baseSepolia;
 
-export const MODEL_TIERS = {
-  HAIKU:  { id: 1, name: "Haiku",  model: "claude-haiku-4-20250414",  priceUsd: 0.01 },
-  SONNET: { id: 2, name: "Sonnet", model: "claude-sonnet-4-20250514", priceUsd: 0.05 },
-  OPUS:   { id: 3, name: "Opus",   model: "claude-sonnet-4-20250514", priceUsd: 0.25 },
-} as const;
-
-export type TierName = keyof typeof MODEL_TIERS;
-export type TierId = 1 | 2 | 3;
-
-export function tierById(id: TierId) {
-  return Object.values(MODEL_TIERS).find(t => t.id === id)!;
-}
-
-export function tierByName(name: string): (typeof MODEL_TIERS)[TierName] | undefined {
-  const key = name.toUpperCase() as TierName;
-  return MODEL_TIERS[key];
-}
+// Import from model-tiers (no viem dependency) and re-export
+import { MODEL_TIERS, tierById, tierByName, type TierName, type TierId } from "./model-tiers";
+export { MODEL_TIERS, tierById, tierByName, type TierName, type TierId };
 
 const USAGE_TOKEN_ABI = parseAbi([
   "function balanceOf(address, uint256) view returns (uint256)",
