@@ -626,7 +626,7 @@ export default function Home() {
       {!active && !user && (
         <motion.button
           onClick={() => setShowAuth(true)}
-          className="shimmer-btn fixed top-4 right-4 sm:top-5 sm:right-5 z-20 px-6 py-3 sm:px-5 sm:py-2.5 rounded-xl text-sm sm:text-xs font-extrabold text-white"
+          className="shimmer-btn fixed top-8 right-4 sm:top-10 sm:right-5 z-20 px-6 py-3 sm:px-5 sm:py-2.5 rounded-xl text-sm sm:text-xs font-extrabold text-white"
           style={{
             background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
             boxShadow: "0 4px 20px rgba(124,92,252,0.35), 0 0 40px rgba(124,92,252,0.08)",
@@ -634,7 +634,7 @@ export default function Home() {
             minHeight: "44px",
           }}
           initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 0.5 } }}
           whileHover={{ scale: 1.04, boxShadow: "0 6px 28px rgba(124,92,252,0.45), 0 0 50px rgba(124,92,252,0.12)" }}
           whileTap={{ scale: 0.96 }}
         >
@@ -643,9 +643,9 @@ export default function Home() {
       )}
       {!active && user && (
         <motion.div
-          className="fixed top-5 right-5 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-xl glass-panel"
+          className="fixed top-8 right-4 sm:top-10 sm:right-5 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-xl glass-panel"
           initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 0.5 } }}
         >
           {user.image ? (
             <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
