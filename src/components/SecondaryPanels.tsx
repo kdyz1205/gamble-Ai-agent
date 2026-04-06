@@ -47,7 +47,7 @@ function Drawer({ open, onClose, title, children }: {
             <div
               className="absolute left-0 top-0 bottom-0 w-[2px]"
               style={{
-                background: "linear-gradient(180deg, #7c5cfc 0%, #00d4c8 40%, #00e87a 70%, transparent 100%)",
+                background: "linear-gradient(180deg, #D4AF37 0%, #005F6F 40%, #639A67 70%, transparent 100%)",
                 opacity: 0.5,
               }}
             />
@@ -82,11 +82,11 @@ function Drawer({ open, onClose, title, children }: {
 
 /* ── Live Activity (real /api/feed) ── */
 const DOT_COLOR: Record<string, string> = {
-  challenge_created: "#7c5cfc",
-  challenge_accepted: "#00d4c8",
-  user_joined: "#00e87a",
-  live: "#ff4757",
-  default: "#7c5cfc",
+  challenge_created: "#D4AF37",
+  challenge_accepted: "#005F6F",
+  user_joined: "#639A67",
+  live: "#A31F34",
+  default: "#D4AF37",
 };
 
 function formatAgo(iso: string): string {
@@ -157,7 +157,7 @@ function LiveContent() {
                 {e.challenge && e.challenge.stake > 0 && (
                   <span
                     className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                    style={{ background: "rgba(245,166,35,0.1)", color: "#f5a623" }}
+                    style={{ background: "rgba(245,166,35,0.1)", color: "#D4AF37" }}
                   >
                     {e.challenge.stake} cr
                   </span>
@@ -239,13 +239,13 @@ function DiscoverContent({
         <motion.div
           className="w-16 h-16 rounded-2xl flex items-center justify-center"
           style={{
-            background: "rgba(124,92,252,0.08)",
-            border: "1px solid rgba(124,92,252,0.15)",
+            background: "rgba(212,175,55,0.08)",
+            border: "1px solid rgba(212,175,55,0.15)",
           }}
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -258,7 +258,7 @@ function DiscoverContent({
           type="button"
           onClick={load}
           className="shimmer-btn px-4 py-2 rounded-xl text-xs font-bold text-accent border border-accent/20"
-          style={{ background: "rgba(124,92,252,0.08)" }}
+          style={{ background: "rgba(212,175,55,0.08)" }}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
         >
@@ -270,7 +270,7 @@ function DiscoverContent({
 
   return (
     <div className="space-y-2">
-      {msg && <p className="text-xs font-bold text-[#ff4757]">{msg}</p>}
+      {msg && <p className="text-xs font-bold text-[#A31F34]">{msg}</p>}
       {rows.map((c, i) => {
         const mine = Boolean(uid && c.creatorId === uid);
         const joined = Boolean(uid && c.participants.some((p) => p.user.id === uid));
@@ -295,7 +295,7 @@ function DiscoverContent({
                 onClick={() => join(c)}
                 disabled={mine}
                 className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
+                style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)" }}
               >
                 {mine ? "Yours" : joined ? "Open room" : "Join as opponent"}
               </motion.button>
@@ -327,8 +327,8 @@ function WalletContent() {
       <motion.div
         className="rounded-2xl p-5 relative overflow-hidden"
         style={{
-          background: "linear-gradient(135deg, #7c5cfc, #00d4c8)",
-          boxShadow: "0 8px 32px rgba(124,92,252,0.3)",
+          background: "linear-gradient(135deg, #D4AF37, #005F6F)",
+          boxShadow: "0 8px 32px rgba(212,175,55,0.3)",
         }}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -376,19 +376,19 @@ function WalletContent() {
       >
         <div>
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">In Escrow</p>
-          <p className="text-xl font-black" style={{ color: "#f5a623" }}>$85.00</p>
+          <p className="text-xl font-black" style={{ color: "#D4AF37" }}>$85.00</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Bets</p>
-          <p className="text-xl font-black" style={{ color: "#f5a623" }}>3</p>
+          <p className="text-xl font-black" style={{ color: "#D4AF37" }}>3</p>
         </div>
       </motion.div>
 
       {/* Win/Loss */}
       <div className="grid grid-cols-2 gap-2.5">
         {[
-          { label:"Total Won",  val:"$1,240", color:"#00e87a", bg:"rgba(0,232,122,0.08)", border:"rgba(0,232,122,0.15)" },
-          { label:"Total Lost", val:"$420",   color:"#ff4757", bg:"rgba(255,71,87,0.08)", border:"rgba(255,71,87,0.15)" },
+          { label:"Total Won",  val:"$1,240", color:"#639A67", bg:"rgba(99,154,103,0.08)", border:"rgba(99,154,103,0.15)" },
+          { label:"Total Lost", val:"$420",   color:"#A31F34", bg:"rgba(255,71,87,0.08)", border:"rgba(255,71,87,0.15)" },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -408,10 +408,10 @@ function WalletContent() {
       <div>
         <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">Recent</p>
         {[
-          { label:"Won: 50 Pushups Challenge", amount:"+$20",  color:"#00e87a" },
-          { label:"Staked: 5K Run",            amount:"-$50",  color:"#ff4757" },
-          { label:"Deposit",                   amount:"+$100", color:"#00e87a" },
-          { label:"Won: Chess Blitz",          amount:"+$10",  color:"#00e87a" },
+          { label:"Won: 50 Pushups Challenge", amount:"+$20",  color:"#639A67" },
+          { label:"Staked: 5K Run",            amount:"-$50",  color:"#A31F34" },
+          { label:"Deposit",                   amount:"+$100", color:"#639A67" },
+          { label:"Won: Chess Blitz",          amount:"+$10",  color:"#639A67" },
         ].map((tx, i) => (
           <motion.div
             key={i}
@@ -432,10 +432,10 @@ function WalletContent() {
 
 /* ── Floating Action Bar ── */
 const ACTIONS = [
-  { key: "discover", icon: "◎", label: "Discover", badge: null as string | null, dotColor: "#7c5cfc" },
-  { key: "live", icon: "⚡", label: "Live", badge: null as string | null, dotColor: "#ff4757" },
-  { key: "nearby", icon: "📍", label: "Nearby", badge: null as string | null, dotColor: "#00e87a" },
-  { key: "wallet", icon: "◈", label: "Wallet", badge: null as string | null, dotColor: "#f5a623" },
+  { key: "discover", icon: "◎", label: "Discover", badge: null as string | null, dotColor: "#D4AF37" },
+  { key: "live", icon: "⚡", label: "Live", badge: null as string | null, dotColor: "#A31F34" },
+  { key: "nearby", icon: "📍", label: "Nearby", badge: null as string | null, dotColor: "#639A67" },
+  { key: "wallet", icon: "◈", label: "Wallet", badge: null as string | null, dotColor: "#D4AF37" },
 ];
 
 export function FloatingActionBar({
@@ -465,13 +465,13 @@ export function FloatingActionBar({
             <motion.div
               className="rounded-2xl p-[1px] relative"
               style={{
-                background: "linear-gradient(135deg, rgba(124,92,252,0.5), rgba(0,212,200,0.3), rgba(124,92,252,0.5))",
+                background: "linear-gradient(135deg, rgba(212,175,55,0.5), rgba(0,95,111,0.3), rgba(212,175,55,0.5))",
               }}
               animate={{
                 boxShadow: [
-                  "0 0 20px rgba(124,92,252,0.15), 0 0 40px rgba(0,212,200,0.08)",
-                  "0 0 28px rgba(124,92,252,0.25), 0 0 50px rgba(0,212,200,0.15)",
-                  "0 0 20px rgba(124,92,252,0.15), 0 0 40px rgba(0,212,200,0.08)",
+                  "0 0 20px rgba(212,175,55,0.15), 0 0 40px rgba(0,95,111,0.08)",
+                  "0 0 28px rgba(212,175,55,0.25), 0 0 50px rgba(0,95,111,0.15)",
+                  "0 0 20px rgba(212,175,55,0.15), 0 0 40px rgba(0,95,111,0.08)",
                 ],
               }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
@@ -505,7 +505,7 @@ export function FloatingActionBar({
                         className="absolute -top-0.5 left-1/2 w-1.5 h-1.5 rounded-full"
                         style={{
                           translateX: "-50%",
-                          background: a.dotColor ?? "#7c5cfc",
+                          background: a.dotColor ?? "#D4AF37",
                         }}
                         animate={isActive ? {
                           boxShadow: [
@@ -530,7 +530,7 @@ export function FloatingActionBar({
                         <motion.div
                           className="absolute -bottom-0.5 left-2 right-2 h-[2px] rounded-full"
                           style={{
-                            background: a.dotColor ?? "#7c5cfc",
+                            background: a.dotColor ?? "#D4AF37",
                             boxShadow: `0 0 8px ${a.dotColor}aa, 0 2px 12px ${a.dotColor}60`,
                           }}
                           layoutId="fab-underline"
@@ -541,7 +541,7 @@ export function FloatingActionBar({
                       {a.badge ? (
                         <span
                           className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-black text-white flex items-center justify-center"
-                          style={{ background: a.dotColor ?? "#7c5cfc" }}
+                          style={{ background: a.dotColor ?? "#D4AF37" }}
                         >
                           {a.badge}
                         </span>

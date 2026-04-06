@@ -76,7 +76,7 @@ export default function ParticleBackground() {
     /* ── Particle factories ── */
     const rnd  = (min: number, max: number) => min + Math.random() * (max - min);
     const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-    const HUES = [255, 260, 270, 175, 180, 190]; // violet + cyan spectrum
+    const HUES = [40, 42, 45, 48, 190, 195]; // gold + oracle-blue spectrum
 
     /* Layer 1: FOG (large, slow, blurred blobs) */
     const fogCount = 6;
@@ -173,9 +173,9 @@ export default function ParticleBackground() {
 
       // Attraction field visualization
       const fieldGrad = ctx.createRadialGradient(mx, my, 0, mx, my, 180);
-      fieldGrad.addColorStop(0,   `hsla(260, 70%, 65%, 0.03)`);
-      fieldGrad.addColorStop(0.5, `hsla(260, 70%, 65%, 0.01)`);
-      fieldGrad.addColorStop(1,   `hsla(260, 70%, 65%, 0)`);
+      fieldGrad.addColorStop(0,   `hsla(43, 74%, 52%, 0.03)`);
+      fieldGrad.addColorStop(0.5, `hsla(43, 74%, 52%, 0.01)`);
+      fieldGrad.addColorStop(1,   `hsla(43, 74%, 52%, 0)`);
       ctx.fillStyle = fieldGrad;
       ctx.beginPath();
       ctx.arc(mx, my, 180, 0, Math.PI * 2);
@@ -194,10 +194,10 @@ export default function ParticleBackground() {
 
       ctx.globalCompositeOperation = "lighter";
       const grad = ctx.createRadialGradient(cp.x, cp.y, 0, cp.x, cp.y, radius);
-      grad.addColorStop(0, `hsla(260, 80%, 70%, 0)`);
-      grad.addColorStop(0.6, `hsla(260, 80%, 70%, ${op})`);
-      grad.addColorStop(0.85, `hsla(180, 70%, 65%, ${op * 0.5})`);
-      grad.addColorStop(1, `hsla(260, 80%, 70%, 0)`);
+      grad.addColorStop(0, `hsla(43, 74%, 52%, 0)`);
+      grad.addColorStop(0.6, `hsla(43, 74%, 52%, ${op})`);
+      grad.addColorStop(0.85, `hsla(190, 100%, 22%, ${op * 0.5})`);
+      grad.addColorStop(1, `hsla(43, 74%, 52%, 0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(cp.x, cp.y, radius, 0, Math.PI * 2);

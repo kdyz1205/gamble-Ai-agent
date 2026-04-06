@@ -205,9 +205,9 @@ export default function Home() {
   const creditsBadge = user ? (
     <span className={`px-2 py-0.5 rounded-md text-[9px] font-black${(user.credits ?? 0) > 0 ? " animate-credits-glow" : ""}`}
           style={{
-            background: (user.credits ?? 0) > 0 ? "rgba(0,232,122,0.15)" : "rgba(255,59,48,0.15)",
-            color: (user.credits ?? 0) > 0 ? "#00e87a" : "#ff3b30",
-            border: `1px solid ${(user.credits ?? 0) > 0 ? "rgba(0,232,122,0.3)" : "rgba(255,59,48,0.3)"}`,
+            background: (user.credits ?? 0) > 0 ? "rgba(99,154,103,0.15)" : "rgba(255,59,48,0.15)",
+            color: (user.credits ?? 0) > 0 ? "#639A67" : "#ff3b30",
+            border: `1px solid ${(user.credits ?? 0) > 0 ? "rgba(99,154,103,0.3)" : "rgba(255,59,48,0.3)"}`,
           }}>
       {user.credits ?? 0} credits
     </span>
@@ -221,18 +221,18 @@ export default function Home() {
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(124,92,252,0.06) 0%, transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, rgba(212,175,55,0.06) 0%, transparent 70%)" }}
           animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
           className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(0,212,200,0.05) 0%, transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, rgba(0,95,111,0.05) 0%, transparent 70%)" }}
           animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.7, 0.4] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 3 }}
         />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
-             style={{ background: "radial-gradient(ellipse, rgba(124,92,252,0.025) 0%, transparent 60%)" }} />
+             style={{ background: "radial-gradient(ellipse, rgba(212,175,55,0.025) 0%, transparent 60%)" }} />
       </div>
 
       {showScanLine && <div className="scan-line" />}
@@ -258,13 +258,13 @@ export default function Home() {
                   whileTap={{ scale: 0.97 }}
                 >
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                       style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 16px rgba(124,92,252,0.4)" }}>
+                       style={{ background: "linear-gradient(135deg, #D4AF37, #005F6F)", boxShadow: "0 0 16px rgba(212,175,55,0.4)" }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
                       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                     </svg>
                   </div>
                   <span className="text-sm font-extrabold text-text-primary group-hover:text-white transition-colors">
-                    ChallengeAI
+                    Lex Divina
                   </span>
                 </motion.button>
 
@@ -284,14 +284,14 @@ export default function Home() {
                       onClick={() => setShowProfile(!showProfile)}
                       className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle cursor-pointer"
                       style={{ background: "rgba(255,255,255,0.04)" }}
-                      whileHover={{ borderColor: "rgba(124,92,252,0.3)", background: "rgba(255,255,255,0.08)" }}
+                      whileHover={{ borderColor: "rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.08)" }}
                       whileTap={{ scale: 0.97 }}
                     >
                       {user.image ? (
                         <img src={user.image} alt="" className="w-5 h-5 rounded-md" />
                       ) : (
                         <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
-                             style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                             style={{ background: "linear-gradient(135deg, #D4AF37, #005F6F)" }}>
                           {user.username.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -302,7 +302,7 @@ export default function Home() {
                     <motion.button
                       onClick={() => setShowAuth(true)}
                       className="px-3 py-1.5 rounded-xl text-xs font-bold text-white"
-                      style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
+                      style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)" }}
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                     >
@@ -367,15 +367,15 @@ export default function Home() {
               <div
                 className="rounded-2xl p-5"
                 style={{
-                  background: "rgba(0,232,122,0.06)",
-                  border: "1px solid rgba(0,232,122,0.15)",
-                  boxShadow: "0 0 30px rgba(0,232,122,0.06)",
+                  background: "rgba(99,154,103,0.06)",
+                  border: "1px solid rgba(99,154,103,0.15)",
+                  boxShadow: "0 0 30px rgba(99,154,103,0.06)",
                 }}
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                       style={{ background: "rgba(0,232,122,0.12)" }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
+                       style={{ background: "rgba(99,154,103,0.12)" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#639A67" strokeWidth="2.5" strokeLinecap="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                     <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
@@ -385,7 +385,7 @@ export default function Home() {
                     <p className="text-xs text-text-secondary">Send the link to your friend</p>
                   </div>
                   <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
-                        style={{ background: "rgba(0,232,122,0.1)", color: "#00e87a" }}>
+                        style={{ background: "rgba(99,154,103,0.1)", color: "#639A67" }}>
                     <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                     Live
                   </span>
@@ -407,7 +407,7 @@ export default function Home() {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className="flex-shrink-0 px-4 py-3 text-sm font-extrabold text-white"
-                        style={{ background: copied ? "rgba(0,232,122,0.3)" : "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
+                        style={{ background: copied ? "rgba(99,154,103,0.3)" : "linear-gradient(135deg, #D4AF37, #A38829)" }}
                       >
                         {copied ? (
                           <span className="flex items-center gap-1">
@@ -464,7 +464,7 @@ export default function Home() {
           >
             <span>Terms</span>
             <span className="text-text-muted/20">·</span>
-            <span>AI-Powered Challenge OS</span>
+            <span>Lex Divina · AI Oracle Tribunal</span>
             <span className="text-text-muted/20">·</span>
             <span>Privacy</span>
           </motion.footer>
@@ -483,7 +483,7 @@ export default function Home() {
         <motion.button
           onClick={() => setShowAuth(true)}
           className="fixed top-5 right-5 z-20 px-4 py-2 rounded-xl text-xs font-bold text-white"
-          style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 16px rgba(124,92,252,0.3)" }}
+          style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)", boxShadow: "0 4px 16px rgba(212,175,55,0.3)" }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0, transition: { delay: 0.3 } }}
           whileHover={{ scale: 1.04 }}
@@ -502,14 +502,14 @@ export default function Home() {
             onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle cursor-pointer"
             style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
-            whileHover={{ borderColor: "rgba(124,92,252,0.3)", background: "rgba(10,10,24,0.95)" }}
+            whileHover={{ borderColor: "rgba(212,175,55,0.3)", background: "rgba(10,10,24,0.95)" }}
             whileTap={{ scale: 0.97 }}
           >
             {user.image ? (
               <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
             ) : (
               <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black text-white"
-                   style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                   style={{ background: "linear-gradient(135deg, #D4AF37, #005F6F)" }}>
                 {user.username.charAt(0).toUpperCase()}
               </div>
             )}
@@ -525,7 +525,7 @@ export default function Home() {
                 style={{
                   background: "rgba(13,13,30,0.97)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  boxShadow: "0 16px 48px rgba(0,0,0,0.5), 0 0 40px rgba(124,92,252,0.06)",
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.5), 0 0 40px rgba(212,175,55,0.06)",
                   backdropFilter: "blur(20px)",
                 }}
                 initial={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -536,7 +536,7 @@ export default function Home() {
                 <div className="p-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white"
-                         style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}>
+                         style={{ background: "linear-gradient(135deg, #D4AF37, #005F6F)" }}>
                       {user.username.charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -547,9 +547,9 @@ export default function Home() {
                 </div>
                 <div className="p-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
                   <div className="flex items-center justify-between px-2 py-2 rounded-lg"
-                       style={{ background: "rgba(0,232,122,0.06)" }}>
+                       style={{ background: "rgba(99,154,103,0.06)" }}>
                     <span className="text-xs font-bold text-text-secondary">Credits</span>
-                    <span className="text-sm font-black" style={{ color: "#00e87a" }}>{user.credits ?? 0}</span>
+                    <span className="text-sm font-black" style={{ color: "#639A67" }}>{user.credits ?? 0}</span>
                   </div>
                 </div>
                 <div className="p-2">

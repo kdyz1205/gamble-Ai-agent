@@ -84,9 +84,9 @@ export default function PlazaSection({ onAccept }: Props) {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold"
             style={{
-              background: "rgba(245,166,35,0.08)",
-              border: "1px solid rgba(245,166,35,0.15)",
-              color: "#f5a623",
+              background: "rgba(212,175,55,0.08)",
+              border: "1px solid rgba(212,175,55,0.15)",
+              color: "#D4AF37",
             }}
           >
             {levelMessage}
@@ -112,15 +112,15 @@ export default function PlazaSection({ onAccept }: Props) {
               onClick={() => onAccept(c.id)}
               className="rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-              whileHover={{ borderColor: "rgba(124,92,252,0.3)" }}
+              whileHover={{ borderColor: "rgba(212,175,55,0.3)" }}
             >
               <div className="flex justify-between items-start mb-2">
                 <span className="text-sm font-bold text-text-primary">{c.title}</span>
                 <motion.span
                   className="text-lg font-black flex-shrink-0 ml-3"
-                  style={{ color: c.stake > 0 ? "#f5a623" : "#00d4c8" }}
+                  style={{ color: c.stake > 0 ? "#D4AF37" : "#005F6F" }}
                   animate={c.stake > 0 ? {
-                    textShadow: ["0 0 8px rgba(245,166,35,0.3)", "0 0 16px rgba(245,166,35,0.6)", "0 0 8px rgba(245,166,35,0.3)"],
+                    textShadow: ["0 0 8px rgba(212,175,55,0.3)", "0 0 16px rgba(212,175,55,0.6)", "0 0 8px rgba(212,175,55,0.3)"],
                   } : {}}
                   transition={{ duration: 2, repeat: Infinity }}
                 >
