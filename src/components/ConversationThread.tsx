@@ -29,15 +29,19 @@ function TypingIndicator() {
     >
       <AIAvatar />
       <div className="px-4 py-3.5 rounded-2xl rounded-tl-md glass-card border border-border-subtle">
-        <div className="flex items-center gap-1.5">
-          {[0, 1, 2].map(i => (
-            <motion.div
-              key={i}
-              className="w-1.5 h-1.5 rounded-full bg-accent"
-              animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
-            />
-          ))}
+        <div className="flex flex-col items-start gap-1.5">
+          <div className="flex items-center gap-1.5">
+            {[0, 1, 2].map(i => (
+              <motion.div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}
+                animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] font-medium text-text-muted">AI is thinking</span>
         </div>
       </div>
     </motion.div>
@@ -98,8 +102,8 @@ function MessageBubble({ message, onOptionSelect, index }: {
   return (
     <motion.div
       className={`flex items-start gap-3 ${isAI ? "" : "flex-row-reverse"}`}
-      initial={{ opacity: 0, y: 18, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={{ opacity: 0, x: isAI ? -20 : 20, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: index * 0.04 }}
     >
       {isAI ? <AIAvatar /> : <UserAvatar />}
@@ -124,7 +128,7 @@ function MessageBubble({ message, onOptionSelect, index }: {
           {/* Render markdown-style bold */}
           {message.content.split(/(\*\*.*?\*\*)/).map((part, i) => {
             if (part.startsWith("**") && part.endsWith("**")) {
-              return <strong key={i} className="font-extrabold text-accent">{part.slice(2, -2)}</strong>;
+              return <strong key={i} className="font-extrabold text-accent" style={{ textShadow: "0 0 8px rgba(124,92,252,0.3)" }}>{part.slice(2, -2)}</strong>;
             }
             return <span key={i}>{part}</span>;
           })}
@@ -148,6 +152,8 @@ function MessageBubble({ message, onOptionSelect, index }: {
                   scale: 1.05,
                   y: -2,
                   boxShadow: "0 4px 20px rgba(124,92,252,0.2)",
+                  backdropFilter: "blur(4px)",
+                  borderLeft: "2px solid rgba(124,92,252,0.6)",
                 }}
                 whileTap={{ scale: 0.95 }}
                 className="shimmer-btn px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-300"

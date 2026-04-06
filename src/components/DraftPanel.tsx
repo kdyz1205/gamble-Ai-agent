@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import type { Variants } from "framer-motion";
 
 export interface ChallengeDraft {
@@ -22,6 +22,7 @@ interface Props {
   draft: ChallengeDraft;
   onPublish: (editedDraft: ChallengeDraft) => void;
   onEdit: () => void;
+  isPublishing?: boolean;
 }
 
 const TYPE_COLORS: Record<string, { from: string; to: string; glow: string }> = {
@@ -61,7 +62,13 @@ function InfoCell({ icon, label, value }: { icon: string; label: string; value: 
     <motion.div
       className="relative flex flex-col gap-1.5 px-3.5 py-3 rounded-xl overflow-hidden shine-card"
       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-      whileHover={{ background: "rgba(255,255,255,0.06)", borderColor: "rgba(124,92,252,0.15)" }}
+      whileHover={{
+        y: -2,
+        background: "rgba(255,255,255,0.07)",
+        borderColor: "rgba(124,92,252,0.15)",
+        boxShadow: "0 4px 16px rgba(124,92,252,0.08), 0 2px 8px rgba(0,0,0,0.2)",
+      }}
+      transition={{ duration: 0.2 }}
     >
       <div className="flex items-center gap-1.5 text-text-muted">
         {INFO_ICONS[label] || <span className="text-xs">{icon}</span>}
@@ -72,7 +79,7 @@ function InfoCell({ icon, label, value }: { icon: string; label: string; value: 
   );
 }
 
-export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
+export default function DraftPanel({ draft, onPublish, onEdit, isPublishing }: Props) {
   const [editDraft, setEditDraft] = useState<ChallengeDraft>(draft);
   useEffect(() => setEditDraft(draft), [draft]);
 
@@ -149,13 +156,19 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
               >
                 {editDraft.type}
               </span>
-              <input
-                type="text"
-                value={editDraft.title}
-                onChange={e => updateField("title", e.target.value)}
-                maxLength={64}
-                className="text-lg font-extrabold text-text-primary leading-snug bg-transparent border-b border-transparent hover:border-border-subtle focus:border-accent focus:outline-none transition-colors w-full"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editDraft.title}
+                  onChange={e => updateField("title", e.target.value)}
+                  maxLength={64}
+                  className="peer text-lg font-extrabold text-text-primary leading-snug bg-transparent border-b border-transparent hover:border-border-subtle focus:border-transparent focus:outline-none transition-colors w-full"
+                />
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-[2px] opacity-0 peer-focus:opacity-100 transition-opacity duration-300 rounded-full"
+                  style={{ background: `linear-gradient(90deg, ${colors.from}, ${colors.to})` }}
+                />
+              </div>
             </div>
 
             <motion.div
@@ -170,10 +183,19 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
                     style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
                 Stake
               </span>
-              <span className="text-lg font-black"
-                    style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}>
-                {hasStake ? `${draft.stake}` : "Free"}
-              </span>
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={editDraft.stake}
+                  className="text-lg font-black block"
+                  style={{ color: hasStake ? "#f5a623" : "#00d4c8" }}
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 20, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  {hasStake ? `${editDraft.stake}` : "Free"}
+                </motion.span>
+              </AnimatePresence>
               {hasStake && (
                 <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5"
                       style={{ color: "rgba(245,166,35,0.6)" }}>
@@ -243,16 +265,25 @@ export default function DraftPanel({ draft, onPublish, onEdit }: Props) {
 
           <motion.div className="flex items-center gap-3" variants={childVariants}>
             <motion.button
-              onClick={() => onPublish(editDraft)}
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.97 }}
-              className="shimmer-btn flex-1 py-3.5 rounded-xl text-sm font-extrabold text-white relative overflow-hidden"
+              onClick={() => !isPublishing && onPublish(editDraft)}
+              disabled={isPublishing}
+              whileHover={isPublishing ? {} : { scale: 1.02, y: -1 }}
+              whileTap={isPublishing ? {} : { scale: 0.97 }}
+              className="shimmer-btn flex-1 py-3.5 rounded-xl text-sm font-extrabold text-white relative overflow-hidden flex items-center justify-center gap-2"
               style={{
                 background: `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
                 boxShadow: `0 4px 24px ${colors.glow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
+                opacity: isPublishing ? 0.85 : 1,
               }}
             >
-              Publish Challenge{hasStake ? ` (${draft.stake} credits)` : ""}
+              {isPublishing && (
+                <motion.div
+                  className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                />
+              )}
+              {isPublishing ? "Publishing..." : `Publish Challenge${hasStake ? ` (${editDraft.stake} credits)` : ""}`}
             </motion.button>
 
             <motion.button
@@ -289,9 +320,17 @@ function PlayerCard({ name, role, gradient, color, open = false }: {
       >
         {open
           ? <motion.span
-              className="text-sm text-text-muted"
-              animate={{ opacity: [0.3, 0.7, 0.3] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              className="text-sm font-bold"
+              style={{ backgroundClip: "text", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+              animate={{
+                backgroundImage: [
+                  "linear-gradient(135deg, #7c5cfc, #7c5cfc)",
+                  "linear-gradient(135deg, #00d4c8, #00d4c8)",
+                  "linear-gradient(135deg, #7c5cfc, #7c5cfc)",
+                ],
+                opacity: [0.5, 1, 0.5],
+              }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
             >?</motion.span>
           : <span className="text-sm font-black text-white">{name.charAt(0)}</span>
         }

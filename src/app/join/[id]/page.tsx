@@ -81,7 +81,17 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const stakeLabel = c.stake > 0 ? `${c.stake} credits` : "Free";
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: "#06060f" }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden" style={{ background: "#06060f" }}>
+      {/* Background gradient orbs */}
+      <div
+        className="pointer-events-none absolute w-[500px] h-[500px] rounded-full opacity-[0.07] blur-[120px]"
+        style={{ background: color, top: "-10%", left: "-10%" }}
+      />
+      <div
+        className="pointer-events-none absolute w-[400px] h-[400px] rounded-full opacity-[0.05] blur-[100px]"
+        style={{ background: color, bottom: "-10%", right: "-15%" }}
+      />
+
       <motion.div
         className="w-full max-w-md rounded-2xl overflow-hidden"
         style={{
@@ -94,7 +104,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
         transition={{ duration: 0.5 }}
       >
         {/* Top bar */}
-        <div className="h-1" style={{ background: `linear-gradient(90deg, ${color}, ${color}80)` }} />
+        <div className="h-1" style={{ background: `linear-gradient(90deg, ${color}, ${color}80, ${color})`, backgroundSize: "200% 100%", animation: "gradient-drift 4s linear infinite" }} />
 
         <div className="p-6">
           {/* Creator info */}
@@ -138,13 +148,50 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
           {/* Accept button */}
           {accepted ? (
             <motion.div
-              className="text-center py-4 rounded-xl"
+              className="text-center py-5 rounded-xl relative overflow-hidden"
               style={{ background: "rgba(0,232,122,0.1)", border: "1px solid rgba(0,232,122,0.2)" }}
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
             >
-              <p className="text-lg font-extrabold text-green-400 mb-1">You&apos;re In!</p>
-              <p className="text-xs text-text-secondary">Submit your evidence before the deadline</p>
+              {/* Green glow burst */}
+              <motion.div
+                className="absolute inset-0 rounded-xl pointer-events-none"
+                style={{ background: "radial-gradient(circle at center, rgba(0,232,122,0.25) 0%, transparent 70%)" }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: [0, 1, 0.3], scale: [0.5, 1.2, 1] }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+              />
+              {/* Checkmark icon */}
+              <motion.div
+                className="relative mx-auto mb-2 w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(0,232,122,0.2)" }}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 400, damping: 12, delay: 0.1 }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </motion.div>
+              <p className="relative text-lg font-extrabold text-green-400 mb-1">You&apos;re In!</p>
+              <p className="relative text-xs text-text-secondary">Submit your evidence before the deadline</p>
+              {/* Go to Challenge link - appears after delay */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
+              >
+                <Link
+                  href={`/challenge/${id}`}
+                  className="relative inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors"
+                  style={{ background: "rgba(0,232,122,0.2)", border: "1px solid rgba(0,232,122,0.3)" }}
+                >
+                  Go to Challenge
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </motion.div>
             </motion.div>
           ) : c.status !== "open" ? (
             <div className="text-center py-4 rounded-xl"
@@ -157,12 +204,12 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             <motion.button
               onClick={handleAccept}
               disabled={accepting}
-              whileHover={{ scale: 1.02, y: -1 }}
+              whileHover={{ scale: 1.02, y: -1, boxShadow: `0 8px 36px ${color}70, 0 0 60px ${color}25` }}
               whileTap={{ scale: 0.97 }}
-              className="w-full py-4 rounded-xl text-base font-extrabold text-white"
+              className="shimmer-btn w-full py-4 rounded-xl text-base font-extrabold text-white relative overflow-hidden"
               style={{
                 background: `linear-gradient(135deg, ${color}, ${color}cc)`,
-                boxShadow: `0 4px 20px ${color}50`,
+                boxShadow: `0 4px 24px ${color}50, 0 0 40px ${color}15`,
                 opacity: accepting ? 0.7 : 1,
               }}
             >

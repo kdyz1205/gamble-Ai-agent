@@ -17,6 +17,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleGoogleLogin = () => {
     signIn("google", { callbackUrl: "/" });
@@ -38,8 +39,12 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
       if (res?.error) {
         setError(res.error === "CredentialsSignin" ? "Invalid credentials" : res.error);
       } else {
+        setSuccess(true);
         onSuccess();
-        onClose();
+        setTimeout(() => {
+          setSuccess(false);
+          onClose();
+        }, 800);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -48,13 +53,15 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
     }
   };
 
+  const inputClass = "w-full px-4 py-3 rounded-xl text-sm font-medium text-text-primary placeholder:text-text-muted input-premium border border-border-subtle focus:border-accent focus:outline-none";
+
   return (
     <AnimatePresence>
       {open && (
         <>
           <motion.div
             className="fixed inset-0 z-50"
-            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
+            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -71,39 +78,80 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
               style={{
                 background: "rgba(13,13,30,0.97)",
                 border: "1px solid rgba(255,255,255,0.08)",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 60px rgba(124,92,252,0.08)",
+                boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 60px rgba(124,92,252,0.08)",
               }}
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              initial={{ scale: 0.92, y: 24, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.92, y: 24, opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="h-0.5 bg-gradient-to-r from-accent via-teal to-accent" />
+              {/* Gradient top accent */}
+              <div className="h-0.5" style={{ background: "linear-gradient(90deg, #7c5cfc, #00d4c8, #7c5cfc)", backgroundSize: "200% 100%", animation: "gradient-drift 4s linear infinite" }} />
 
               <div className="p-6">
+                {/* Success overlay */}
+                <AnimatePresence>
+                  {success && (
+                    <motion.div
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl"
+                      style={{ background: "rgba(13,13,30,0.98)" }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <motion.div
+                        className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                        style={{ background: "rgba(0,232,122,0.15)" }}
+                        initial={{ scale: 0, rotate: -45 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", damping: 15, stiffness: 200 }}
+                      >
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </motion.div>
+                      <p className="text-sm font-bold text-success">Welcome to ChallengeAI!</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Header with crossfade */}
                 <div className="text-center mb-6">
-                  <div className="inline-flex w-12 h-12 rounded-xl items-center justify-center mb-3"
-                       style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 24px rgba(124,92,252,0.3)" }}>
+                  <motion.div
+                    className="inline-flex w-12 h-12 rounded-xl items-center justify-center mb-3 relative"
+                    style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 24px rgba(124,92,252,0.3)" }}
+                    whileHover={{ scale: 1.05 }}
+                  >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
                       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                     </svg>
-                  </div>
-                  <h2 className="text-lg font-extrabold text-text-primary">
-                    {mode === "register" ? "Create Account" : "Welcome Back"}
-                  </h2>
-                  <p className="text-xs text-text-muted mt-1">
-                    {mode === "register" ? "Join ChallengeAI — 10 seconds to start" : "Sign in to continue"}
-                  </p>
+                  </motion.div>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={mode}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <h2 className="text-lg font-extrabold text-text-primary">
+                        {mode === "register" ? "Create Account" : "Welcome Back"}
+                      </h2>
+                      <p className="text-xs text-text-muted mt-1">
+                        {mode === "register" ? "Join ChallengeAI — 10 seconds to start" : "Sign in to continue"}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
 
                 {/* Google Sign In */}
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-bold text-white mb-4"
+                  whileHover={{ scale: 1.02, borderColor: "rgba(124,92,252,0.3)", background: "rgba(255,255,255,0.09)" }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-bold text-white mb-4 transition-colors"
                   style={{
                     background: "rgba(255,255,255,0.06)",
                     border: "1px solid rgba(255,255,255,0.12)",
@@ -125,12 +173,25 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                   <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
                 </div>
 
-                {error && (
-                  <div className="mb-4 px-3 py-2 rounded-xl text-xs font-bold"
-                       style={{ background: "rgba(255,71,87,0.1)", color: "#ff4757", border: "1px solid rgba(255,71,87,0.2)" }}>
-                    {error}
-                  </div>
-                )}
+                {/* Error with shake */}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      className="animate-error-shake mb-4 px-3 py-2.5 rounded-xl text-xs font-bold"
+                      style={{
+                        background: "rgba(255,71,87,0.1)",
+                        color: "#ff4757",
+                        border: "1px solid rgba(255,71,87,0.2)",
+                        borderLeft: "3px solid #ff4757",
+                      }}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                    >
+                      {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <input
@@ -139,18 +200,29 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                     onChange={e => setEmail(e.target.value)}
                     placeholder="Email"
                     required
-                    className="w-full px-4 py-3 rounded-xl text-sm font-medium text-text-primary placeholder:text-text-muted bg-bg-input border border-border-subtle focus:border-accent focus:outline-none transition-colors"
+                    className={inputClass}
                   />
-                  {mode === "register" && (
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      placeholder="Username"
-                      required
-                      className="w-full px-4 py-3 rounded-xl text-sm font-medium text-text-primary placeholder:text-text-muted bg-bg-input border border-border-subtle focus:border-accent focus:outline-none transition-colors"
-                    />
-                  )}
+                  {/* Username field with expand/collapse animation */}
+                  <AnimatePresence>
+                    {mode === "register" && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={e => setUsername(e.target.value)}
+                          placeholder="Username"
+                          required
+                          className={inputClass}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <input
                     type="password"
                     value={password}
@@ -158,21 +230,32 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                     placeholder="Password"
                     required
                     minLength={6}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-medium text-text-primary placeholder:text-text-muted bg-bg-input border border-border-subtle focus:border-accent focus:outline-none transition-colors"
+                    className={inputClass}
                   />
 
                   <motion.button
                     type="submit"
                     disabled={loading}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="shimmer-btn w-full py-3 rounded-xl text-sm font-extrabold text-white disabled:opacity-50"
+                    whileHover={!loading ? { scale: 1.02, boxShadow: "0 6px 28px rgba(124,92,252,0.4)" } : {}}
+                    whileTap={!loading ? { scale: 0.97 } : {}}
+                    className="shimmer-btn w-full py-3.5 rounded-xl text-sm font-extrabold text-white disabled:opacity-60 transition-shadow"
                     style={{
                       background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                      boxShadow: "0 4px 20px rgba(124,92,252,0.3)",
+                      boxShadow: "0 4px 20px rgba(124,92,252,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
                     }}
                   >
-                    {loading ? "..." : mode === "register" ? "Create Account" : "Sign In"}
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <motion.span
+                          className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                        />
+                        {mode === "register" ? "Creating..." : "Signing in..."}
+                      </span>
+                    ) : (
+                      mode === "register" ? "Create Account" : "Sign In"
+                    )}
                   </motion.button>
                 </form>
 

@@ -148,7 +148,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
               >
                 <div
                   className="w-2.5 h-2.5 rounded-full bg-teal"
-                  style={{ boxShadow: "0 0 10px rgba(0,212,200,0.9), 0 0 20px rgba(0,212,200,0.4)" }}
+                  style={{ boxShadow: "0 0 12px rgba(0,212,200,0.9), 0 0 24px rgba(0,212,200,0.5)" }}
                 />
               </div>
 
@@ -217,7 +217,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
             : { duration: 3, repeat: Infinity, ease: "easeInOut" }
           }
           style={{
-            background: "linear-gradient(135deg, rgba(124,92,252,0.4), rgba(0,212,200,0.2), rgba(124,92,252,0.15))",
+            background: "linear-gradient(135deg, rgba(124,92,252,0.5), rgba(0,212,200,0.25), rgba(124,92,252,0.2))",
             filter: focused ? "blur(0px)" : "blur(1px)",
           }}
         />
@@ -251,22 +251,33 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <motion.div
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-teal flex items-center justify-center mb-4"
-                  animate={{
-                    scale: [1, 1.1, 1],
-                    boxShadow: [
-                      "0 0 20px rgba(124,92,252,0.3)",
-                      "0 0 40px rgba(124,92,252,0.6)",
-                      "0 0 20px rgba(124,92,252,0.3)",
-                    ],
-                  }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                  </svg>
-                </motion.div>
+                <div className="relative mb-4">
+                  {/* Radial gradient pulse behind icon */}
+                  <motion.div
+                    className="absolute inset-0 -m-6 rounded-full pointer-events-none"
+                    style={{
+                      background: "radial-gradient(circle, rgba(124,92,252,0.25) 0%, rgba(0,212,200,0.1) 40%, transparent 70%)",
+                    }}
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.6, 1, 0.6] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                  <motion.div
+                    className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-teal flex items-center justify-center"
+                    animate={{
+                      scale: [1, 1.1, 1],
+                      boxShadow: [
+                        "0 0 20px rgba(124,92,252,0.3)",
+                        "0 0 40px rgba(124,92,252,0.6)",
+                        "0 0 20px rgba(124,92,252,0.3)",
+                      ],
+                    }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  </motion.div>
+                </div>
                 <motion.p
                   className="text-sm font-bold text-text-secondary"
                   animate={{ opacity: [0.5, 1, 0.5] }}
@@ -345,10 +356,10 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
               onClick={send}
               disabled={!input.trim() || isParsing}
               whileHover={input.trim() ? { scale: 1.04 } : {}}
-              whileTap={input.trim() ? { scale: 0.96 } : {}}
+              whileTap={input.trim() ? { scale: 0.94 } : {}}
               className={`shimmer-btn flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ${
                 input.trim()
-                  ? "bg-gradient-to-r from-accent via-[#6a4cfc] to-teal text-white shadow-lg shadow-accent/30"
+                  ? "bg-gradient-to-r from-accent via-[#6a4cfc] to-teal text-white shadow-lg shadow-accent/30 animate-[glow-entrance_0.4s_ease-out]"
                   : "bg-bg-raised text-text-muted cursor-not-allowed"
               } ${sendPulse ? "animate-energy-pulse" : ""}`}
               style={input.trim() ? {
@@ -382,8 +393,8 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0, transition: { delay: 0.55 + i * 0.07 } }}
                 whileHover={{ y: -3, scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                className="energy-btn shimmer-btn relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border-subtle overflow-hidden group/qb"
+                whileTap={{ scale: 0.95 }}
+                className="energy-btn shimmer-btn relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border-subtle overflow-hidden group/qb active:scale-95"
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   backdropFilter: "blur(12px)",
@@ -399,8 +410,8 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
                   }}
                 />
                 {/* Gradient underline */}
-                <div className="absolute bottom-0 inset-x-0 h-px"
-                     style={{ background: `linear-gradient(90deg, ${a.from}, ${a.to})`, opacity: 0.6 }} />
+                <div className="absolute bottom-0 inset-x-0 h-px transition-opacity duration-300 opacity-60 group-hover/qb:opacity-100"
+                     style={{ background: `linear-gradient(90deg, ${a.from}, ${a.to})` }} />
                 {/* Colored dot indicator */}
                 <span
                   className="relative w-1.5 h-1.5 rounded-full flex-shrink-0 group-hover/qb:scale-125 transition-transform duration-200"
@@ -409,7 +420,12 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
                     boxShadow: `0 0 6px ${a.from}90`,
                   }}
                 />
-                <span className="text-base relative">{a.icon}</span>
+                {/* Icon with circular gradient background */}
+                <span className="text-base relative flex items-center justify-center w-7 h-7 rounded-full"
+                  style={{
+                    background: `radial-gradient(circle, ${a.from}20 0%, ${a.to}10 60%, transparent 100%)`,
+                  }}
+                >{a.icon}</span>
                 <span className="text-text-secondary relative">{a.label}</span>
               </motion.button>
             ))}

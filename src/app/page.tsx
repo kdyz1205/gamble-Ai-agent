@@ -202,7 +202,7 @@ export default function Home() {
   const active = appState !== "idle";
 
   const creditsBadge = user ? (
-    <span className="px-2 py-0.5 rounded-md text-[9px] font-black"
+    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black${(user.credits ?? 0) > 0 ? " animate-credits-glow" : ""}`}
           style={{
             background: (user.credits ?? 0) > 0 ? "rgba(0,232,122,0.15)" : "rgba(255,59,48,0.15)",
             color: (user.credits ?? 0) > 0 ? "#00e87a" : "#ff3b30",
@@ -246,7 +246,7 @@ export default function Home() {
             exit={{ y: -60, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
           >
-            <div className="glass-panel" style={{ borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+            <div className="glass-panel" style={{ borderTop: "none", borderLeft: "none", borderRight: "none", backdropFilter: "blur(20px) saturate(180%)", boxShadow: "0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.3)" }}>
               <div className="plasma-line" />
               <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
 
@@ -403,7 +403,14 @@ export default function Home() {
                         className="flex-shrink-0 px-4 py-3 text-sm font-extrabold text-white"
                         style={{ background: copied ? "rgba(0,232,122,0.3)" : "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}
                       >
-                        {copied ? "Copied!" : "Copy"}
+                        {copied ? (
+                          <span className="flex items-center gap-1">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Copied!
+                          </span>
+                        ) : "Copy"}
                       </motion.button>
                     </div>
                   </div>
@@ -472,7 +479,7 @@ export default function Home() {
           className="fixed top-5 right-5 z-20 px-4 py-2 rounded-xl text-xs font-bold text-white"
           style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 16px rgba(124,92,252,0.3)" }}
           initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 0.3 } }}
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.96 }}
         >
@@ -484,7 +491,7 @@ export default function Home() {
           className="fixed top-5 right-5 z-20 flex items-center gap-2 px-3 py-2 rounded-xl border border-border-subtle"
           style={{ background: "rgba(10,10,24,0.8)", backdropFilter: "blur(12px)" }}
           initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0, transition: { delay: 1.5 } }}
+          animate={{ opacity: 1, y: 0, transition: { delay: 0.3 } }}
         >
           {user.image ? (
             <img src={user.image} alt="" className="w-6 h-6 rounded-lg" />
