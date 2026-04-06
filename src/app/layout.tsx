@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Providers from "@/components/Providers";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -50,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen antialiased" style={{ background: "#06060f" }}>
-        <Providers>{children}</Providers>
+        <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
       </body>
     </html>
   );

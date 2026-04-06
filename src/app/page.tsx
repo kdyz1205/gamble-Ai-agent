@@ -64,7 +64,8 @@ function instantDraft(userInput: string): ChallengeDraft {
 
 export default function Home() {
   const { data: session, update: updateSession } = useSession();
-  const user = session?.user as { id: string; username: string; email: string; credits?: number; image?: string | null } | undefined;
+  const rawUser = session?.user as { id?: string; username?: string; name?: string; email?: string; credits?: number; image?: string | null } | undefined;
+  const user = rawUser ? { ...rawUser, username: rawUser.username || rawUser.name || rawUser.email?.split("@")[0] || "User" } : undefined;
 
   const [appState, setAppState]           = useState<AppState>("idle");
   const [messages, setMessages]           = useState<Message[]>([]);
