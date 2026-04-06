@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -123,6 +123,7 @@ export default function Home() {
   const [showScanLine, setShowScanLine]   = useState(false);
   const [challengeId, setChallengeId]     = useState<string | null>(null);
   const [isParsing, setIsParsing]         = useState(false);
+  const aiDraftRef                        = useRef<ChallengeDraft | null>(null);
 
   const [showAuth, setShowAuth]           = useState(false);
 
@@ -186,6 +187,26 @@ export default function Home() {
         setIsParsing(false);
         setIsTyping(false);
 
+        // Store the AI-parsed draft so we use it instead of the local buildDraft
+        const bd = res.betDraft;
+        aiDraftRef.current = {
+          title: bd.title,
+          playerA: "You",
+          playerB: null,
+          type: bd.type ?? "General",
+          stake: bd.stake ?? bd.suggestedStake ?? 0,
+          currency: bd.currency ?? "credits",
+          deadline: bd.deadline ?? "48 hours",
+          durationMinutes: bd.durationMinutes ?? 2880,
+          rules: bd.rules ?? `Standard ${bd.type?.toLowerCase() ?? "general"} rules — AI reviewed`,
+          evidence: bd.evidenceType === "video" ? "Video proof"
+                  : bd.evidenceType === "photo" ? "Photo evidence"
+                  : bd.evidenceType === "gps"   ? "GPS tracking"
+                  : "Self-report",
+          aiReview: true,
+          isPublic: bd.isPublic ?? true,
+        };
+
         if (res.confirmationPrompt?.trim()) {
           pushMsg("ai", res.confirmationPrompt.trim());
         }
@@ -231,15 +252,100 @@ export default function Home() {
       setTimeout(() => {
         setIsTyping(false);
         pushMsg("ai", "I've structured your challenge. Review the draft below and publish when you're ready.");
-        setDraft(buildDraft(origInput, next));
+
+        // Use AI-parsed draft if available, apply user's clarification choices
+        let finalDraft: ChallengeDraft;
+        if (aiDraftRef.current) {
+          finalDraft = { ...aiDraftRef.current };
+          // Apply stake adjustment from clarification answers
+          for (const a of next) {
+            const m = a.match(/(\d+)\s*credit/i);
+            if (m) { finalDraft.stake = parseInt(m[1]); break; }
+          }
+          // Apply evidence choice
+          for (const a of next) {
+            const al = a.toLowerCase();
+            if (/video/.test(al))       { finalDraft.evidence = "Video proof";    break; }
+            if (/photo/.test(al))       { finalDraft.evidence = "Photo evidence"; break; }
+            if (/gps/.test(al))         { finalDraft.evidence = "GPS tracking";   break; }
+            if (/self.report/.test(al)) { finalDraft.evidence = "Self-report";    break; }
+          }
+          // Apply visibility
+          if (next.some(a => /public|nearby/.test(a.toLowerCase()))) finalDraft.isPublic = true;
+          if (next.some(a => /private/.test(a.toLowerCase())))       finalDraft.isPublic = false;
+        } else {
+          finalDraft = buildDraft(origInput, next);
+        }
+
+        setDraft(finalDraft);
         setAppState("drafting");
       }, 1400);
     }
   }, [pushMsg, answers, stepIdx, steps, aiReply, origInput]);
 
   const handleFollowUp = useCallback((input: string) => {
+    // In drafting state, interpret input as draft modification
+    if (appState === "drafting" && draft) {
+      pushMsg("user", input);
+      const lower = input.toLowerCase();
+
+      // Stake adjustment: "change to 5", "lower stake to 3", "5 credits", "make it 2", "set stake 10"
+      const stakeMatch = lower.match(/(\d+)\s*(?:credit|token|coin)/i)
+        || lower.match(/(?:stake|bet|wager|lower|change|set|make\s*it)\s*(?:to\s+)?(\d+)/i)
+        || lower.match(/^(\d+)$/);
+      if (stakeMatch) {
+        const newStake = parseInt(stakeMatch[1]);
+        setDraft(prev => prev ? { ...prev, stake: Math.max(0, newStake) } : prev);
+        const credits = user?.credits ?? 0;
+        if (newStake > credits) {
+          aiReply(
+            `Stake updated to **${newStake} credits**, but you only have **${credits}**. Try a lower amount or top up.`,
+            [`${Math.floor(credits * 0.8)} credits`, `${Math.floor(credits * 0.5)} credits`, "Free — no stake", "Top up credits"],
+          );
+        } else {
+          aiReply(`Stake updated to **${newStake} credits**. Review the draft and publish when ready.`);
+        }
+        return;
+      }
+
+      // Free / remove stake: "free", "no stake", "remove stake"
+      if (/\b(free|no\s*stake|remove\s*stake|zero|0\s*credit)\b/.test(lower)) {
+        setDraft(prev => prev ? { ...prev, stake: 0 } : prev);
+        aiReply("Stake removed — this is now a free challenge. Publish when ready.");
+        return;
+      }
+
+      // Deadline adjustment
+      const deadlineMatch = lower.match(/(\d+)\s*(hour|min|day|week)/i);
+      if (deadlineMatch && /deadline|time|duration/.test(lower)) {
+        const newDeadline = `${deadlineMatch[1]} ${deadlineMatch[2]}s`;
+        setDraft(prev => prev ? { ...prev, deadline: newDeadline } : prev);
+        aiReply(`Deadline updated to **${newDeadline}**.`);
+        return;
+      }
+
+      // Evidence type change
+      if (/video/.test(lower) && /evidence|proof|change/.test(lower)) {
+        setDraft(prev => prev ? { ...prev, evidence: "Video proof" } : prev);
+        aiReply("Evidence type changed to **Video proof**.");
+        return;
+      }
+      if (/photo/.test(lower) && /evidence|proof|change/.test(lower)) {
+        setDraft(prev => prev ? { ...prev, evidence: "Photo evidence" } : prev);
+        aiReply("Evidence type changed to **Photo evidence**.");
+        return;
+      }
+
+      // Unrecognized — suggest common adjustments
+      aiReply(
+        "I can adjust your draft. Try something like:",
+        ["Lower stake to 5", "Make it free", "Change deadline to 1 hour", "Change to photo evidence"],
+      );
+      return;
+    }
+
     handleOptionSelect(input);
-  }, [handleOptionSelect]);
+  }, [handleOptionSelect, appState, draft, pushMsg, aiReply, user?.credits]);
 
   /* ── Publish ── */
   const handlePublish = useCallback(async (editedDraft?: ChallengeDraft) => {
@@ -251,11 +357,22 @@ export default function Home() {
     const finalDraft = editedDraft ?? draft;
     if (!finalDraft) return;
 
-    // Pre-flight balance check
+    // Pre-flight balance check — offer adjustment options instead of dead-end
     if (finalDraft.stake > 0) {
       const currentCredits = user.credits ?? 0;
       if (currentCredits < finalDraft.stake) {
-        pushMsg("ai", `Insufficient credits. You need ${finalDraft.stake} credits but have ${currentCredits}. Please top up first.`);
+        const suggestions: string[] = [];
+        if (currentCredits > 0) {
+          const safe = Math.floor(currentCredits * 0.8);
+          if (safe > 0) suggestions.push(`${safe} credits`);
+          if (currentCredits >= 2) suggestions.push(`${Math.floor(currentCredits / 2)} credits`);
+        }
+        suggestions.push("Free — no stake");
+        suggestions.push("Top up credits");
+        pushMsg("ai",
+          `Not enough credits — you need **${finalDraft.stake}** but have **${currentCredits}**. Adjust your stake or top up:`,
+          suggestions,
+        );
         return;
       }
     }
@@ -305,6 +422,7 @@ export default function Home() {
     setMessages([]); setSteps([]); setStepIdx(0);
     setAnswers([]); setOrigInput(""); setDraft(null); setPublished(false);
     setChallengeId(null);
+    aiDraftRef.current = null;
     if (typeof window !== "undefined" && window.history.replaceState) {
       const u = new URL(window.location.href);
       u.searchParams.delete("challenge");
