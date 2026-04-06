@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ═══════════════════════════════════════
+// NEXTAUTH MODELS
+// ═══════════════════════════════════════
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ═══════════════════════════════════════
+// USERS
+// ═══════════════════════════════════════
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  username      String    @unique
+  name          String?
+  image         String?
+  passwordHash  String?
+  bio           String?
+  credits       Int       @default(10) // starting credits — enough for a few rounds
+  totalCreditsWon  Int    @default(0)
+  totalCreditsLost Int    @default(0)
+  totalCreditsBought Int  @default(0)
+  evmAddress    String?   @unique // EVM wallet for on-chain USAGE tokens
+  latitude      Float?
+  longitude     Float?
+  locationUpdatedAt DateTime?
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  challengesCreated  Challenge[]    @relation("ChallengeCreator")
+  participations     Participant[]
+  evidenceSubmissions Evidence[]
+  judgmentsGiven     Judgment[]     @relation("JudgeUser")
+  judgmentsWon       Judgment[]     @relation("WinnerUser")
+  transactions       CreditTx[]
+  activityEvents     ActivityEvent[]
+}
+
+// ═══════════════════════════════════════
+// CREDIT TRANSACTIONS
+// ═══════════════════════════════════════
+
+model CreditTx {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String   // topup | ai_parse | ai_judge | stake | win | loss | refund | bonus
+  amount       Int      // positive = gained, negative = spent
+  balanceAfter Int
+  description  String?
+  challengeId  String?
+  x402TxHash   String?  // on-chain tx hash for USDC top-ups
+  createdAt    DateTime @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+}
+
+// ═══════════════════════════════════════
+// CHALLENGES
+// ═══════════════════════════════════════
+
+model Challenge {
+  id            String   @id @default(cuid())
+  creatorId     String
+  title         String
+  description   String?
+  type          String   // Fitness | Cooking | Coding | Learning | Games | General
+  status        String   @default("draft") // draft | open | matched | live | judging | settled | cancelled | disputed
+  stake         Int      @default(0) // credits wagered per participant
+  deadline      DateTime?
+  rules         String?
+  evidenceType  String   @default("self_report") // video | photo | gps | self_report
+  aiReview      Boolean  @default(true)
+  aiModel       String?  // which model was used for judging
+  escrowTxHash  String?  // on-chain escrow creation tx
+  settleTxHash  String?  // on-chain settlement tx
+  isPublic      Boolean  @default(true)
+  maxParticipants Int    @default(2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator       User          @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants  Participant[]
+  evidence      Evidence[]
+  judgments     Judgment[]
+  creditTxs     CreditTx[]
+  activityEvents ActivityEvent[]
+}
+
+model Participant {
+  id           String   @id @default(cuid())
+  challengeId  String
+  userId       String
+  role         String   @default("opponent") // creator | opponent | spectator
+  status       String   @default("pending")  // pending | accepted | declined | completed
+  joinedAt     DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+}
+
+// ═══════════════════════════════════════
+// EVIDENCE & JUDGMENT
+// ═══════════════════════════════════════
+
+model Evidence {
+  id           String   @id @default(cuid())
+  challengeId  String
+  userId       String
+  type         String   // video | photo | gps | text
+  url          String?
+  description  String?
+  metadata     String?  // JSON string
+  createdAt    DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Judgment {
+  id           String   @id @default(cuid())
+  challengeId  String
+  judgeId      String?
+  winnerId     String?
+  method       String   @default("ai") // ai | manual | community_vote
+  aiModel      String?
+  reasoning    String?
+  confidence   Float?
+  status       String   @default("pending") // pending | completed | disputed
+  createdAt    DateTime @default(now())
+
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  judge        User?     @relation("JudgeUser", fields: [judgeId], references: [id])
+  winner       User?     @relation("WinnerUser", fields: [winnerId], references: [id])
+}
+
+// ═══════════════════════════════════════
+// ACTIVITY FEED
+// ═══════════════════════════════════════
+
+model ActivityEvent {
+  id           String   @id @default(cuid())
+  type         String
+  message      String
+  userId       String?
+  challengeId  String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  user         User?      @relation(fields: [userId], references: [id])
+  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+}
