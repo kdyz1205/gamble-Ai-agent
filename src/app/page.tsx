@@ -108,7 +108,7 @@ function buildDraft(userInput: string, answers: string[]): ChallengeDraft {
    ═══════════════════════════════════════════════════ */
 
 export default function Home() {
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, status: sessionStatus, update: updateSession } = useSession();
   const user = session?.user as { id: string; username: string; email: string; credits?: number; image?: string | null } | undefined;
 
   const [appState, setAppState]           = useState<AppState>("idle");
@@ -138,15 +138,15 @@ export default function Home() {
     if (id) router.replace(`/challenge/${id}`);
   }, [router]);
 
-  // Reset conversation state when user logs out mid-flow
+  // Reset conversation state only on explicit logout (not during session loading)
   useEffect(() => {
-    if (!user && appState !== "idle") {
+    if (sessionStatus === "unauthenticated" && appState !== "idle") {
       setAppState("idle");
       setMessages([]); setSteps([]); setStepIdx(0);
       setAnswers([]); setOrigInput(""); setDraft(null);
       aiDraftRef.current = null;
     }
-  }, [user, appState]);
+  }, [sessionStatus, appState]);
 
   const openChallengeRoom = useCallback(
     (id: string) => {
