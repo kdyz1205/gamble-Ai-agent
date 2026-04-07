@@ -194,6 +194,35 @@ export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promis
   });
 }
 
+/* ── Voice transcription ── */
+
+export interface TranscriptionResponse {
+  transcript: string;
+  language: string;
+  provider: string;
+  usedFallback: boolean;
+}
+
+export async function transcribeAudio(
+  file: Blob,
+  options?: { languageHint?: "en" | "zh"; previewText?: string },
+): Promise<TranscriptionResponse> {
+  const form = new FormData();
+  const filename = options?.languageHint ? `voice-${options.languageHint}.webm` : "voice.webm";
+  form.append("file", file, filename);
+  if (options?.languageHint) form.append("languageHint", options.languageHint);
+  if (options?.previewText) form.append("previewText", options.previewText);
+
+  const res = await fetch(`${BASE}/transcribe`, {
+    method: "POST",
+    body: form,
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Transcription failed");
+  return data as TranscriptionResponse;
+}
+
 /* ── Feed ── */
 
 export interface ActivityEventData {

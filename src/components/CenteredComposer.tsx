@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AudioRecorder } from "@/lib/audio-recorder";
+import * as api from "@/lib/api-client";
 
 interface Props {
   onSubmit: (message: string) => void;
@@ -10,210 +10,265 @@ interface Props {
   isParsing?: boolean;
 }
 
-type MicState = "idle" | "recording" | "transcribing";
+type VoiceLang = "auto" | "en" | "zh";
 
 export default function CenteredComposer({ onSubmit, isActive, isParsing }: Props) {
   const [input, setInput] = useState("");
-  const [micState, setMicState] = useState<MicState>("idle");
+  const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
-  const [voiceLang, setVoiceLang] = useState<"auto" | "en" | "zh">("auto");
+  const [voiceLang, setVoiceLang] = useState<VoiceLang>("auto");
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recorderRef = useRef<AudioRecorder | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const browserRecognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const latestInputRef = useRef("");
+  const latestInterimRef = useRef("");
 
   const send = useCallback(() => {
     const v = input.trim();
-    if (!v || isParsing) return;
+    if (!v || isParsing || isTranscribing) return;
     onSubmit(v);
     setInput("");
-  }, [input, isParsing, onSubmit]);
+    setInterim("");
+  }, [input, isParsing, isTranscribing, onSubmit]);
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
   };
 
-  /* ── Dual-track voice: browser preview + server transcribe ── */
-  const startRecording = useCallback(async () => {
-    if (micState !== "idle") return;
+  useEffect(() => {
+    latestInputRef.current = input;
+  }, [input]);
 
-    // Track A: Browser SpeechRecognition for real-time preview
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) {
-      const recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      const langMap = { auto: navigator.language || "en-US", en: "en-US", zh: "zh-CN" };
-      recognition.lang = langMap[voiceLang];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      recognition.onresult = (event: any) => {
-        let interimText = "";
-        for (let i = 0; i < event.results.length; i++) {
-          if (!event.results[i].isFinal) {
-            interimText += event.results[i][0].transcript;
-          }
-        }
-        setInterim(interimText);
-      };
-      recognition.onerror = () => {};
-      recognition.start();
-      browserRecognitionRef.current = recognition;
+  useEffect(() => {
+    latestInterimRef.current = interim;
+  }, [interim]);
+
+  const getRecognitionLanguage = useCallback(() => {
+    if (voiceLang === "en") return "en-US";
+    if (voiceLang === "zh") return "zh-CN";
+    return navigator.language || "en-US";
+  }, [voiceLang]);
+
+  const getLanguageHint = useCallback((): "en" | "zh" | undefined => {
+    if (voiceLang === "en") return "en";
+    if (voiceLang === "zh") return "zh";
+    return undefined;
+  }, [voiceLang]);
+
+  const stopPreviewRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  const stopRecorderOnly = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const stopAllTracks = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const transcribeRecordedAudio = useCallback(async () => {
+    const mimeType = mediaRecorderRef.current?.mimeType || "audio/webm";
+    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+    const previewText = `${latestInputRef.current} ${latestInterimRef.current}`.trim();
+
+    if (!audioBlob.size && !previewText) {
+      return;
     }
 
-    // Track B: Real audio recording for server-side transcription
+    setIsTranscribing(true);
     try {
-      const recorder = new AudioRecorder();
-      await recorder.start();
-      recorderRef.current = recorder;
-      setMicState("recording");
-    } catch {
-      setMicState("idle");
-      alert("Could not access microphone.");
-    }
-  }, [micState, voiceLang]);
+      const result = await api.transcribeAudio(audioBlob, {
+        languageHint: getLanguageHint(),
+        previewText,
+      });
 
-  const stopRecording = useCallback(async () => {
-    if (micState !== "recording") return;
-
-    // Stop browser preview
-    if (browserRecognitionRef.current) {
-      browserRecognitionRef.current.stop();
-      browserRecognitionRef.current = null;
-    }
-    setInterim("");
-    setMicState("transcribing");
-
-    // Stop recording and get audio blob
-    const recorder = recorderRef.current;
-    if (!recorder) { setMicState("idle"); return; }
-
-    const audioBlob = await recorder.stop();
-    recorderRef.current = null;
-
-    // Upload to server for high-quality transcription
-    try {
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.webm");
-      formData.append("lang", voiceLang);
-
-      const res = await fetch("/api/transcribe", { method: "POST", body: formData });
-      const data = await res.json();
-
-      if (data.transcript) {
-        // Server transcript overrides everything
-        setInput(data.transcript);
-        setMicState("idle");
-        // Auto-submit the high-quality transcript
-        onSubmit(data.transcript);
-      } else {
-        // Fallback: use whatever browser captured
-        setMicState("idle");
+      const finalText = (result.transcript || previewText).trim();
+      if (finalText) {
+        setInput(finalText);
+        setInterim("");
+        onSubmit(finalText);
+        setInput("");
       }
     } catch {
-      // Network error — keep whatever text was in input
-      setMicState("idle");
+      if (previewText) {
+        setInput(previewText);
+        setInterim("");
+        onSubmit(previewText);
+        setInput("");
+      }
+    } finally {
+      setIsTranscribing(false);
+      audioChunksRef.current = [];
     }
-  }, [micState, voiceLang, onSubmit]);
+  }, [getLanguageHint, onSubmit]);
 
-  const toggleMic = useCallback(() => {
-    if (micState === "idle") {
-      startRecording();
-    } else if (micState === "recording") {
-      stopRecording();
+  const startPreviewRecognition = useCallback(() => {
+    const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!RecognitionCtor) return;
+
+    const recognition = new RecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = getRecognitionLanguage();
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let finalText = "";
+      let interimText = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const transcript = event.results[i][0]?.transcript || "";
+        if (event.results[i].isFinal) {
+          finalText += transcript;
+        } else {
+          interimText += transcript;
+        }
+      }
+
+      if (finalText) {
+        setInput(prev => prev ? `${prev.trimEnd()} ${finalText.trim()}` : finalText.trim());
+      }
+      setInterim(interimText.trim());
+    };
+
+    recognition.onerror = () => {
+      setInterim("");
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
     }
-  }, [micState, startRecording, stopRecording]);
+  }, [getRecognitionLanguage]);
 
-  // Focus input on idle mount
+  const startRecording = useCallback(async () => {
+    if (isParsing || isTranscribing) return;
+
+    const hasMediaRecorder = typeof window !== "undefined" && "MediaRecorder" in window;
+    const hasGetUserMedia = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+
+    if (!hasMediaRecorder || !hasGetUserMedia) {
+      alert("当前浏览器不支持录音。");
+      return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
+    audioChunksRef.current = [];
+
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data && event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onerror = () => {
+      setListening(false);
+      stopPreviewRecognition();
+      stopAllTracks();
+    };
+
+    recorder.onstop = async () => {
+      stopPreviewRecognition();
+      stopAllTracks();
+      setListening(false);
+      await transcribeRecordedAudio();
+    };
+
+    recorder.start();
+    setListening(true);
+    setInterim("");
+    startPreviewRecognition();
+  }, [isParsing, isTranscribing, startPreviewRecognition, stopAllTracks, stopPreviewRecognition, transcribeRecordedAudio]);
+
+  const toggleMic = useCallback(async () => {
+    if (listening) {
+      stopPreviewRecognition();
+      stopRecorderOnly();
+      return;
+    }
+
+    await startRecording();
+  }, [listening, startRecording, stopPreviewRecognition, stopRecorderOnly]);
+
   useEffect(() => {
-    if (!isActive && textareaRef.current) textareaRef.current.focus();
+    if (!isActive && textareaRef.current) {
+      textareaRef.current.focus();
+    }
   }, [isActive]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      recorderRef.current?.cancel();
-      browserRecognitionRef.current?.stop();
+      stopPreviewRecognition();
+      stopRecorderOnly();
+      stopAllTracks();
     };
-  }, []);
+  }, [stopAllTracks, stopPreviewRecognition, stopRecorderOnly]);
+
+  const busy = Boolean(isParsing || isTranscribing);
 
   return (
     <div className="w-full">
       <div
         style={{
           background: "#111110",
-          border: `1px solid ${micState === "recording" ? "rgba(163,31,52,0.4)" : isParsing ? "rgba(212,175,55,0.3)" : "rgba(212,175,55,0.1)"}`,
+          border: `1px solid ${busy ? "rgba(212,175,55,0.3)" : "rgba(212,175,55,0.1)"}`,
           borderRadius: "2px",
           transition: "border-color 0.3s",
         }}
       >
-        {/* Recording indicator */}
-        <AnimatePresence>
-          {micState === "recording" && (
-            <motion.div
-              className="flex items-center gap-2 px-4 py-2 border-b"
-              style={{ borderColor: "rgba(163,31,52,0.2)", background: "rgba(163,31,52,0.04)" }}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-            >
-              <motion.div
-                className="w-2 h-2 rounded-full"
-                style={{ background: "#A31F34" }}
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              />
-              <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "#A31F34" }}>
-                Recording — tap mic to finish
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Transcribing state */}
-        <AnimatePresence>
-          {micState === "transcribing" && (
-            <motion.div
-              className="flex items-center gap-2 px-4 py-2 border-b"
-              style={{ borderColor: "rgba(212,175,55,0.15)", background: "rgba(212,175,55,0.04)" }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="w-3 h-3 rounded-full border border-t-transparent"
-                style={{ borderColor: "#D4AF37", borderTopColor: "transparent" }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-              />
-              <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "#D4AF37" }}>
-                Transcribing with AI...
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Textarea */}
         <textarea
           ref={textareaRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={isActive ? "Edit: \"$20 stake\" or \"video proof\"" : "I bet Benny's wife fails the DMV test — $10..."}
+          placeholder={isActive ? "Edit: e.g. \"$20 stake\" or \"video proof\"" : "I bet Benny's wife fails the DMV test — $10..."}
           rows={isActive ? 1 : 2}
-          disabled={isParsing || micState === "transcribing"}
+          disabled={busy}
           className="w-full bg-transparent px-4 py-3 text-sm font-mono resize-none focus:outline-none"
           style={{ color: "#E5E0D8", caretColor: "#D4AF37" }}
         />
 
-        {/* Live preview from browser recognition */}
         <AnimatePresence>
           {interim && (
             <motion.div
               className="px-4 pb-2 text-xs font-mono italic"
-              style={{ color: "#D4AF37", opacity: 0.5 }}
+              style={{ color: "#D4AF37", opacity: 0.6 }}
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
+              animate={{ opacity: 0.6 }}
               exit={{ opacity: 0 }}
             >
               {interim}
@@ -221,66 +276,93 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
           )}
         </AnimatePresence>
 
-        {/* Bottom bar */}
         <div className="flex items-center justify-between px-3 py-2 border-t" style={{ borderColor: "rgba(212,175,55,0.06)" }}>
-          <div className="flex items-center gap-1">
-            {/* Language toggle */}
-            {(["auto", "en", "zh"] as const).map(lang => (
-              <button
-                key={lang}
-                onClick={() => setVoiceLang(lang)}
-                className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider transition-colors"
-                style={{
-                  color: voiceLang === lang ? "#D4AF37" : "#8b8b83",
-                  background: voiceLang === lang ? "rgba(212,175,55,0.1)" : "transparent",
-                  borderRadius: "1px",
-                }}
-              >
-                {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "中"}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 mr-1">
+              {(["auto", "en", "zh"] as const).map(lang => (
+                <button
+                  key={lang}
+                  onClick={() => setVoiceLang(lang)}
+                  disabled={listening || isTranscribing}
+                  className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider transition-colors disabled:opacity-40"
+                  style={{
+                    color: voiceLang === lang ? "#D4AF37" : "#8b8b83",
+                    background: voiceLang === lang ? "rgba(212,175,55,0.1)" : "transparent",
+                    borderRadius: "1px",
+                  }}
+                >
+                  {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "中"}
+                </button>
+              ))}
+            </div>
 
-            <div className="w-px h-3 mx-1" style={{ background: "rgba(212,175,55,0.1)" }} />
-
-            {/* Mic button */}
             <button
-              onClick={toggleMic}
-              disabled={micState === "transcribing"}
+              onClick={() => { void toggleMic(); }}
+              disabled={busy && !listening}
               className="flex items-center gap-1.5 px-2 py-1.5 transition-colors disabled:opacity-40"
               style={{
-                color: micState === "recording" ? "#A31F34" : "#8b8b83",
-                background: micState === "recording" ? "rgba(163,31,52,0.1)" : "transparent",
+                color: listening ? "#A31F34" : "#8b8b83",
+                background: listening ? "rgba(163,31,52,0.1)" : "transparent",
                 borderRadius: "2px",
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-              <span className="text-[10px] font-mono uppercase tracking-wider">
-                {micState === "recording" ? "Stop" : micState === "transcribing" ? "..." : "Mic"}
-              </span>
+              {isTranscribing ? (
+                <>
+                  <motion.div
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "#D4AF37" }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Transcribing...</span>
+                </>
+              ) : listening ? (
+                <>
+                  <motion.div
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "#A31F34" }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Recording...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Mic</span>
+                </>
+              )}
             </button>
           </div>
 
-          {/* Send */}
           <button
             onClick={send}
-            disabled={!input.trim() || isParsing || micState !== "idle"}
+            disabled={!input.trim() || busy}
             className="px-4 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-all disabled:opacity-30"
             style={{
-              color: input.trim() ? "#0A0A0B" : "#8b8b83",
-              background: input.trim() ? "#D4AF37" : "transparent",
-              border: input.trim() ? "none" : "1px solid rgba(212,175,55,0.1)",
+              color: input.trim() && !busy ? "#0A0A0B" : "#8b8b83",
+              background: input.trim() && !busy ? "#D4AF37" : "transparent",
+              border: input.trim() && !busy ? "none" : "1px solid rgba(212,175,55,0.1)",
               borderRadius: "2px",
             }}
           >
-            {isParsing ? "..." : isActive ? "Update" : "Send"}
+            {busy ? "..." : isActive ? "Update" : "Send"}
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare global {
+  interface Window {
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
+  }
 }

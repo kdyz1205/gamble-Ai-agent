@@ -30,6 +30,28 @@ export default function Home() {
   const [amountConfirm, setAmountConfirm] = useState<{ prompt: string; options: { label: string; credits: number }[] } | null>(null);
   const [clarifications, setClarifications] = useState<Array<{ question: string; options: string[] }>>([]);
 
+  const applyDraftEdit = useCallback((input: string) => {
+    if (!draft) return;
+    const normalized = normalizeTranscript(input);
+    const updated = { ...draft };
+
+    const amountResult = parseAmount(normalized);
+    if (amountResult && !amountResult.needsConfirmation) {
+      updated.stake = amountResult.credits;
+    }
+    if (/free|no.?stake|免费|不赌钱/i.test(normalized)) updated.stake = 0;
+    if (/video|录像|视频/i.test(normalized)) updated.evidence = "Video proof";
+    else if (/photo|照片|图片|截图/i.test(normalized)) updated.evidence = "Photo evidence";
+    else if (/self.?report|自己报|口头/i.test(normalized)) updated.evidence = "Self-report";
+    if (/1.?hour|1小时/i.test(normalized)) updated.deadline = "1 hour";
+    if (/24.?h|24小时|一天/i.test(normalized)) updated.deadline = "24 hours";
+    if (/48.?h|48小时|两天/i.test(normalized)) updated.deadline = "48 hours";
+    if (/7.?day|7天|一周/i.test(normalized)) updated.deadline = "7 days";
+
+    setDraft(updated);
+    setAiMessage(`Updated — ${updated.stake > 0 ? `${updated.stake} credits` : "free"}, ${updated.evidence}, ${updated.deadline}.`);
+  }, [draft]);
+
   /* ── Submit: normalize → try API parse → fallback to local ── */
   const handleSubmit = useCallback(async (input: string) => {
     const normalized = normalizeTranscript(input);
@@ -39,33 +61,33 @@ export default function Home() {
     setClarifications([]);
     setAppState("parsing");
 
-    // Check for amount ambiguity FIRST
     const amountResult = parseAmount(normalized);
     if (amountResult?.needsConfirmation && amountResult.confirmationPrompt) {
+      const options = [{ label: `${amountResult.credits} credits`, credits: amountResult.credits }];
+      if (amountResult.unit === "ambiguous" && amountResult.credits < 1000) {
+        options.push({
+          label: `$${amountResult.credits} = ${amountResult.credits * 100} credits`,
+          credits: amountResult.credits * 100,
+        });
+      }
       setAmountConfirm({
         prompt: amountResult.confirmationPrompt,
-        options: [
-          { label: `${amountResult.credits} credits`, credits: amountResult.credits },
-          ...(amountResult.unit === "ambiguous" && amountResult.credits < 1000
-            ? [{ label: `$${amountResult.credits} = ${amountResult.credits * 100} credits`, credits: amountResult.credits * 100 }]
-            : []),
-        ],
+        options,
       });
-      // Still parse, but flag the ambiguity
     }
 
     try {
       if (user) {
         const res = await api.parseChallenge(normalized);
         if (res.parsed) {
-          // Use unified amount parser result if available, else use AI's
           const stake = amountResult && !amountResult.needsConfirmation
             ? amountResult.credits
             : res.parsed.suggestedStake || 0;
 
           setDraft({
             title: res.parsed.title || normalized,
-            playerA: "You", playerB: null,
+            playerA: "You",
+            playerB: null,
             type: res.parsed.type || "General",
             stake,
             deadline: res.parsed.deadline || "24 hours",
@@ -73,10 +95,9 @@ export default function Home() {
             rules: res.parsed.rules || "",
             evidence: res.parsed.evidenceType || "Self-report",
             aiReview: true,
-            isPublic: false, // default private for friend-to-friend
+            isPublic: false,
           });
 
-          // Pass along clarifications
           if (res.clarifications?.length > 0) {
             setClarifications(res.clarifications);
           }
@@ -87,10 +108,9 @@ export default function Home() {
         }
       }
     } catch {
-      // Fallback to local parsing
+      // fall through to local parse
     }
 
-    // Local fallback — uses unified amount parser
     const d = localParse(normalized);
     if (amountResult && !amountResult.needsConfirmation) {
       d.stake = amountResult.credits;
@@ -129,7 +149,6 @@ export default function Home() {
     }
   }, [draft, user]);
 
-  /* ── Copy ── */
   const copyLink = useCallback(() => {
     if (!shareLink) return;
     navigator.clipboard.writeText(shareLink).then(() => {
@@ -138,11 +157,16 @@ export default function Home() {
     });
   }, [shareLink]);
 
-  /* ── Reset ── */
   const reset = useCallback(() => {
     setAppState("idle");
-    setUserInput(""); setAiMessage(""); setDraft(null);
-    setShareLink(null); setCopied(false); setError(null);
+    setUserInput("");
+    setAiMessage("");
+    setDraft(null);
+    setShareLink(null);
+    setCopied(false);
+    setError(null);
+    setAmountConfirm(null);
+    setClarifications([]);
   }, []);
 
   return (
@@ -151,13 +175,11 @@ export default function Home() {
       style={{ background: "#0A0A0B" }}
       onClick={() => showProfile && setShowProfile(false)}
     >
-      {/* Subtle ambient */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.03] blur-[150px]" style={{ background: "#D4AF37" }} />
         <div className="absolute -bottom-40 -right-40 w-[400px] h-[400px] rounded-full opacity-[0.02] blur-[120px]" style={{ background: "#005F6F" }} />
       </div>
 
-      {/* ── Top bar — always visible ── */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <button onClick={reset} className="flex items-center gap-2">
           <span className="text-sm font-serif font-bold" style={{ color: "#D4AF37" }}>Lex Divina</span>
@@ -224,20 +246,20 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ── Main content ── */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-20">
         <div className="w-full max-w-lg">
-
-          {/* STATE: idle — just the composer */}
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <p className="text-center font-serif text-2xl mb-1" style={{ color: "#E5E0D8" }}>Say the bet.</p>
               <p className="text-center text-xs font-mono mb-8" style={{ color: "#8b8b83" }}>We&apos;ll structure it.</p>
-              <CenteredComposer onSubmit={handleSubmit} isActive={false} />
+              <CenteredComposer
+                onSubmit={handleSubmit}
+                isActive={false}
+                isParsing={false}
+              />
             </motion.div>
           )}
 
-          {/* STATE: parsing */}
           {appState === "parsing" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <motion.div
@@ -251,20 +273,16 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* STATE: drafting — show draft card */}
           {appState === "drafting" && draft && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-              {/* User input echo */}
               <div className="mb-3 px-3 py-2" style={{ borderLeft: "2px solid rgba(212,175,55,0.2)" }}>
                 <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>&ldquo;{userInput}&rdquo;</p>
               </div>
 
-              {/* AI interpretation */}
               {aiMessage && (
                 <p className="text-xs font-mono mb-5 px-1" style={{ color: "#D4AF37" }}>{aiMessage}</p>
               )}
 
-              {/* Amount ambiguity confirmation */}
               {amountConfirm && draft && (
                 <div className="mb-4 p-3" style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)", borderRadius: "2px" }}>
                   <p className="text-xs font-mono mb-2" style={{ color: "#D4AF37" }}>{amountConfirm.prompt}</p>
@@ -287,7 +305,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Clarifications from AI */}
               {clarifications.length > 0 && (
                 <div className="mb-4 space-y-3">
                   {clarifications.map((c, i) => (
@@ -298,7 +315,6 @@ export default function Home() {
                           <button
                             key={opt}
                             onClick={() => {
-                              // Remove this clarification after answering
                               setClarifications(prev => prev.filter((_, idx) => idx !== i));
                             }}
                             className="px-3 py-1.5 text-[10px] font-mono tracking-wider transition-colors"
@@ -313,7 +329,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Error */}
               {error && (
                 <div className="mb-4 px-3 py-2 text-xs font-mono" style={{ color: "#A31F34", borderLeft: "2px solid #A31F34" }}>
                   {error}
@@ -322,31 +337,16 @@ export default function Home() {
 
               <DraftPanel draft={draft} onPublish={handlePublish} onEdit={() => {}} />
 
-              {/* Edit via text */}
               <div className="mt-4">
-                <CenteredComposer onSubmit={(input) => {
-                  // Inline edit the draft
-                  const s = input.toLowerCase();
-                  const updated = { ...draft };
-                  const creditMatch = s.match(/(\d+)\s*credit/i);
-                  const dollarMatch = s.match(/\$(\d+)/);
-                  if (creditMatch) updated.stake = parseInt(creditMatch[1]);
-                  else if (dollarMatch) updated.stake = parseInt(dollarMatch[1]);
-                  if (/free|no.?stake/.test(s)) updated.stake = 0;
-                  if (/video/.test(s)) updated.evidence = "Video proof";
-                  if (/photo/.test(s)) updated.evidence = "Photo evidence";
-                  if (/self.?report/.test(s)) updated.evidence = "Self-report";
-                  if (/1.?hour/.test(s)) updated.deadline = "1 hour";
-                  if (/24.?h/.test(s)) updated.deadline = "24 hours";
-                  if (/48.?h/.test(s)) updated.deadline = "48 hours";
-                  setDraft(updated);
-                  setAiMessage(`Updated — ${updated.stake > 0 ? `${updated.stake} credits` : "free"}, ${updated.evidence}, ${updated.deadline}.`);
-                }} isActive={true} />
+                <CenteredComposer
+                  onSubmit={applyDraftEdit}
+                  isActive={true}
+                  isParsing={false}
+                />
               </div>
             </motion.div>
           )}
 
-          {/* STATE: publishing */}
           {appState === "publishing" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <motion.div
@@ -359,7 +359,6 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* STATE: live — share link */}
           {appState === "live" && shareLink && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
               <div className="text-center mb-6">
@@ -367,7 +366,6 @@ export default function Home() {
                 <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>Send this link to your opponent.</p>
               </div>
 
-              {/* Share link */}
               <div className="flex items-center gap-0 mb-6" style={{ border: "1px solid rgba(212,175,55,0.15)", borderRadius: "2px" }}>
                 <input
                   type="text"
@@ -389,7 +387,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Draft summary */}
               {draft && (
                 <div className="flex gap-3 mb-6 text-[10px] font-mono" style={{ color: "#8b8b83" }}>
                   <span>{draft.type}</span>
@@ -417,31 +414,37 @@ export default function Home() {
   );
 }
 
-/* ── Local fallback parser (used when API unavailable) ── */
 function localParse(input: string): ChallengeDraft {
   const s = input.toLowerCase();
   let type = "General";
-  if (/pushup|run|fitness|exercise|plank|squat|gym|workout/.test(s)) type = "Fitness";
-  else if (/cook|bake|food|pasta/.test(s)) type = "Cooking";
-  else if (/code|coding|program/.test(s)) type = "Coding";
-  else if (/read|book|study|learn/.test(s)) type = "Learning";
-  else if (/chess|game|play|match|bet/.test(s)) type = "Games";
+  if (/pushup|run|fitness|exercise|plank|squat|gym|workout|俯卧撑|跑步|健身/i.test(s)) type = "Fitness";
+  else if (/cook|bake|food|pasta|做饭|烘焙|料理/i.test(s)) type = "Cooking";
+  else if (/code|coding|program|写代码|编程/i.test(s)) type = "Coding";
+  else if (/read|book|study|learn|exam|阅读|学习|考试/i.test(s)) type = "Learning";
+  else if (/chess|game|play|match|bet|游戏|比赛|赌/i.test(s)) type = "Games";
 
-  let stake = 0;
-  const m = s.match(/(\d+)\s*(?:credit|dollar|\$|u\b|块|刀)/i) || s.match(/\$(\d+)/);
-  if (m) stake = parseInt(m[1]);
+  const amountResult = parseAmount(input);
+  const stake = amountResult && !amountResult.needsConfirmation ? amountResult.credits : 0;
 
   let evidence = "Self-report";
-  if (/video/.test(s)) evidence = "Video proof";
-  else if (/photo/.test(s)) evidence = "Photo evidence";
+  if (/video|录像|视频/i.test(s)) evidence = "Video proof";
+  else if (/photo|照片|图片|截图/i.test(s)) evidence = "Photo evidence";
   else if (type === "Fitness") evidence = "Video proof";
 
   let title = input.charAt(0).toUpperCase() + input.slice(1);
   if (title.length > 64) title = title.slice(0, 61) + "…";
 
   return {
-    title, playerA: "You", playerB: null, type, stake,
-    deadline: "24 hours", durationMinutes: 1440,
-    rules: `${type} challenge — AI judges`, evidence, aiReview: true, isPublic: false,
+    title,
+    playerA: "You",
+    playerB: null,
+    type,
+    stake,
+    deadline: "24 hours",
+    durationMinutes: 1440,
+    rules: `${type} challenge — AI judges`,
+    evidence,
+    aiReview: true,
+    isPublic: false,
   };
 }
