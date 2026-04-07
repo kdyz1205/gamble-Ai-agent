@@ -188,6 +188,9 @@ export default function Home() {
                       <p className="text-[9px] font-mono" style={{ color: "#8b8b83" }}>{user.email || ""}</p>
                     </div>
                     <div className="p-2 space-y-1">
+                      <button onClick={() => { setShowProfile(false); router.push("/me"); }}
+                        className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#D4AF37] transition-colors"
+                        style={{ color: "#8b8b83" }}>Profile</button>
                       <button onClick={() => { setShowProfile(false); router.push("/markets"); }}
                         className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#D4AF37] transition-colors"
                         style={{ color: "#8b8b83" }}>My Markets</button>
