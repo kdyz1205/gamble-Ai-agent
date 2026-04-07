@@ -8,12 +8,13 @@ interface Props {
   onSubmit: (message: string) => void;
   isActive: boolean;
   isParsing?: boolean;
+  initialValue?: string;
 }
 
 type VoiceLang = "auto" | "en" | "zh";
 
-export default function CenteredComposer({ onSubmit, isActive, isParsing }: Props) {
-  const [input, setInput] = useState("");
+export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue }: Props) {
+  const [input, setInput] = useState(initialValue || "");
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [voiceLang, setVoiceLang] = useState<VoiceLang>("auto");
@@ -221,6 +222,14 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
 
     await startRecording();
   }, [listening, startRecording, stopPreviewRecognition, stopRecorderOnly]);
+
+  // Sync initialValue into input when it changes (e.g. "Edit input" brings back original text)
+  useEffect(() => {
+    if (initialValue !== undefined && initialValue !== input) {
+      setInput(initialValue);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValue]);
 
   useEffect(() => {
     if (!isActive && textareaRef.current) {

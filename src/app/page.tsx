@@ -53,11 +53,31 @@ export default function Home() {
   }, [draft]);
 
   /* ── Intent gate: is this a challenge/bet? ── */
+  /* ── Intent classifier: scored, not binary ── */
   const looksLikeChallenge = useCallback((text: string): boolean => {
     const s = text.toLowerCase();
-    return /bet|赌|wager|challenge|stake|credit|\$\d|比|挑战|打赌|能不能|会不会|输|赢|对赌|dare/i.test(s)
-      || /who can|i can|you can't|先做完|谁能|谁先/i.test(s)
-      || s.length > 30; // long sentences are likely challenge descriptions
+    let score = 0;
+
+    // Strong signals (any one is enough)
+    if (/\$\d|credit|stake|wager/i.test(s)) score += 3;
+    if (/赌|打赌|对赌|下注/i.test(s)) score += 3;
+    if (/bet\b|dare\b|challenge\b/i.test(s)) score += 3;
+
+    // Medium signals
+    if (/who can|i can|can't|i bet|你敢不敢|谁能|谁先|比谁/i.test(s)) score += 2;
+    if (/能不能|会不会|输|赢|挑战|比赛/i.test(s)) score += 2;
+    if (/pushup|squat|run|cook|code|chess|race|考试|跑步|俯卧撑/i.test(s)) score += 2;
+
+    // Weak signals
+    if (/先做完|before|deadline|by tomorrow|明天|今天/i.test(s)) score += 1;
+    if (/video|photo|proof|证据|录像/i.test(s)) score += 1;
+    if (s.length > 40) score += 1; // long = more likely descriptive
+
+    // Anti-signals (likely not a challenge)
+    if (/^(hi|hello|hey|你好|嗨|what|how|help|帮|怎么)\b/i.test(s)) score -= 2;
+    if (s.length < 8) score -= 1;
+
+    return score >= 2;
   }, []);
 
   /* ── Submit: normalize → intent gate → parse ── */
@@ -275,6 +295,7 @@ export default function Home() {
                 onSubmit={handleSubmit}
                 isActive={false}
                 isParsing={false}
+                initialValue={userInput}
               />
             </motion.div>
           )}
@@ -304,7 +325,7 @@ export default function Home() {
                   &larr; Start over
                 </button>
                 <button
-                  onClick={() => { setAppState("idle"); setDraft(null); setAiMessage(""); }}
+                  onClick={() => { setAppState("idle"); setDraft(null); setAiMessage("Try again or edit your input."); }}
                   className="text-[10px] font-mono uppercase tracking-wider transition-colors"
                   style={{ color: "#D4AF37" }}
                 >
