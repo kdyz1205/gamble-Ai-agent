@@ -52,13 +52,29 @@ export default function Home() {
     setAiMessage(`Updated — ${updated.stake > 0 ? `${updated.stake} credits` : "free"}, ${updated.evidence}, ${updated.deadline}.`);
   }, [draft]);
 
-  /* ── Submit: normalize → try API parse → fallback to local ── */
+  /* ── Intent gate: is this a challenge/bet? ── */
+  const looksLikeChallenge = useCallback((text: string): boolean => {
+    const s = text.toLowerCase();
+    return /bet|赌|wager|challenge|stake|credit|\$\d|比|挑战|打赌|能不能|会不会|输|赢|对赌|dare/i.test(s)
+      || /who can|i can|you can't|先做完|谁能|谁先/i.test(s)
+      || s.length > 30; // long sentences are likely challenge descriptions
+  }, []);
+
+  /* ── Submit: normalize → intent gate → parse ── */
   const handleSubmit = useCallback(async (input: string) => {
     const normalized = normalizeTranscript(input);
     setUserInput(normalized);
     setError(null);
     setAmountConfirm(null);
     setClarifications([]);
+
+    // Intent gate — don't force short non-challenge text into draft
+    if (!looksLikeChallenge(normalized)) {
+      setAiMessage("That doesn't look like a challenge. Try something like: \"I bet 10 credits I can do 50 pushups in 2 min\"");
+      setAppState("idle");
+      return;
+    }
+
     setAppState("parsing");
 
     const amountResult = parseAmount(normalized);
@@ -251,7 +267,10 @@ export default function Home() {
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <p className="text-center font-serif text-2xl mb-1" style={{ color: "#E5E0D8" }}>Say the bet.</p>
-              <p className="text-center text-xs font-mono mb-8" style={{ color: "#8b8b83" }}>We&apos;ll structure it.</p>
+              <p className="text-center text-xs font-mono mb-4" style={{ color: "#8b8b83" }}>We&apos;ll structure it.</p>
+              {aiMessage && (
+                <p className="text-center text-xs font-mono mb-4 px-4" style={{ color: "#D4AF37" }}>{aiMessage}</p>
+              )}
               <CenteredComposer
                 onSubmit={handleSubmit}
                 isActive={false}
@@ -275,6 +294,24 @@ export default function Home() {
 
           {appState === "drafting" && draft && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              {/* Back / Retry controls */}
+              <div className="flex items-center gap-3 mb-4">
+                <button
+                  onClick={() => { reset(); }}
+                  className="text-[10px] font-mono uppercase tracking-wider transition-colors"
+                  style={{ color: "#8b8b83" }}
+                >
+                  &larr; Start over
+                </button>
+                <button
+                  onClick={() => { setAppState("idle"); setDraft(null); setAiMessage(""); }}
+                  className="text-[10px] font-mono uppercase tracking-wider transition-colors"
+                  style={{ color: "#D4AF37" }}
+                >
+                  Edit input
+                </button>
+              </div>
+
               <div className="mb-3 px-3 py-2" style={{ borderLeft: "2px solid rgba(212,175,55,0.2)" }}>
                 <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>&ldquo;{userInput}&rdquo;</p>
               </div>

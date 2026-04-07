@@ -105,17 +105,15 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
 
       const finalText = (result.transcript || previewText).trim();
       if (finalText) {
+        // Show in input box — let user review before submitting
         setInput(finalText);
         setInterim("");
-        onSubmit(finalText);
-        setInput("");
       }
     } catch {
+      // Fallback: use browser preview text
       if (previewText) {
         setInput(previewText);
         setInterim("");
-        onSubmit(previewText);
-        setInput("");
       }
     } finally {
       setIsTranscribing(false);
