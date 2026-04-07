@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import CenteredComposer from "@/components/CenteredComposer";
 import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
@@ -13,6 +14,7 @@ import { compileMarket, type MarketDraft, type Clarification, type CompileResult
 type AppState = "idle" | "compiling" | "drafting" | "publishing" | "live";
 
 export default function Home() {
+  const router = useRouter();
   const { data: session, update: updateSession } = useSession();
   const rawUser = session?.user as { id?: string; username?: string; name?: string; email?: string; credits?: number } | undefined;
   const user = rawUser ? { ...rawUser, username: rawUser.username || rawUser.name || rawUser.email?.split("@")[0] || "User" } : undefined;
@@ -123,8 +125,8 @@ export default function Home() {
         aiReview: true,
         isPublic: d.isPublic || false,
       });
-      setShareLink(`${window.location.origin}/join/${res.challenge.id}`);
-      setAppState("live");
+      // Redirect to the market's permanent home
+      router.push(`/market/${res.challenge.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to publish");
       setAppState("drafting");
@@ -185,7 +187,10 @@ export default function Home() {
                       <p className="text-xs font-serif font-bold" style={{ color: "#E5E0D8" }}>{user.username}</p>
                       <p className="text-[9px] font-mono" style={{ color: "#8b8b83" }}>{user.email || ""}</p>
                     </div>
-                    <div className="p-2">
+                    <div className="p-2 space-y-1">
+                      <button onClick={() => { setShowProfile(false); router.push("/markets"); }}
+                        className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#D4AF37] transition-colors"
+                        style={{ color: "#8b8b83" }}>My Markets</button>
                       <button onClick={() => { setShowProfile(false); signOut(); reset(); }}
                         className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#A31F34] transition-colors"
                         style={{ color: "#8b8b83" }}>Sign Out</button>
