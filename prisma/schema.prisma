@@ -115,21 +115,53 @@ model Challenge {
   creatorId     String
   title         String
   description   String?
-  type          String   // Fitness | Cooking | Coding | Learning | Games | General
-  status        String   @default("draft") // draft | open | matched | live | judging | settled | cancelled | disputed
+  type          String   // Fitness | Cooking | Coding | Learning | Games | Prediction | General
+  status        String   @default("draft") // draft | open | funded | live | judging | resolved | void | cancelled | disputed
+
+  // ── Market structure ──
+  marketType    String   @default("challenge") // yes_no | threshold | head_to_head | challenge
+  proposition   String?  // canonical proposition ("Will X happen?", "Can I do Y?")
+
+  // ── Stakes ──
   stake         Int      @default(0) // credits wagered per participant
+  stakeToken    String   @default("credits") // credits | usdc | eth
+
+  // ── Timing ──
   deadline      DateTime?
+  eventTime     String?  // human-readable event time ("April 10", "tomorrow 3pm")
+  joinWindow    String?  // how long others can join ("24 hours", "until event")
+  proofWindow   String?  // how long to submit proof ("48 hours after event")
+
+  // ── Rules & Evidence ──
   rules         String?
   evidenceType  String   @default("self_report") // video | photo | gps | self_report
-  aiReview      Boolean  @default(true)
-  aiModel       String?  // which model was used for judging
+
+  // ── Settlement ──
+  settlementMode String  @default("mutual_confirmation") // oracle | arbiter | mutual_confirmation
+  proofSource   String?  // who submits the result ("creator", "opponent", "both", username)
+  arbiter       String?  // who decides disputes (username or "ai")
+  fallbackRule  String?  // what happens if no proof ("refund_if_no_proof", "forfeit_if_no_proof")
+  disputeWindow String?  // how long to dispute ("12 hours", "24 hours")
+
+  // ── Visibility ──
+  isPublic      Boolean  @default(false)
+  visibility    String   @default("private") // private | invite_only | public
+  maxParticipants Int    @default(2)
+
+  // ── On-chain anchoring (optional) ──
+  paramsHash    String?  // hash of market params at creation time
+  evidenceHash  String?  // hash of submitted evidence
+  resolutionHash String? // hash of final resolution packet
   escrowTxHash  String?  // on-chain escrow creation tx
   settleTxHash  String?  // on-chain settlement tx
-  isPublic      Boolean  @default(true)
-  maxParticipants Int    @default(2)
+
+  // ── AI ──
+  aiReview      Boolean  @default(true)
+  aiModel       String?  // which model was used for judging
+
+  // ── Metadata ──
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
   discoveryLat        Float?
   discoveryLng        Float?
   discoveryCapturedAt DateTime?

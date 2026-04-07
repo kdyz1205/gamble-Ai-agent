@@ -28,13 +28,17 @@ export interface MarketDraft {
   subject: string | null;
   stake: number;
   stakeUnit: "credits" | "usd" | "ambiguous" | "unset";
+  stakeToken: string;
   evidenceType: string;
   eventTime: string | null;
   joinWindow: string | null;
+  proofWindow: string | null;
   proofSource: string | null;
   arbiter: string | null;
   fallbackRule: string | null;
-  visibility: "private" | "public";
+  disputeWindow: string | null;
+  settlementMode: "oracle" | "arbiter" | "mutual_confirmation";
+  visibility: "private" | "invite_only" | "public";
   // For ChallengeDraft compatibility
   type: string;
   deadline: string;
@@ -223,6 +227,12 @@ export function compileMarket(rawInput: string): CompileResult {
   const stake = amountResult && !amountResult.needsConfirmation ? amountResult.credits : 0;
   const stakeUnit = amountResult ? amountResult.unit : "unset" as const;
 
+  // Infer settlement mode from what was extracted
+  const settlementMode: MarketDraft["settlementMode"] =
+    arbiter ? "arbiter"
+    : (marketType === "yes_no" && /btc|eth|price|stock|weather/i.test(input)) ? "oracle"
+    : "mutual_confirmation";
+
   const draft: MarketDraft = {
     marketType,
     proposition,
@@ -230,12 +240,16 @@ export function compileMarket(rawInput: string): CompileResult {
     subject,
     stake,
     stakeUnit,
+    stakeToken: "credits",
     evidenceType,
     eventTime,
     joinWindow: null,
+    proofWindow: null,
     proofSource,
     arbiter,
     fallbackRule,
+    disputeWindow: stake > 0 ? "24 hours" : null,
+    settlementMode,
     visibility: "private",
     type: activityType,
     deadline: eventTime || "24 hours",
