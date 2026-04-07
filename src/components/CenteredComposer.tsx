@@ -13,6 +13,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
+  const [voiceLang, setVoiceLang] = useState<"auto" | "en" | "zh">("auto");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -47,7 +48,9 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = "en-US";
+    // Language based on toggle
+    const langMap = { auto: navigator.language || "en-US", en: "en-US", zh: "zh-CN" };
+    recognition.lang = langMap[voiceLang];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
@@ -61,7 +64,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
         }
       }
       if (final) {
-        setInput(prev => prev + final);
+        setInput(prev => prev ? prev.trimEnd() + " " + final : final);
         setInterim("");
       } else {
         setInterim(interimText);
@@ -135,6 +138,24 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing }: Prop
 
         {/* Bottom bar: mic + send */}
         <div className="flex items-center justify-between px-3 py-2 border-t" style={{ borderColor: "rgba(212,175,55,0.06)" }}>
+          {/* Language toggle */}
+          <div className="flex items-center gap-1 mr-2">
+            {(["auto", "en", "zh"] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => setVoiceLang(lang)}
+                className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider transition-colors"
+                style={{
+                  color: voiceLang === lang ? "#D4AF37" : "#8b8b83",
+                  background: voiceLang === lang ? "rgba(212,175,55,0.1)" : "transparent",
+                  borderRadius: "1px",
+                }}
+              >
+                {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "中"}
+              </button>
+            ))}
+          </div>
+
           {/* Mic button */}
           <button
             onClick={toggleMic}

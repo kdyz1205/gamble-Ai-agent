@@ -8,6 +8,7 @@ import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
+import { parseAmount, normalizeTranscript } from "@/lib/amount-parser";
 
 type AppState = "idle" | "parsing" | "drafting" | "publishing" | "live";
 
@@ -26,32 +27,61 @@ export default function Home() {
 
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [amountConfirm, setAmountConfirm] = useState<{ prompt: string; options: { label: string; credits: number }[] } | null>(null);
+  const [clarifications, setClarifications] = useState<Array<{ question: string; options: string[] }>>([]);
 
-  /* ── Submit: try API parse first, fallback to local ── */
+  /* ── Submit: normalize → try API parse → fallback to local ── */
   const handleSubmit = useCallback(async (input: string) => {
-    setUserInput(input);
+    const normalized = normalizeTranscript(input);
+    setUserInput(normalized);
     setError(null);
+    setAmountConfirm(null);
+    setClarifications([]);
     setAppState("parsing");
 
+    // Check for amount ambiguity FIRST
+    const amountResult = parseAmount(normalized);
+    if (amountResult?.needsConfirmation && amountResult.confirmationPrompt) {
+      setAmountConfirm({
+        prompt: amountResult.confirmationPrompt,
+        options: [
+          { label: `${amountResult.credits} credits`, credits: amountResult.credits },
+          ...(amountResult.unit === "ambiguous" && amountResult.credits < 1000
+            ? [{ label: `$${amountResult.credits} = ${amountResult.credits * 100} credits`, credits: amountResult.credits * 100 }]
+            : []),
+        ],
+      });
+      // Still parse, but flag the ambiguity
+    }
+
     try {
-      // Try real AI parse if logged in
       if (user) {
-        const res = await api.parseChallenge(input);
+        const res = await api.parseChallenge(normalized);
         if (res.parsed) {
+          // Use unified amount parser result if available, else use AI's
+          const stake = amountResult && !amountResult.needsConfirmation
+            ? amountResult.credits
+            : res.parsed.suggestedStake || 0;
+
           setDraft({
-            title: res.parsed.title || input,
-            playerA: "You",
-            playerB: null,
+            title: res.parsed.title || normalized,
+            playerA: "You", playerB: null,
             type: res.parsed.type || "General",
-            stake: res.parsed.suggestedStake || 0,
+            stake,
             deadline: res.parsed.deadline || "24 hours",
             durationMinutes: 1440,
             rules: res.parsed.rules || "",
             evidence: res.parsed.evidenceType || "Self-report",
             aiReview: true,
-            isPublic: res.parsed.isPublic ?? false,
+            isPublic: false, // default private for friend-to-friend
           });
-          setAiMessage(`${res.parsed.type} — ${res.parsed.suggestedStake > 0 ? `${res.parsed.suggestedStake} credits` : "free"}. Review and publish.`);
+
+          // Pass along clarifications
+          if (res.clarifications?.length > 0) {
+            setClarifications(res.clarifications);
+          }
+
+          setAiMessage(`${res.parsed.type} — ${stake > 0 ? `${stake} credits` : "free"}. Review and publish.`);
           setAppState("drafting");
           return;
         }
@@ -60,10 +90,13 @@ export default function Home() {
       // Fallback to local parsing
     }
 
-    // Local fallback
-    const d = localParse(input);
+    // Local fallback — uses unified amount parser
+    const d = localParse(normalized);
+    if (amountResult && !amountResult.needsConfirmation) {
+      d.stake = amountResult.credits;
+    }
     setDraft(d);
-    setAiMessage(`${d.type} challenge — ${d.stake > 0 ? `${d.stake} credits` : "free"} — ${d.evidence}. Publish when ready.`);
+    setAiMessage(`${d.type} — ${d.stake > 0 ? `${d.stake} credits` : "free"} — ${d.evidence}. Publish when ready.`);
     setAppState("drafting");
   }, [user]);
 
@@ -229,6 +262,55 @@ export default function Home() {
               {/* AI interpretation */}
               {aiMessage && (
                 <p className="text-xs font-mono mb-5 px-1" style={{ color: "#D4AF37" }}>{aiMessage}</p>
+              )}
+
+              {/* Amount ambiguity confirmation */}
+              {amountConfirm && draft && (
+                <div className="mb-4 p-3" style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)", borderRadius: "2px" }}>
+                  <p className="text-xs font-mono mb-2" style={{ color: "#D4AF37" }}>{amountConfirm.prompt}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {amountConfirm.options.map(opt => (
+                      <button
+                        key={opt.credits}
+                        onClick={() => {
+                          setDraft({ ...draft, stake: opt.credits });
+                          setAmountConfirm(null);
+                          setAiMessage(`Stake set to ${opt.credits} credits.`);
+                        }}
+                        className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-colors"
+                        style={{ border: "1px solid rgba(212,175,55,0.3)", color: "#D4AF37", borderRadius: "2px" }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Clarifications from AI */}
+              {clarifications.length > 0 && (
+                <div className="mb-4 space-y-3">
+                  {clarifications.map((c, i) => (
+                    <div key={i} className="p-3" style={{ background: "rgba(0,95,111,0.06)", border: "1px solid rgba(0,95,111,0.15)", borderRadius: "2px" }}>
+                      <p className="text-xs font-mono mb-2" style={{ color: "#005F6F" }}>{c.question}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {c.options.map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              // Remove this clarification after answering
+                              setClarifications(prev => prev.filter((_, idx) => idx !== i));
+                            }}
+                            className="px-3 py-1.5 text-[10px] font-mono tracking-wider transition-colors"
+                            style={{ border: "1px solid rgba(0,95,111,0.2)", color: "#E5E0D8", borderRadius: "2px" }}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {/* Error */}

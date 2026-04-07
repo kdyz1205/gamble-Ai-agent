@@ -33,7 +33,7 @@ export async function parseChallenge(input: string, model = "claude-haiku-4-2025
 - evidenceType ("video" | "photo" | "gps" | "self_report")
 - rules (string, brief rules)
 - deadline (string like "48 hours", "7 days")
-- isPublic (boolean, true unless user says private)`,
+- isPublic (boolean, false unless user explicitly says public or open)`,
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
@@ -170,7 +170,7 @@ function parseChallengeFallback(input: string): ParsedChallenge {
   return {
     title, type, suggestedStake: amount, evidenceType,
     rules: `Standard ${type.toLowerCase()} challenge — AI reviewed`,
-    deadline, isPublic: !/private|secret|just us|between us/i.test(input),
+    deadline, isPublic: /public|open|anyone|everyone|open to all/i.test(input),
   };
 }
 

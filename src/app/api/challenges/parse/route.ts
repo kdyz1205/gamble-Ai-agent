@@ -26,20 +26,33 @@ export async function POST(req: NextRequest) {
     const balance = await getCredits(user.userId);
     if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
-    const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${input.slice(0, 50)}…"`);
-    if (!result.success) return noCredits(cost, result.balance, getAiModel(tierId).displayName);
-
-    const parsed = await parseChallenge(input, result.model);
+    // Parse FIRST — only charge if AI was actually used (not fallback)
+    const { model: modelName } = getAiModel(tierId);
+    const parsed = await parseChallenge(input, modelName);
     const clarifications = generateClarifications(parsed);
+
+    // Only charge if real AI was used (check if ANTHROPIC_API_KEY exists)
+    let creditsUsed = 0;
+    let creditsRemaining = balance;
+    let txHash: string | null = null;
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${input.slice(0, 50)}…"`);
+      if (result.success) {
+        creditsUsed = cost;
+        creditsRemaining = result.balance;
+        txHash = result.txHash || null;
+      }
+    }
 
     return Response.json({
       parsed,
       clarifications,
       model: getAiModel(tierId).displayName,
       tierId,
-      creditsUsed: cost,
-      creditsRemaining: result.balance,
-      txHash: result.txHash || null,
+      creditsUsed,
+      creditsRemaining,
+      txHash,
     });
   } catch (err) {
     console.error("Parse error:", err);
