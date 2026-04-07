@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
-import ParticleBackground from "@/components/ParticleBackground";
+
 import CenteredComposer from "@/components/CenteredComposer";
 import ConversationThread from "@/components/ConversationThread";
 import type { Message } from "@/components/ConversationThread";
@@ -214,28 +214,17 @@ export default function Home() {
   ) : null;
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ background: "#06060f" }} onClick={() => showProfile && setShowProfile(false)}>
+    <div className="relative min-h-screen overflow-hidden" style={{ background: "#0A0A0B" }} onClick={() => showProfile && setShowProfile(false)}>
 
-      <ParticleBackground />
-
+      {/* Subtle gold ambient light — no particles */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <motion.div
-          className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(212,175,55,0.06) 0%, transparent 70%)" }}
-          animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(0,95,111,0.05) 0%, transparent 70%)" }}
-          animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.7, 0.4] }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 3 }}
-        />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
-             style={{ background: "radial-gradient(ellipse, rgba(212,175,55,0.025) 0%, transparent 60%)" }} />
+        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full opacity-[0.04] blur-[150px]"
+             style={{ background: "#D4AF37" }} />
+        <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full opacity-[0.03] blur-[120px]"
+             style={{ background: "#005F6F" }} />
       </div>
 
-      {showScanLine && <div className="scan-line" />}
+
 
       {/* ── Minimal header (active state only) ── */}
       <AnimatePresence>
@@ -280,24 +269,61 @@ export default function Home() {
                   </motion.button>
 
                   {user ? (
-                    <motion.button
-                      onClick={() => setShowProfile(!showProfile)}
-                      className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle cursor-pointer"
-                      style={{ background: "rgba(255,255,255,0.04)" }}
-                      whileHover={{ borderColor: "rgba(212,175,55,0.3)", background: "rgba(255,255,255,0.08)" }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      {user.image ? (
-                        <img src={user.image} alt="" className="w-5 h-5 rounded-md" />
-                      ) : (
-                        <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
-                             style={{ background: "linear-gradient(135deg, #D4AF37, #005F6F)" }}>
+                    <div className="relative">
+                      <motion.button
+                        onClick={() => setShowProfile(!showProfile)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-sm border cursor-pointer"
+                        style={{ background: "rgba(212,175,55,0.04)", borderColor: "rgba(212,175,55,0.12)" }}
+                        whileHover={{ borderColor: "rgba(212,175,55,0.3)", background: "rgba(212,175,55,0.08)" }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        <div className="w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-serif font-bold"
+                             style={{ background: "rgba(212,175,55,0.15)", color: "#D4AF37", border: "1px solid rgba(212,175,55,0.2)" }}>
                           {user.username.charAt(0).toUpperCase()}
                         </div>
-                      )}
-                      <span className="text-xs font-bold text-text-secondary">{user.username}</span>
-                      {creditsBadge}
-                    </motion.button>
+                        <span className="text-xs font-mono text-text-secondary">{user.username}</span>
+                        {creditsBadge}
+                      </motion.button>
+                      {/* Header profile dropdown */}
+                      <AnimatePresence>
+                        {showProfile && (
+                          <motion.div
+                            className="absolute top-full right-0 mt-2 w-52 overflow-hidden z-50"
+                            style={{
+                              background: "#0E0E0C",
+                              border: "1px solid rgba(212,175,55,0.12)",
+                              boxShadow: "0 16px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(212,175,55,0.06)",
+                              borderRadius: "2px",
+                            }}
+                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <div className="p-3 border-b" style={{ borderColor: "rgba(212,175,55,0.08)" }}>
+                              <p className="text-sm font-serif font-bold" style={{ color: "#E5E0D8" }}>{user.username}</p>
+                              <p className="text-[10px] font-mono" style={{ color: "#8b8b83" }}>{user.email || "Oracle Seeker"}</p>
+                            </div>
+                            <div className="p-2 border-b" style={{ borderColor: "rgba(212,175,55,0.08)" }}>
+                              <div className="flex items-center justify-between px-2 py-1.5" style={{ background: "rgba(212,175,55,0.04)" }}>
+                                <span className="text-[10px] font-mono" style={{ color: "#8b8b83" }}>Credits</span>
+                                <span className="text-sm font-serif font-bold" style={{ color: "#D4AF37" }}>{user.credits ?? 0}</span>
+                              </div>
+                            </div>
+                            <div className="p-2">
+                              <motion.button
+                                onClick={() => { setShowProfile(false); signOut(); reset(); }}
+                                whileHover={{ background: "rgba(163,31,52,0.1)" }}
+                                className="w-full text-left px-2 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors"
+                                style={{ color: "#8b8b83" }}
+                              >
+                                Sign Out
+                              </motion.button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   ) : (
                     <motion.button
                       onClick={() => setShowAuth(true)}
@@ -381,8 +407,8 @@ export default function Home() {
                     <div className="absolute inset-0 rounded-xl border border-success opacity-30 animate-ping" style={{ animationDuration: "2s" }} />
                   </div>
                   <div>
-                    <h3 className="text-base font-extrabold text-text-primary">Challenge Live!</h3>
-                    <p className="text-xs text-text-secondary">Send the link to your friend</p>
+                    <h3 className="text-base font-serif font-bold" style={{ color: "#E5E0D8" }}>Contract Sealed</h3>
+                    <p className="text-[10px] font-mono tracking-wider" style={{ color: "#8b8b83" }}>Dispatch the summons</p>
                   </div>
                   <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold"
                         style={{ background: "rgba(99,154,103,0.1)", color: "#639A67" }}>
@@ -438,7 +464,7 @@ export default function Home() {
                   className="w-full py-3 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
                   style={{ background: "rgba(255,255,255,0.04)" }}
                 >
-                  Create Another Challenge
+                  Forge Another Contract
                 </motion.button>
               </div>
             </motion.div>
@@ -452,7 +478,7 @@ export default function Home() {
         />
       </main>
 
-      <FloatingActionBar visible={active} />
+      <FloatingActionBar visible={active && !published} />
 
       <AnimatePresence>
         {!active && (
