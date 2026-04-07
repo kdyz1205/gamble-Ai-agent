@@ -36,29 +36,83 @@ export default function Home() {
     setError(null);
     setAppState("compiling");
 
-    // First: local compile (instant)
+    // Try LLM-powered compile first (if logged in + API key set)
+    if (user) {
+      try {
+        const res = await api.parseChallenge(input);
+        const p = res.parsed;
+
+        // LLM said it's ordinary chat → reject
+        if (p.intent === "ordinary_chat") {
+          setUnderstanding("That doesn't seem like a bet or challenge. Try describing what you want to wager on.");
+          setAppState("idle");
+          return;
+        }
+
+        // LLM compiled a market — use it directly
+        const llmDraft: MarketDraft = {
+          marketType: p.marketType || "challenge",
+          proposition: p.proposition || p.title,
+          title: p.title || input.slice(0, 64),
+          subject: p.subject || null,
+          stake: p.suggestedStake || 0,
+          stakeUnit: p.suggestedStake > 0 ? "credits" : "unset",
+          evidenceType: p.evidenceType || "unset",
+          eventTime: null,
+          joinWindow: null,
+          proofSource: null,
+          arbiter: null,
+          fallbackRule: null,
+          visibility: p.isPublic ? "public" : "private",
+          type: p.type || "General",
+          deadline: p.deadline || "24 hours",
+          rules: p.rules || p.proposition || p.title,
+          aiReview: true,
+          isPublic: p.isPublic ?? false,
+        };
+
+        // Build understanding from LLM
+        const parts = [];
+        parts.push(`**${(p.marketType || "challenge").replace(/_/g, " ")}**`);
+        if (p.proposition) parts.push(`→ "${p.proposition}"`);
+        if (p.suggestedStake > 0) parts.push(`| ${p.suggestedStake} credits`);
+        if (p.deadline && p.deadline !== "24 hours") parts.push(`| by ${p.deadline}`);
+
+        const missing = p.missingFields || [];
+        const understanding = missing.length === 0
+          ? `Ready to publish: ${parts.join(" ")}`
+          : `${parts.join(" ")} — need: ${missing.join(", ")}`;
+
+        setDraft(llmDraft);
+        setUnderstanding(understanding);
+
+        // Use LLM's clarifying question or generate from missing fields
+        if (p.clarifyingQuestion && missing.length > 0) {
+          setNextQuestion({
+            field: (missing[0] || "stake") as keyof MarketDraft,
+            question: p.clarifyingQuestion,
+            options: getDefaultOptions(missing[0] || "stake"),
+          });
+        } else {
+          // Use local compiler to generate missing field questions
+          const localResult = compileMarket(input);
+          setNextQuestion(localResult.nextQuestion);
+        }
+
+        setAppState("drafting");
+        return;
+      } catch {
+        // Fall through to local compile
+      }
+    }
+
+    // Local fallback compile (no API key or not logged in)
     const result: CompileResult = compileMarket(input);
 
     if (result.level === "ordinary_chat") {
       setUnderstanding(result.understanding);
       setAppState("idle");
       return;
-    }
-
-    // Try API parse for better results if logged in
-    if (user && result.draft) {
-      try {
-        const res = await api.parseChallenge(input);
-        if (res.parsed) {
-          // Merge API results into local draft (API is smarter for title/rules)
-          result.draft.title = res.parsed.title || result.draft.title;
-          result.draft.rules = res.parsed.rules || result.draft.rules;
-          result.draft.type = res.parsed.type || result.draft.type;
-          if (res.parsed.deadline) result.draft.deadline = res.parsed.deadline;
-        }
-      } catch {
-        // Local compile is fine as fallback
-      }
     }
 
     setDraft(result.draft);
@@ -368,4 +422,34 @@ export default function Home() {
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} onSuccess={() => updateSession()} />
     </div>
   );
+}
+
+/* ── Default options for clarification fields ── */
+function getDefaultOptions(field: string): Clarification["options"] {
+  switch (field) {
+    case "stake":
+      return [
+        { label: "Free", value: 0, patch: { stake: 0, stakeUnit: "credits" } },
+        { label: "5 credits", value: 5, patch: { stake: 5, stakeUnit: "credits" } },
+        { label: "10 credits", value: 10, patch: { stake: 10, stakeUnit: "credits" } },
+        { label: "25 credits", value: 25, patch: { stake: 25, stakeUnit: "credits" } },
+      ];
+    case "evidenceType":
+      return [
+        { label: "Video proof", value: "Video proof", patch: { evidenceType: "Video proof" } },
+        { label: "Photo", value: "Photo evidence", patch: { evidenceType: "Photo evidence" } },
+        { label: "Self-report", value: "Self-report", patch: { evidenceType: "Self-report" } },
+      ];
+    case "deadline":
+      return [
+        { label: "1 hour", value: "1 hour", patch: { deadline: "1 hour", eventTime: "1 hour" } },
+        { label: "24 hours", value: "24 hours", patch: { deadline: "24 hours", eventTime: "24 hours" } },
+        { label: "1 week", value: "7 days", patch: { deadline: "7 days", eventTime: "7 days" } },
+      ];
+    default:
+      return [
+        { label: "Yes", value: "yes", patch: {} },
+        { label: "No", value: "no", patch: {} },
+      ];
+  }
 }

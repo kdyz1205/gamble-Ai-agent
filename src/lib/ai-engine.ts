@@ -5,11 +5,18 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" })
 export interface ParsedChallenge {
   title: string;
   type: string;
-  suggestedStake: number; // credits
+  suggestedStake: number;
   evidenceType: string;
   rules: string;
   deadline: string;
   isPublic: boolean;
+  // Extended fields from LLM
+  marketType?: "yes_no" | "threshold" | "head_to_head" | "challenge";
+  proposition?: string;
+  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
+  subject?: string;
+  missingFields?: string[];
+  clarifyingQuestion?: string;
 }
 
 export interface JudgmentResult {
@@ -18,27 +25,72 @@ export interface JudgmentResult {
   confidence: number;
 }
 
+const MARKET_COMPILER_PROMPT = `You are a market compiler. You take natural language (English, Chinese, or mixed) and compile it into a structured betting market.
+
+Your job:
+1. Understand the user's INTENT — are they describing a bet, challenge, prediction, or just chatting?
+2. Extract a CANONICAL PROPOSITION — a clear, unambiguous statement of what's being wagered on
+3. Classify into one of 4 MARKET TYPES:
+   - yes_no: "Will X happen?" (e.g., "Will Benny's wife pass DMV?")
+   - threshold: "Will X exceed Y?" (e.g., "Can I eat 10 burgers in 10 min?")
+   - head_to_head: "A vs B" (e.g., "Who runs 5K faster?")
+   - challenge: "Can someone do X?" (e.g., "50 pushups in 2 minutes")
+4. Extract all available SLOTS from the input
+5. Identify MISSING fields and generate ONE clarifying question
+
+INTENT classification:
+- "definite_market": enough info to publish (has proposition + at least stake or clear outcome)
+- "candidate_market": clearly a bet/challenge but missing key fields
+- "ordinary_chat": not a bet at all
+
+CURRENCY RULES:
+- "credits" / "cr" / "积分" = credits (1:1)
+- "$" / "dollars" / "美金" / "美元" = USD → multiply by 100 for credits
+- "块" / "元" / "刀" without context = AMBIGUOUS, set suggestedStake to the raw number and note it
+- bare number = ambiguous
+
+Return ONLY valid JSON:
+{
+  "intent": "definite_market" | "candidate_market" | "ordinary_chat",
+  "marketType": "yes_no" | "threshold" | "head_to_head" | "challenge",
+  "title": "short title, max 64 chars",
+  "proposition": "clear canonical statement of the bet",
+  "type": "Fitness" | "Cooking" | "Coding" | "Learning" | "Games" | "Prediction" | "General",
+  "subject": "who/what the bet is about, or null",
+  "suggestedStake": 0,
+  "evidenceType": "video" | "photo" | "gps" | "self_report",
+  "rules": "clear rules for resolution",
+  "deadline": "24 hours",
+  "isPublic": false,
+  "missingFields": ["stake", "evidenceType", ...],
+  "clarifyingQuestion": "One question to ask, or null if complete"
+}`;
+
 export async function parseChallenge(input: string, model = "claude-haiku-4-20250414"): Promise<ParsedChallenge> {
   if (!process.env.ANTHROPIC_API_KEY) return parseChallengeFallback(input);
 
   try {
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 512,
+      max_tokens: 800,
       messages: [{ role: "user", content: input }],
-      system: `You parse natural language into a structured challenge. Credits are the in-app currency (1 credit ≈ $0.01). Return ONLY valid JSON with these fields:
-- title (string, max 64 chars, concise)
-- type (one of: Fitness, Cooking, Coding, Learning, Games, Video, General)
-- suggestedStake (integer, credits to wager, 0 if none mentioned. If user says "$5", convert to 500 credits. If user says "10 credits" use 10.)
-- evidenceType ("video" | "photo" | "gps" | "self_report")
-- rules (string, brief rules)
-- deadline (string like "48 hours", "7 days")
-- isPublic (boolean, false unless user explicitly says public or open)`,
+      system: MARKET_COMPILER_PROMPT,
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]) as ParsedChallenge;
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as ParsedChallenge;
+      // Ensure required fields have defaults
+      parsed.title = parsed.title || input.slice(0, 64);
+      parsed.type = parsed.type || "General";
+      parsed.suggestedStake = parsed.suggestedStake || 0;
+      parsed.evidenceType = parsed.evidenceType || "self_report";
+      parsed.rules = parsed.rules || "";
+      parsed.deadline = parsed.deadline || "24 hours";
+      parsed.isPublic = parsed.isPublic ?? false;
+      return parsed;
+    }
   } catch {
     // fall through
   }
@@ -101,27 +153,51 @@ Return JSON: { "winner": "A" or "B", "reasoning": "...", "confidence": 0.0-1.0 }
 }
 
 export function generateClarifications(parsed: ParsedChallenge): Array<{ question: string; options: string[] }> {
-  const questions = [];
-  questions.push({
-    question: `I'll set up a **${parsed.type}** challenge: "${parsed.title}". Who's your opponent?`,
-    options: ["Invite a friend", "Anyone nearby", "Open to public"],
-  });
-  if (parsed.suggestedStake <= 0) {
+  // If LLM already provided a single clarifying question, use it
+  if (parsed.clarifyingQuestion) {
+    return [{
+      question: parsed.clarifyingQuestion,
+      options: getOptionsForField(parsed.missingFields?.[0] || "stake"),
+    }];
+  }
+
+  // Otherwise, generate based on missing fields
+  const questions: Array<{ question: string; options: string[] }> = [];
+
+  const missing = parsed.missingFields || [];
+
+  // Only ask about truly missing fields — one at a time ideally
+  if (missing.includes("stake") || parsed.suggestedStake <= 0) {
     questions.push({
-      question: "Would you like to stake some credits, or keep it free?",
-      options: ["Free — just for fun", "5 credits", "10 credits", "20 credits"],
-    });
-  } else {
-    questions.push({
-      question: `You mentioned a ${parsed.suggestedStake} credit wager. Confirm or adjust?`,
-      options: [`${parsed.suggestedStake} credits — confirm`, "5 credits", "10 credits", "20 credits", "50 credits"],
+      question: "How much to stake?",
+      options: ["Free — no stake", "5 credits", "10 credits", "25 credits", "50 credits"],
     });
   }
-  questions.push({
-    question: "How should we verify the result?",
-    options: ["Video proof", "Photo evidence", "GPS tracking", "Self-report + honor system"],
-  });
+
+  if (missing.includes("evidenceType") || parsed.evidenceType === "self_report") {
+    questions.push({
+      question: "How should the result be verified?",
+      options: ["Video proof", "Photo evidence", "Self-report"],
+    });
+  }
+
+  if (missing.includes("deadline")) {
+    questions.push({
+      question: "When does this resolve?",
+      options: ["1 hour", "24 hours", "48 hours", "1 week"],
+    });
+  }
+
   return questions;
+}
+
+function getOptionsForField(field: string): string[] {
+  switch (field) {
+    case "stake": return ["Free", "5 credits", "10 credits", "25 credits"];
+    case "evidenceType": return ["Video proof", "Photo", "Self-report"];
+    case "deadline": return ["1 hour", "24 hours", "48 hours", "1 week"];
+    default: return ["Yes", "No"];
+  }
 }
 
 /* ── Fallback parsers (no API key) ── */

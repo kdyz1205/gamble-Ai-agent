@@ -177,6 +177,13 @@ export interface ParsedChallenge {
   rules: string;
   deadline: string;
   isPublic: boolean;
+  // Extended fields from LLM market compiler
+  marketType?: "yes_no" | "threshold" | "head_to_head" | "challenge";
+  proposition?: string;
+  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
+  subject?: string;
+  missingFields?: string[];
+  clarifyingQuestion?: string;
 }
 
 export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promise<{
