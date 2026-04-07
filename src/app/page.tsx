@@ -105,8 +105,11 @@ export default function Home() {
 
         setAppState("drafting");
         return;
-      } catch {
-        // Fall through to local compile
+      } catch (parseErr) {
+        // Show the user that AI failed, using local fallback
+        const msg = parseErr instanceof Error ? parseErr.message : "AI parse failed";
+        console.error("LLM parse error:", msg);
+        setUnderstanding(`⚠ AI unavailable (${msg}) — using local analysis`);
       }
     }
 
