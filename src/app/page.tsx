@@ -209,53 +209,49 @@ export default function Home() {
   return (
     <div className="relative min-h-screen flex flex-col"
          onClick={() => showProfile && setShowProfile(false)}>
-      {/* Ambient — soft pastel orbs over the body gradient */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-40 blur-[150px]" style={{ background: "#FF9966" }} />
-        <div className="absolute -bottom-40 -right-40 w-[400px] h-[400px] rounded-full opacity-40 blur-[120px]" style={{ background: "#5FC9B4" }} />
-      </div>
+      {/* Ambient orbs are now in <SoftBackground /> mounted globally in layout.tsx */}
 
       {/* ── Header ── */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
-        <button onClick={reset} className="text-base font-bold tracking-tight" style={{ color: "#1F3A5F" }}>
+        <button onClick={reset} className="text-base font-bold tracking-tight" style={{ color: "#1E293B" }}>
           LuckyPlay
         </button>
         <div className="flex items-center gap-3">
           {appState !== "idle" && (
-            <button onClick={reset} className="text-xs font-semibold tracking-wide uppercase" style={{ color: "rgba(31,58,95,0.55)" }}>New</button>
+            <button onClick={reset} className="text-xs font-semibold tracking-wide uppercase" style={{ color: "#64748B" }}>New</button>
           )}
           {user ? (
             <div className="relative">
               <button onClick={(e) => { e.stopPropagation(); setShowProfile(!showProfile); }}
                 className="flex items-center gap-2 px-3 py-1.5 border shadow-sm"
-                style={{ background: "#FFFFFF", borderColor: "rgba(31,58,95,0.10)", borderRadius: "999px" }}>
+                style={{ background: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: "999px" }}>
                 <span className="w-6 h-6 flex items-center justify-center text-[11px] font-bold"
-                  style={{ background: "#FF9966", color: "#FFFFFF", borderRadius: "999px" }}>
+                  style={{ background: "#FED7AA", color: "#FFFFFF", borderRadius: "999px" }}>
                   {user.username.charAt(0).toUpperCase()}
                 </span>
-                <span className="text-xs font-semibold" style={{ color: "#1F3A5F" }}>{user.username}</span>
-                <span className="text-[11px] font-bold px-1.5 py-0.5" style={{ background: "#FFF8E7", color: "#F07A4F", borderRadius: "999px" }}>{user.credits ?? 0}</span>
+                <span className="text-xs font-semibold" style={{ color: "#1E293B" }}>{user.username}</span>
+                <span className="text-[11px] font-bold px-1.5 py-0.5" style={{ background: "#FFEDD5", color: "#9A3412", borderRadius: "999px" }}>{user.credits ?? 0}</span>
               </button>
               <AnimatePresence>
                 {showProfile && (
-                  <motion.div className="absolute top-full right-0 mt-2 w-52 z-50"
-                    style={{ background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "20px", boxShadow: "0 6px 0 rgba(31,58,95,0.06), 0 16px 32px rgba(31,58,95,0.10)" }}
+                  <motion.div className="absolute top-full right-0 mt-2 w-52 z-50 lp-glass"
+                    style={{ borderRadius: "24px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}
                     initial={{ opacity: 0, y: -4, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.95 }}
                     onClick={(e) => e.stopPropagation()}>
-                    <div className="p-3 border-b" style={{ borderColor: "rgba(31,58,95,0.08)" }}>
-                      <p className="text-sm font-bold" style={{ color: "#1F3A5F" }}>{user.username}</p>
-                      <p className="text-xs truncate" style={{ color: "rgba(31,58,95,0.55)" }}>{user.email || ""}</p>
+                    <div className="p-3 border-b" style={{ borderColor: "#F1F5F9" }}>
+                      <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{user.username}</p>
+                      <p className="text-xs truncate" style={{ color: "#64748B" }}>{user.email || ""}</p>
                     </div>
                     <div className="p-2 space-y-0.5">
                       <button onClick={() => { setShowProfile(false); router.push("/me"); }}
-                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFF8E7]"
-                        style={{ color: "#1F3A5F" }}>👤 Profile</button>
+                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFEDD5]"
+                        style={{ color: "#1E293B" }}>👤 Profile</button>
                       <button onClick={() => { setShowProfile(false); router.push("/markets"); }}
-                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFF8E7]"
-                        style={{ color: "#1F3A5F" }}>🎲 My Markets</button>
+                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFEDD5]"
+                        style={{ color: "#1E293B" }}>🎲 My Markets</button>
                       <button onClick={() => { setShowProfile(false); signOut(); reset(); }}
                         className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFE5EA]"
-                        style={{ color: "#FF6B82" }}>👋 Sign Out</button>
+                        style={{ color: "#991B1B" }}>👋 Sign Out</button>
                     </div>
                   </motion.div>
                 )}
@@ -264,7 +260,7 @@ export default function Home() {
           ) : (
             <button onClick={() => setShowAuth(true)}
               className="px-4 py-2 text-sm font-bold shadow-sm active:scale-95 transition-transform"
-              style={{ color: "#FFFFFF", background: "linear-gradient(135deg, #FF9966, #F07A4F)", borderRadius: "999px", boxShadow: "0 3px 0 #F07A4F, 0 6px 14px rgba(255,153,102,0.4)" }}>Sign In ✨</button>
+              style={{ color: "#7C2D12", background: "#FED7AA", borderRadius: "9999px", boxShadow: "0 4px 14px 0 rgba(251,146,60,0.39)" }}>Sign In ✨</button>
           )}
         </div>
       </header>
@@ -283,21 +279,21 @@ export default function Home() {
                 animate={{ y: [0, -6, 0] }}
                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               >
-                <svg viewBox="0 0 120 120" width="96" height="96" style={{ filter: "drop-shadow(0 6px 12px rgba(255,153,102,0.25))" }}>
+                <svg viewBox="0 0 120 120" width="96" height="96" style={{ filter: "drop-shadow(0 6px 12px rgba(251,207,232,0.50))" }}>
                   {/* body */}
-                  <ellipse cx="60" cy="68" rx="44" ry="38" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
-                  <circle cx="28" cy="58" r="14" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
-                  <circle cx="92" cy="58" r="14" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
+                  <ellipse cx="60" cy="68" rx="44" ry="38" fill="#FFFFFF" stroke="#1E293B" strokeWidth="2.5" />
+                  <circle cx="28" cy="58" r="14" fill="#FFFFFF" stroke="#1E293B" strokeWidth="2.5" />
+                  <circle cx="92" cy="58" r="14" fill="#FFFFFF" stroke="#1E293B" strokeWidth="2.5" />
                   {/* cheeks */}
-                  <circle cx="36" cy="74" r="6" fill="#FFB8A6" opacity="0.85" />
-                  <circle cx="84" cy="74" r="6" fill="#FFB8A6" opacity="0.85" />
+                  <circle cx="36" cy="74" r="6" fill="#FFD1DC" opacity="0.85" />
+                  <circle cx="84" cy="74" r="6" fill="#FFD1DC" opacity="0.85" />
                   {/* eyes */}
-                  <circle cx="48" cy="64" r="4" fill="#1F3A5F" />
-                  <circle cx="72" cy="64" r="4" fill="#1F3A5F" />
+                  <circle cx="48" cy="64" r="4" fill="#1E293B" />
+                  <circle cx="72" cy="64" r="4" fill="#1E293B" />
                   <circle cx="49" cy="63" r="1.4" fill="#FFFFFF" />
                   <circle cx="73" cy="63" r="1.4" fill="#FFFFFF" />
                   {/* mouth */}
-                  <path d="M 52 78 Q 60 84 68 78" stroke="#1F3A5F" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                  <path d="M 52 78 Q 60 84 68 78" stroke="#1E293B" strokeWidth="2.5" fill="none" strokeLinecap="round" />
                 </svg>
                 {/* sparkles */}
                 <motion.span className="absolute" style={{ top: -4, right: -2, fontSize: 18 }}
@@ -308,17 +304,17 @@ export default function Home() {
                   transition={{ duration: 2.8, repeat: Infinity, delay: 0.5 }}>⭐</motion.span>
               </motion.div>
 
-              <h1 className="text-center text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ color: "#1F3A5F" }}>
+              <h1 className="text-center text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ color: "#1E293B" }}>
                 Say the bet! <span className="inline-block">🎲</span>
               </h1>
-              <p className="text-center text-base font-medium mb-6" style={{ color: "rgba(31,58,95,0.65)" }}>
+              <p className="text-center text-base font-medium mb-6" style={{ color: "#475569" }}>
                 Tell me what you wanna call — I&apos;ll turn it into a fun market.
               </p>
               {understanding && (
                 <motion.p
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                   className="text-center text-sm font-semibold mb-5 px-5 py-2 mx-auto inline-block"
-                  style={{ color: "#F07A4F", background: "#FFF8E7", borderRadius: "999px", display: "block", maxWidth: "fit-content", margin: "0 auto 1.25rem" }}>
+                  style={{ color: "#9A3412", background: "#FFEDD5", borderRadius: "999px", display: "block", maxWidth: "fit-content", margin: "0 auto 1.25rem" }}>
                   {understanding}
                 </motion.p>
               )}
@@ -330,10 +326,10 @@ export default function Home() {
           {appState === "compiling" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent"
-                style={{ borderColor: "#FF9966", borderTopColor: "transparent" }}
+                style={{ borderColor: "#FED7AA", borderTopColor: "transparent" }}
                 animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-              <p className="text-base font-bold" style={{ color: "#1F3A5F" }}>Cooking up your market… 🍳</p>
-              <p className="text-sm font-medium mt-2 max-w-sm mx-auto px-4 py-2" style={{ color: "#F07A4F", background: "#FFF8E7", borderRadius: "999px", display: "inline-block" }}>&ldquo;{userInput}&rdquo;</p>
+              <p className="text-base font-bold" style={{ color: "#1E293B" }}>Cooking up your market… 🍳</p>
+              <p className="text-sm font-medium mt-2 max-w-sm mx-auto px-4 py-2" style={{ color: "#9A3412", background: "#FFEDD5", borderRadius: "999px", display: "inline-block" }}>&ldquo;{userInput}&rdquo;</p>
             </motion.div>
           )}
 
@@ -343,23 +339,23 @@ export default function Home() {
               {/* Back controls */}
               <div className="flex items-center gap-2 mb-4">
                 <button onClick={reset} className="px-3 py-1.5 text-xs font-bold rounded-full transition-all active:scale-95"
-                  style={{ color: "rgba(31,58,95,0.65)", background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)" }}>← Start over</button>
+                  style={{ color: "#475569", background: "#FFFFFF", border: "1px solid #E2E8F0" }}>← Start over</button>
                 <button onClick={() => { setAppState("idle"); setDraft(null); setUnderstanding("Edit your input and try again."); }}
                   className="px-3 py-1.5 text-xs font-bold rounded-full transition-all active:scale-95"
-                  style={{ color: "#F07A4F", background: "#FFF8E7", border: "1px solid #FFE0CC" }}>✏️ Edit input</button>
+                  style={{ color: "#9A3412", background: "#FFEDD5", border: "1px solid #FFE0CC" }}>✏️ Edit input</button>
               </div>
 
               {/* System Understanding Card */}
-              <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#5FC9B4" }}>🧠 What I heard</p>
-                <p className="text-sm font-medium leading-relaxed" style={{ color: "#1F3A5F" }}
-                   dangerouslySetInnerHTML={{ __html: understanding.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#F07A4F">$1</strong>') }} />
+              <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#A7F3D0" }}>🧠 What I heard</p>
+                <p className="text-sm font-medium leading-relaxed" style={{ color: "#1E293B" }}
+                   dangerouslySetInnerHTML={{ __html: understanding.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#9A3412">$1</strong>') }} />
               </div>
 
               {/* Next Missing Field — ONE question at a time */}
               {nextQuestion && (
-                <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "2px solid #5FC9B4", borderRadius: "20px", boxShadow: "0 4px 0 rgba(95,201,180,0.15), 0 8px 20px rgba(95,201,180,0.20)" }}>
-                  <p className="text-base font-bold mb-3" style={{ color: "#1F3A5F" }}>💭 {nextQuestion.question}</p>
+                <div className="mb-4 p-4 lp-glass" style={{ borderRadius: "24px", boxShadow: "0 4px 14px 0 rgba(110,231,183,0.40)" }}>
+                  <p className="text-base font-bold mb-3" style={{ color: "#1E293B" }}>💭 {nextQuestion.question}</p>
                   <div className="flex gap-2 flex-wrap">
                     {nextQuestion.options.map(opt => (
                       <motion.button
@@ -367,7 +363,8 @@ export default function Home() {
                         onClick={() => handleClarificationAnswer(opt.patch)}
                         whileTap={{ scale: 0.94 }}
                         className="px-4 py-2 text-sm font-bold transition-all"
-                        style={{ background: "#5FC9B4", color: "#FFFFFF", borderRadius: "999px", boxShadow: "0 3px 0 #4AB89F" }}
+                        transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                        style={{ background: "#A7F3D0", color: "#064E3B", borderRadius: "9999px", boxShadow: "0 4px 14px 0 rgba(110,231,183,0.40)" }}
                       >
                         {opt.label}
                       </motion.button>
@@ -378,7 +375,7 @@ export default function Home() {
 
               {/* Error */}
               {error && (
-                <div className="mb-4 px-4 py-3 text-sm font-semibold" style={{ color: "#FFFFFF", background: "#FF6B82", borderRadius: "16px", boxShadow: "0 3px 0 #E55872" }}>⚠️ {error}</div>
+                <div className="mb-4 px-4 py-3 text-sm font-semibold" style={{ color: "#991B1B", background: "#FECACA", borderRadius: "16px", boxShadow: "0 4px 14px 0 rgba(254,202,202,0.60)" }}>⚠️ {error}</div>
               )}
 
               {/* Live Draft Card */}
@@ -429,9 +426,9 @@ export default function Home() {
           {appState === "publishing" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent"
-                style={{ borderColor: "#FF9966", borderTopColor: "transparent" }}
+                style={{ borderColor: "#FED7AA", borderTopColor: "transparent" }}
                 animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-              <p className="text-base font-bold" style={{ color: "#1F3A5F" }}>Publishing your market… 🚀</p>
+              <p className="text-base font-bold" style={{ color: "#1E293B" }}>Publishing your market… 🚀</p>
             </motion.div>
           )}
 
@@ -441,36 +438,36 @@ export default function Home() {
               <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", damping: 12 }}
                 className="text-center mb-6">
                 <div className="text-5xl mb-2">🎉</div>
-                <h2 className="text-2xl font-extrabold mb-1" style={{ color: "#1F3A5F" }}>Market is live!</h2>
-                <p className="text-sm font-medium" style={{ color: "rgba(31,58,95,0.65)" }}>Send this link to your opponent 👇</p>
+                <h2 className="text-2xl font-extrabold mb-1" style={{ color: "#1E293B" }}>Market is live!</h2>
+                <p className="text-sm font-medium" style={{ color: "#475569" }}>Send this link to your opponent 👇</p>
               </motion.div>
               <div className="flex items-center gap-2 mb-5 p-2 shadow-sm"
-                style={{ background: "#FFFFFF", border: "2px solid rgba(31,58,95,0.10)", borderRadius: "20px" }}>
+                style={{ background: "#FFFFFF", border: "2px solid #E2E8F0", borderRadius: "20px" }}>
                 <input type="text" readOnly value={shareLink}
                   className="flex-1 bg-transparent px-3 py-2 text-sm font-semibold focus:outline-none truncate"
-                  style={{ color: "#1F3A5F" }} />
+                  style={{ color: "#1E293B" }} />
                 <motion.button onClick={copyLink}
                   whileTap={{ scale: 0.94 }}
                   className="flex-shrink-0 px-4 py-2 text-sm font-bold transition-all"
                   style={{
-                    background: copied ? "#6BCF8E" : "linear-gradient(135deg, #FF9966, #F07A4F)",
+                    background: copied ? "#6BCF8E" : "linear-gradient(135deg, #FED7AA, #9A3412)",
                     color: "#FFFFFF",
                     borderRadius: "999px",
-                    boxShadow: copied ? "0 3px 0 #4FB371" : "0 3px 0 #F07A4F, 0 6px 14px rgba(255,153,102,0.4)",
+                    boxShadow: copied ? "0 4px 14px 0 rgba(110,231,183,0.40)" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}>
                   {copied ? "Copied! ✓" : "Copy 📋"}
                 </motion.button>
               </div>
               {draft && (
                 <div className="flex flex-wrap gap-2 mb-6 justify-center">
-                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#5FC9B41A", color: "#3FA890", borderRadius: "999px" }}>{draft.marketType.replace(/_/g, " ")}</span>
-                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#FF99661A", color: "#F07A4F", borderRadius: "999px" }}>{draft.stake > 0 ? `${draft.stake} cr` : "Free"}</span>
-                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#B8A6E01A", color: "#9881C7", borderRadius: "999px" }}>{draft.evidenceType}</span>
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#A7F3D01A", color: "#3FA890", borderRadius: "999px" }}>{draft.marketType.replace(/_/g, " ")}</span>
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#FED7AA1A", color: "#9A3412", borderRadius: "999px" }}>{draft.stake > 0 ? `${draft.stake} cr` : "Free"}</span>
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#E9D5FF1A", color: "#9881C7", borderRadius: "999px" }}>{draft.evidenceType}</span>
                 </div>
               )}
               <motion.button onClick={reset} whileTap={{ scale: 0.97 }}
                 className="w-full py-3 text-sm font-bold transition-all"
-                style={{ color: "#1F3A5F", background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "999px" }}>
+                style={{ color: "#1E293B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "999px" }}>
                 ✨ Make another market
               </motion.button>
             </motion.div>

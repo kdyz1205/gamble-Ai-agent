@@ -23,14 +23,18 @@ interface Props {
   onEdit: () => void;
 }
 
-const NAVY = "#1F3A5F";
-const NAVY_DIM = "rgba(31,58,95,0.55)";
-const NAVY_FAINT = "rgba(31,58,95,0.10)";
-const PEACH = "#FF9966";
-const PEACH_DARK = "#F07A4F";
-const MINT = "#5FC9B4";
-const LAVENDER = "#B8A6E0";
-const CREAM = "#FFF8E7";
+// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+const NAVY = "#1E293B";        // slate-800
+const NAVY_DIM = "#64748B";    // slate-500
+const NAVY_FAINT = "#E2E8F0";  // slate-200
+const PEACH = "#FED7AA";       // orange-200 — CTA
+const PEACH_DARK = "#FDBA74";  // orange-300 — hover
+const PEACH_TEXT = "#7C2D12";  // orange-900
+const ORANGE_GLOW = "rgba(251,146,60,0.39)";
+const MINT = "#A7F3D0";        // mint-200
+const LAVENDER = "#E9D5FF";    // purple-200
+// const PINK = "#FFD1DC"; // reserved for future cotton candy decorations
+const CREAM = "#FFEDD5";       // orange-100
 
 export default function DraftPanel({ draft, onPublish }: Props) {
   const [d, setD] = useState<ChallengeDraft>(draft);
@@ -40,11 +44,11 @@ export default function DraftPanel({ draft, onPublish }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      className="lp-glass"
       style={{
-        background: "#FFFFFF",
-        border: `2px solid ${NAVY_FAINT}`,
-        borderRadius: "24px",
-        boxShadow: `0 6px 0 ${NAVY}0F, 0 16px 32px ${NAVY}0A`,
+        borderRadius: "28px",
+        boxShadow: `0 8px 30px rgba(15,23,42,0.04)`,
         overflow: "hidden",
       }}
     >
@@ -99,14 +103,15 @@ export default function DraftPanel({ draft, onPublish }: Props) {
         {/* Publish button — fat sticker pill */}
         <motion.button
           onClick={() => onPublish(d)}
-          whileHover={{ y: -2 }}
-          whileTap={{ scale: 0.96, y: 1 }}
-          className="w-full py-4 text-base font-extrabold transition-all"
+          whileHover={{ scale: 1.03, y: -2 }}
+          whileTap={{ scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          className="w-full py-4 text-base font-extrabold"
           style={{
-            background: `linear-gradient(135deg, ${PEACH} 0%, ${PEACH_DARK} 100%)`,
-            color: "#FFFFFF",
-            borderRadius: "999px",
-            boxShadow: `0 5px 0 ${PEACH_DARK}, 0 10px 24px ${PEACH}66`,
+            background: PEACH,
+            color: PEACH_TEXT,
+            borderRadius: "9999px",
+            boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
             letterSpacing: "0.02em",
           }}
         >

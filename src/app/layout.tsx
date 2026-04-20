@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Providers from "@/components/Providers";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import SoftBackground from "@/components/SoftBackground";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#EAF4FB",
+  themeColor: "#E0F2FE",
   colorScheme: "light",
 };
 
@@ -53,11 +54,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className="min-h-screen antialiased"
         style={{
-          background:
-            "linear-gradient(160deg, #EAF4FB 0%, #F4FBF8 45%, #FFF8E7 100%)",
-          color: "#1F3A5F",
+          background: "linear-gradient(180deg, #E0F2FE 0%, #F0F9FF 50%, #FAFAFA 100%)",
+          color: "#334155",
         }}
       >
+        <SoftBackground />
         <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
       </body>
     </html>

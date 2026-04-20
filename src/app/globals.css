@@ -6,62 +6,90 @@
    ═══════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Backgrounds — Sky, mint, cream ── */
-  --color-bg-void:    #EAF4FB;  /* page outer (sky-blue tint) */
-  --color-bg-primary: #F4FBF8;  /* main canvas (mint-cream) */
-  --color-bg-surface: #FFFFFF;  /* surfaces */
-  --color-bg-card:    #FFFFFF;  /* cards */
-  --color-bg-raised:  #FFFDF8;  /* raised surfaces (warm white) */
-  --color-bg-input:   #F7FAFC;  /* form fields */
-  --color-bg-hover:   #EFF7F3;  /* hover state */
+  /* ── Backgrounds — Sky-100 → gray-50 (canonical spec) ── */
+  --color-bg-void:    #E0F2FE;
+  --color-bg-primary: #F0F9FF;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-card:    rgba(255,255,255,0.85);
+  --color-bg-raised:  #FAFAFA;
+  --color-bg-input:   #F8FAFC;
+  --color-bg-hover:   #F1F5F9;
 
-  /* ── Borders — Soft pastel outlines ── */
-  --color-border-subtle: rgba(120,160,180,0.10);
-  --color-border-mid:    rgba(120,160,180,0.18);
-  --color-border-bright: rgba(255,153,102,0.40);  /* peach focus */
-  --color-border-focus:  rgba(255,153,102,0.70);
+  /* ── Borders — slate-200 hairlines ── */
+  --color-border-subtle: #F1F5F9;
+  --color-border-mid:    #E2E8F0;
+  --color-border-bright: #FDBA74;
+  --color-border-focus:  #FB923C;
 
-  /* ── Accent — Peach Coral (primary CTA) ── */
-  --color-accent:         #FF9966;
-  --color-accent-light:   rgba(255,153,102,0.18);
-  --color-accent-dim:     rgba(255,153,102,0.08);
-  --color-accent-dark:    #F07A4F;
-  --color-accent-glow:    rgba(255,153,102,0.30);
-  --color-accent-plasma:  rgba(255,153,102,0.45);
+  /* ── Accent — Orange-200 primary CTA (canonical) ── */
+  --color-accent:         #FED7AA;
+  --color-accent-light:   #FFEDD5;
+  --color-accent-dim:     #FFF7ED;
+  --color-accent-dark:    #FDBA74;
+  --color-accent-glow:    rgba(251,146,60,0.39);
+  --color-accent-plasma:  #FB923C;
+  --color-accent-text:    #7C2D12;
 
-  /* ── Mint Sky — Secondary action ── */
-  --color-teal:           #5FC9B4;
-  --color-teal-light:     rgba(95,201,180,0.18);
-  --color-teal-dim:       rgba(95,201,180,0.08);
-  --color-teal-glow:      rgba(95,201,180,0.30);
+  /* ── Mint — Mint-200 success / live ── */
+  --color-teal:           #A7F3D0;
+  --color-teal-light:     #D1FAE5;
+  --color-teal-dim:       #ECFDF5;
+  --color-teal-glow:      rgba(110,231,183,0.40);
 
-  /* ── Lavender — Tertiary / leaderboard ── */
-  --color-gold:           #B8A6E0;
-  --color-gold-light:     rgba(184,166,224,0.18);
-  --color-gold-dim:       rgba(184,166,224,0.08);
+  /* ── Lavender — Purple-200 leaderboard / tertiary ── */
+  --color-gold:           #E9D5FF;
+  --color-gold-light:     #F3E8FF;
+  --color-gold-dim:       #FAF5FF;
+  --color-gold-glow:      rgba(216,180,254,0.40);
 
-  /* ── Status — Friendly green / rosy red ── */
-  --color-success:        #6BCF8E;
-  --color-success-light:  rgba(107,207,142,0.16);
-  --color-danger:         #FF6B82;
-  --color-danger-light:   rgba(255,107,130,0.14);
+  /* ── Soft Pink — Cotton candy accent (decorations) ── */
+  --color-pink:           #FFD1DC;
+  --color-pink-light:     #FCE7F3;
+  --color-pink-glow:      rgba(251,207,232,0.50);
 
-  /* ── Text — Deep navy on light, never pure black ── */
-  --color-text-primary:   #1F3A5F;
-  --color-text-secondary: rgba(31,58,95,0.70);
-  --color-text-tertiary:  rgba(31,58,95,0.45);
-  --color-text-muted:     rgba(31,58,95,0.28);
+  /* ── Cyan — Cool secondary (odds buttons) ── */
+  --color-cyan:           #CFFAFE;
+  --color-cyan-text:      #155E75;
+
+  /* ── Status — Soft, never alarming ── */
+  --color-success:        #A7F3D0;
+  --color-success-light:  #D1FAE5;
+  --color-danger:         #FECACA;
+  --color-danger-light:   #FEE2E2;
+  --color-danger-text:    #991B1B;
+
+  /* ── Text — Slate, never pure black ── */
+  --color-text-primary:   #1E293B;
+  --color-text-secondary: #334155;
+  --color-text-tertiary:  #64748B;
+  --color-text-muted:     #94A3B8;
 
   /* ── Fonts — Rounded friendly sans ── */
   --font-sans:  "Plus Jakarta Sans", "Nunito", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-serif: "Plus Jakarta Sans", "Nunito", "Quicksand", serif;
   --font-mono:  "JetBrains Mono", "Space Mono", ui-monospace, monospace;
 
-  /* ── Radii — generous rounding for the playful look ── */
-  --radius-pill: 999px;
-  --radius-card: 20px;
-  --radius-soft: 14px;
+  /* ── Radii — Squircle (24-32) cards + 9999 pills ── */
+  --radius-pill: 9999px;
+  --radius-card: 28px;
+  --radius-soft: 20px;
+  --radius-input: 16px;
 }
+
+/* ── Glassmorphic surface utility (canonical) ── */
+.lp-glass {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  border: 1px solid rgba(255,255,255,0.9);
+}
+
+/* ── Colored shadow utilities ── */
+.lp-shadow-card     { box-shadow: 0 8px 30px rgba(15,23,42,0.04); }
+.lp-shadow-orange   { box-shadow: 0 4px 14px 0 rgba(251,146,60,0.39); }
+.lp-shadow-mint     { box-shadow: 0 4px 14px 0 rgba(110,231,183,0.40); }
+.lp-shadow-lavender { box-shadow: 0 4px 14px 0 rgba(216,180,254,0.40); }
+.lp-shadow-pink     { box-shadow: 0 4px 14px 0 rgba(251,207,232,0.50); }
 
 /* ═══════════════════════════════════════════════════
    BASE
