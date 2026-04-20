@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
-import { DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "@/lib/credits";
 
 /**
@@ -55,7 +55,19 @@ export async function POST(
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
 
   const aiModel = getAiModel(tierId);
-  const providerId = process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID;
+  const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
+  const providerId =
+    envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
+  const pdef = getProviderById(providerId);
+  // tier model names are Claude IDs; only valid when routing to Anthropic.
+  // For other providers, fall back to that provider's default model so the
+  // call doesn't 404 and silently degrade to the random-winner fallback.
+  const judgeModel =
+    providerId === DEFAULT_LLM_PROVIDER_ID
+      ? aiModel.model
+      : (pdef?.defaultModel ?? aiModel.model);
+  const aiModelLabel = `${pdef?.shortLabel ?? aiModel.displayName} · ${judgeModel}`;
+
   const result = await judgeChallenge({
     title: challenge.title,
     type: challenge.type,
@@ -65,7 +77,7 @@ export async function POST(
     evidenceB: evidenceB ? { description: evidenceB.description, type: evidenceB.type, url: evidenceB.url } : null,
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
-    model: aiModel.model,
+    model: judgeModel,
     providerId,
   });
 
@@ -74,7 +86,7 @@ export async function POST(
       challengeId: id,
       winnerId: result.winnerId,
       method: "ai",
-      aiModel: aiModel.displayName,
+      aiModel: aiModelLabel,
       reasoning: result.reasoning,
       confidence: result.confidence,
       status: "completed",
@@ -90,13 +102,13 @@ export async function POST(
     );
   }
 
-  await prisma.challenge.update({ where: { id }, data: { status: "settled", aiModel: aiModel.displayName } });
+  await prisma.challenge.update({ where: { id }, data: { status: "settled", aiModel: aiModelLabel } });
 
   const winnerName = judgment.winner?.username || "No one";
   await prisma.activityEvent.create({
     data: {
       type: "challenge_settled",
-      message: `"${challenge.title}" judged by ${aiModel.displayName} — ${winnerName} wins!${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}`,
+      message: `"${challenge.title}" judged by ${aiModelLabel} — ${winnerName} wins!${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}`,
       userId: result.winnerId,
       challengeId: id,
     },
@@ -106,7 +118,7 @@ export async function POST(
     judgment,
     settlement: settlementResult,
     challenge: { id, status: "settled" },
-    model: aiModel.displayName,
+    model: aiModelLabel,
     tierId,
     creditsUsed: cost,
     creditsRemaining: spend.balance,
