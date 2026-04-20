@@ -247,13 +247,16 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
   const busy = Boolean(isParsing || isTranscribing);
 
-  const NAVY = "#1F3A5F";
-  const NAVY_DIM = "rgba(31,58,95,0.55)";
-  const NAVY_FAINT = "rgba(31,58,95,0.10)";
-  const PEACH = "#FF9966";
-  const PEACH_DARK = "#F07A4F";
-  const MINT = "#5FC9B4";
-  const ROSE = "#FF6B82";
+  // LuckyPlay canonical palette — see project_luckyplay_design_system memory
+  const NAVY = "#1E293B";
+  const NAVY_DIM = "#64748B";
+  const NAVY_FAINT = "#E2E8F0";
+  const PEACH = "#FED7AA";       // orange-200 CTA
+  const PEACH_DARK = "#FDBA74";  // orange-300 hover
+  const PEACH_TEXT = "#7C2D12";  // orange-900 text on peach
+  const ORANGE_GLOW = "rgba(251,146,60,0.39)";
+  const MINT = "#A7F3D0";        // mint-200
+  const ROSE = "#FECACA";        // red-200 (gentle)
   const canSend = Boolean(input.trim() && !busy);
 
   return (
@@ -264,8 +267,8 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           border: `2px solid ${busy ? PEACH : NAVY_FAINT}`,
           borderRadius: "24px",
           boxShadow: busy
-            ? `0 6px 0 ${PEACH}33, 0 16px 32px ${PEACH}22`
-            : `0 4px 0 ${NAVY}0F, 0 12px 24px ${NAVY}0A`,
+            ? `0 4px 14px 0 ${ORANGE_GLOW}`
+            : `0 8px 30px rgba(15,23,42,0.04)`,
           transition: "all 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
@@ -363,12 +366,13 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
             onClick={send}
             disabled={!canSend}
             whileTap={canSend ? { scale: 0.94 } : undefined}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
             className="px-6 py-2 text-sm font-bold transition-all disabled:opacity-40"
             style={{
-              color: "#FFFFFF",
-              background: canSend ? `linear-gradient(135deg, ${PEACH} 0%, ${PEACH_DARK} 100%)` : NAVY_FAINT,
-              borderRadius: "999px",
-              boxShadow: canSend ? `0 3px 0 ${PEACH_DARK}, 0 6px 14px ${PEACH}55` : "none",
+              color: canSend ? PEACH_TEXT : NAVY_DIM,
+              background: canSend ? PEACH : NAVY_FAINT,
+              borderRadius: "9999px",
+              boxShadow: canSend ? `0 4px 14px 0 ${ORANGE_GLOW}` : "none",
             }}
           >
             {busy ? "…" : isActive ? "Update ✨" : "Send 🚀"}

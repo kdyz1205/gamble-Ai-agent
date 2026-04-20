@@ -7,23 +7,26 @@ import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 
-// LuckyPlay status palette — friendly, never alarming
+// LuckyPlay status palette — canonical pastels
 const STATUS_COLOR: Record<string, string> = {
-  open:      "#FF9966", // peach — accepting joiners
-  live:      "#5FC9B4", // mint — in progress
-  judging:   "#B8A6E0", // lavender — AI thinking
-  settled:   "#6BCF8E", // soft green — done
-  cancelled: "#FF6B82", // rosy red — voided
-  disputed:  "#FF6B82",
-  draft:     "#1F3A5F66",
+  open:      "#FED7AA", // orange-200 — accepting joiners
+  live:      "#A7F3D0", // mint-200 — in progress
+  judging:   "#E9D5FF", // purple-200 — AI thinking
+  settled:   "#A7F3D0", // mint-200 — done
+  cancelled: "#FECACA", // red-200 — voided (soft, not alarming)
+  disputed:  "#FECACA",
+  draft:     "#E2E8F0", // slate-200 — neutral
 };
 
-const NAVY = "#1F3A5F";
-const NAVY_DIM = "rgba(31,58,95,0.55)";
-const NAVY_FAINT = "rgba(31,58,95,0.10)";
-const PEACH = "#FF9966";
-const PEACH_DARK = "#F07A4F";
-const CREAM = "#FFF8E7";
+// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+const NAVY = "#1E293B";        // slate-800 headlines
+const NAVY_DIM = "#64748B";    // slate-500 muted text
+const NAVY_FAINT = "#E2E8F0";  // slate-200 hairline borders
+const PEACH = "#FED7AA";       // orange-200 — primary CTA bg
+const PEACH_DARK = "#FDBA74";  // orange-300 — hover
+const PEACH_TEXT = "#7C2D12";  // orange-900 — text on peach
+const ORANGE_GLOW = "rgba(251,146,60,0.39)"; // colored shadow
+const CREAM = "#FFEDD5";       // orange-100 soft fill
 
 type Tab = "all" | "open" | "live" | "settled";
 
@@ -68,19 +71,19 @@ export default function MePage() {
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>LuckyPlay</Link>
-        <Link href="/" className="text-xs font-semibold px-3 py-1.5 shadow-sm"
-          style={{ background: PEACH, color: "#FFFFFF", borderRadius: "999px" }}>
+        <Link href="/" className="text-xs font-bold px-4 py-2"
+          style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
           + New Market
         </Link>
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6">
         {/* Profile card */}
-        <div className="mb-6 p-5 shadow-sm"
-          style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "20px" }}>
+        <div className="mb-6 p-5 lp-glass"
+          style={{ borderRadius: "28px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}>
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-14 h-14 flex items-center justify-center text-xl font-bold shadow-sm"
-              style={{ background: PEACH, color: "#FFFFFF", borderRadius: "999px" }}>
+            <div className="w-14 h-14 flex items-center justify-center text-xl font-bold"
+              style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
               {username.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -91,11 +94,11 @@ export default function MePage() {
 
           {/* Balance */}
           <div className="flex items-center justify-between py-3 px-4 mb-4"
-            style={{ background: CREAM, borderRadius: "14px" }}>
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Balance</span>
-            <span className="text-2xl font-bold" style={{ color: PEACH_DARK }}>
+            style={{ background: CREAM, borderRadius: "20px" }}>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Balance</span>
+            <span className="text-2xl font-extrabold" style={{ color: PEACH_TEXT }}>
               {credits}
-              <span className="text-xs font-semibold ml-1" style={{ color: NAVY_DIM }}>cr</span>
+              <span className="text-xs font-bold ml-1" style={{ color: NAVY_DIM }}>cr</span>
             </span>
           </div>
 
@@ -119,10 +122,12 @@ export default function MePage() {
             <button key={t} onClick={() => setTab(t)}
               className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-all flex-shrink-0"
               style={{
-                color: tab === t ? "#FFFFFF" : NAVY_DIM,
-                background: tab === t ? PEACH : "#FFFFFF",
-                border: `1px solid ${tab === t ? PEACH : NAVY_FAINT}`,
-                borderRadius: "999px",
+                color: tab === t ? PEACH_TEXT : NAVY_DIM,
+                background: tab === t ? PEACH : "rgba(255,255,255,0.85)",
+                border: `1px solid ${tab === t ? "transparent" : NAVY_FAINT}`,
+                borderRadius: "9999px",
+                boxShadow: tab === t ? `0 4px 14px 0 ${ORANGE_GLOW}` : "none",
+                backdropFilter: tab === t ? undefined : "blur(8px)",
               }}>
               {t}
             </button>
@@ -143,9 +148,9 @@ export default function MePage() {
               {tab === "all" ? "No markets yet — make a friendly call!" : `No ${tab} markets right now.`}
             </p>
             {tab === "all" && (
-              <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold shadow-sm"
-                style={{ background: PEACH, color: "#FFFFFF", borderRadius: "999px" }}>
-                Create your first market
+              <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold"
+                style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
+                ✨ Create your first market
               </Link>
             )}
           </div>
@@ -155,8 +160,8 @@ export default function MePage() {
               <motion.div key={m.id}
                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}>
-                <Link href={`/market/${m.id}`} className="block p-4 shadow-sm transition-all hover:shadow-md"
-                  style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
+                <Link href={`/market/${m.id}`} className="block p-4 lp-glass transition-all hover:shadow-lg"
+                  style={{ borderRadius: "24px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-bold truncate" style={{ color: NAVY }}>{m.title}</h3>
@@ -170,9 +175,9 @@ export default function MePage() {
                     </div>
                     <span className="flex-shrink-0 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
                       style={{
-                        color: "#FFFFFF",
-                        background: STATUS_COLOR[m.status] || NAVY_DIM,
-                        borderRadius: "999px",
+                        color: NAVY,
+                        background: STATUS_COLOR[m.status] || "#E2E8F0",
+                        borderRadius: "9999px",
                       }}>
                       {m.status}
                     </span>
