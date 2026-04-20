@@ -207,34 +207,34 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="relative min-h-screen flex flex-col" style={{ background: "#0A0A0B" }}
+    <div className="relative min-h-screen flex flex-col"
          onClick={() => showProfile && setShowProfile(false)}>
-      {/* Ambient */}
+      {/* Ambient — soft pastel orbs over the body gradient */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.03] blur-[150px]" style={{ background: "#D4AF37" }} />
-        <div className="absolute -bottom-40 -right-40 w-[400px] h-[400px] rounded-full opacity-[0.02] blur-[120px]" style={{ background: "#005F6F" }} />
+        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full opacity-40 blur-[150px]" style={{ background: "#FF9966" }} />
+        <div className="absolute -bottom-40 -right-40 w-[400px] h-[400px] rounded-full opacity-40 blur-[120px]" style={{ background: "#5FC9B4" }} />
       </div>
 
       {/* ── Header ── */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
-        <button onClick={reset} className="text-sm font-serif font-bold" style={{ color: "#D4AF37" }}>
-          Lex Divina
+        <button onClick={reset} className="text-base font-bold tracking-tight" style={{ color: "#1F3A5F" }}>
+          LuckyPlay
         </button>
         <div className="flex items-center gap-3">
           {appState !== "idle" && (
-            <button onClick={reset} className="text-[10px] font-mono tracking-wider uppercase" style={{ color: "#8b8b83" }}>New</button>
+            <button onClick={reset} className="text-xs font-semibold tracking-wide uppercase" style={{ color: "rgba(31,58,95,0.55)" }}>New</button>
           )}
           {user ? (
             <div className="relative">
               <button onClick={(e) => { e.stopPropagation(); setShowProfile(!showProfile); }}
-                className="flex items-center gap-2 px-2.5 py-1.5 border"
-                style={{ background: "rgba(212,175,55,0.04)", borderColor: "rgba(212,175,55,0.12)", borderRadius: "2px" }}>
-                <span className="w-5 h-5 flex items-center justify-center text-[9px] font-serif font-bold"
-                  style={{ background: "rgba(212,175,55,0.12)", color: "#D4AF37", borderRadius: "2px" }}>
+                className="flex items-center gap-2 px-3 py-1.5 border shadow-sm"
+                style={{ background: "#FFFFFF", borderColor: "rgba(31,58,95,0.10)", borderRadius: "999px" }}>
+                <span className="w-6 h-6 flex items-center justify-center text-[11px] font-bold"
+                  style={{ background: "#FF9966", color: "#FFFFFF", borderRadius: "999px" }}>
                   {user.username.charAt(0).toUpperCase()}
                 </span>
-                <span className="text-xs font-mono" style={{ color: "#8b8b83" }}>{user.username}</span>
-                <span className="text-[9px] font-mono font-bold" style={{ color: "#D4AF37" }}>{user.credits ?? 0}</span>
+                <span className="text-xs font-semibold" style={{ color: "#1F3A5F" }}>{user.username}</span>
+                <span className="text-[11px] font-bold px-1.5 py-0.5" style={{ background: "#FFF8E7", color: "#F07A4F", borderRadius: "999px" }}>{user.credits ?? 0}</span>
               </button>
               <AnimatePresence>
                 {showProfile && (
