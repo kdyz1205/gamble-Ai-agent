@@ -163,13 +163,11 @@ export default function Home() {
   const handlePublish = useCallback(async (editedDraft?: ChallengeDraft) => {
     if (!user) { setShowAuth(true); return; }
 
-    // Use the MarketDraft (draft state) as primary, editedDraft for title changes from DraftPanel
-    const d = draft;
-    if (!d) return;
-    if (editedDraft) {
-      d.title = editedDraft.title;
-      d.stake = editedDraft.stake;
-    }
+    // Use the MarketDraft (draft state) as primary, editedDraft for title/stake overrides from DraftPanel
+    if (!draft) return;
+    const d = editedDraft
+      ? { ...draft, title: editedDraft.title, stake: editedDraft.stake }
+      : draft;
 
     setAppState("publishing");
     setError(null);
@@ -192,7 +190,7 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "Failed to publish");
       setAppState("drafting");
     }
-  }, [draft, user]);
+  }, [draft, user, router]);
 
   const copyLink = useCallback(() => {
     if (!shareLink) return;
