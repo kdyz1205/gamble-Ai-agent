@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
+import { DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "@/lib/credits";
 
 /**
@@ -54,13 +55,19 @@ export async function POST(
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
 
   const aiModel = getAiModel(tierId);
-  const result = await judgeChallenge(
-    challenge.title, challenge.type,
-    evidenceA ? { description: evidenceA.description, type: evidenceA.type } : null,
-    evidenceB ? { description: evidenceB.description, type: evidenceB.type } : null,
-    creator.userId, opponent?.userId || "",
-    aiModel.model,
-  );
+  const providerId = process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID;
+  const result = await judgeChallenge({
+    title: challenge.title,
+    type: challenge.type,
+    rules: challenge.rules,
+    evidencePolicy: challenge.evidenceType,
+    evidenceA: evidenceA ? { description: evidenceA.description, type: evidenceA.type, url: evidenceA.url } : null,
+    evidenceB: evidenceB ? { description: evidenceB.description, type: evidenceB.type, url: evidenceB.url } : null,
+    participantAId: creator.userId,
+    participantBId: opponent?.userId ?? null,
+    model: aiModel.model,
+    providerId,
+  });
 
   const judgment = await prisma.judgment.create({
     data: {

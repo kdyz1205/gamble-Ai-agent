@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { completeOraclePrompt } from "./llm-router";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
 
@@ -98,58 +99,87 @@ export async function parseChallenge(input: string, model = "claude-haiku-4-2025
   return parseChallengeFallback(input);
 }
 
-export async function judgeChallenge(
-  challengeTitle: string,
-  challengeType: string,
-  evidenceA: { description: string | null; type: string } | null,
-  evidenceB: { description: string | null; type: string } | null,
-  participantAId: string,
-  participantBId: string,
-  model = "claude-haiku-4-20250414",
-): Promise<JudgmentResult> {
+export interface JudgeChallengeParams {
+  title: string;
+  description?: string | null;
+  deadlineIso?: string | null;
+  type: string;
+  rules?: string | null;
+  evidencePolicy?: string;
+  evidenceA: { description: string | null; type: string; url?: string | null } | null;
+  evidenceB: { description: string | null; type: string; url?: string | null } | null;
+  participantAId: string;
+  participantBId: string | null;
+  model: string;
+  providerId: string;
+  /** Optional liveness prompt (not in schema today; accepted for forward compat). */
+  livenessPrompt?: string | null;
+}
+
+export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
+  const { evidenceA, evidenceB, participantAId, participantBId, title, type, rules } = params;
+
+  // Forfeit / void cases — no LLM needed.
   if (!evidenceA && !evidenceB) {
     return { winnerId: null, reasoning: "Neither participant submitted evidence. Challenge voided — credits refunded.", confidence: 0.95 };
   }
-  if (evidenceA && !evidenceB) {
+  if (evidenceA && !evidenceB && participantBId) {
     return { winnerId: participantAId, reasoning: `Only participant A submitted ${evidenceA.type} evidence. Winner by default.`, confidence: 0.85 };
   }
-  if (!evidenceA && evidenceB) {
+  if (!evidenceA && evidenceB && participantBId) {
     return { winnerId: participantBId, reasoning: `Only participant B submitted ${evidenceB.type} evidence. Winner by default.`, confidence: 0.85 };
   }
+  // Solo / no opponent — accept the single submission.
+  if (!participantBId && evidenceA) {
+    return { winnerId: participantAId, reasoning: "No opponent — solo submission accepted.", confidence: 0.85 };
+  }
 
-  if (!process.env.ANTHROPIC_API_KEY) return judgeChallengeFallback(challengeTitle, evidenceA!, evidenceB!, participantAId, participantBId);
+  const system = `You are a fair AI judge for two-player challenges. The "Rules / Task" line defines what each player had to do. Each player submits evidence (text description, optionally a media URL). Decide the winner by comparing each submission against the rules. Return ONLY valid JSON.`;
+
+  const user = `Challenge: "${title}"
+Type: ${type}
+${params.description ? `Context: ${params.description}\n` : ""}Rules / Task: ${rules || title}
+Evidence policy: ${params.evidencePolicy || "self_report"}
+
+Participant A evidence (${evidenceA!.type}):
+description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
+
+Participant B evidence (${evidenceB!.type}):
+description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}
+
+Decide the winner:
+- If exactly one submission satisfies the rules, that participant wins.
+- If both satisfy, prefer the clearer / more complete answer.
+- If neither satisfies, return winner: null.
+
+Return JSON only: { "winner": "A" | "B" | null, "reasoning": "<one short paragraph>", "confidence": 0.0-1.0 }`;
 
   try {
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 512,
-      messages: [{
-        role: "user",
-        content: `Judge this "${challengeType}" challenge: "${challengeTitle}"
-
-Participant A evidence (${evidenceA!.type}): ${evidenceA!.description || "No description"}
-Participant B evidence (${evidenceB!.type}): ${evidenceB!.description || "No description"}
-
-Return JSON: { "winner": "A" or "B", "reasoning": "...", "confidence": 0.0-1.0 }`,
-      }],
-      system: "You are a fair AI judge for challenges. Analyze evidence objectively. Return ONLY valid JSON.",
+    const text = await completeOraclePrompt({
+      providerId: params.providerId,
+      model: params.model,
+      system,
+      user,
+      maxTokens: 512,
     });
-
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
+      const result = JSON.parse(jsonMatch[0]) as { winner: "A" | "B" | null; reasoning: string; confidence: number };
+      const winnerId =
+        result.winner === "A" ? participantAId :
+        result.winner === "B" ? participantBId :
+        null;
       return {
-        winnerId: result.winner === "A" ? participantAId : participantBId,
+        winnerId,
         reasoning: result.reasoning,
         confidence: result.confidence,
       };
     }
   } catch {
-    // fall through
+    // fall through to deterministic fallback
   }
 
-  return judgeChallengeFallback(challengeTitle, evidenceA!, evidenceB!, participantAId, participantBId);
+  return judgeChallengeFallback(title, evidenceA!, evidenceB!, participantAId, participantBId!);
 }
 
 export function generateClarifications(parsed: ParsedChallenge): Array<{ question: string; options: string[] }> {
