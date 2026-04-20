@@ -1,61 +1,66 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
-   DESIGN SYSTEM — Lex Divina · Cyber-Gothic Oracle Tribunal
-   Bronze vault aesthetic with mechanical precision
+   DESIGN SYSTEM — LuckyPlay · Playful Predictor
+   Soft sky pastels, friendly mascot energy, rounded pills
    ═══════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Backgrounds — Obsidian & Titanium ── */
-  --color-bg-void:    #0A0A0B;
-  --color-bg-primary: #0B0B0A;
-  --color-bg-surface: #111110;
-  --color-bg-card:    #16160F;
-  --color-bg-raised:  #1C1C14;
-  --color-bg-input:   #1A1A12;
-  --color-bg-hover:   #22221A;
+  /* ── Backgrounds — Sky, mint, cream ── */
+  --color-bg-void:    #EAF4FB;  /* page outer (sky-blue tint) */
+  --color-bg-primary: #F4FBF8;  /* main canvas (mint-cream) */
+  --color-bg-surface: #FFFFFF;  /* surfaces */
+  --color-bg-card:    #FFFFFF;  /* cards */
+  --color-bg-raised:  #FFFDF8;  /* raised surfaces (warm white) */
+  --color-bg-input:   #F7FAFC;  /* form fields */
+  --color-bg-hover:   #EFF7F3;  /* hover state */
 
-  /* ── Borders — Laser-etched precision ── */
-  --color-border-subtle: rgba(212,175,55,0.08);
-  --color-border-mid:    rgba(212,175,55,0.15);
-  --color-border-bright: rgba(212,175,55,0.25);
-  --color-border-focus:  rgba(212,175,55,0.6);
+  /* ── Borders — Soft pastel outlines ── */
+  --color-border-subtle: rgba(120,160,180,0.10);
+  --color-border-mid:    rgba(120,160,180,0.18);
+  --color-border-bright: rgba(255,153,102,0.40);  /* peach focus */
+  --color-border-focus:  rgba(255,153,102,0.70);
 
-  /* ── Accent — Antique Gold ── */
-  --color-accent:         #D4AF37;
-  --color-accent-light:   rgba(212,175,55,0.15);
-  --color-accent-dim:     rgba(212,175,55,0.08);
-  --color-accent-dark:    #A38829;
-  --color-accent-glow:    rgba(212,175,55,0.3);
-  --color-accent-plasma:  rgba(212,175,55,0.5);
+  /* ── Accent — Peach Coral (primary CTA) ── */
+  --color-accent:         #FF9966;
+  --color-accent-light:   rgba(255,153,102,0.18);
+  --color-accent-dim:     rgba(255,153,102,0.08);
+  --color-accent-dark:    #F07A4F;
+  --color-accent-glow:    rgba(255,153,102,0.30);
+  --color-accent-plasma:  rgba(255,153,102,0.45);
 
-  /* ── Oracle Blue — Deep Sea ── */
-  --color-teal:           #005F6F;
-  --color-teal-light:     rgba(0,95,111,0.15);
-  --color-teal-dim:       rgba(0,95,111,0.08);
-  --color-teal-glow:      rgba(0,95,111,0.3);
+  /* ── Mint Sky — Secondary action ── */
+  --color-teal:           #5FC9B4;
+  --color-teal-light:     rgba(95,201,180,0.18);
+  --color-teal-dim:       rgba(95,201,180,0.08);
+  --color-teal-glow:      rgba(95,201,180,0.30);
 
-  /* ── Bronze Green — Victory ── */
-  --color-gold:           #639A67;
-  --color-gold-light:     rgba(99,154,103,0.15);
-  --color-gold-dim:       rgba(99,154,103,0.08);
+  /* ── Lavender — Tertiary / leaderboard ── */
+  --color-gold:           #B8A6E0;
+  --color-gold-light:     rgba(184,166,224,0.18);
+  --color-gold-dim:       rgba(184,166,224,0.08);
 
-  /* ── Status ── */
-  --color-success:        #639A67;
-  --color-success-light:  rgba(99,154,103,0.12);
-  --color-danger:         #A31F34;
-  --color-danger-light:   rgba(163,31,52,0.12);
+  /* ── Status — Friendly green / rosy red ── */
+  --color-success:        #6BCF8E;
+  --color-success-light:  rgba(107,207,142,0.16);
+  --color-danger:         #FF6B82;
+  --color-danger-light:   rgba(255,107,130,0.14);
 
-  /* ── Text — Parchment & Linen ── */
-  --color-text-primary:   #E5E0D8;
-  --color-text-secondary: rgba(229,224,216,0.60);
-  --color-text-tertiary:  rgba(229,224,216,0.35);
-  --color-text-muted:     rgba(229,224,216,0.20);
+  /* ── Text — Deep navy on light, never pure black ── */
+  --color-text-primary:   #1F3A5F;
+  --color-text-secondary: rgba(31,58,95,0.70);
+  --color-text-tertiary:  rgba(31,58,95,0.45);
+  --color-text-muted:     rgba(31,58,95,0.28);
 
-  /* ── Fonts — Heritage serif + precision mono ── */
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-serif: "Cormorant Garamond", "Playfair Display", "Georgia", serif;
-  --font-mono: "Space Mono", "JetBrains Mono", ui-monospace, monospace;
+  /* ── Fonts — Rounded friendly sans ── */
+  --font-sans:  "Plus Jakarta Sans", "Nunito", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Plus Jakarta Sans", "Nunito", "Quicksand", serif;
+  --font-mono:  "JetBrains Mono", "Space Mono", ui-monospace, monospace;
+
+  /* ── Radii — generous rounding for the playful look ── */
+  --radius-pill: 999px;
+  --radius-card: 20px;
+  --radius-soft: 14px;
 }
 
 /* ═══════════════════════════════════════════════════
