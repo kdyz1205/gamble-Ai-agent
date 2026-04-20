@@ -238,24 +238,24 @@ export default function Home() {
               </button>
               <AnimatePresence>
                 {showProfile && (
-                  <motion.div className="absolute top-full right-0 mt-1 w-48 z-50"
-                    style={{ background: "#0E0E0C", border: "1px solid rgba(212,175,55,0.12)", borderRadius: "2px", boxShadow: "0 12px 40px rgba(0,0,0,0.6)" }}
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                  <motion.div className="absolute top-full right-0 mt-2 w-52 z-50"
+                    style={{ background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "20px", boxShadow: "0 6px 0 rgba(31,58,95,0.06), 0 16px 32px rgba(31,58,95,0.10)" }}
+                    initial={{ opacity: 0, y: -4, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.95 }}
                     onClick={(e) => e.stopPropagation()}>
-                    <div className="p-3 border-b" style={{ borderColor: "rgba(212,175,55,0.08)" }}>
-                      <p className="text-xs font-serif font-bold" style={{ color: "#E5E0D8" }}>{user.username}</p>
-                      <p className="text-[9px] font-mono" style={{ color: "#8b8b83" }}>{user.email || ""}</p>
+                    <div className="p-3 border-b" style={{ borderColor: "rgba(31,58,95,0.08)" }}>
+                      <p className="text-sm font-bold" style={{ color: "#1F3A5F" }}>{user.username}</p>
+                      <p className="text-xs truncate" style={{ color: "rgba(31,58,95,0.55)" }}>{user.email || ""}</p>
                     </div>
-                    <div className="p-2 space-y-1">
+                    <div className="p-2 space-y-0.5">
                       <button onClick={() => { setShowProfile(false); router.push("/me"); }}
-                        className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#D4AF37] transition-colors"
-                        style={{ color: "#8b8b83" }}>Profile</button>
+                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFF8E7]"
+                        style={{ color: "#1F3A5F" }}>👤 Profile</button>
                       <button onClick={() => { setShowProfile(false); router.push("/markets"); }}
-                        className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#D4AF37] transition-colors"
-                        style={{ color: "#8b8b83" }}>My Markets</button>
+                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFF8E7]"
+                        style={{ color: "#1F3A5F" }}>🎲 My Markets</button>
                       <button onClick={() => { setShowProfile(false); signOut(); reset(); }}
-                        className="w-full text-left px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider hover:text-[#A31F34] transition-colors"
-                        style={{ color: "#8b8b83" }}>Sign Out</button>
+                        className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl transition-colors hover:bg-[#FFE5EA]"
+                        style={{ color: "#FF6B82" }}>👋 Sign Out</button>
                     </div>
                   </motion.div>
                 )}
@@ -263,8 +263,8 @@ export default function Home() {
             </div>
           ) : (
             <button onClick={() => setShowAuth(true)}
-              className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider"
-              style={{ color: "#D4AF37", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "2px" }}>Sign In</button>
+              className="px-4 py-2 text-sm font-bold shadow-sm active:scale-95 transition-transform"
+              style={{ color: "#FFFFFF", background: "linear-gradient(135deg, #FF9966, #F07A4F)", borderRadius: "999px", boxShadow: "0 3px 0 #F07A4F, 0 6px 14px rgba(255,153,102,0.4)" }}>Sign In ✨</button>
           )}
         </div>
       </header>
@@ -276,10 +276,51 @@ export default function Home() {
           {/* ── IDLE ── */}
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-              <p className="text-center font-serif text-2xl mb-1" style={{ color: "#E5E0D8" }}>Say the bet.</p>
-              <p className="text-center text-xs font-mono mb-4" style={{ color: "#8b8b83" }}>We&apos;ll compile it into a market.</p>
+              {/* Cute mascot — animated cloud blob */}
+              <motion.div
+                className="mx-auto mb-4 relative"
+                style={{ width: 96, height: 96 }}
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <svg viewBox="0 0 120 120" width="96" height="96" style={{ filter: "drop-shadow(0 6px 12px rgba(255,153,102,0.25))" }}>
+                  {/* body */}
+                  <ellipse cx="60" cy="68" rx="44" ry="38" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
+                  <circle cx="28" cy="58" r="14" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
+                  <circle cx="92" cy="58" r="14" fill="#FFFFFF" stroke="#1F3A5F" strokeWidth="2.5" />
+                  {/* cheeks */}
+                  <circle cx="36" cy="74" r="6" fill="#FFB8A6" opacity="0.85" />
+                  <circle cx="84" cy="74" r="6" fill="#FFB8A6" opacity="0.85" />
+                  {/* eyes */}
+                  <circle cx="48" cy="64" r="4" fill="#1F3A5F" />
+                  <circle cx="72" cy="64" r="4" fill="#1F3A5F" />
+                  <circle cx="49" cy="63" r="1.4" fill="#FFFFFF" />
+                  <circle cx="73" cy="63" r="1.4" fill="#FFFFFF" />
+                  {/* mouth */}
+                  <path d="M 52 78 Q 60 84 68 78" stroke="#1F3A5F" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                </svg>
+                {/* sparkles */}
+                <motion.span className="absolute" style={{ top: -4, right: -2, fontSize: 18 }}
+                  animate={{ rotate: [0, 20, -20, 0], scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2.5, repeat: Infinity }}>✨</motion.span>
+                <motion.span className="absolute" style={{ bottom: 0, left: -8, fontSize: 14 }}
+                  animate={{ rotate: [0, -15, 15, 0], scale: [1, 1.15, 1] }}
+                  transition={{ duration: 2.8, repeat: Infinity, delay: 0.5 }}>⭐</motion.span>
+              </motion.div>
+
+              <h1 className="text-center text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ color: "#1F3A5F" }}>
+                Say the bet! <span className="inline-block">🎲</span>
+              </h1>
+              <p className="text-center text-base font-medium mb-6" style={{ color: "rgba(31,58,95,0.65)" }}>
+                Tell me what you wanna call — I&apos;ll turn it into a fun market.
+              </p>
               {understanding && (
-                <p className="text-center text-xs font-mono mb-4 px-4" style={{ color: "#D4AF37" }}>{understanding}</p>
+                <motion.p
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  className="text-center text-sm font-semibold mb-5 px-5 py-2 mx-auto inline-block"
+                  style={{ color: "#F07A4F", background: "#FFF8E7", borderRadius: "999px", display: "block", maxWidth: "fit-content", margin: "0 auto 1.25rem" }}>
+                  {understanding}
+                </motion.p>
               )}
               <CenteredComposer onSubmit={handleSubmit} isActive={false} initialValue={userInput} />
             </motion.div>
@@ -288,11 +329,11 @@ export default function Home() {
           {/* ── COMPILING ── */}
           {appState === "compiling" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <motion.div className="w-6 h-6 mx-auto mb-4 rounded-full border border-t-transparent"
-                style={{ borderColor: "#D4AF37", borderTopColor: "transparent" }}
+              <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent"
+                style={{ borderColor: "#FF9966", borderTopColor: "transparent" }}
                 animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-              <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>Compiling market...</p>
-              <p className="text-[10px] font-mono mt-2 max-w-sm mx-auto" style={{ color: "#D4AF37" }}>&ldquo;{userInput}&rdquo;</p>
+              <p className="text-base font-bold" style={{ color: "#1F3A5F" }}>Cooking up your market… 🍳</p>
+              <p className="text-sm font-medium mt-2 max-w-sm mx-auto px-4 py-2" style={{ color: "#F07A4F", background: "#FFF8E7", borderRadius: "999px", display: "inline-block" }}>&ldquo;{userInput}&rdquo;</p>
             </motion.div>
           )}
 
@@ -300,33 +341,36 @@ export default function Home() {
           {appState === "drafting" && draft && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
               {/* Back controls */}
-              <div className="flex items-center gap-3 mb-4">
-                <button onClick={reset} className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "#8b8b83" }}>&larr; Start over</button>
+              <div className="flex items-center gap-2 mb-4">
+                <button onClick={reset} className="px-3 py-1.5 text-xs font-bold rounded-full transition-all active:scale-95"
+                  style={{ color: "rgba(31,58,95,0.65)", background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)" }}>← Start over</button>
                 <button onClick={() => { setAppState("idle"); setDraft(null); setUnderstanding("Edit your input and try again."); }}
-                  className="text-[10px] font-mono uppercase tracking-wider" style={{ color: "#D4AF37" }}>Edit input</button>
+                  className="px-3 py-1.5 text-xs font-bold rounded-full transition-all active:scale-95"
+                  style={{ color: "#F07A4F", background: "#FFF8E7", border: "1px solid #FFE0CC" }}>✏️ Edit input</button>
               </div>
 
               {/* System Understanding Card */}
-              <div className="mb-4 p-3" style={{ background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.1)", borderRadius: "2px" }}>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] mb-1.5" style={{ color: "#8b8b83" }}>System Understanding</p>
-                <p className="text-xs font-mono" style={{ color: "#E5E0D8" }}
-                   dangerouslySetInnerHTML={{ __html: understanding.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#D4AF37">$1</strong>') }} />
+              <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "20px" }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#5FC9B4" }}>🧠 What I heard</p>
+                <p className="text-sm font-medium leading-relaxed" style={{ color: "#1F3A5F" }}
+                   dangerouslySetInnerHTML={{ __html: understanding.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#F07A4F">$1</strong>') }} />
               </div>
 
               {/* Next Missing Field — ONE question at a time */}
               {nextQuestion && (
-                <div className="mb-4 p-3" style={{ background: "rgba(0,95,111,0.04)", border: "1px solid rgba(0,95,111,0.12)", borderRadius: "2px" }}>
-                  <p className="text-xs font-mono mb-2.5" style={{ color: "#005F6F" }}>{nextQuestion.question}</p>
+                <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "2px solid #5FC9B4", borderRadius: "20px", boxShadow: "0 4px 0 rgba(95,201,180,0.15), 0 8px 20px rgba(95,201,180,0.20)" }}>
+                  <p className="text-base font-bold mb-3" style={{ color: "#1F3A5F" }}>💭 {nextQuestion.question}</p>
                   <div className="flex gap-2 flex-wrap">
                     {nextQuestion.options.map(opt => (
-                      <button
+                      <motion.button
                         key={opt.label}
                         onClick={() => handleClarificationAnswer(opt.patch)}
-                        className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-all active:scale-95"
-                        style={{ border: "1px solid rgba(0,95,111,0.25)", color: "#E5E0D8", borderRadius: "2px", background: "rgba(0,95,111,0.06)" }}
+                        whileTap={{ scale: 0.94 }}
+                        className="px-4 py-2 text-sm font-bold transition-all"
+                        style={{ background: "#5FC9B4", color: "#FFFFFF", borderRadius: "999px", boxShadow: "0 3px 0 #4AB89F" }}
                       >
                         {opt.label}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 </div>
@@ -334,7 +378,7 @@ export default function Home() {
 
               {/* Error */}
               {error && (
-                <div className="mb-4 px-3 py-2 text-xs font-mono" style={{ color: "#A31F34", borderLeft: "2px solid #A31F34" }}>{error}</div>
+                <div className="mb-4 px-4 py-3 text-sm font-semibold" style={{ color: "#FFFFFF", background: "#FF6B82", borderRadius: "16px", boxShadow: "0 3px 0 #E55872" }}>⚠️ {error}</div>
               )}
 
               {/* Live Draft Card */}
@@ -384,41 +428,51 @@ export default function Home() {
           {/* ── PUBLISHING ── */}
           {appState === "publishing" && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <motion.div className="w-6 h-6 mx-auto mb-4 rounded-full border border-t-transparent"
-                style={{ borderColor: "#D4AF37", borderTopColor: "transparent" }}
+              <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent"
+                style={{ borderColor: "#FF9966", borderTopColor: "transparent" }}
                 animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-              <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>Publishing market...</p>
+              <p className="text-base font-bold" style={{ color: "#1F3A5F" }}>Publishing your market… 🚀</p>
             </motion.div>
           )}
 
           {/* ── LIVE ── */}
           {appState === "live" && shareLink && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="text-center mb-6">
-                <p className="font-serif text-xl mb-1" style={{ color: "#E5E0D8" }}>Market published.</p>
-                <p className="text-xs font-mono" style={{ color: "#8b8b83" }}>Send this link to your opponent.</p>
-              </div>
-              <div className="flex items-center gap-0 mb-6" style={{ border: "1px solid rgba(212,175,55,0.15)", borderRadius: "2px" }}>
+              <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", damping: 12 }}
+                className="text-center mb-6">
+                <div className="text-5xl mb-2">🎉</div>
+                <h2 className="text-2xl font-extrabold mb-1" style={{ color: "#1F3A5F" }}>Market is live!</h2>
+                <p className="text-sm font-medium" style={{ color: "rgba(31,58,95,0.65)" }}>Send this link to your opponent 👇</p>
+              </motion.div>
+              <div className="flex items-center gap-2 mb-5 p-2 shadow-sm"
+                style={{ background: "#FFFFFF", border: "2px solid rgba(31,58,95,0.10)", borderRadius: "20px" }}>
                 <input type="text" readOnly value={shareLink}
-                  className="flex-1 bg-transparent px-3 py-3 text-xs font-mono focus:outline-none truncate"
-                  style={{ color: "#E5E0D8" }} />
-                <button onClick={copyLink}
-                  className="flex-shrink-0 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-colors"
-                  style={{ background: copied ? "rgba(99,154,103,0.15)" : "rgba(212,175,55,0.1)", color: copied ? "#639A67" : "#D4AF37", borderLeft: "1px solid rgba(212,175,55,0.15)" }}>
-                  {copied ? "Copied" : "Copy"}
-                </button>
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-semibold focus:outline-none truncate"
+                  style={{ color: "#1F3A5F" }} />
+                <motion.button onClick={copyLink}
+                  whileTap={{ scale: 0.94 }}
+                  className="flex-shrink-0 px-4 py-2 text-sm font-bold transition-all"
+                  style={{
+                    background: copied ? "#6BCF8E" : "linear-gradient(135deg, #FF9966, #F07A4F)",
+                    color: "#FFFFFF",
+                    borderRadius: "999px",
+                    boxShadow: copied ? "0 3px 0 #4FB371" : "0 3px 0 #F07A4F, 0 6px 14px rgba(255,153,102,0.4)",
+                  }}>
+                  {copied ? "Copied! ✓" : "Copy 📋"}
+                </motion.button>
               </div>
               {draft && (
-                <div className="flex gap-3 mb-6 text-[10px] font-mono" style={{ color: "#8b8b83" }}>
-                  <span>{draft.marketType.replace(/_/g, " ")}</span>
-                  <span>·</span>
-                  <span>{draft.stake > 0 ? `${draft.stake} credits` : "Free"}</span>
-                  <span>·</span>
-                  <span>{draft.evidenceType}</span>
+                <div className="flex flex-wrap gap-2 mb-6 justify-center">
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#5FC9B41A", color: "#3FA890", borderRadius: "999px" }}>{draft.marketType.replace(/_/g, " ")}</span>
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#FF99661A", color: "#F07A4F", borderRadius: "999px" }}>{draft.stake > 0 ? `${draft.stake} cr` : "Free"}</span>
+                  <span className="px-3 py-1 text-xs font-bold" style={{ background: "#B8A6E01A", color: "#9881C7", borderRadius: "999px" }}>{draft.evidenceType}</span>
                 </div>
               )}
-              <button onClick={reset} className="w-full py-3 text-xs font-mono uppercase tracking-wider transition-colors"
-                style={{ color: "#8b8b83", border: "1px solid rgba(212,175,55,0.1)", borderRadius: "2px" }}>New Market</button>
+              <motion.button onClick={reset} whileTap={{ scale: 0.97 }}
+                className="w-full py-3 text-sm font-bold transition-all"
+                style={{ color: "#1F3A5F", background: "#FFFFFF", border: "1px solid rgba(31,58,95,0.10)", borderRadius: "999px" }}>
+                ✨ Make another market
+              </motion.button>
             </motion.div>
           )}
         </div>
