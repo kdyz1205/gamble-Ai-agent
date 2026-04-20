@@ -4,9 +4,9 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lex Divina — AI Oracle Tribunal",
+  title: "LuckyPlay — Your Playful Predictor",
   description:
-    "Sacred contracts. AI judgment. Divine settlement. Challenge anyone, stake your credits, let the Oracle decide.",
+    "Cute, friendly prediction play. Make a call, stake your credits, let the AI judge — win with fun.",
 };
 
 export const viewport: Viewport = {
@@ -14,13 +14,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0A0A0B",
-  colorScheme: "dark",
+  themeColor: "#EAF4FB",
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         {/* Suppress MetaMask / wallet extension "Cannot redefine property: ethereum" errors */}
         <script
@@ -46,11 +46,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased" style={{ background: "#0A0A0B" }}>
+      <body
+        className="min-h-screen antialiased"
+        style={{
+          background:
+            "linear-gradient(160deg, #EAF4FB 0%, #F4FBF8 45%, #FFF8E7 100%)",
+          color: "#1F3A5F",
+        }}
+      >
         <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
       </body>
     </html>
