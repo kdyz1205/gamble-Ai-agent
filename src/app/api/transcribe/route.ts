@@ -1,7 +1,19 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 
-const DEFAULT_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
+// Default to classic whisper-1 because it is the most battle-tested multilingual
+// transcription model on OpenAI's platform — Chinese, Spanish, Arabic, Hindi,
+// Japanese, etc. all work out of the box. gpt-4o-mini-transcribe is a newer
+// model that has broader capabilities but is NOT yet available for every
+// project/region, and silently behaves poorly on non-English audio in some
+// accounts. A previous default of gpt-4o-mini-transcribe caused Chinese voice
+// input to come back empty or as English gibberish for some users, so we're
+// moving back to the proven path unless an operator explicitly overrides via
+// OPENAI_TRANSCRIBE_MODEL.
+const DEFAULT_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1";
+// If the primary model call fails (model not available to this project, etc.)
+// try this as a fallback.
+const FALLBACK_MODEL = "whisper-1";
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // OpenAI Whisper cap — reject larger before forwarding
 
@@ -73,44 +85,63 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const upstream = new FormData();
-    upstream.append("file", file, file.name || "voice.webm");
-    upstream.append("model", DEFAULT_MODEL);
-    upstream.append("response_format", "json");
+    // Single-shot call builder — reused for primary + fallback so the audio
+    // `File` isn't accidentally consumed between attempts.
+    const callWhisper = async (modelName: string, audioFile: File): Promise<Response> => {
+      const upstream = new FormData();
+      upstream.append("file", audioFile, audioFile.name || "voice.webm");
+      upstream.append("model", modelName);
+      upstream.append("response_format", "json");
+      if (languageHint) upstream.append("language", languageHint);
+      return fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: upstream,
+      });
+    };
 
-    if (languageHint) {
-      upstream.append("language", languageHint);
+    let response = await callWhisper(DEFAULT_MODEL, file);
+    let modelUsed = DEFAULT_MODEL;
+
+    // Model-not-available / permission errors from OpenAI come back as 4xx.
+    // Retry once on `whisper-1` — it's ubiquitously available and excellent
+    // for Chinese. Keeps Chinese input working even if the newer model isn't
+    // enabled on this key.
+    if (!response.ok && DEFAULT_MODEL !== FALLBACK_MODEL) {
+      const errBody = await response.text().catch(() => "");
+      console.warn(`[transcribe] primary model "${DEFAULT_MODEL}" failed (${response.status}): ${errBody.slice(0, 160)}. Falling back to ${FALLBACK_MODEL}.`);
+      response = await callWhisper(FALLBACK_MODEL, file);
+      modelUsed = FALLBACK_MODEL;
     }
-
-    const response = await fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: upstream,
-    });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[transcribe] upstream failed (${response.status}): ${errorText.slice(0, 300)}`);
       return Response.json({
         transcript: previewText,
         language: languageHint || "unknown",
         provider: "preview_fallback",
         usedFallback: true,
-        error: `Upstream transcription failed: ${errorText}`,
+        error: `Upstream transcription failed (${response.status}): ${errorText.slice(0, 200)}`,
+        model: modelUsed,
       }, { status: 200 });
     }
 
     const data = await response.json() as { text?: string; language?: string };
     const transcript = (data.text || previewText || "").trim();
+    if (!transcript) {
+      console.warn(`[transcribe] empty transcript from ${modelUsed}, lang=${data.language ?? "n/a"}`);
+    }
 
     return Response.json({
       transcript,
       language: data.language || languageHint || "unknown",
       provider: "openai_audio_transcriptions",
+      model: modelUsed,
       usedFallback: !data.text,
     });
   } catch (err) {
+    console.error("[transcribe] exception:", err);
     return Response.json({
       error: err instanceof Error ? err.message : "Failed to transcribe audio",
     }, { status: 500 });

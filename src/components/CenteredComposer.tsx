@@ -61,7 +61,16 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const getLanguageHint = useCallback((): "en" | "zh" | undefined => {
     if (voiceLang === "en") return "en";
     if (voiceLang === "zh") return "zh";
-    return undefined;
+    // Auto mode — peek at the browser/device language. A user whose phone is
+    // set to zh-CN / zh-TW / zh-HK almost certainly wants Chinese transcription.
+    // Without this hint Whisper sometimes defaulted to English on short / noisy
+    // clips, producing empty or garbled transcripts.
+    if (typeof navigator !== "undefined") {
+      const nav = navigator.language?.toLowerCase() || "";
+      if (nav.startsWith("zh")) return "zh";
+      if (nav.startsWith("en")) return "en";
+    }
+    return undefined; // let Whisper auto-detect
   }, [voiceLang]);
 
   const stopPreviewRecognition = useCallback(() => {

@@ -507,6 +507,27 @@ export default function Home() {
             </motion.div>
           )}
 
+          {/* ── DRAFTING but no draft (shouldn't happen but guards against
+              a blank screen if parse raced to `drafting` state without
+              setting draft — surfaces the real reason to the user).  ── */}
+          {appState === "drafting" && !draft && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="text-center py-12 px-6">
+              <div className="text-4xl mb-3">🤔</div>
+              <p className="text-sm font-bold mb-1" style={{ color: "#991B1B" }}>
+                Couldn&apos;t turn that into a challenge.
+              </p>
+              <p className="text-xs mb-4" style={{ color: "#64748B" }}>
+                {understanding || "The AI didn\u2019t return a structured draft — could be a recognition issue. Try again or type directly."}
+              </p>
+              <button onClick={reset}
+                className="px-5 py-2.5 text-sm font-bold rounded-full active:scale-95 transition-transform"
+                style={{ background: "#FED7AA", color: "#7C2D12", boxShadow: "0 4px 14px 0 rgba(251,146,60,0.39)" }}>
+                Try again
+              </button>
+            </motion.div>
+          )}
+
           {/* ── DRAFTING ── */}
           {appState === "drafting" && draft && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
