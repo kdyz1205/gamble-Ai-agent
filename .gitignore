@@ -30,9 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files — NEVER commit any flavor of .env
 .env*.local
 .env
+.env.production
+.env.development
 
 # vercel
 .vercel
@@ -44,3 +46,19 @@ next-env.d.ts
 /src/generated/prisma
 *.db
 src/generated/
+
+# dev-time noise
+devserver-*.out.log
+devserver-*.err.log
+*.log
+
+# tool config that isn't source-of-truth
+.claude/
+.cursor/
+.idea/
+.vscode/*
+!.vscode/settings.example.json
+
+# ad-hoc scratch
+scratch/
+.tmp/

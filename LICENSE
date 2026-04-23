@@ -1,0 +1,40 @@
+LuckyPlay — Proprietary License
+Copyright (c) 2026 kdyz1205 (axelrodluo@gmail.com). All rights reserved.
+
+This repository and all of its contents — including but not limited to source
+code, design assets, prompts, schema, documentation, and build/deployment
+configuration — are the proprietary and confidential property of the
+copyright holder.
+
+No part of this work may be reproduced, distributed, modified, sublicensed,
+publicly performed, publicly displayed, or otherwise used in any form or by
+any means, electronic or mechanical, without the prior written permission of
+the copyright holder, except for the following minimal operational uses:
+
+  1. Automated build and deployment pipelines directly authorized by the
+     copyright holder (e.g. GitHub Actions CI on this repository, Vercel
+     production / preview deployments linked to this project).
+
+  2. Local development by individual contributors who have been granted
+     explicit collaborator access on the hosting platform (GitHub), solely
+     for the purpose of contributing to this project.
+
+Any other use, including but not limited to:
+
+  - forking, copying, or mirroring this repository;
+  - training machine-learning models on this source;
+  - extracting, republishing, or redistributing any portion of the code,
+    prompts, design tokens, or product flows;
+  - creating derivative works, whether or not for commercial purposes;
+
+is strictly prohibited without prior written permission.
+
+Third-party dependencies declared in package.json retain their respective
+upstream licenses; this license applies only to original work authored in
+this repository.
+
+No warranty. The software is provided "as is", without warranty of any kind,
+express or implied. In no event shall the author be liable for any claim,
+damages, or other liability arising from the use of this software.
+
+To request a license or partnership: axelrodluo@gmail.com
