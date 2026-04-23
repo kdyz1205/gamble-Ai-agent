@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Gambling Arena</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a14;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a0a2e 0%, #0d1b3e 50%, #0a1628 100%);
+      border-bottom: 1px solid #2a1a5e;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header .logo {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #a855f7, #6366f1, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    header .subtitle {
+      font-size: 13px;
+      color: #6b7280;
+      margin-left: 8px;
+    }
+
+    .main-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+    }
+
+    .panel {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .game-card {
+      background: #1f2937;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 16px 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .game-card:hover { border-color: #4f46e5; background: #253047; }
+    .game-card.selected { border-color: #a855f7; background: #1e1040; }
+
+    .game-card .icon { font-size: 28px; margin-bottom: 8px; }
+    .game-card .name { font-size: 13px; font-weight: 600; color: #d1d5db; }
+    .game-card .edge {
+      font-size: 11px;
+      color: #f87171;
+      margin-top: 4px;
+    }
+
+    .strategy-select {
+      width: 100%;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      color: #e0e0e0;
+      padding: 10px 12px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .strategy-select:focus { outline: none; border-color: #a855f7; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-group input {
+      width: 100%;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      color: #e0e0e0;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus { outline: none; border-color: #a855f7; }
+
+    .strategy-params {
+      background: #0d1117;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .strategy-params h3 {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .run-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+
+    .run-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,58,237,0.4); }
+    .run-btn:active { transform: translateY(0); }
+    .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Right panel */
+    .right-panel { display: flex; flex-direction: column; gap: 20px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-card .label { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .stat-card .value { font-size: 24px; font-weight: 700; }
+    .stat-card .value.positive { color: #34d399; }
+    .stat-card .value.negative { color: #f87171; }
+    .stat-card .value.neutral { color: #60a5fa; }
+    .stat-card .value.white { color: #e0e0e0; }
+
+    .chart-panel {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 24px;
+      flex: 1;
+    }
+
+    .chart-panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+
+    #bankrollChart {
+      width: 100%;
+      height: 220px;
+      display: block;
+    }
+
+    .rounds-table-panel {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .rounds-table-panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+
+    .rounds-scroll {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .rounds-scroll::-webkit-scrollbar { width: 4px; }
+    .rounds-scroll::-webkit-scrollbar-track { background: #0a0a14; }
+    .rounds-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      color: #6b7280;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 6px 10px;
+      border-bottom: 1px solid #1f2937;
+    }
+
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #111827;
+      color: #d1d5db;
+    }
+
+    tr:hover td { background: #1a1f2e; }
+
+    td.win { color: #34d399; font-weight: 600; }
+    td.lose { color: #f87171; font-weight: 600; }
+    td.push { color: #fbbf24; font-weight: 600; }
+
+    .status-bar {
+      background: #0d1117;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #6b7280;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #374151;
+    }
+
+    .status-dot.running { background: #fbbf24; animation: pulse 1s infinite; }
+    .status-dot.done { background: #34d399; }
+    .status-dot.error { background: #f87171; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #4b5563;
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-bust { background: #450a0a; color: #f87171; }
+    .badge-profit { background: #052e16; color: #34d399; }
+    .badge-loss { background: #1c0505; color: #f87171; }
+
+    @media (max-width: 768px) {
+      .main-container { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">🎰 AI Gambling Arena</div>
+    <div class="subtitle">Simulation &amp; Strategy Lab</div>
+  </header>
+
+  <div class="main-container">
+    <!-- Left: Controls -->
+    <div>
+      <div class="panel">
+        <h2>Select Game</h2>
+        <div class="game-grid" id="gameGrid"></div>
+
+        <h2>Betting Strategy</h2>
+        <select class="strategy-select" id="strategySelect">
+          <option value="fixed">Fixed Bet</option>
+          <option value="martingale">Martingale (Double on Loss)</option>
+          <option value="anti_martingale">Anti-Martingale (Double on Win)</option>
+          <option value="kelly">Kelly Criterion</option>
+          <option value="dalembert">D'Alembert</option>
+          <option value="percentage">Percentage of Bankroll</option>
+        </select>
+
+        <div class="strategy-params" id="strategyParams">
+          <h3>Strategy Parameters</h3>
+          <div id="paramFields"></div>
+        </div>
+
+        <h2>Simulation Settings</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Initial Bankroll ($)</label>
+            <input type="number" id="bankroll" value="1000" min="100" max="100000" />
+          </div>
+          <div class="form-group">
+            <label>Rounds</label>
+            <input type="number" id="rounds" value="200" min="10" max="2000" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Min Bet ($)</label>
+            <input type="number" id="minBet" value="10" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Max Bet ($)</label>
+            <input type="number" id="maxBet" value="500" min="1" />
+          </div>
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runSimulation()">
+          ▶ Run Simulation
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Results -->
+    <div class="right-panel">
+      <div id="statusBar" class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Select a game and strategy, then click Run Simulation.</span>
+      </div>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="label">Final Bankroll</div>
+          <div class="value white" id="statFinal">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Net Profit</div>
+          <div class="value neutral" id="statNet">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Win Rate</div>
+          <div class="value neutral" id="statWin">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">ROI</div>
+          <div class="value neutral" id="statROI">—</div>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <h2>Bankroll Over Time</h2>
+        <canvas id="bankrollChart"></canvas>
+        <div class="empty-state" id="chartEmpty">
+          <div class="icon">📊</div>
+          <p>Run a simulation to see your bankroll chart</p>
+        </div>
+      </div>
+
+      <div class="rounds-table-panel">
+        <h2>Round History</h2>
+        <div class="rounds-scroll">
+          <div class="empty-state" id="tableEmpty">
+            <div class="icon">🎲</div>
+            <p>No rounds played yet</p>
+          </div>
+          <table id="roundsTable" style="display:none">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Wagered</th>
+                <th>Outcome</th>
+                <th>Net</th>
+                <th>Bankroll</th>
+              </tr>
+            </thead>
+            <tbody id="roundsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GAMES = [
+      { id: 'blackjack', name: 'Blackjack', icon: '🃏', edge: '0.5%' },
+      { id: 'roulette', name: 'Roulette', icon: '🎡', edge: '5.26%' },
+      { id: 'dice',     name: 'Craps',    icon: '🎲', edge: '1.36%' },
+      { id: 'slots',    name: 'Slots',    icon: '🎰', edge: '5.0%'  },
+    ];
+
+    const STRATEGY_PARAMS = {
+      fixed:         [{ id: 'bet_amount', label: 'Bet Amount ($)', default: 25, min: 1 }],
+      martingale:    [{ id: 'base_bet', label: 'Base Bet ($)', default: 10, min: 1 },
+                      { id: 'max_multiplier', label: 'Max Multiplier', default: 64, min: 2 }],
+      anti_martingale:[{ id: 'base_bet', label: 'Base Bet ($)', default: 10, min: 1 },
+                      { id: 'max_streak', label: 'Max Win Streak', default: 5, min: 1 }],
+      kelly:         [{ id: 'win_prob', label: 'Win Probability', default: 0.48, min: 0.01, max: 0.99, step: 0.01 },
+                      { id: 'payout_odds', label: 'Payout Odds', default: 1.0, min: 0.1, step: 0.1 },
+                      { id: 'fraction', label: 'Kelly Fraction', default: 0.25, min: 0.01, max: 1.0, step: 0.01 }],
+      dalembert:     [{ id: 'base_bet', label: 'Base Bet ($)', default: 10, min: 1 },
+                      { id: 'unit', label: 'Unit ($)', default: 5, min: 1 }],
+      percentage:    [{ id: 'percentage', label: 'Bet % of Bankroll', default: 3.0, min: 0.1, max: 100, step: 0.1 },
+                      { id: 'min_bet', label: 'Min Bet ($)', default: 1, min: 1 }],
+    };
+
+    const GAME_BET_TYPES = {
+      blackjack: 'standard',
+      roulette:  'red',
+      dice:      'pass',
+      slots:     'spin',
+    };
+
+    let selectedGame = 'blackjack';
+    let simulationData = null;
+
+    // Init game grid
+    const gameGrid = document.getElementById('gameGrid');
+    GAMES.forEach(g => {
+      const card = document.createElement('div');
+      card.className = 'game-card' + (g.id === selectedGame ? ' selected' : '');
+      card.innerHTML = `<div class="icon">${g.icon}</div><div class="name">${g.name}</div><div class="edge">House Edge: ${g.edge}</div>`;
+      card.onclick = () => selectGame(g.id);
+      card.dataset.id = g.id;
+      gameGrid.appendChild(card);
+    });
+
+    function selectGame(id) {
+      selectedGame = id;
+      document.querySelectorAll('.game-card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.id === id);
+      });
+    }
+
+    // Init strategy params
+    document.getElementById('strategySelect').addEventListener('change', renderParams);
+    renderParams();
+
+    function renderParams() {
+      const strategy = document.getElementById('strategySelect').value;
+      const fields = STRATEGY_PARAMS[strategy] || [];
+      const container = document.getElementById('paramFields');
+      container.innerHTML = '';
+      if (fields.length === 0) return;
+
+      const row = document.createElement('div');
+      row.className = 'form-row';
+      fields.forEach(f => {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        group.innerHTML = `
+          <label>${f.label}</label>
+          <input type="number" id="param_${f.id}" value="${f.default}"
+            min="${f.min ?? ''}" max="${f.max ?? ''}" step="${f.step ?? 1}" />
+        `;
+        row.appendChild(group);
+      });
+      container.appendChild(row);
+    }
+
+    function getStrategyParams() {
+      const strategy = document.getElementById('strategySelect').value;
+      const fields = STRATEGY_PARAMS[strategy] || [];
+      const params = {};
+      fields.forEach(f => {
+        const el = document.getElementById('param_' + f.id);
+        if (el) params[f.id] = parseFloat(el.value);
+      });
+      return params;
+    }
+
+    async function runSimulation() {
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      setStatus('running', 'Running simulation...');
+
+      const strategy = document.getElementById('strategySelect').value;
+      const strategyParams = getStrategyParams();
+      const bankroll = parseFloat(document.getElementById('bankroll').value);
+      const rounds = parseInt(document.getElementById('rounds').value);
+      const minBet = parseFloat(document.getElementById('minBet').value);
+      const maxBet = parseFloat(document.getElementById('maxBet').value);
+      const betType = GAME_BET_TYPES[selectedGame] || 'standard';
+
+      strategyParams.bet_type = betType;
+      const payload = {
+        game_type: selectedGame,
+        strategy: strategy,
+        strategy_params: strategyParams,
+        initial_bankroll: bankroll,
+        num_rounds: rounds,
+        min_bet: minBet,
+        max_bet: maxBet,
+      };
+
+      try {
+        const resp = await fetch('/api/v1/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(err.detail || `HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        simulationData = data;
+        renderResults(data, bankroll);
+        setStatus('done', `Simulation complete — ${data.total_rounds} rounds played.`);
+      } catch (e) {
+        setStatus('error', `Error: ${e.message}`);
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function setStatus(state, text) {
+      const dot = document.getElementById('statusDot');
+      dot.className = 'status-dot ' + state;
+      document.getElementById('statusText').textContent = text;
+    }
+
+    function fmt$(n) {
+      return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderResults(data, initialBankroll) {
+      const net = data.final_bankroll - initialBankroll;
+      const roi = ((net / initialBankroll) * 100).toFixed(1);
+      const winRate = (data.win_rate * 100).toFixed(1);
+
+      document.getElementById('statFinal').textContent = fmt$(data.final_bankroll);
+      document.getElementById('statFinal').className = 'value white';
+
+      const netEl = document.getElementById('statNet');
+      netEl.textContent = (net >= 0 ? '+' : '') + fmt$(net);
+      netEl.className = 'value ' + (net >= 0 ? 'positive' : 'negative');
+
+      document.getElementById('statWin').textContent = winRate + '%';
+      document.getElementById('statWin').className = 'value neutral';
+
+      const roiEl = document.getElementById('statROI');
+      roiEl.textContent = (roi >= 0 ? '+' : '') + roi + '%';
+      roiEl.className = 'value ' + (parseFloat(roi) >= 0 ? 'positive' : 'negative');
+
+      // Draw chart
+      drawChart(data.rounds, initialBankroll);
+
+      // Build table
+      renderTable(data.rounds);
+
+      document.getElementById('chartEmpty').style.display = 'none';
+      document.getElementById('bankrollChart').style.display = 'block';
+    }
+
+    function drawChart(rounds, initialBankroll) {
+      const canvas = document.getElementById('bankrollChart');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = 220 * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const W = canvas.offsetWidth;
+      const H = 220;
+      const PAD = { top: 20, right: 20, bottom: 30, left: 70 };
+
+      const values = [initialBankroll, ...rounds.map(r => r.bankroll_after)];
+      const minV = Math.min(...values);
+      const maxV = Math.max(...values);
+      const rangeV = maxV - minV || 1;
+
+      const xScale = (i) => PAD.left + (i / (values.length - 1)) * (W - PAD.left - PAD.right);
+      const yScale = (v) => PAD.top + (1 - (v - minV) / rangeV) * (H - PAD.top - PAD.bottom);
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid lines
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = PAD.top + (i / 4) * (H - PAD.top - PAD.bottom);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, y);
+        ctx.lineTo(W - PAD.right, y);
+        ctx.stroke();
+
+        const val = maxV - (i / 4) * rangeV;
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText('$' + Math.round(val).toLocaleString(), PAD.left - 8, y + 4);
+      }
+
+      // Initial bankroll reference line
+      const refY = yScale(initialBankroll);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = '#374151';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, refY);
+      ctx.lineTo(W - PAD.right, refY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Fill gradient
+      const gradient = ctx.createLinearGradient(0, PAD.top, 0, H - PAD.bottom);
+      const finalVal = values[values.length - 1];
+      const isProfit = finalVal >= initialBankroll;
+      if (isProfit) {
+        gradient.addColorStop(0, 'rgba(52, 211, 153, 0.3)');
+        gradient.addColorStop(1, 'rgba(52, 211, 153, 0.02)');
+      } else {
+        gradient.addColorStop(0, 'rgba(248, 113, 113, 0.3)');
+        gradient.addColorStop(1, 'rgba(248, 113, 113, 0.02)');
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(xScale(0), yScale(values[0]));
+      for (let i = 1; i < values.length; i++) {
+        ctx.lineTo(xScale(i), yScale(values[i]));
+      }
+      ctx.lineTo(xScale(values.length - 1), H - PAD.bottom);
+      ctx.lineTo(xScale(0), H - PAD.bottom);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(xScale(0), yScale(values[0]));
+      for (let i = 1; i < values.length; i++) {
+        ctx.lineTo(xScale(i), yScale(values[i]));
+      }
+      ctx.strokeStyle = isProfit ? '#34d399' : '#f87171';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function renderTable(rounds) {
+      const tbody = document.getElementById('roundsBody');
+      tbody.innerHTML = '';
+      document.getElementById('tableEmpty').style.display = 'none';
+      document.getElementById('roundsTable').style.display = 'table';
+
+      const display = rounds.slice(-100).reverse();
+      display.forEach(r => {
+        const outcome = r.outcome;
+        const net = r.net;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.round_number}</td>
+          <td>${fmt$(r.bet_amount)}</td>
+          <td class="${outcome}">${outcome.toUpperCase()}</td>
+          <td class="${net >= 0 ? 'win' : 'lose'}">${net >= 0 ? '+' : ''}${fmt$(net)}</td>
+          <td>${fmt$(r.bankroll_after)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Show chart canvas hidden initially
+    document.getElementById('bankrollChart').style.display = 'none';
+  </script>
+</body>
+</html>

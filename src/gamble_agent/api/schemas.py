@@ -31,6 +31,16 @@ class SimulationRequest(BaseModel):
         return v
 
 
+class RoundData(BaseModel):
+    """Per-round data for chart rendering."""
+
+    round_number: int
+    bankroll_after: float
+    bet_amount: float
+    outcome: str
+    net: float
+
+
 class SimulationResponse(BaseModel):
     """Response from a simulation run."""
 
@@ -52,6 +62,7 @@ class SimulationResponse(BaseModel):
     max_drawdown_pct: float
     bust_round: int | None
     house_edge_observed: float
+    rounds: list[RoundData] = Field(default_factory=list)
 
 
 class BatchSimulationRequest(BaseModel):

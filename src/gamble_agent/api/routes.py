@@ -12,6 +12,7 @@ from gamble_agent.api.schemas import (
     BatchSimulationResponse,
     GameInfo,
     HealthResponse,
+    RoundData,
     SimulationRequest,
     SimulationResponse,
     StrategyCompareRequest,
@@ -97,6 +98,17 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
     engine = SimulationEngine(game=game, strategy=strategy, bankroll=bankroll)
     stats = engine.run(request.num_rounds)
 
+    round_data = [
+        RoundData(
+            round_number=r.round_number,
+            bankroll_after=r.bankroll_after,
+            bet_amount=r.bets[0].bet.amount if r.bets else 0,
+            outcome=r.bets[0].outcome.value if r.bets else "push",
+            net=r.net_result,
+        )
+        for r in engine.rounds
+    ]
+
     return SimulationResponse(
         session_id=str(stats.session_id),
         game_type=stats.game_type.value,
@@ -116,6 +128,7 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
         max_drawdown_pct=round(bankroll.max_drawdown(), 2),
         bust_round=stats.bust_round,
         house_edge_observed=round(stats.house_edge_observed, 4),
+        rounds=round_data,
     )
 
 

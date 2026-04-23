@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from gamble_agent import __version__
 from gamble_agent.api.routes import router
 from gamble_agent.config.settings import get_settings
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 LOG_LEVELS: dict[str, int] = {
     "DEBUG": logging.DEBUG,
@@ -52,6 +56,12 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router, prefix="/api/v1")
+
+    @app.get("/", include_in_schema=False)
+    async def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.exception_handler(ValueError)
     async def value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
