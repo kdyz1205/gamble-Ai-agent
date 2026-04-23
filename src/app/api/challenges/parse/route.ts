@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
+import { getAuthUser, getAiModel, unauthorized, type TierId } from "@/lib/auth";
 import { parseChallenge, generateClarifications } from "@/lib/ai-engine";
-import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { getCredits } from "@/lib/credits";
 
 /**
  * POST /api/challenges/parse

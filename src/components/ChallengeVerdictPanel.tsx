@@ -85,8 +85,8 @@ export default function ChallengeVerdictPanel({
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [evidenceText, setEvidenceText] = useState("");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
+  // (evidenceText / evidenceUrl state removed — evidence capture now lives
+  // in <EvidenceUploader />; this panel is verdict + settle only.)
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictErr, setVerdictErr] = useState("");
   const [asyncHint, setAsyncHint] = useState("");
@@ -131,26 +131,9 @@ export default function ChallengeVerdictPanel({
   const canConfirmAi = challenge && challenge.status === "disputed" && isCreator && challenge.judgments.length > 0;
   const settled = challenge?.status === "settled";
 
-  const submitEvidence = async () => {
-    if (!challenge || !evidenceText.trim()) return;
-    setBusy(true);
-    setVerdictErr("");
-    try {
-      await api.submitEvidence(challenge.id, {
-        type: challenge.evidenceType || "text",
-        description: evidenceText.trim(),
-        url: evidenceUrl.trim() || undefined,
-      });
-      setEvidenceText("");
-      setEvidenceUrl("");
-      await refresh();
-      onCreditsMayChange();
-    } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not submit evidence");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Evidence submission moved to the dedicated <EvidenceUploader /> component
+  // (src/components/EvidenceUploader.tsx) which handles record/photo/upload/URL
+  // in one flow. This panel only orchestrates verdict + settlement now.
 
   const runVerdict = async () => {
     if (!challenge) return;

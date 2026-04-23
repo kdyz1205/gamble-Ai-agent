@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
 
-// LuckyPlay palette
+// LuckyPlay palette — only the tokens this component actually uses.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -16,9 +16,7 @@ const ORANGE_GLOW = "rgba(251,146,60,0.39)";
 const MINT = "#A7F3D0";
 const MINT_TEXT = "#065F46";
 const LAVENDER = "#E9D5FF";
-const LAVENDER_TEXT = "#6B21A8";
 const PINK = "#FFD1DC";
-const CREAM = "#FFEDD5";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
@@ -224,7 +222,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             } else {
               throw new Error(presJson.error || "Upload failed — configure Vercel Blob or S3.");
             }
-          } catch (e2) {
+          } catch {
             throw new Error(
               e instanceof Error
                 ? `Upload failed: ${e.message}. Tip: paste a public HTTPS URL instead.`
