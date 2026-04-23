@@ -57,13 +57,33 @@ function formatUsd(n: number): string {
 }
 
 /**
+ * Lambda-local in-memory cache for CoinGecko lookups. Free tier is ~10 req/min;
+ * under real load a single BTC market spike could send dozens of parses and 429
+ * the provider. Cache each symbol for 60s — close enough to "live" for prop
+ * markets but cheap enough to survive a 100 rps spike.
+ */
+type PriceCacheEntry = { data: Record<string, unknown>; cachedAt: number };
+const priceCache = new Map<string, PriceCacheEntry>();
+const PRICE_CACHE_TTL_MS = 60_000;
+
+/**
  * CoinGecko — free tier, no key. Accepts common tickers (BTC, ETH, SOL…)
- * and returns current USD spot price.
+ * and returns current USD spot price. Cached 60s in-process.
  */
 export async function checkCryptoPrice(args: { symbol: string }): Promise<OracleToolResult> {
   const raw = args.symbol?.trim().toLowerCase() || "";
   const id = COINGECKO_SYMBOL_MAP[raw] ?? raw; // fall through to raw in case AI passed the coingecko id directly
   if (!id) return { ok: false, source: "CoinGecko", error: "Missing symbol" };
+
+  // Cache hit — return immediately, refresh queriedAt so the UI shows "Now:".
+  const cached = priceCache.get(id);
+  if (cached && Date.now() - cached.cachedAt < PRICE_CACHE_TTL_MS) {
+    return {
+      ok: true,
+      source: "CoinGecko",
+      data: { ...cached.data, queriedAt: new Date().toISOString(), fromCache: true },
+    };
+  }
 
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd&include_24hr_change=true`;
   try {
@@ -71,25 +91,42 @@ export async function checkCryptoPrice(args: { symbol: string }): Promise<Oracle
     const t = setTimeout(() => ac.abort(), 7000);
     const res = await fetch(url, { signal: ac.signal, headers: { accept: "application/json" } });
     clearTimeout(t);
+    if (res.status === 429) {
+      // Rate-limited: serve stale cache if we have ANY, otherwise fail clean.
+      if (cached) {
+        return {
+          ok: true,
+          source: "CoinGecko",
+          data: { ...cached.data, queriedAt: new Date().toISOString(), fromCache: true, stale: true },
+        };
+      }
+      return { ok: false, source: "CoinGecko", error: "CoinGecko rate limit (HTTP 429). Try again in ~30s." };
+    }
     if (!res.ok) return { ok: false, source: "CoinGecko", error: `HTTP ${res.status}` };
     const body = (await res.json()) as Record<string, { usd?: number; usd_24h_change?: number }>;
     const row = body[id];
     if (!row || typeof row.usd !== "number") {
       return { ok: false, source: "CoinGecko", error: `Unknown symbol "${args.symbol}"` };
     }
-    return {
-      ok: true,
-      source: "CoinGecko",
-      data: {
-        symbol: args.symbol.toUpperCase(),
-        coingeckoId: id,
-        priceUsd: row.usd,
-        change24hPct: row.usd_24h_change ?? null,
-        queriedAt: new Date().toISOString(),
-        publicUrl: `https://www.coingecko.com/en/coins/${id}`,
-      },
+    const data = {
+      symbol: args.symbol.toUpperCase(),
+      coingeckoId: id,
+      priceUsd: row.usd,
+      change24hPct: row.usd_24h_change ?? null,
+      queriedAt: new Date().toISOString(),
+      publicUrl: `https://www.coingecko.com/en/coins/${id}`,
     };
+    priceCache.set(id, { data, cachedAt: Date.now() });
+    return { ok: true, source: "CoinGecko", data };
   } catch (e) {
+    // Network failure — fall back to cache if we have it.
+    if (cached) {
+      return {
+        ok: true,
+        source: "CoinGecko",
+        data: { ...cached.data, queriedAt: new Date().toISOString(), fromCache: true, stale: true },
+      };
+    }
     return { ok: false, source: "CoinGecko", error: e instanceof Error ? e.message : String(e) };
   }
 }

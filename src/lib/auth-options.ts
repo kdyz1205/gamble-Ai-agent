@@ -14,7 +14,14 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: true,
+      // SECURITY: must NOT be true — dangerous email linking lets anyone who
+      // registers a Google account for user@foo.com silently take over the
+      // credentials-registered user at that email. We instead let the signIn
+      // callback below detect the collision and either (a) attach the Google
+      // identity if ownership is already verified by our side, or (b) block
+      // the sign-in with a clear error asking the user to log in with the
+      // original method first.
+      allowDangerousEmailAccountLinking: false,
     }),
     CredentialsProvider({
       name: "credentials",
@@ -71,8 +78,12 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google" && user.email) {
-        const existing = await prisma.user.findUnique({ where: { email: user.email } });
+        const existing = await prisma.user.findUnique({
+          where: { email: user.email },
+          include: { accounts: { select: { provider: true } } },
+        });
         if (!existing) {
+          // Brand-new account — create it with welcome bonus.
           const username = user.email.split("@")[0] + Math.random().toString(36).slice(2, 5);
           const created = await prisma.user.create({
             data: {
@@ -90,31 +101,75 @@ export const authOptions: NextAuthOptions = {
             data: { userId: created.id, type: "bonus", amount: COSTS.SIGNUP_BONUS, balanceAfter: COSTS.SIGNUP_BONUS, description: "Welcome bonus" },
           });
           await prisma.activityEvent.create({
-            data: { type: "user_joined", message: `${username} joined ChallengeAI via Google`, userId: user.id },
+            data: { type: "user_joined", message: `${username} joined via Google`, userId: user.id },
           });
         } else {
+          // SECURITY: someone else already owns this email.
+          // If they have a Google Account row linked → fine, it's them logging back in.
+          // If they ONLY have a password (credentials) account and no Google link →
+          //   block the sign-in. Otherwise a Google-verified email alone would
+          //   let a squatter take over the credentials-registered user.
+          const hasGoogle = existing.accounts.some((a) => a.provider === "google");
+          if (!hasGoogle && existing.passwordHash) {
+            // We can't safely auto-link without proof the Google user actually
+            // owns the credentials account. Send them a clear error.
+            return `/?authError=${encodeURIComponent(
+              "An account with this email already exists. Sign in with your password first, then link Google from settings.",
+            )}`;
+          }
           await prisma.user.update({ where: { id: existing.id }, data: { isOnline: true, lastSeenAt: new Date() } });
           user.id = existing.id;
         }
       }
       return true;
     },
-    async jwt({ token, user }) {
-      if (user) token.userId = user.id;
+    async jwt({ token, user, trigger }) {
+      if (user) {
+        token.userId = user.id;
+        // Snapshot the fields we show in the header — now cached in the JWT so
+        // every request doesn't need a DB round-trip just to render credits.
+        const db = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { username: true, credits: true, image: true },
+        });
+        if (db) {
+          token.username = db.username;
+          token.credits = db.credits;
+          if (db.image) token.image = db.image;
+        }
+        token.cachedAt = Date.now();
+      } else if (trigger === "update") {
+        // `useSession().update()` from the client (e.g. after a top-up or a
+        // win) forces a fresh DB read so the UI shows current credits.
+        if (token.userId) {
+          const db = await prisma.user.findUnique({
+            where: { id: token.userId as string },
+            select: { username: true, credits: true, image: true },
+          });
+          if (db) {
+            token.username = db.username;
+            token.credits = db.credits;
+            if (db.image) token.image = db.image;
+            token.cachedAt = Date.now();
+          }
+        }
+      }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.userId) {
         (session.user as { id?: string }).id = token.userId as string;
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.userId as string },
-          select: { username: true, credits: true, image: true },
-        });
-        if (dbUser) {
-          (session.user as { username?: string }).username = dbUser.username;
-          (session.user as { credits?: number }).credits = dbUser.credits;
-          if (dbUser.image) session.user.image = dbUser.image;
-        }
+        // Read from JWT token (zero DB queries) — massive hot-path win.
+        // Previously this was a DB roundtrip on every page / every
+        // useSession() call. At millions of users that was our biggest DB
+        // load. The JWT is refreshed by trigger="update" when we actually
+        // mutate credits / username / avatar.
+        const username = (token as { username?: string }).username;
+        const credits = (token as { credits?: number }).credits;
+        const image = (token as { image?: string }).image;
+        if (username !== undefined) (session.user as { username?: string }).username = username;
+        if (credits !== undefined) (session.user as { credits?: number }).credits = credits;
+        if (image) session.user.image = image;
       }
       return session;
     },

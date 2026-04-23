@@ -12,17 +12,31 @@ export interface LlmCompleteParams {
   temperature?: number;
 }
 
+const ANTHROPIC_TIMEOUT_MS = 45_000;
+
+/** Wrap a promise with a hard timeout so a hung upstream never holds a serverless slot forever. */
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number, temperature?: number) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
-  const client = new Anthropic({ apiKey: key });
-  const response = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: user }],
-    ...(temperature !== undefined ? { temperature } : {}),
-  });
+  const client = new Anthropic({ apiKey: key, maxRetries: 1 });
+  const response = await withTimeout(
+    client.messages.create({
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+      ...(temperature !== undefined ? { temperature } : {}),
+    }),
+    ANTHROPIC_TIMEOUT_MS,
+    "anthropic.messages.create",
+  );
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
 }
@@ -131,7 +145,7 @@ async function anthropicCompleteVision(
 ) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
-  const client = new Anthropic({ apiKey: key });
+  const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [
     { type: "text", text: userText },
     ...images.map(
@@ -145,13 +159,18 @@ async function anthropicCompleteVision(
       }),
     ),
   ];
-  const response = await client.messages.create({
-    model,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content }],
-    ...(temperature !== undefined ? { temperature } : {}),
-  });
+  // Vision calls are heavier — give them a bit more headroom.
+  const response = await withTimeout(
+    client.messages.create({
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content }],
+      ...(temperature !== undefined ? { temperature } : {}),
+    }),
+    ANTHROPIC_TIMEOUT_MS * 2,
+    "anthropic.messages.create (vision)",
+  );
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
 }

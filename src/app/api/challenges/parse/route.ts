@@ -4,6 +4,40 @@ import { parseChallenge, generateClarifications, type ParsedChallenge } from "@/
 import { getCredits } from "@/lib/credits";
 
 /**
+ * Per-user rate limit. Parse is free so anyone with a free signup bonus could
+ * hammer it to drain our OpenAI budget. Sliding-window, lambda-local (best-
+ * effort under horizontal scale — a shared Redis would be tighter; for now
+ * this stops the obvious abuse).
+ */
+const PARSE_WINDOW_MS = 60_000;
+const PARSE_MAX_PER_WINDOW = 15;      // 15 parses/minute per user
+const PARSE_MAX_PER_DAY = 300;        // soft day cap
+const DAY_MS = 24 * 60 * 60 * 1000;
+const userHits = new Map<string, number[]>();
+
+function hitRate(userId: string): { ok: boolean; retryInSec?: number; reason?: string } {
+  const now = Date.now();
+  const prior = userHits.get(userId) ?? [];
+  // Trim to last 24h so we can check both windows.
+  const within24h = prior.filter((t) => now - t < DAY_MS);
+  const withinMinute = within24h.filter((t) => now - t < PARSE_WINDOW_MS);
+  if (withinMinute.length >= PARSE_MAX_PER_WINDOW) {
+    const oldest = withinMinute[0];
+    return {
+      ok: false,
+      retryInSec: Math.max(1, Math.ceil((PARSE_WINDOW_MS - (now - oldest)) / 1000)),
+      reason: "minute",
+    };
+  }
+  if (within24h.length >= PARSE_MAX_PER_DAY) {
+    return { ok: false, reason: "day" };
+  }
+  within24h.push(now);
+  userHits.set(userId, within24h);
+  return { ok: true };
+}
+
+/**
  * POST /api/challenges/parse
  * Body: { input: string, tier?: 1|2|3 }
  *
@@ -14,6 +48,15 @@ import { getCredits } from "@/lib/credits";
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
+
+  const rl = hitRate(user.userId);
+  if (!rl.ok) {
+    const msg =
+      rl.reason === "day"
+        ? `Parse rate limit — you've hit ${PARSE_MAX_PER_DAY} parses today. Try again tomorrow.`
+        : `Too many parse requests — try again in ${rl.retryInSec}s.`;
+    return Response.json({ error: msg }, { status: 429 });
+  }
 
   try {
     const { input, tier: rawTier, priorDraft: rawPrior } = await req.json();
