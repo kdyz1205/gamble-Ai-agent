@@ -273,6 +273,8 @@ model JudgeJob {
   creditsUsed       Int?
   creditsRemaining  Int?
   txHash            String?
+  startedAt         DateTime?  // when runner actually picked up the job (for heartbeat / stuck detection)
+  heartbeatAt       DateTime?  // updated periodically during long runs so we can find hung jobs
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -281,6 +283,7 @@ model JudgeJob {
   judgment          Judgment? @relation(fields: [judgmentId], references: [id])
 
   @@index([challengeId, status])
+  @@index([status, startedAt]) // sweeper can find stuck-in-processing jobs
 }
 
 // ═══════════════════════════════════════

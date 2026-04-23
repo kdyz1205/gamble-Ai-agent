@@ -176,26 +176,55 @@ export default function ChallengeVerdictPanel({
         ...(prefs.model ? { model: prefs.model } : {}),
       });
       setAsyncHint("AI is analyzing evidence (video frames + vision)...");
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
-          const j = await api.getJudgeJob(res.jobId);
-          if (j.status === "completed" || j.status === "failed") {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            setBusy(false);
-            setAsyncHint("");
-            if (j.status === "failed") setVerdictErr(j.error || "Background verdict failed");
-            await refresh();
-            onCreditsMayChange();
-          }
-        } catch {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
+
+      // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
+      // Replaces the old 2s-forever loop that at 1000 concurrent waiters did
+      // 500 req/s against /api/judge-jobs/[id] for as long as anyone was
+      // watching. Stops automatically after 15min (maxDuration + grace) so
+      // even a stuck job doesn't loop forever.
+      const BACKOFF_SEQUENCE = [2000, 3000, 5000, 8000, 12000, 20000, 30000];
+      const MAX_TOTAL_MS = 15 * 60 * 1000; // hard stop at 15 minutes
+      const pollStart = Date.now();
+      let attempt = 0;
+      let cancelled = false;
+
+      const scheduleNext = () => {
+        if (cancelled) return;
+        if (Date.now() - pollStart > MAX_TOTAL_MS) {
           setBusy(false);
           setAsyncHint("");
+          setVerdictErr("Verdict is taking longer than expected — please reload to check status.");
+          return;
         }
-      }, 2000);
+        const delay = BACKOFF_SEQUENCE[Math.min(attempt, BACKOFF_SEQUENCE.length - 1)];
+        attempt++;
+        // Use nested setTimeout instead of setInterval so each tick is independently schedulable.
+        const timerId = setTimeout(async () => {
+          if (cancelled) return;
+          try {
+            const j = await api.getJudgeJob(res.jobId);
+            if (j.status === "completed" || j.status === "failed") {
+              cancelled = true;
+              setBusy(false);
+              setAsyncHint("");
+              if (j.status === "failed") setVerdictErr(j.error || "Background verdict failed");
+              await refresh();
+              onCreditsMayChange();
+              return;
+            }
+            scheduleNext();
+          } catch {
+            cancelled = true;
+            setBusy(false);
+            setAsyncHint("");
+          }
+        }, delay);
+        // Store the timer so we can cancel on unmount — reuse pollRef to minimize code diff.
+        pollRef.current = timerId as unknown as ReturnType<typeof setInterval>;
+      };
+
+      if (pollRef.current) clearInterval(pollRef.current);
+      scheduleNext();
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "Could not start background verdict");
       setBusy(false);

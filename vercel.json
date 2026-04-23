@@ -2,8 +2,9 @@
   "buildCommand": "prisma generate && next build",
   "crons": [
     {
+      "// note": "Was daily 08:00; that meant a verdict could sit stuck for up to a day if async judgment crashed mid-flight. Moved to every 15min so the stuck-job sweeper fires in time to unblock real users. Vercel Hobby plan may cap cron frequency; if so, set to the tightest allowed (hourly on Hobby).",
       "path": "/api/cron/challenge-judgment",
-      "schedule": "0 8 * * *"
+      "schedule": "*/15 * * * *"
     }
   ]
 }
