@@ -56,7 +56,22 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     api.getChallenge(id)
       .then(res => { setMarket(res.challenge); setLoading(false); })
-      .catch(() => { setError("Market not found"); setLoading(false); });
+      .catch((e: unknown) => {
+        // Surface the REAL error to the user instead of the old generic
+        // "Market not found". An empty DB row is only one possible cause;
+        // others include network errors, auth failures, Vercel cold-start
+        // timeouts, etc. Showing the actual message makes triage possible
+        // instead of "something went wrong, good luck".
+        const msg = e instanceof Error ? e.message : String(e);
+        const pretty =
+          /404|not found/i.test(msg)
+            ? "This market was deleted or the link is stale."
+            : /401|unauthorized/i.test(msg)
+              ? "Please sign in to view this market."
+              : msg || "Could not load this market.";
+        setError(pretty);
+        setLoading(false);
+      });
   }, [id]);
 
   const copyLink = useCallback(() => {
@@ -92,14 +107,26 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
   if (error || !market) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5 text-center">
         <div className="text-5xl mb-2">😿</div>
-        <p className="text-base font-bold" style={{ color: ROSE_TEXT }}>{error || "Market not found"}</p>
-        <Link href="/"
-          className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
-          style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          Make a new bet ✨
-        </Link>
+        <p className="text-base font-bold max-w-md" style={{ color: ROSE_TEXT }}>
+          {error || "Market not found"}
+        </p>
+        <p className="text-[11px] font-mono opacity-60 max-w-md break-all" style={{ color: NAVY_DIM }}>
+          market id: {id}
+        </p>
+        <div className="flex items-center gap-2 mt-2">
+          <Link href="/"
+            className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
+            style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
+            Make a new bet ✨
+          </Link>
+          <Link href="/markets"
+            className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
+            style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}>
+            My markets
+          </Link>
+        </div>
       </div>
     );
   }
