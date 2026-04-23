@@ -1,8 +1,42 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { completeOraclePrompt, completeOracleJudgeVision } from "./llm-router";
-import { prepareParticipantVisuals, capJudgeVisuals, type JudgeVisionImage } from "./media/prepare-evidence-visuals";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import {
+  prepareParticipantVisuals,
+  prepareParticipantVisualsFast,
+  capJudgeVisuals,
+  type JudgeVisionImage,
+} from "./media/prepare-evidence-visuals";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+/**
+ * Resolve the effective LLM provider + model for non-vision text calls (parse,
+ * adjust-draft). Honors ORACLE_DEFAULT_PROVIDER so operators can flip the whole
+ * app to OpenAI / Google / etc. without touching code. A passed-in `model` that
+ * doesn't match the resolved provider is dropped (a Claude model id would 404
+ * against OpenAI's API) and replaced with that provider's defaultModel.
+ */
+function resolveOracle(preferredModel?: string): { providerId: string; model: string } {
+  const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
+  const providerId =
+    envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
+  const def = getProviderById(providerId);
+  const looksLikeClaude = preferredModel?.toLowerCase().startsWith("claude");
+  const looksLikeGpt = preferredModel?.toLowerCase().startsWith("gpt") || preferredModel?.toLowerCase().startsWith("o");
+  const looksLikeGemini = preferredModel?.toLowerCase().startsWith("gemini");
+  const modelMatchesProvider =
+    (providerId === "anthropic" && looksLikeClaude) ||
+    (providerId === "openai" && looksLikeGpt) ||
+    (providerId === "google" && looksLikeGemini) ||
+    // Other openai-compatible backends accept any string — trust the caller.
+    (def?.kind === "openai_compat" && providerId !== "openai" && Boolean(preferredModel));
+  const model = modelMatchesProvider && preferredModel ? preferredModel : (def?.defaultModel ?? preferredModel ?? "");
+  return { providerId, model };
+}
+
+function oracleKeyAvailable(providerId: string): boolean {
+  const def = getProviderById(providerId);
+  if (!def) return false;
+  return Boolean(process.env[def.envVar]?.trim());
+}
 
 /** A single AI-recommended stake tier with reasoning. */
 export interface StakeOption {
@@ -184,21 +218,32 @@ function safeParseJson(text: string): unknown | null {
   return null;
 }
 
-export async function parseChallenge(input: string, model = "claude-haiku-4-5-20251001"): Promise<ParsedChallenge> {
-  if (!process.env.ANTHROPIC_API_KEY) return parseChallengeFallback(input);
+export async function parseChallenge(input: string, preferredModel?: string): Promise<ParsedChallenge> {
+  // Route through the same llm-router used by judge + adjust-draft so that
+  // ORACLE_DEFAULT_PROVIDER (anthropic / openai / google / etc.) is honored.
+  // Previously this was hardcoded to Anthropic SDK, so an OpenAI-only deploy
+  // silently fell through to the deterministic fallback — the user saw "Standard
+  // general challenge — AI reviewed" boilerplate every time instead of real AI
+  // thinking. That was the actual bug report.
+  const { providerId, model } = resolveOracle(preferredModel);
+
+  if (!oracleKeyAvailable(providerId)) {
+    console.warn(`[parseChallenge] provider=${providerId} has no API key set; falling back to deterministic parser. Set the provider's env key or switch ORACLE_DEFAULT_PROVIDER.`);
+    return parseChallengeFallback(input);
+  }
 
   try {
-    const response = await anthropic.messages.create({
+    const text = await completeOraclePrompt({
+      providerId,
       model,
-      max_tokens: 3000, // rich output with per-option reasoning; bumped from 2000 after trunc errors
-      messages: [{ role: "user", content: input }],
       system: MARKET_COMPILER_PROMPT,
+      user: input,
+      maxTokens: 3000, // rich output with per-option reasoning
+      temperature: 0.3,
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
     const parsed = safeParseJson(text) as ParsedChallenge | null;
     if (parsed) {
-      // Ensure required fields have defaults — these protect downstream even if LLM skips a field.
       parsed.title = parsed.title || input.slice(0, 64);
       parsed.type = parsed.type || "General";
       parsed.suggestedStake = typeof parsed.suggestedStake === "number" ? parsed.suggestedStake : 0;
@@ -206,19 +251,30 @@ export async function parseChallenge(input: string, model = "claude-haiku-4-5-20
       parsed.rules = parsed.rules || "";
       parsed.deadline = parsed.deadline || "24 hours";
       parsed.isPublic = parsed.isPublic ?? false;
-      // Keep AI-generated option lists as-is; if LLM didn't return them, leave undefined
-      // (UI will fall back to deriving options from missing fields).
       if (!Array.isArray(parsed.redFlags)) parsed.redFlags = [];
       if (!Array.isArray(parsed.missingFields)) parsed.missingFields = [];
       return parsed;
     }
-    // LLM returned text but no JSON block — log so operators can see, then fall back.
     console.error("[parseChallenge] LLM returned no JSON:", text.slice(0, 200));
   } catch (err) {
-    console.error("[parseChallenge] LLM call failed:", err instanceof Error ? err.message : err);
+    console.error(`[parseChallenge] LLM call failed (provider=${providerId}, model=${model}):`, err instanceof Error ? err.message : err);
   }
 
   return parseChallengeFallback(input);
+}
+
+/**
+ * Evidence shape accepted by the judge. The `prepared*` fields are populated
+ * by the evidence POST `after()` hook (src/lib/media/pre-extract-frames.ts) and
+ * let the judge skip ffmpeg entirely when present.
+ */
+export interface JudgeEvidencePayload {
+  description: string | null;
+  type: string;
+  url?: string | null;
+  preparedFrames?: string[] | null;
+  preparedDurationSec?: number | null;
+  preparedMode?: string | null;
 }
 
 export interface JudgeChallengeParams {
@@ -228,14 +284,37 @@ export interface JudgeChallengeParams {
   type: string;
   rules?: string | null;
   evidencePolicy?: string;
-  evidenceA: { description: string | null; type: string; url?: string | null } | null;
-  evidenceB: { description: string | null; type: string; url?: string | null } | null;
+  evidenceA: JudgeEvidencePayload | null;
+  evidenceB: JudgeEvidencePayload | null;
   participantAId: string;
   participantBId: string | null;
   model: string;
   providerId: string;
   /** Optional liveness prompt (not in schema today; accepted for forward compat). */
   livenessPrompt?: string | null;
+}
+
+/**
+ * Try the fast (pre-extracted frames) path; fall back to live ffmpeg extraction
+ * when the hook hasn't run yet, couldn't cache the frames, or the evidence
+ * doesn't have a media URL at all.
+ */
+async function getVisualsForParticipant(
+  label: string,
+  evidence: JudgeEvidencePayload,
+): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
+  if (evidence.preparedFrames && evidence.preparedFrames.length > 0) {
+    const fast = await prepareParticipantVisualsFast(label, evidence.preparedFrames, {
+      durationSec: evidence.preparedDurationSec,
+      mode: evidence.preparedMode,
+    });
+    if (fast) return fast;
+  }
+  return prepareParticipantVisuals(label, {
+    description: evidence.description,
+    type: evidence.type,
+    url: evidence.url ?? null,
+  });
 }
 
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
@@ -292,13 +371,16 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   "confidence": 0.0-1.0
 }`;
 
-  // ── Try to extract real visual evidence (video frames via ffmpeg, images via fetch) ──
+  // ── Try to extract real visual evidence ──
+  // FAST path: if the evidence POST hook already pre-extracted frames to Blob, skip ffmpeg
+  // and just fetch the cached JPEGs in parallel (~500ms instead of ~10-15s).
+  // SLOW path: ffmpeg + sharp live.
   let visualsA: { preambleLines: string[]; visuals: JudgeVisionImage[] } = { preambleLines: [], visuals: [] };
   let visualsB: { preambleLines: string[]; visuals: JudgeVisionImage[] } = { preambleLines: [], visuals: [] };
   try {
     [visualsA, visualsB] = await Promise.all([
-      prepareParticipantVisuals("Participant A", { description: evidenceA!.description, type: evidenceA!.type, url: evidenceA!.url ?? null }),
-      prepareParticipantVisuals("Participant B", { description: evidenceB!.description, type: evidenceB!.type, url: evidenceB!.url ?? null }),
+      getVisualsForParticipant("Participant A", evidenceA!),
+      getVisualsForParticipant("Participant B", evidenceB!),
     ]);
   } catch {
     // Vision extraction is best-effort; if it fails, fall through to text-only.
@@ -321,45 +403,90 @@ ${evidenceSummary}
 
 ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allVisuals.length > 0 ? `I have attached ${allVisuals.length} frame(s) from the submitted media — examine them as your primary evidence; the descriptions above are supporting context only.\n\n` : ""}Decide now. Return JSON only.`;
 
-  try {
-    const text = allVisuals.length > 0
-      ? await completeOracleJudgeVision({
-          providerId: params.providerId,
-          model: params.model,
-          system,
-          userText,
-          images: allVisuals,
-          maxTokens: 800,
-        })
-      : await completeOraclePrompt({
-          providerId: params.providerId,
-          model: params.model,
-          system,
-          user: userText,
-          maxTokens: 800,
-        });
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]) as { winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string };
-      const winnerId =
-        result.winner === "A" ? participantAId :
-        result.winner === "B" ? participantBId :
-        null;
-      // Include analysis in reasoning if the model returned one, so downstream surfaces (AuditLog, UI) keep the full trail.
-      const fullReasoning = result.analysis && result.analysis.trim().length > 0
-        ? `${result.reasoning}\n\n(Analysis: ${result.analysis.trim()})`
-        : result.reasoning;
-      return {
-        winnerId,
-        reasoning: fullReasoning,
-        confidence: result.confidence,
-      };
+  // One-shot vision call, with optional low-confidence escalation to a bigger model
+  // in the same family. Default path: gpt-4o-mini (fast/cheap). Escalation: gpt-4o.
+  const runJudge = async (modelName: string): Promise<{ winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string } | null> => {
+    try {
+      const text = allVisuals.length > 0
+        ? await completeOracleJudgeVision({
+            providerId: params.providerId,
+            model: modelName,
+            system,
+            userText,
+            images: allVisuals,
+            maxTokens: 800,
+          })
+        : await completeOraclePrompt({
+            providerId: params.providerId,
+            model: modelName,
+            system,
+            user: userText,
+            maxTokens: 800,
+          });
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+      return JSON.parse(jsonMatch[0]) as { winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string };
+    } catch {
+      return null;
     }
-  } catch {
-    // fall through to deterministic fallback
+  };
+
+  let parsedResult = await runJudge(params.model);
+
+  // Low-confidence escalation: if the fast model hedged (< 0.70), retry once on
+  // the flagship variant in the same family. Covers the most common accuracy
+  // tradeoff (mini → flagship) without doubling every call.
+  const escalated = escalateModelForLowConfidence(params.providerId, params.model, parsedResult?.confidence);
+  if (escalated) {
+    const retry = await runJudge(escalated);
+    // Keep the retry only if it came back with meaningfully higher confidence.
+    if (retry && retry.confidence > (parsedResult?.confidence ?? 0)) {
+      parsedResult = retry;
+    }
+  }
+
+  if (parsedResult) {
+    const winnerId =
+      parsedResult.winner === "A" ? participantAId :
+      parsedResult.winner === "B" ? participantBId :
+      null;
+    const fullReasoning = parsedResult.analysis && parsedResult.analysis.trim().length > 0
+      ? `${parsedResult.reasoning}\n\n(Analysis: ${parsedResult.analysis.trim()})`
+      : parsedResult.reasoning;
+    return {
+      winnerId,
+      reasoning: fullReasoning,
+      confidence: parsedResult.confidence,
+    };
   }
 
   return judgeChallengeFallback(title, evidenceA!, evidenceB!, participantAId, participantBId!);
+}
+
+/**
+ * Return a flagship model name if `model` is a "mini/fast" variant AND
+ * confidence is suspect. Returns null to mean "don't escalate".
+ * Kept intentionally narrow — only the common openai mini → 4o path today.
+ */
+function escalateModelForLowConfidence(
+  providerId: string,
+  model: string,
+  confidence: number | undefined,
+): string | null {
+  if (confidence == null) return null;
+  if (confidence >= 0.70) return null;
+  const m = model.toLowerCase();
+  if (providerId === "openai" && m.includes("mini")) {
+    // gpt-4o-mini / o4-mini → gpt-4o for the second pass.
+    return "gpt-4o";
+  }
+  if (providerId === "anthropic" && m.includes("haiku")) {
+    return "claude-sonnet-4-20250514";
+  }
+  if (providerId === "google" && m.includes("flash")) {
+    return "gemini-2.5-pro-preview-05-06";
+  }
+  return null;
 }
 
 /**

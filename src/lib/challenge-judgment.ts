@@ -119,8 +119,28 @@ export async function executeChallengeJudgment(
 
   const evidenceA = challenge.evidence.find((e) => e.userId === creator.userId);
   const evidenceB = opponent ? challenge.evidence.find((e) => e.userId === opponent.userId) : null;
+  // Lift the pre-extracted Blob frame URLs from JSON-text into a string[] so the
+  // judge can skip ffmpeg entirely when the POST /evidence hook already cached them.
+  const parseFrames = (raw: string | null | undefined): string[] | null => {
+    if (!raw) return null;
+    try {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.every((x) => typeof x === "string") ? arr : null;
+    } catch {
+      return null;
+    }
+  };
   const mapEv = (e: (typeof challenge.evidence)[0] | null | undefined) =>
-    e ? { description: e.description, type: e.type, url: e.url } : null;
+    e
+      ? {
+          description: e.description,
+          type: e.type,
+          url: e.url,
+          preparedFrames: parseFrames(e.preparedFrames),
+          preparedDurationSec: e.preparedDurationSec,
+          preparedMode: e.preparedMode,
+        }
+      : null;
 
   const bothHaveVideoUrl =
     evidenceA?.type === "video" &&

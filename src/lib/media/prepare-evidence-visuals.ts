@@ -205,3 +205,55 @@ export function capJudgeVisuals(a: JudgeVisionImage[], b: JudgeVisionImage[], ma
   const step = Math.ceil(all.length / maxTotal);
   return all.filter((_, i) => i % step === 0).slice(0, maxTotal);
 }
+
+/**
+ * FAST path used by the judge when evidence.preparedFrames has already been
+ * populated by the evidence POST hook. Skips ffmpeg entirely — just fetches
+ * the already-normalized JPEGs (public Blob URLs) in parallel.
+ *
+ * Returns null if no prepared frames exist so the caller falls back to the
+ * live extraction path.
+ */
+export async function prepareParticipantVisualsFast(
+  participantLabel: string,
+  preparedFrames: string[],
+  opts?: { durationSec?: number | null; mode?: string | null },
+): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] } | null> {
+  if (!Array.isArray(preparedFrames) || preparedFrames.length === 0) return null;
+  const preambleLines: string[] = [];
+  const visuals: JudgeVisionImage[] = [];
+  preambleLines.push(
+    `${participantLabel}: ${preparedFrames.length} pre-extracted frame(s)${opts?.mode ? ` [${opts.mode}]` : ""}${opts?.durationSec ? ` (~${Math.round(opts.durationSec)}s video)` : ""} — served from cache.`,
+  );
+
+  const n = preparedFrames.length;
+  const fetched = await Promise.all(
+    preparedFrames.map(async (url, i) => {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return null;
+        const ab = await res.arrayBuffer();
+        const buf = Buffer.from(ab);
+        // Frames were already normalized at pre-extract time — don't re-encode.
+        if (buf.length > 4.5 * 1024 * 1024) return null;
+        const approxSec =
+          opts?.durationSec != null && n > 0
+            ? Math.round(((i + 1) / (n + 1)) * opts.durationSec)
+            : null;
+        const caption =
+          approxSec != null
+            ? `${participantLabel} — frame ${i + 1}/${n} (~${approxSec}s)`
+            : `${participantLabel} — frame ${i + 1}/${n}`;
+        return { caption, mimeType: "image/jpeg" as const, base64: buf.toString("base64") };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const f of fetched) if (f) visuals.push(f);
+  if (visuals.length === 0) {
+    preambleLines.push(`  → All pre-extracted frame fetches failed; falling back to slow path.`);
+    return null;
+  }
+  return { preambleLines, visuals };
+}

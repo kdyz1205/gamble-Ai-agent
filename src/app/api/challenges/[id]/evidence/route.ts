@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { preExtractAndPersistFrames } from "@/lib/media/pre-extract-frames";
+
+// Vision frame extraction + Blob upload can take 5-20s for a longer video.
+// Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
+export const maxDuration = 300;
 
 /**
  * POST /api/challenges/[id]/evidence — Submit evidence for a challenge
@@ -73,6 +79,21 @@ export async function POST(
     await prisma.challenge.update({
       where: { id },
       data: { status: "judging" },
+    });
+  }
+
+  // Fire-and-forget pre-extraction of vision frames so the judge call later
+  // can skip ffmpeg entirely. Runs AFTER response is sent; errors are captured
+  // into Evidence.prepareError (never crashes the request).
+  if (url && (type === "video" || type === "photo" || type === "image")) {
+    after(async () => {
+      await preExtractAndPersistFrames({
+        evidenceId: evidence.id,
+        challengeId: id,
+        userId: user.userId,
+        type,
+        url,
+      });
     });
   }
 

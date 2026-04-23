@@ -204,6 +204,13 @@ model Evidence {
   metadata     String?  // JSON string
   createdAt    DateTime @default(now())
 
+  // ── Pre-extracted vision frames (populated async on submit so judgeChallenge can skip ffmpeg) ──
+  preparedFrames      String?   // JSON array of public Blob URLs — already normalized JPEGs, judge just fetches them
+  preparedAt          DateTime? // when frame extraction finished
+  preparedDurationSec Float?    // source video duration (if video) for caption building
+  preparedMode        String?   // "scene_change" | "uniform_fallback" | "photo" | "none"
+  prepareError        String?   // populated if extraction failed — judge falls back to slow path + logs this
+
   challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

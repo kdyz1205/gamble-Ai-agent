@@ -65,6 +65,15 @@ export async function POST(
 
   const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
+  const parseFrames = (raw: string | null | undefined): string[] | null => {
+    if (!raw) return null;
+    try {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.every((x) => typeof x === "string") ? arr : null;
+    } catch {
+      return null;
+    }
+  };
 
   const aiModel = getAiModel(tierId);
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -88,8 +97,26 @@ export async function POST(
     type: challenge.type,
     rules: challenge.rules,
     evidencePolicy: challenge.evidenceType,
-    evidenceA: evidenceA ? { description: evidenceA.description, type: evidenceA.type, url: evidenceA.url } : null,
-    evidenceB: evidenceB ? { description: evidenceB.description, type: evidenceB.type, url: evidenceB.url } : null,
+    evidenceA: evidenceA
+      ? {
+          description: evidenceA.description,
+          type: evidenceA.type,
+          url: evidenceA.url,
+          preparedFrames: parseFrames(evidenceA.preparedFrames),
+          preparedDurationSec: evidenceA.preparedDurationSec,
+          preparedMode: evidenceA.preparedMode,
+        }
+      : null,
+    evidenceB: evidenceB
+      ? {
+          description: evidenceB.description,
+          type: evidenceB.type,
+          url: evidenceB.url,
+          preparedFrames: parseFrames(evidenceB.preparedFrames),
+          preparedDurationSec: evidenceB.preparedDurationSec,
+          preparedMode: evidenceB.preparedMode,
+        }
+      : null,
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
     model: judgeModel,
