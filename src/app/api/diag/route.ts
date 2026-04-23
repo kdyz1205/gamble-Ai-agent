@@ -26,14 +26,44 @@ function resolveOracleFromEnv() {
   return { providerId, model: def?.defaultModel ?? "", kind: def?.kind ?? "?" };
 }
 
+// Rate-limit diag itself so someone who steals the token (or a logged-in user
+// using the e2e path) can't pile on OpenAI cost.
+const DIAG_WINDOW_MS = 60_000;
+const DIAG_MAX_PER_WINDOW = 10;
+const diagHits = new Map<string, number[]>();
+function diagRateLimit(key: string): boolean {
+  const now = Date.now();
+  const prior = diagHits.get(key) ?? [];
+  const fresh = prior.filter((t) => now - t < DIAG_WINDOW_MS);
+  if (fresh.length >= DIAG_MAX_PER_WINDOW) return false;
+  fresh.push(now);
+  diagHits.set(key, fresh);
+  return true;
+}
+
 export async function GET(req: NextRequest) {
   const token = req.headers.get("x-diag-token");
   const envToken = process.env.DIAG_TOKEN;
   const user = await getAuthUser();
-  const authorized =
-    (envToken && token && token === envToken) || Boolean(user);
-  if (!authorized) {
-    return Response.json({ error: "diag requires auth or x-diag-token" }, { status: 401 });
+
+  // Token is the primary gate (ops pattern). A signed-in session alone is NOT
+  // enough — otherwise any registered user could hammer parse/oracleHealth and
+  // burn our OpenAI budget. The `?e2e=publish` mode additionally requires the
+  // signed-in user because it needs a userId to own the test Challenge row.
+  const tokenOk = Boolean(envToken && token && token === envToken);
+  if (!tokenOk) {
+    return Response.json(
+      { error: "diag requires x-diag-token header matching DIAG_TOKEN env" },
+      { status: 401 },
+    );
+  }
+
+  const clientKey = req.headers.get("x-forwarded-for") || "anonymous";
+  if (!diagRateLimit(clientKey)) {
+    return Response.json(
+      { error: "diag rate limit exceeded (10 req/min per IP)" },
+      { status: 429 },
+    );
   }
 
   const { providerId, model, kind } = resolveOracleFromEnv();
@@ -41,6 +71,10 @@ export async function GET(req: NextRequest) {
   const envKey = def ? process.env[def.envVar] : undefined;
   const keyLen = envKey?.length ?? 0;
 
+  // Audit note: we intentionally do NOT return any slice of actual key material.
+  // Earlier revision returned `openAiKeyPrefix: key.slice(0, 8)` which leaked
+  // the provider prefix (e.g. "sk-proj-") — by itself not enough to reconstruct
+  // the key but enough to fingerprint it against logs, so we dropped it.
   const envSnapshot = {
     ORACLE_DEFAULT_PROVIDER: process.env.ORACLE_DEFAULT_PROVIDER || null,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || null,
@@ -51,7 +85,6 @@ export async function GET(req: NextRequest) {
     hasOpenAiKey: Boolean(process.env.OPENAI_API_KEY),
     hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
     openAiKeyLen: (process.env.OPENAI_API_KEY ?? "").length,
-    openAiKeyPrefix: (process.env.OPENAI_API_KEY ?? "").slice(0, 8),
   };
 
   // Step 1: minimal provider ping — 1 token, tells us if the key works
@@ -145,9 +178,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Step 3: optional full-stack E2E if ?e2e=publish
-  //   parse a BTC prompt → create Challenge row in DB → GET-by-id → delete
-  // This verifies the market detail page will actually be able to find the row.
+  // Step 3: optional full-stack E2E if ?e2e=publish (requires BOTH the diag token
+  // — already verified above — AND a signed-in session, because we need a userId
+  // to own the transient Challenge row we create and then delete).
   let e2e: Record<string, unknown> | null = null;
   if (req.nextUrl.searchParams.get("e2e") === "publish" && user) {
     const trace: Array<{ step: string; ok: boolean; ms: number; detail?: unknown }> = [];

@@ -102,34 +102,43 @@ export async function spendForInference(
     }
   }
 
-  // Off-chain: deduct credits (multiplied by tier)
+  // Off-chain: atomic conditional decrement.
+  // updateMany with {credits: {gte: cost}} is a single SQL statement equivalent to:
+  //   UPDATE "User" SET credits = credits - cost WHERE id = ? AND credits >= cost
+  // so two concurrent calls cannot both pass the balance check at different moments.
   const cost = TIER_MULTIPLIER[tierId];
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-  if (!user || user.credits < cost) {
-    return { success: false, balance: user?.credits ?? 0, model: tier.model, error: "Insufficient credits" };
-  }
-
-  const updated = await prisma.user.update({
-    where: { id: userId },
+  const result = await prisma.user.updateMany({
+    where: { id: userId, credits: { gte: cost } },
     data: { credits: { decrement: cost } },
   });
+  if (result.count === 0) {
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
+    return { success: false, balance: current?.credits ?? 0, model: tier.model, error: "Insufficient credits" };
+  }
 
+  // Refetch balance for the tx row (not in the same transaction — acceptable for ledger display).
+  const after = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
   await prisma.creditTx.create({
     data: {
       userId,
       type: `ai_${action}`,
       amount: -cost,
-      balanceAfter: updated.credits,
+      balanceAfter: after?.credits ?? 0,
       description: `${description} [${tier.name}]`,
       challengeId,
     },
   });
 
-  return { success: true, balance: updated.credits, model: tier.model };
+  return { success: true, balance: after?.credits ?? 0, model: tier.model };
 }
 
 // ── Stake / Add Credits ──
 
+/**
+ * Atomic credit decrement. Uses a single conditional updateMany so two concurrent
+ * callers can't both pass the balance check at different moments and double-spend.
+ * If the update touched 0 rows, the caller had insufficient credits.
+ */
 export async function spendCredits(
   userId: string,
   amount: number,
@@ -137,18 +146,22 @@ export async function spendCredits(
   description: string,
   challengeId?: string,
 ): Promise<{ success: boolean; balance: number; error?: string }> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-  if (!user || user.credits < amount) {
-    return { success: false, balance: user?.credits ?? 0, error: "Insufficient credits" };
+  if (amount <= 0) {
+    return { success: false, balance: 0, error: "Invalid spend amount" };
   }
-  const updated = await prisma.user.update({
-    where: { id: userId },
+  const result = await prisma.user.updateMany({
+    where: { id: userId, credits: { gte: amount } },
     data: { credits: { decrement: amount } },
   });
+  if (result.count === 0) {
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
+    return { success: false, balance: current?.credits ?? 0, error: "Insufficient credits" };
+  }
+  const after = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
   await prisma.creditTx.create({
-    data: { userId, type, amount: -amount, balanceAfter: updated.credits, description, challengeId },
+    data: { userId, type, amount: -amount, balanceAfter: after?.credits ?? 0, description, challengeId },
   });
-  return { success: true, balance: updated.credits };
+  return { success: true, balance: after?.credits ?? 0 };
 }
 
 export async function addCredits(
@@ -220,15 +233,44 @@ export async function settleChallenge(
     return { success: true };
   }
 
-  const loserId = participants.find(p => p.userId !== winnerId)?.userId;
-  if (!loserId) return { success: true };
+  // Multi-participant safe: iterate over EVERY non-winner, not just the first.
+  // Previously this assumed exactly 2 players; for a 3+ player stake pool the
+  // winner would only receive stake*2 while the 3rd+ players' stakes were
+  // silently absorbed into the void (maxParticipants can be > 2 per schema).
+  const losers = participants.filter((p) => p.userId !== winnerId);
+  if (losers.length === 0) {
+    // Solo / no-opponent payout — just refund the stake.
+    await addCredits(winnerId, stake, "refund", "Solo challenge — stake refunded", challengeId);
+    return { success: true };
+  }
 
-  const loser = await prisma.user.findUnique({ where: { id: loserId }, select: { credits: true } });
-  await prisma.creditTx.create({
-    data: { userId: loserId, type: "loss", amount: -stake, balanceAfter: loser?.credits ?? 0, description: `Lost challenge — ${stake} credits`, challengeId },
-  });
-  await prisma.user.update({ where: { id: loserId }, data: { totalCreditsLost: { increment: stake } } });
-  await addCredits(winnerId, stake * 2, "win", `Won challenge — +${stake * 2} credits`, challengeId);
+  for (const loser of losers) {
+    const row = await prisma.user.findUnique({ where: { id: loser.userId }, select: { credits: true } });
+    await prisma.creditTx.create({
+      data: {
+        userId: loser.userId,
+        type: "loss",
+        amount: -stake,
+        balanceAfter: row?.credits ?? 0,
+        description: `Lost challenge — ${stake} credits`,
+        challengeId,
+      },
+    });
+    await prisma.user.update({
+      where: { id: loser.userId },
+      data: { totalCreditsLost: { increment: stake } },
+    });
+  }
+
+  // Winner takes own stake back + every loser's stake.
+  const totalWinnings = stake * (losers.length + 1); // self + N losers
+  await addCredits(
+    winnerId,
+    totalWinnings,
+    "win",
+    `Won challenge — +${totalWinnings} credits (${losers.length} opponent${losers.length > 1 ? "s" : ""})`,
+    challengeId,
+  );
 
   return { success: true };
 }

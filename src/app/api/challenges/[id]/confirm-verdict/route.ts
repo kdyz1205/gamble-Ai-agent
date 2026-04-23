@@ -54,10 +54,25 @@ export async function POST(
   let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
   if (challenge.stake > 0) {
     assertChallengeTransition(status, ChallengeStatus.pending_settlement);
-    await prisma.challenge.update({
-      where: { id },
+
+    // Atomic guard: only ONE request gets to move the status from {disputed,judging}
+    // into pending_settlement. If a second tab or a double-click races us, its
+    // updateMany returns count=0 and we bail before double-settling. This
+    // closes the classic "fire the click handler twice → winner gets paid twice"
+    // exploit noted in the production-readiness audit.
+    const claim = await prisma.challenge.updateMany({
+      where: {
+        id,
+        status: { in: [ChallengeStatus.disputed, ChallengeStatus.judging] },
+      },
       data: { status: ChallengeStatus.pending_settlement },
     });
+    if (claim.count === 0) {
+      return Response.json(
+        { error: "This challenge is already being settled by another request." },
+        { status: 409 },
+      );
+    }
 
     settlement = await settleChallenge(
       id,

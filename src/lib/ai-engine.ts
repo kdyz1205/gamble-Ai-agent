@@ -698,18 +698,37 @@ function parseChallengeFallback(input: string): ParsedChallenge {
   };
 }
 
+/**
+ * SAFE fallback when every LLM attempt (primary + escalated) fails or returns
+ * unparseable JSON. This path MUST NOT auto-settle real credits.
+ *
+ * Previously this function picked a winner via Math.random() > 0.5 and
+ * returned confidence 0.65 + Math.random() * 0.25, which could produce
+ * values up to ~0.90. The auto-settle gate in challenge-judgment.ts is
+ * `confidence < 0.85 → disputed`, so roughly 20% of fallback calls
+ * cleared the gate and moved real stake between random users whenever
+ * the LLM was down.
+ *
+ * New behavior: always return winnerId=null (tie / void), confidence=0.4
+ * (well under the 0.85 auto-settle threshold), and a clear message telling
+ * the creator that AI is unavailable so they can manually confirm later.
+ * The challenge moves to `disputed` and the creator must resolve it
+ * through the confirm-verdict flow, not get a coin-flip settlement.
+ */
 function judgeChallengeFallback(
   challengeTitle: string,
-  evidenceA: { description: string | null; type: string },
-  evidenceB: { description: string | null; type: string },
-  participantAId: string,
-  participantBId: string,
+  _evidenceA: { description: string | null; type: string },
+  _evidenceB: { description: string | null; type: string },
+  _participantAId: string,
+  _participantBId: string,
 ): JudgmentResult {
-  const random = Math.random();
-  const winnerId = random > 0.5 ? participantAId : participantBId;
-  const confidence = 0.65 + Math.random() * 0.25;
   return {
-    winnerId, confidence,
-    reasoning: `AI analyzed evidence from both participants for "${challengeTitle}". Based on ${evidenceA.type} and ${evidenceB.type} submissions, the winner was determined with ${(confidence * 100).toFixed(0)}% confidence.`,
+    winnerId: null,
+    // Below both the 0.70 escalation trigger and the 0.85 auto-settle gate
+    // — guarantees this cannot settle credits automatically.
+    confidence: 0.4,
+    reasoning:
+      `AI was unable to evaluate "${challengeTitle}" (primary and escalated model calls both failed or returned malformed JSON). ` +
+      `Marking this challenge as needing manual review. No credits will move until the creator explicitly confirms a winner.`,
   };
 }
