@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, type TierId } from "@/lib/auth";
-import { parseChallenge, generateClarifications } from "@/lib/ai-engine";
+import { parseChallenge, generateClarifications, type ParsedChallenge } from "@/lib/ai-engine";
 import { getCredits } from "@/lib/credits";
 
 /**
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!user) return unauthorized();
 
   try {
-    const { input, tier: rawTier } = await req.json();
+    const { input, tier: rawTier, priorDraft: rawPrior } = await req.json();
     if (!input || typeof input !== "string") {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
@@ -24,12 +24,20 @@ export async function POST(req: NextRequest) {
     const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
     const balance = await getCredits(user.userId);
 
+    // Light validation on the optional priorDraft — ensure it's an object with
+    // at least a title. We send only a small subset to the LLM so context
+    // stays focused (title/proposition/type/suggestedStake/evidenceType/deadline).
+    const priorDraft: ParsedChallenge | null =
+      rawPrior && typeof rawPrior === "object" && typeof rawPrior.title === "string"
+        ? (rawPrior as ParsedChallenge)
+        : null;
+
     // Parse is ALWAYS FREE — it's the top of the funnel (chat → structured draft),
     // the cost is trivial (~$0.001 per call on Haiku), and charging here would
     // scare off new users before they experience the product. Credit cost kicks
     // in later when real stakes + AI judgment are involved.
     const { model: modelName } = getAiModel(tierId);
-    const parsed = await parseChallenge(input, modelName);
+    const parsed = await parseChallenge(input, modelName, priorDraft);
     const clarifications = generateClarifications(parsed);
 
     return Response.json({

@@ -294,7 +294,11 @@ export interface ParsedChallenge {
   actionItems?: ActionItem[];
 }
 
-export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promise<{
+export async function parseChallenge(
+  input: string,
+  tier: 1 | 2 | 3 = 1,
+  priorDraft?: ParsedChallenge | null,
+): Promise<{
   parsed: ParsedChallenge;
   clarifications: Array<{ question: string; options: string[] }>;
   model: string;
@@ -305,7 +309,10 @@ export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promis
 }> {
   return apiFetch("/challenges/parse", {
     method: "POST",
-    body: JSON.stringify({ input, tier }),
+    // `priorDraft` is an optional hint: when present, the AI sees the user's
+    // previous draft alongside the new input so "再来一个" / "another one" /
+    // "bigger stake" references the right prior context instead of cold-starting.
+    body: JSON.stringify({ input, tier, priorDraft: priorDraft ?? undefined }),
   });
 }
 

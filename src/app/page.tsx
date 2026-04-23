@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,32 @@ import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import type { ParsedChallenge } from "@/lib/api-client";
 import { compileMarket, type MarketDraft, type Clarification, type CompileResult } from "@/lib/market-compiler";
+
+/**
+ * Conversation memory — localStorage-backed so "再来一个 / another one / make
+ * it bigger" references the most-recent draft instead of cold-starting. Keyed
+ * by user id; we only keep the last 5 entries so context stays focused.
+ */
+const DRAFT_HISTORY_KEY_PREFIX = "luckyplay.draftHistory.v1.";
+const DRAFT_HISTORY_LIMIT = 5;
+function loadDraftHistory(userId: string | undefined): ParsedChallenge[] {
+  if (!userId || typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(DRAFT_HISTORY_KEY_PREFIX + userId);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.slice(-DRAFT_HISTORY_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+function saveDraftHistory(userId: string | undefined, list: ParsedChallenge[]) {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    const trimmed = list.slice(-DRAFT_HISTORY_LIMIT);
+    window.localStorage.setItem(DRAFT_HISTORY_KEY_PREFIX + userId, JSON.stringify(trimmed));
+  } catch { /* quota exceeded is fine */ }
+}
 
 type AppState = "idle" | "compiling" | "drafting" | "publishing" | "live";
 type WorkflowPhase = "understanding" | "drafting" | "validating" | "publishing" | "published" | "failed";
@@ -44,6 +70,12 @@ export default function Home() {
   const [isTweaking, setIsTweaking] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [draftHistory, setDraftHistory] = useState<ParsedChallenge[]>([]);
+
+  // Rehydrate draft history from localStorage once the user session is known.
+  useEffect(() => {
+    setDraftHistory(loadDraftHistory(user?.id));
+  }, [user?.id]);
 
   /* ── Compile: natural language → market draft ── */
   const handleSubmit = useCallback(async (input: string) => {
@@ -55,11 +87,22 @@ export default function Home() {
     setAssistantNote("I am reading the prompt and turning it into a structured challenge.");
     setAppState("compiling");
 
-    // Try LLM-powered compile first (if logged in + API key set)
+    // Try LLM-powered compile first (if logged in + API key set).
+    // Pass the most-recent prior draft so AI can handle "another one /
+    // 再来一个 / make it bigger" as continuation rather than fresh start.
     if (user) {
       try {
-        const res = await api.parseChallenge(input);
+        const priorDraft = draftHistory.length > 0 ? draftHistory[draftHistory.length - 1] : undefined;
+        const res = await api.parseChallenge(input, 1, priorDraft);
         const p = res.parsed;
+
+        // Push the new draft onto history — but only if it looks like a real
+        // draft (not an ordinary_chat fallthrough).
+        if (p && p.intent !== "ordinary_chat") {
+          const nextHistory = [...draftHistory, p].slice(-DRAFT_HISTORY_LIMIT);
+          setDraftHistory(nextHistory);
+          saveDraftHistory(user.id, nextHistory);
+        }
 
         // LLM said it's genuinely ordinary chat (greetings, off-topic).
         // If the AI still generated option lists (rich draft), trust it anyway —
@@ -183,7 +226,7 @@ export default function Home() {
     setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
     setWorkflowPhase("validating");
     setAppState("drafting");
-  }, [user]);
+  }, [user, draftHistory]);
 
   /* ── Apply clarification answer → patch draft ── */
   const handleClarificationAnswer = useCallback((patch: Partial<MarketDraft>) => {

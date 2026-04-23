@@ -275,14 +275,45 @@ function safeParseJson(text: string): unknown | null {
  *     function calling. Final fallback: deterministic parser.
  *  4. Self-correct: if the first pass returned obvious garbage (no title, no
  *     options), try once more on a stronger model in the same family.
+ *  5. Optional `priorDraft` is used as conversation context so follow-up input
+ *     ("another one", "再来一个", "make it bigger") references the previous
+ *     draft instead of cold-starting.
  */
-export async function parseChallenge(input: string, preferredModel?: string): Promise<ParsedChallenge> {
+export async function parseChallenge(
+  input: string,
+  preferredModel?: string,
+  priorDraft?: ParsedChallenge | null,
+): Promise<ParsedChallenge> {
   const { providerId, model } = resolveOracle(preferredModel);
 
   if (!oracleKeyAvailable(providerId)) {
     console.warn(`[parseChallenge] provider=${providerId} has no API key set; falling back to deterministic parser.`);
     return parseChallengeFallback(input);
   }
+
+  // Build the user message — inject prior-draft summary when the frontend
+  // passed one. We keep it COMPACT (just the fields the AI needs to remember
+  // or diverge from) so it doesn't blow context.
+  const userMessage = (() => {
+    if (!priorDraft) return input;
+    const priorSummary = JSON.stringify({
+      title: priorDraft.title,
+      proposition: priorDraft.proposition,
+      marketType: priorDraft.marketType,
+      type: priorDraft.type,
+      suggestedStake: priorDraft.suggestedStake,
+      evidenceType: priorDraft.evidenceType,
+      deadline: priorDraft.deadline,
+      oracles: priorDraft.oracles?.map((o) => `${o.source}:${o.label}`),
+    });
+    return `Context — user's most-recent published/draft challenge in this session:
+${priorSummary}
+
+User's new input:
+${input}
+
+If the new input clearly references a NEW independent bet, treat it as a fresh draft (ignore context). If it sounds like a continuation ("another one", "再来一个", "different flavor", "bigger stake", "similar but harder"), produce a DIFFERENT challenge from the same family/type, or a modification — don't repeat the exact same draft.`;
+  })();
 
   const runOnce = async (useModel: string): Promise<{ parsed: ParsedChallenge | null; invocations: ToolInvocation[] }> => {
     try {
@@ -294,7 +325,7 @@ export async function parseChallenge(input: string, preferredModel?: string): Pr
           providerId,
           model: useModel,
           system: MARKET_COMPILER_PROMPT,
-          user: input,
+          user: userMessage,
           tools: ORACLE_TOOLS,
           maxTokens: 3000,
           temperature: 0.3,
@@ -306,7 +337,7 @@ export async function parseChallenge(input: string, preferredModel?: string): Pr
         providerId,
         model: useModel,
         system: MARKET_COMPILER_PROMPT,
-        user: input,
+        user: userMessage,
         maxTokens: 3000,
         temperature: 0.3,
       });
