@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
-import { getCredits, spendCredits } from "@/lib/credits";
+import { getCredits, spendCredits, addCredits } from "@/lib/credits";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 
@@ -74,7 +74,7 @@ export async function POST(
   if (existing) return Response.json({ error: "You are already in this challenge" }, { status: 400 });
   if (challenge.participants.length >= challenge.maxParticipants) return Response.json({ error: "Challenge is full" }, { status: 400 });
 
-  // Escrow: deduct staked credits upfront
+  // Escrow: deduct staked credits upfront (atomic — see spendCredits in credits.ts).
   if (challenge.stake > 0) {
     const balance = await getCredits(user.userId);
     if (balance < challenge.stake) return noCredits(challenge.stake, balance);
@@ -83,16 +83,57 @@ export async function POST(
     if (!result.success) return noCredits(challenge.stake, result.balance);
   }
 
-  await prisma.participant.create({
-    data: {
-      challengeId: challenge.id,
-      userId: user.userId,
-      role: "opponent",
-      status: "accepted",
-    },
+  // ── ATOMIC SEAT CLAIM ──
+  // Previous flow: length check, then participant.create. Two users racing
+  // could both pass the "< maxParticipants" read before either wrote, then
+  // both succeed → over-full challenge + 3rd user holding money that isn't
+  // part of the pool logic.
+  // Fix: participant.create is already guarded by @@unique([challengeId,
+  // userId]) so a single user can't create two rows, but NOT across different
+  // users. So we wrap in a transaction that re-counts inside and rolls back
+  // if the challenge is already full.
+  let participantId: string | null = null;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const currentCount = await tx.participant.count({
+        where: { challengeId: challenge.id, status: { in: ["pending", "accepted"] } },
+      });
+      if (currentCount >= challenge.maxParticipants) {
+        throw new Error("FULL");
+      }
+      const p = await tx.participant.create({
+        data: {
+          challengeId: challenge.id,
+          userId: user.userId,
+          role: "opponent",
+          status: "accepted",
+        },
+      });
+      participantId = p.id;
+    });
+  } catch (e) {
+    // Refund the stake we just escrowed since we can't actually seat them.
+    if (challenge.stake > 0) {
+      try {
+        await addCredits(user.userId, challenge.stake, "refund", `Refund — could not join "${challenge.title.slice(0, 40)}"`, id);
+      } catch (refundErr) {
+        console.error("CRITICAL: accept stake charged but refund failed", { userId: user.userId, id, refundErr });
+      }
+    }
+    if (e instanceof Error && e.message === "FULL") {
+      return Response.json({ error: "Challenge filled up just before you joined — stake refunded." }, { status: 409 });
+    }
+    // Unique-constraint collision = user already joined (shouldn't happen given the check above, but belt + suspenders).
+    return Response.json({ error: "Could not join challenge — stake refunded." }, { status: 409 });
+  }
+  void participantId; // kept for future logging/audit
+
+  // Re-read authoritative participant count to set the post-join status correctly.
+  const freshCount = await prisma.participant.count({
+    where: { challengeId: challenge.id, status: { in: ["pending", "accepted"] } },
   });
 
-  const newStatus = challenge.participants.length + 1 >= challenge.maxParticipants ? "live" : "open";
+  const newStatus = freshCount >= challenge.maxParticipants ? "live" : "open";
 
   // Generate a shared AI-issued task (e.g. math problem) when the challenge
   // transitions to live AND it looks like a quiz-style challenge. This lets two

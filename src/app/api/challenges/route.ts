@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
-import { getCredits, spendCredits } from "@/lib/credits";
+import { getCredits, spendCredits, addCredits } from "@/lib/credits";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -78,12 +78,21 @@ export async function POST(req: NextRequest) {
 
     const stakeInt = Math.max(0, Math.floor(stake));
 
-    // Verify creator has enough credits to cover the stake
+    // ── ATOMIC ESCROW + CREATE ──
+    // Previous flow:
+    //   spendCredits(stakeInt)  → credits gone
+    //   prisma.challenge.create → may throw (constraint, DB blip, etc.)
+    //   → user is charged but no Challenge row exists, no refund.
+    // We now stake FIRST (atomic spendCredits is already race-safe, see
+    // credits.ts updateMany pattern) and immediately refund if the follow-up
+    // Challenge.create throws for any reason. That's the standard
+    // "compensating action" pattern — two ops can't be a single transaction
+    // because spendCredits writes to both User and CreditTx tables and we
+    // want its atomicity guarantees preserved.
     if (stakeInt > 0) {
       const balance = await getCredits(user.userId);
       if (balance < stakeInt) return noCredits(stakeInt, balance);
 
-      // Escrow: deduct credits upfront
       const result = await spendCredits(user.userId, stakeInt, "stake", `Staked ${stakeInt} credits on "${title.slice(0, 40)}"`, undefined);
       if (!result.success) return noCredits(stakeInt, result.balance);
     }
@@ -103,42 +112,55 @@ export async function POST(req: NextRequest) {
       else deadlineDate.setHours(deadlineDate.getHours() + 48);
     }
 
-    const challenge = await prisma.challenge.create({
-      data: {
-        creatorId: user.userId,
-        title,
-        description,
-        marketType,
-        proposition,
-        type,
-        status: "open",
-        stake: stakeInt,
-        stakeToken,
-        deadline: deadlineDate,
-        eventTime,
-        joinWindow,
-        proofWindow,
-        rules,
-        evidenceType,
-        settlementMode,
-        proofSource,
-        arbiter,
-        fallbackRule,
-        disputeWindow,
-        aiReview,
-        isPublic,
-        visibility: visibility || (isPublic ? "public" : "private"),
-        participants: {
-          create: { userId: user.userId, role: "creator", status: "accepted" },
+    let challenge;
+    try {
+      challenge = await prisma.challenge.create({
+        data: {
+          creatorId: user.userId,
+          title,
+          description,
+          marketType,
+          proposition,
+          type,
+          status: "open",
+          stake: stakeInt,
+          stakeToken,
+          deadline: deadlineDate,
+          eventTime,
+          joinWindow,
+          proofWindow,
+          rules,
+          evidenceType,
+          settlementMode,
+          proofSource,
+          arbiter,
+          fallbackRule,
+          disputeWindow,
+          aiReview,
+          isPublic,
+          visibility: visibility || (isPublic ? "public" : "private"),
+          participants: {
+            create: { userId: user.userId, role: "creator", status: "accepted" },
+          },
         },
-      },
-      include: {
-        creator: { select: { id: true, username: true, image: true, credits: true } },
-        participants: {
-          include: { user: { select: { id: true, username: true, image: true } } },
+        include: {
+          creator: { select: { id: true, username: true, image: true, credits: true } },
+          participants: {
+            include: { user: { select: { id: true, username: true, image: true } } },
+          },
         },
-      },
-    });
+      });
+    } catch (createErr) {
+      // Compensating refund — never leave a user charged with no Challenge.
+      if (stakeInt > 0) {
+        try {
+          await addCredits(user.userId, stakeInt, "refund", `Refund — challenge creation failed for "${title.slice(0, 40)}"`);
+        } catch (refundErr) {
+          console.error("CRITICAL: stake charged but refund failed", { userId: user.userId, stakeInt, createErr, refundErr });
+        }
+      }
+      throw createErr;
+    }
 
     await prisma.activityEvent.create({
       data: {
@@ -152,6 +174,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ challenge }, { status: 201 });
   } catch (err) {
     console.error("Create challenge error:", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ error: err instanceof Error ? err.message : "Internal server error" }, { status: 500 });
   }
 }

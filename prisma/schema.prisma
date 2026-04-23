@@ -102,8 +102,15 @@ model CreditTx {
   x402TxHash   String?  // on-chain tx hash for USDC top-ups
   createdAt    DateTime @default(now())
 
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+  // Ledger rows must SURVIVE user / challenge deletion so post-hoc audits and
+  // counter-party history stay intact. Cascade on user delete would destroy
+  // the counter-party record of a win/loss the opposing user already received.
+  user         User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  challenge    Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([challengeId])
+  @@index([type, createdAt])
 }
 
 // ═══════════════════════════════════════
@@ -174,6 +181,14 @@ model Challenge {
   activityEvents ActivityEvent[]
   judgeJobs     JudgeJob[]
   auditLogs     AuditLog[]    @relation("AuditLogChallenge")
+
+  // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
+  // by createdAt DESC; the "my markets" tab filters on creatorId; the judge
+  // cron scans by status="judging". Without these, every query is a full
+  // table scan — unusable at >10k rows.
+  @@index([status, isPublic, createdAt])
+  @@index([creatorId, createdAt])
+  @@index([status, updatedAt])
 }
 
 model Participant {
@@ -213,6 +228,12 @@ model Evidence {
 
   challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One evidence row per (challenge, user). Prevents double-submit from
+  // flooding the judge with N rows per player where only the first is read.
+  // Callers who want "replace previous" should upsert on this key.
+  @@unique([challengeId, userId])
+  @@index([challengeId])
 }
 
 model Judgment {
@@ -299,4 +320,8 @@ model ActivityEvent {
 
   user         User?      @relation(fields: [userId], references: [id])
   challenge    Challenge? @relation(fields: [challengeId], references: [id])
+
+  // Feed reads order by createdAt DESC and often filter by type.
+  @@index([createdAt])
+  @@index([challengeId])
 }

@@ -95,6 +95,22 @@ export async function executeChallengeJudgment(
     };
   }
 
+  // Require an opponent before judging. Solo challenges used to auto-win at
+  // 0.85 confidence (above the settle threshold), turning self-staked markets
+  // into a ledger-polluting no-op that still burned inference credit.
+  const creator = challenge.participants.find((p) => p.role === "creator");
+  const opponent = challenge.participants.find((p) => p.role === "opponent");
+  if (!creator) {
+    return { ok: false, error: "Creator not found", status: 400 };
+  }
+  if (!opponent) {
+    return {
+      ok: false,
+      error: "No opponent has accepted — judgment requires at least two participants.",
+      status: 400,
+    };
+  }
+
   const spend = await spendForInference(
     payerUserId,
     tierId,
@@ -109,12 +125,6 @@ export async function executeChallengeJudgment(
       status: 402,
       creditsRemaining: spend.balance,
     };
-  }
-
-  const creator = challenge.participants.find((p) => p.role === "creator");
-  const opponent = challenge.participants.find((p) => p.role === "opponent");
-  if (!creator) {
-    return { ok: false, error: "Creator not found", status: 400 };
   }
 
   const evidenceA = challenge.evidence.find((e) => e.userId === creator.userId);
@@ -169,21 +179,41 @@ export async function executeChallengeJudgment(
   }
   const aiModelLabel = `${pdef?.shortLabel ?? "LLM"} · ${judgeModel}`;
 
-  const result = await judgeChallenge({
-    title: challenge.title,
-    description: challenge.description,
-    deadlineIso: challenge.deadline?.toISOString() ?? null,
-    type: challenge.type,
-    rules: challenge.rules,
-    evidencePolicy: challenge.evidenceType,
-    evidenceA: mapEv(evidenceA ?? null),
-    evidenceB: mapEv(evidenceB ?? null),
-    participantAId: creator.userId,
-    participantBId: opponent?.userId ?? null,
-    model: judgeModel,
-    providerId,
-    livenessPrompt: challenge.livenessPrompt,
-  });
+  // Wrap judgeChallenge so a throw (provider timeout, bad JSON, etc.) refunds
+  // the inference spend instead of pocketing it silently.
+  let result;
+  try {
+    result = await judgeChallenge({
+      title: challenge.title,
+      description: challenge.description,
+      deadlineIso: challenge.deadline?.toISOString() ?? null,
+      type: challenge.type,
+      rules: challenge.rules,
+      evidencePolicy: challenge.evidenceType,
+      evidenceA: mapEv(evidenceA ?? null),
+      evidenceB: mapEv(evidenceB ?? null),
+      participantAId: creator.userId,
+      participantBId: opponent?.userId ?? null,
+      model: judgeModel,
+      providerId,
+      livenessPrompt: challenge.livenessPrompt,
+    });
+  } catch (err) {
+    // Refund the inference credits since no judgment will be produced.
+    const refundCost = cost;
+    try {
+      await (await import("./credits")).addCredits(
+        payerUserId,
+        refundCost,
+        "refund",
+        `Refund — judge call failed: ${err instanceof Error ? err.message.slice(0, 80) : "unknown"}`,
+        challengeId,
+      );
+    } catch (refundErr) {
+      console.error("CRITICAL: judge spend refund failed", { payerUserId, refundCost, err, refundErr });
+    }
+    return { ok: false, error: err instanceof Error ? err.message : "Judge call failed", status: 502 };
+  }
 
   const judgment = await prisma.judgment.create({
     data: {

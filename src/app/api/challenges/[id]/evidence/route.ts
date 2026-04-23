@@ -41,15 +41,33 @@ export async function POST(
     return Response.json({ error: "You are not a participant in this challenge" }, { status: 403 });
   }
 
-  // Create evidence
-  const evidence = await prisma.evidence.create({
-    data: {
+  // Upsert — one Evidence row per (challengeId, userId), matching the new
+  // @@unique([challengeId, userId]) constraint. If the user re-submits we
+  // replace the old evidence instead of stacking N rows and confusing the
+  // judge's `.find(e => e.userId === creator)` which picks the first match.
+  // Also clears prepared frames so the background pre-extract starts fresh.
+  const evidence = await prisma.evidence.upsert({
+    where: {
+      challengeId_userId: { challengeId: id, userId: user.userId },
+    },
+    create: {
       challengeId: id,
       userId: user.userId,
       type,
       url,
       description,
       metadata: metadata ? JSON.stringify(metadata) : null,
+    },
+    update: {
+      type,
+      url,
+      description,
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      preparedFrames: null,
+      preparedAt: null,
+      preparedDurationSec: null,
+      preparedMode: null,
+      prepareError: null,
     },
     include: {
       user: { select: { id: true, username: true } },
@@ -66,18 +84,20 @@ export async function POST(
     },
   });
 
-  // Check if all participants have submitted evidence
+  // Atomic transition: only the request that actually fills the last seat
+  // flips the status. Two in-flight submissions racing can both read
+  // allEvidenceUsers.length >= N and try to set status=judging; that's
+  // benign here but makes a noisy activity feed. updateMany with a status
+  // guard ensures exactly one transition lands.
+  const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
   const allEvidenceUsers = await prisma.evidence.findMany({
     where: { challengeId: id },
     select: { userId: true },
     distinct: ["userId"],
   });
-  const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
-
   if (allEvidenceUsers.length >= activeParticipants.length) {
-    // Move to judging
-    await prisma.challenge.update({
-      where: { id },
+    await prisma.challenge.updateMany({
+      where: { id, status: { in: ["live", "matched"] } },
       data: { status: "judging" },
     });
   }
