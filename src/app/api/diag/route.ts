@@ -13,9 +13,10 @@ import { getAuthUser } from "@/lib/auth";
 import { getProviderById, DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { parseChallenge } from "@/lib/ai-engine";
+import prisma from "@/lib/db";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function resolveOracleFromEnv() {
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -111,12 +112,109 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Step 3: optional full-stack E2E if ?e2e=publish
+  //   parse a BTC prompt → create Challenge row in DB → GET-by-id → delete
+  // This verifies the market detail page will actually be able to find the row.
+  let e2e: Record<string, unknown> | null = null;
+  if (req.nextUrl.searchParams.get("e2e") === "publish" && user) {
+    const trace: Array<{ step: string; ok: boolean; ms: number; detail?: unknown }> = [];
+    let createdId: string | null = null;
+    try {
+      // (a) parse
+      const t0 = Date.now();
+      const parsed = await parseChallenge("I bet BTC will not exceed 100000 USD tomorrow");
+      trace.push({
+        step: "parse",
+        ok: true,
+        ms: Date.now() - t0,
+        detail: {
+          title: parsed.title,
+          type: parsed.type,
+          marketType: parsed.marketType,
+          proposition: parsed.proposition,
+          stakeOptions: parsed.stakeOptions?.length ?? 0,
+          oracles: parsed.oracles ?? [],
+          toolInvocations: parsed.toolInvocations ?? [],
+        },
+      });
+
+      // (b) create Challenge row (same shape as POST /api/challenges does)
+      const t1 = Date.now();
+      const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h from now
+      const row = await prisma.challenge.create({
+        data: {
+          creatorId: user.userId,
+          title: parsed.title,
+          description: parsed.proposition || parsed.title,
+          type: parsed.type || "General",
+          marketType: parsed.marketType || "challenge",
+          proposition: parsed.proposition || null,
+          stake: 0, // free mode for diag
+          stakeToken: "credits",
+          deadline: deadlineDate,
+          rules: parsed.rules || parsed.title,
+          evidenceType: parsed.evidenceType || "self_report",
+          settlementMode: "mutual_confirmation",
+          isPublic: false,
+          visibility: "private",
+          maxParticipants: 2,
+          aiReview: true,
+          status: "draft",
+        },
+      });
+      createdId = row.id;
+      trace.push({ step: "create", ok: true, ms: Date.now() - t1, detail: { id: row.id } });
+
+      // (c) fetch by id — simulate what market/[id]/page.tsx does
+      const t2 = Date.now();
+      const refetch = await prisma.challenge.findUnique({
+        where: { id: row.id },
+        include: {
+          creator: { select: { id: true, username: true } },
+          participants: true,
+          evidence: true,
+          judgments: true,
+        },
+      });
+      trace.push({
+        step: "getById",
+        ok: Boolean(refetch),
+        ms: Date.now() - t2,
+        detail: refetch
+          ? { found: true, status: refetch.status, title: refetch.title }
+          : { found: false },
+      });
+
+      // (d) cleanup — delete the diag row so it doesn't pollute /markets listings
+      const t3 = Date.now();
+      await prisma.challenge.delete({ where: { id: row.id } });
+      trace.push({ step: "cleanup", ok: true, ms: Date.now() - t3 });
+
+      e2e = { ok: true, trace };
+    } catch (err) {
+      trace.push({
+        step: "error",
+        ok: false,
+        ms: 0,
+        detail: err instanceof Error ? err.message.slice(0, 400) : String(err),
+      });
+      // Best-effort cleanup of any stray row
+      if (createdId) {
+        try { await prisma.challenge.delete({ where: { id: createdId } }); } catch { /* ignore */ }
+      }
+      e2e = { ok: false, trace };
+    }
+  } else if (req.nextUrl.searchParams.get("e2e") === "publish" && !user) {
+    e2e = { ok: false, error: "e2e=publish requires a signed-in session (diag token alone isn't enough — we need a userId to own the test Challenge row)." };
+  }
+
   return Response.json({
     status: "ok",
     resolved: { providerId, model, kind, keyLen },
     env: envSnapshot,
     providerPing,
     parseHealth,
-    note: "If parseHealth.looksLikeFallback is true, AI was not reached. If providerPing.ok === false, check the error message — most likely an expired API key.",
+    e2e,
+    note: "If parseHealth.looksLikeFallback is true, AI was not reached. If providerPing.ok === false, check the error message — most likely an expired API key. Add ?e2e=publish while signed-in to run full parse→create→fetch→cleanup trace.",
   });
 }
