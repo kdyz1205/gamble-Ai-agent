@@ -61,9 +61,20 @@ export default function Home() {
         const res = await api.parseChallenge(input);
         const p = res.parsed;
 
-        // LLM said it's ordinary chat → reject
-        if (p.intent === "ordinary_chat") {
-          setUnderstanding("That doesn't seem like a bet or challenge. Try describing what you want to wager on.");
+        // LLM said it's genuinely ordinary chat (greetings, off-topic).
+        // If the AI still generated option lists (rich draft), trust it anyway —
+        // means the prompt produced something useful despite the intent tag.
+        const hasRichDraft =
+          (p.stakeOptions?.length ?? 0) > 0 ||
+          (p.evidenceOptions?.length ?? 0) > 0 ||
+          (p.deadlineOptions?.length ?? 0) > 0;
+        if (p.intent === "ordinary_chat" && !hasRichDraft) {
+          // Use AI's own recommendationSummary when present — it's usually
+          // a friendlier, context-aware nudge than our hardcoded fallback.
+          setUnderstanding(
+            p.recommendationSummary?.trim() ||
+              "Tell me what you want to bet on — like \"10 pushups in 60s\" or \"BTC above 70k by Friday\". I can also generate one for you: try \"surprise me\".",
+          );
           setAppState("idle");
           return;
         }

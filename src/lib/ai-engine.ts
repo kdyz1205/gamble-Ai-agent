@@ -124,7 +124,24 @@ STEPS:
 1. Classify INTENT:
    - "definite_market": Clear bet/challenge with enough info to publish
    - "candidate_market": Clearly a bet but missing key fields
-   - "ordinary_chat": Not a bet at all — user is just chatting
+   - "ordinary_chat": Genuinely unrelated to betting (greetings, personal questions to you, off-topic talk). Use this SPARINGLY.
+
+   CRITICAL — DO NOT REJECT WHEN THE USER HANDED YOU THE WHEEL:
+   If the user explicitly asks YOU to pick / generate / invent / suggest a challenge
+   ("generate one for me", "you pick", "surprise me", "give me a random bet", "anything",
+   "随便来一个", "帮我想一个", "你决定", "whatever you want") — that is NOT ordinary_chat.
+   They ARE trying to bet, they just delegated the creative part to you.
+
+   In that case:
+   - intent = "candidate_market"
+   - INVENT a concrete, fun, safe challenge appropriate to a solo or 1v1 format
+     (e.g. pushups in 60s, hold a plank, a recipe, solve a LeetCode easy in X minutes,
+     guess tomorrow's BTC price direction, read a chapter by tomorrow). Don't pick anything
+     dangerous, illegal, or political.
+   - Fill title + proposition + all *Options arrays with real, specific values
+   - Default to free stake (0) so they can try it risk-free
+   - clarifyingQuestion may ask if they'd like a different flavor, but still give them a
+     working draft so they can publish immediately if they like it.
 
 2. Canonicalize the PROPOSITION — one clear, unambiguous statement of what's wagered.
 
