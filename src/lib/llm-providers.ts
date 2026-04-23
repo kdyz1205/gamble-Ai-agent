@@ -36,8 +36,11 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.openai.com/v1",
     envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-4o-mini",
-    models: ["gpt-4o-mini", "gpt-4o", "o4-mini", "o3-mini"],
+    // gpt-4o reasons substantially better over video frames than gpt-4o-mini
+    // (which misses subtle action cues). ~17x more expensive but still ~$0.02-0.04
+    // per ~6-frame judgment, well below the credit cost we charge.
+    defaultModel: "gpt-4o",
+    models: ["gpt-4o", "gpt-4o-mini", "o4-mini", "o3-mini"],
     docsUrl: "https://platform.openai.com/docs",
   },
   {

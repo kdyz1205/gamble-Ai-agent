@@ -92,14 +92,26 @@ export interface ChallengeData {
   creatorId: string;
   title: string;
   description: string | null;
+  marketType: string;
+  proposition: string | null;
   type: string;
   status: string;
   stake: number;
+  stakeToken: string;
   deadline: string | null;
+  eventTime: string | null;
+  joinWindow: string | null;
+  proofWindow: string | null;
   rules: string | null;
   evidenceType: string;
+  settlementMode: string;
+  proofSource: string | null;
+  arbiter: string | null;
+  fallbackRule: string | null;
+  disputeWindow: string | null;
   aiReview: boolean;
   isPublic: boolean;
+  visibility: string;
   maxParticipants: number;
   createdAt: string;
   creator: { id: string; username: string; image: string | null; credits?: number };
@@ -109,7 +121,27 @@ export interface ChallengeData {
     status: string;
     user: { id: string; username: string; image: string | null };
   }>;
-  _count?: { evidence: number; judgments: number };
+  evidence?: Array<{
+    id: string;
+    userId: string;
+    type: string;
+    url: string | null;
+    description: string | null;
+    createdAt: string;
+    user?: { id: string; username: string; image?: string | null };
+  }>;
+  judgments?: Array<{
+    id: string;
+    winnerId: string | null;
+    method: string;
+    aiModel: string | null;
+    reasoning: string | null;
+    confidence: number | null;
+    status: string;
+    createdAt: string;
+    winner?: { id: string; username: string } | null;
+  }>;
+  _count?: { evidence: number; judgments?: number; participants?: number };
 }
 
 export async function listChallenges(params?: {
@@ -131,13 +163,25 @@ export async function getChallenge(id: string): Promise<{ challenge: ChallengeDa
 export async function createChallenge(data: {
   title: string;
   description?: string;
+  marketType?: string;
+  proposition?: string;
   type?: string;
   stake?: number;
+  stakeToken?: string;
   deadline?: string;
+  eventTime?: string;
+  joinWindow?: string | null;
+  proofWindow?: string | null;
   rules?: string;
   evidenceType?: string;
+  settlementMode?: string;
+  proofSource?: string | null;
+  arbiter?: string | null;
+  fallbackRule?: string | null;
+  disputeWindow?: string | null;
   aiReview?: boolean;
   isPublic?: boolean;
+  visibility?: string;
 }): Promise<{ challenge: ChallengeData }> {
   return apiFetch("/challenges", { method: "POST", body: JSON.stringify(data) });
 }
@@ -152,7 +196,10 @@ export async function submitEvidence(id: string, data: {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
 
-export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1): Promise<{
+export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
+  providerId?: string;
+  model?: string;
+}): Promise<{
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
   model: string;
@@ -163,13 +210,40 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1): Promise<{
 }> {
   return apiFetch(`/challenges/${id}/judge`, {
     method: "POST",
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify({ tier, ...prefs }),
   });
 }
 
-/* ── AI Parse ── */
+export async function confirmVerdict(id: string): Promise<{
+  challenge: ChallengeData;
+  judgment: unknown;
+  settlement: { success: boolean; error?: string; txHash?: string };
+}> {
+  return apiFetch(`/challenges/${id}/confirm-verdict`, { method: "POST" });
+}
+
+/* ── AI Parse & Tweak ── */
+
+export interface StakeOption {
+  amount: number;
+  label: string;
+  reasoning: string;
+}
+
+export interface EvidenceOption {
+  type: string;
+  label: string;
+  reasoning: string;
+  required?: boolean;
+}
+
+export interface DeadlineOption {
+  duration: string;
+  reasoning: string;
+}
 
 export interface ParsedChallenge {
+  // Core
   title: string;
   type: string;
   suggestedStake: number;
@@ -177,11 +251,23 @@ export interface ParsedChallenge {
   rules: string;
   deadline: string;
   isPublic: boolean;
-  // Extended fields from LLM market compiler
+
+  // Intent classification
+  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
   marketType?: "yes_no" | "threshold" | "head_to_head" | "challenge";
   proposition?: string;
-  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
   subject?: string;
+
+  // AI-generated contextual recommendations (replaces hardcoded UI chips)
+  stakeOptions?: StakeOption[];
+  evidenceOptions?: EvidenceOption[];
+  deadlineOptions?: DeadlineOption[];
+
+  // AI's contextual thinking
+  redFlags?: string[];
+  recommendationSummary?: string;
+
+  // What's still unclear (AI should minimize these — defaults preferred)
   missingFields?: string[];
   clarifyingQuestion?: string;
 }
@@ -198,6 +284,20 @@ export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promis
   return apiFetch("/challenges/parse", {
     method: "POST",
     body: JSON.stringify({ input, tier }),
+  });
+}
+
+/**
+ * Natural-language tweak: "make it 30 days", "raise stake to 100", "add witness".
+ * Returns a new, fully-rethought ParsedChallenge (not just changed fields).
+ */
+export async function adjustDraft(
+  instruction: string,
+  draft: ParsedChallenge,
+): Promise<{ draft: ParsedChallenge; message: string; credits: number }> {
+  return apiFetch("/challenges/adjust-draft", {
+    method: "POST",
+    body: JSON.stringify({ instruction, draft }),
   });
 }
 
@@ -267,13 +367,13 @@ export async function presignEvidenceUpload(_challengeId: string, _filename: str
   });
 }
 
-export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, _prefs?: Record<string, unknown>): Promise<{ jobId: string }> {
+export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{ jobId: string }> {
   return apiFetch(`/challenges/${id}/judge/async`, {
     method: "POST",
-    body: JSON.stringify({ tier }),
+    body: JSON.stringify({ tier, ...prefs }),
   });
 }
 
-export async function getJudgeJob(jobId: string): Promise<{ job: { id: string; status: string; resultJson?: string; error?: string } }> {
+export async function getJudgeJob(jobId: string): Promise<{ jobId: string; status: string; result?: unknown; error?: string }> {
   return apiFetch(`/judge-jobs/${jobId}`);
 }

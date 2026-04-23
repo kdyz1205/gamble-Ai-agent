@@ -178,6 +178,49 @@ export async function executeChallengeJudgment(
     include: { winner: { select: { id: true, username: true } } },
   });
 
+  if (process.env.AI_VERDICT_MODE !== "auto_settle") {
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
+    });
+
+    await appendAuditLog({
+      action: AuditActions.JUDGMENT_COMPLETED,
+      actorUserId: payerUserId,
+      challengeId,
+      payload: {
+        winnerId: result.winnerId,
+        judgmentId: judgment.id,
+        confidence: result.confidence,
+        settlementOk: false,
+        reviewRequired: true,
+        reasoning: result.reasoning?.slice(0, 500),
+      },
+    });
+
+    const winnerName = judgment.winner?.username || "No one";
+    await prisma.activityEvent.create({
+      data: {
+        type: "challenge_verdict_recommended",
+        message: `"${challenge.title}" has an AI recommendation from ${aiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
+        userId: result.winnerId,
+        challengeId,
+      },
+    });
+
+    return {
+      ok: true,
+      judgment,
+      settlementResult: { success: false, error: "Manual confirmation required" },
+      challengeId,
+      model: aiModelLabel,
+      tierId,
+      creditsUsed: cost,
+      creditsRemaining: spend.balance,
+      txHash: spend.txHash || null,
+    };
+  }
+
   // Low confidence — don't settle, mark as disputed
   if (result.confidence < 0.85) {
     await prisma.challenge.update({

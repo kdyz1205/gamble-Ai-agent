@@ -8,11 +8,14 @@ import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 /**
  * Collapsed-by-default panel: pick LLM vendor + model for parse / AI judge calls.
  */
+import { DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
+
 function initialOraclePrefs() {
   const p = readOracleLlmPrefs();
-  const def = getProviderById(p.providerId);
+  const effectiveProviderId = p.providerId ?? DEFAULT_LLM_PROVIDER_ID;
+  const def = getProviderById(effectiveProviderId);
   return {
-    providerId: p.providerId,
+    providerId: effectiveProviderId,
     model: p.model ?? def?.defaultModel ?? "",
   };
 }

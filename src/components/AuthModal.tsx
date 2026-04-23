@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 
@@ -9,6 +9,19 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
 }
+
+// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+const NAVY = "#1E293B";
+const NAVY_DIM = "#64748B";
+const NAVY_FAINT = "#E2E8F0";
+const PEACH = "#FED7AA";        // orange-200 CTA
+const PEACH_HOVER = "#FDBA74";  // orange-300
+const PEACH_TEXT = "#7C2D12";   // orange-900
+const MINT = "#A7F3D0";
+const MINT_TEXT = "#065F46";
+const PINK = "#FFD1DC";
+const ROSE_BG = "#FECACA";
+const ROSE_TEXT = "#991B1B";
 
 export default function AuthModal({ open, onClose, onSuccess }: Props) {
   const [mode, setMode] = useState<"login" | "register">("register");
@@ -19,8 +32,34 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Reset transient state whenever modal closes so re-opening gives a clean slate
+  // (fixes "modal closed but stuck" — old success/error/loading flags could keep
+  // the overlay visible).
+  useEffect(() => {
+    if (!open) {
+      setError("");
+      setLoading(false);
+      setSuccess(false);
+    }
+  }, [open]);
+
   const handleGoogleLogin = () => {
-    signIn("google", { callbackUrl: "/" });
+    // Before starting the OAuth flow, nuke any stale state/PKCE cookies from a
+    // previously-abandoned attempt. Without this, if the user clicks Sign In,
+    // closes the modal, then clicks again, NextAuth compares the new URL state
+    // against a stale cookie and rejects the callback as "state mismatch".
+    const staleCookies = [
+      "next-auth.state",
+      "__Secure-next-auth.state",
+      "next-auth.pkce.code_verifier",
+      "__Secure-next-auth.pkce.code_verifier",
+      "next-auth.callback-url",
+      "__Secure-next-auth.callback-url",
+    ];
+    for (const name of staleCookies) {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    }
+    signIn("google", { callbackUrl: "/", prompt: "select_account" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +83,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
         setTimeout(() => {
           setSuccess(false);
           onClose();
-        }, 800);
+        }, 900);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -54,16 +93,26 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
   };
 
   const inputClass =
-    "w-full px-4 py-3 rounded-md text-sm font-mono tracking-wide bg-[#111113] text-[#E5E0D8] placeholder:text-[#8b8b83] border border-[#D4AF37]/20 focus:border-[#D4AF37]/60 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]/30 transition-colors";
+    "w-full px-4 py-3 text-sm font-medium bg-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none transition-colors";
+  const inputStyle: React.CSSProperties = {
+    color: NAVY,
+    borderRadius: "16px",
+    border: `1.5px solid ${NAVY_FAINT}`,
+    caretColor: PEACH_HOVER,
+  };
 
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — soft sky blur, not dark tribunal */}
           <motion.div
             className="fixed inset-0 z-50"
-            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(10px)" }}
+            style={{
+              background: "rgba(15, 23, 42, 0.25)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+            }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -77,53 +126,56 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-sm rounded-lg overflow-hidden relative"
+              className="w-full max-w-sm relative overflow-hidden lp-glass"
               style={{
-                background: "#0A0A0B",
-                border: "1px solid rgba(212,175,55,0.18)",
-                boxShadow:
-                  "0 24px 80px rgba(0,0,0,0.8), 0 0 40px rgba(212,175,55,0.06), inset 0 1px 0 rgba(212,175,55,0.08)",
+                borderRadius: "28px",
+                boxShadow: "0 20px 60px rgba(15,23,42,0.12), 0 4px 14px 0 rgba(251,146,60,0.18)",
               }}
               initial={{ scale: 0.92, y: 24, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.92, y: 24, opacity: 0 }}
-              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              transition={{ type: "spring", damping: 22, stiffness: 400 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Gold gradient top accent */}
+              {/* Floating candy orbs in card bg */}
               <div
-                className="h-[2px]"
-                style={{
-                  background:
-                    "linear-gradient(90deg, transparent, #D4AF37, #C5993A, #D4AF37, transparent)",
-                }}
+                className="absolute -top-6 -right-6 w-28 h-28 rounded-full opacity-60 pointer-events-none"
+                style={{ background: PINK, filter: "blur(24px)" }}
+              />
+              <div
+                className="absolute -bottom-8 -left-6 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+                style={{ background: PEACH, filter: "blur(26px)" }}
               />
 
-              <div className="p-6">
+              <div className="relative p-7">
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
                     <motion.div
-                      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg"
-                      style={{ background: "rgba(10,10,11,0.98)" }}
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center"
+                      style={{
+                        background: "rgba(255,255,255,0.92)",
+                        backdropFilter: "blur(8px)",
+                        borderRadius: "28px",
+                      }}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                     >
                       <motion.div
-                        className="w-16 h-16 rounded-lg flex items-center justify-center mb-4"
+                        className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
                         style={{
-                          background: "rgba(212,175,55,0.1)",
-                          border: "1px solid rgba(212,175,55,0.25)",
+                          background: MINT,
+                          boxShadow: "0 4px 14px 0 rgba(110,231,183,0.40)",
                         }}
-                        initial={{ scale: 0, rotate: -45 }}
-                        animate={{ scale: 1, rotate: 0 }}
-                        transition={{ type: "spring", damping: 15, stiffness: 200 }}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <span className="text-3xl">&#9878;</span>
+                        <span className="text-4xl">🎉</span>
                       </motion.div>
-                      <p className="text-sm font-serif font-bold text-[#D4AF37]">
-                        The Tribunal recognizes you.
+                      <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
+                        You&apos;re in! Let&apos;s play
                       </p>
                     </motion.div>
                   )}
@@ -132,18 +184,18 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                 {/* Header */}
                 <div className="text-center mb-6">
                   <motion.div
-                    className="inline-flex w-14 h-14 rounded-lg items-center justify-center mb-3 relative"
+                    className="inline-flex w-16 h-16 rounded-full items-center justify-center mb-3"
                     style={{
-                      background:
-                        "radial-gradient(ellipse at center, rgba(212,175,55,0.12) 0%, rgba(10,10,11,0.9) 70%)",
-                      border: "1px solid rgba(212,175,55,0.25)",
-                      boxShadow: "0 0 20px rgba(212,175,55,0.1)",
+                      background: `linear-gradient(135deg, ${PEACH} 0%, ${PINK} 100%)`,
+                      boxShadow: "0 4px 14px 0 rgba(251,146,60,0.39)",
                     }}
-                    whileHover={{ scale: 1.05 }}
+                    whileHover={{ scale: 1.06, rotate: -6 }}
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{
+                      y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+                    }}
                   >
-                    <span className="text-2xl" style={{ color: "#D4AF37" }}>
-                      &#9878;
-                    </span>
+                    <span className="text-3xl">🎲</span>
                   </motion.div>
 
                   <AnimatePresence mode="wait">
@@ -154,15 +206,13 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <h2 className="text-lg font-serif font-bold text-[#E5E0D8] tracking-wide">
-                        {mode === "register"
-                          ? "Enter the Tribunal"
-                          : "Return to the Tribunal"}
+                      <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
+                        {mode === "register" ? "Join LuckyPlay" : "Welcome back"}
                       </h2>
-                      <p className="text-xs font-mono text-[#8b8b83] mt-1.5 tracking-wider uppercase">
+                      <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Lex Divina awaits your challenge"
-                          : "Your seat at the bench remains"}
+                          ? "Let's make your first bet ✨"
+                          : "Good to see you again"}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -172,16 +222,15 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
-                  whileHover={{
-                    scale: 1.02,
-                    borderColor: "rgba(212,175,55,0.4)",
-                    background: "rgba(212,175,55,0.06)",
-                  }}
+                  whileHover={{ scale: 1.02, background: "#F8FAFC" }}
                   whileTap={{ scale: 0.97 }}
-                  className="w-full flex items-center justify-center gap-3 py-3 rounded-md text-sm font-mono font-bold text-[#E5E0D8] mb-4 transition-colors"
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                  className="w-full flex items-center justify-center gap-3 py-3 text-sm font-semibold mb-4"
                   style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(212,175,55,0.15)",
+                    color: NAVY,
+                    background: "#FFFFFF",
+                    border: `1.5px solid ${NAVY_FAINT}`,
+                    borderRadius: "9999px",
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -207,39 +256,26 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div
-                    className="flex-1 h-px"
-                    style={{
-                      background:
-                        "linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)",
-                    }}
-                  />
-                  <span className="text-[10px] font-mono font-bold text-[#8b8b83] uppercase tracking-widest">
+                  <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
+                  <span className="text-xs font-medium" style={{ color: NAVY_DIM }}>
                     or
                   </span>
-                  <div
-                    className="flex-1 h-px"
-                    style={{
-                      background:
-                        "linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)",
-                    }}
-                  />
+                  <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
                 </div>
 
                 {/* Error */}
                 <AnimatePresence>
                   {error && (
                     <motion.div
-                      className="animate-error-shake mb-4 px-3 py-2.5 rounded-md text-xs font-mono font-bold"
+                      className="animate-error-shake mb-4 px-4 py-2.5 text-xs font-semibold"
                       style={{
-                        background: "rgba(163,31,52,0.1)",
-                        color: "#A31F34",
-                        border: "1px solid rgba(163,31,52,0.2)",
-                        borderLeft: "3px solid #A31F34",
+                        background: ROSE_BG,
+                        color: ROSE_TEXT,
+                        borderRadius: "16px",
                       }}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
                     >
                       {error}
                     </motion.div>
@@ -249,16 +285,17 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <div>
-                    <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
                       Email
                     </label>
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="advocate@tribunal.law"
+                      placeholder="you@email.com"
                       required
                       className={inputClass}
+                      style={inputStyle}
                     />
                   </div>
 
@@ -273,16 +310,17 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         className="overflow-hidden"
                       >
                         <div>
-                          <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
-                            Title
+                          <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
+                            Nickname
                           </label>
                           <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Your chosen name"
+                            placeholder="What should we call you?"
                             required
                             className={inputClass}
+                            style={inputStyle}
                           />
                         </div>
                       </motion.div>
@@ -290,58 +328,52 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                   </AnimatePresence>
 
                   <div>
-                    <label className="block text-[10px] font-mono uppercase tracking-widest text-[#8b8b83] mb-1.5">
-                      Passphrase
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
+                      Password
                     </label>
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Your sealed word"
+                      placeholder="At least 6 characters"
                       required
                       minLength={6}
                       className={inputClass}
+                      style={inputStyle}
                     />
                   </div>
 
                   <motion.button
                     type="submit"
                     disabled={loading}
-                    whileHover={
-                      !loading
-                        ? {
-                            scale: 1.02,
-                            boxShadow:
-                              "0 6px 28px rgba(212,175,55,0.25), inset 0 1px 0 rgba(212,175,55,0.2)",
-                          }
-                        : {}
-                    }
-                    whileTap={!loading ? { scale: 0.97 } : {}}
-                    className="w-full py-3.5 rounded-md text-sm font-serif font-bold text-[#0A0A0B] disabled:opacity-60 transition-shadow tracking-wide"
+                    whileHover={!loading ? { scale: 1.02 } : {}}
+                    whileTap={!loading ? { scale: 0.96 } : {}}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                    className="w-full py-3.5 text-sm font-bold disabled:opacity-60 mt-2"
                     style={{
-                      background:
-                        "linear-gradient(135deg, #D4AF37, #B8963A, #D4AF37)",
-                      boxShadow:
-                        "0 4px 20px rgba(212,175,55,0.2), inset 0 1px 0 rgba(255,255,255,0.15)",
+                      color: PEACH_TEXT,
+                      background: PEACH,
+                      borderRadius: "9999px",
+                      boxShadow: "0 4px 14px 0 rgba(251,146,60,0.39)",
                     }}
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
                         <motion.span
-                          className="w-4 h-4 border-2 border-[#0A0A0B]/30 border-t-[#0A0A0B] rounded-full inline-block"
-                          animate={{ rotate: 360 }}
-                          transition={{
-                            duration: 0.8,
-                            repeat: Infinity,
-                            ease: "linear",
+                          className="w-4 h-4 rounded-full border-2 inline-block"
+                          style={{
+                            borderColor: `${PEACH_TEXT}40`,
+                            borderTopColor: PEACH_TEXT,
                           }}
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
                         />
-                        {mode === "register" ? "Sealing..." : "Entering..."}
+                        {mode === "register" ? "Creating…" : "Signing in…"}
                       </span>
                     ) : mode === "register" ? (
-                      "Seal Your Oath"
+                      "Start Playing 🎲"
                     ) : (
-                      "Enter"
+                      "Sign In ✨"
                     )}
                   </motion.button>
                 </form>
@@ -353,11 +385,14 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       setMode(mode === "register" ? "login" : "register");
                       setError("");
                     }}
-                    className="text-xs font-mono text-[#8b8b83] hover:text-[#D4AF37] transition-colors tracking-wide"
+                    className="text-xs font-medium transition-colors"
+                    style={{ color: NAVY_DIM }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = PEACH_TEXT)}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = NAVY_DIM)}
                   >
                     {mode === "register"
-                      ? "Already sworn in? Return to the Tribunal"
-                      : "No oath yet? Enter the Tribunal"}
+                      ? "Already have an account? Sign in"
+                      : "New here? Create an account"}
                   </button>
                 </div>
               </div>

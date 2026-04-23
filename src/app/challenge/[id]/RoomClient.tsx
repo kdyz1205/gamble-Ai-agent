@@ -4,9 +4,23 @@ import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ChallengeVerdictPanel from "@/components/ChallengeVerdictPanel";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
+
+// LuckyPlay palette
+const NAVY = "#1E293B";
+const NAVY_DIM = "#64748B";
+const NAVY_FAINT = "#E2E8F0";
+const PEACH = "#FED7AA";
+const PEACH_TEXT = "#7C2D12";
+const ORANGE_GLOW = "rgba(251,146,60,0.39)";
+const MINT = "#A7F3D0";
+const MINT_TEXT = "#065F46";
+const CREAM = "#FFEDD5";
+const ROSE_BG = "#FECACA";
+const ROSE_TEXT = "#991B1B";
 
 export default function RoomClient({
   challengeId,
@@ -23,148 +37,78 @@ export default function RoomClient({
 
   const [showAuth, setShowAuth] = useState(false);
   const [joinMsg, setJoinMsg] = useState("");
+  const [joinErr, setJoinErr] = useState(false);
 
   const handleAccept = useCallback(async () => {
-    if (!user) {
-      setShowAuth(true);
-      return;
-    }
+    if (!user) { setShowAuth(true); return; }
     try {
       await api.acceptChallenge(challengeId);
-      setJoinMsg("You joined the challenge. Submit your evidence below.");
+      setJoinMsg("You joined the challenge. Submit your evidence below 👇");
+      setJoinErr(false);
       await updateSession();
     } catch (err) {
-      setJoinMsg(
-        err instanceof Error
-          ? err.message
-          : "Could not join — you may already be in this challenge.",
-      );
+      setJoinMsg(err instanceof Error ? err.message : "Could not join — you may already be in this challenge.");
+      setJoinErr(true);
     }
   }, [challengeId, user, updateSession]);
 
-  const creditsBadge = user ? (
-    <span
-      className="px-2 py-0.5 rounded-md text-[9px] font-black"
-      style={{
-        background:
-          (user.credits ?? 0) > 0
-            ? "rgba(0,232,122,0.15)"
-            : "rgba(255,59,48,0.15)",
-        color: (user.credits ?? 0) > 0 ? "#00e87a" : "#ff3b30",
-        border: `1px solid ${(user.credits ?? 0) > 0 ? "rgba(0,232,122,0.3)" : "rgba(255,59,48,0.3)"}`,
-      }}
-    >
-      {user.credits ?? 0} credits
-    </span>
-  ) : null;
-
   return (
-    <div
-      className="relative min-h-screen"
-      style={{ background: "#06060f" }}
-    >
-      {/* Header */}
-      <header
-        className="sticky top-0 z-30 glass-panel"
-        style={{ borderTop: "none", borderLeft: "none", borderRight: "none" }}
-      >
-        <div className="plasma-line" />
-        <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3">
-          <motion.button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2.5 group"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{
-                background: "linear-gradient(135deg, #7c5cfc, #00d4c8)",
-                boxShadow: "0 0 16px rgba(124,92,252,0.4)",
-              }}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-              >
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
+    <div className="relative min-h-screen">
+      {/* Header — LuckyPlay consistent */}
+      <header className="relative z-20 flex items-center justify-between px-5 py-4">
+        <button onClick={() => router.push("/")}
+          className="text-base font-bold tracking-tight active:scale-95 transition-transform"
+          style={{ color: NAVY }}>
+          LuckyPlay
+        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/"
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
+            style={{ color: PEACH_TEXT, background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "9999px" }}>
+            + New bet
+          </Link>
+          {user ? (
+            <div className="flex items-center gap-2 px-3 py-1.5"
+              style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px", boxShadow: "0 4px 14px 0 rgba(15,23,42,0.04)" }}>
+              <span className="w-6 h-6 flex items-center justify-center text-[11px] font-bold"
+                style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px" }}>
+                {user.username.charAt(0).toUpperCase()}
+              </span>
+              <span className="text-xs font-bold" style={{ color: NAVY }}>{user.username}</span>
+              <span className="text-[11px] font-bold px-1.5 py-0.5"
+                style={{ background: CREAM, color: PEACH_TEXT, borderRadius: "9999px" }}>
+                {user.credits ?? 0}
+              </span>
             </div>
-            <span className="text-sm font-extrabold text-text-primary group-hover:text-white transition-colors">
-              ChallengeAI
-            </span>
-          </motion.button>
-
-          <div className="flex items-center gap-2.5">
-            <motion.button
-              onClick={() => router.push("/")}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-text-muted border border-border-subtle"
-              style={{ background: "rgba(255,255,255,0.04)" }}
-              whileHover={{
-                color: "#f0f0ff",
-                background: "rgba(255,255,255,0.08)",
-              }}
-              whileTap={{ scale: 0.96 }}
-            >
-              New Challenge
+          ) : (
+            <motion.button onClick={() => setShowAuth(true)}
+              whileTap={{ scale: 0.95 }}
+              className="px-4 py-2 text-sm font-bold"
+              style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
+              Sign In ✨
             </motion.button>
-
-            {user ? (
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border-subtle"
-                style={{ background: "rgba(255,255,255,0.04)" }}
-              >
-                <div
-                  className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black text-white"
-                  style={{
-                    background: "linear-gradient(135deg, #7c5cfc, #00d4c8)",
-                  }}
-                >
-                  {user.username.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-xs font-bold text-text-secondary">
-                  {user.username}
-                </span>
-                {creditsBadge}
-              </div>
-            ) : (
-              <motion.button
-                onClick={() => setShowAuth(true)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white"
-                style={{
-                  background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                }}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                Sign In
-              </motion.button>
-            )}
-          </div>
+          )}
         </div>
       </header>
 
-      {/* Room content */}
-      <main className="max-w-2xl mx-auto px-4 pt-6 pb-32 space-y-4">
+      {/* Main */}
+      <main className="relative z-10 max-w-xl mx-auto px-4 pt-2 pb-24 space-y-4">
         {/* Join message */}
         {joinMsg && (
-          <div
-            className="rounded-xl px-4 py-3 text-xs font-bold"
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="px-4 py-3 text-sm font-bold"
             style={{
-              background: "rgba(0,232,122,0.06)",
-              border: "1px solid rgba(0,232,122,0.12)",
-              color: "#00e87a",
+              background: joinErr ? ROSE_BG : MINT,
+              color: joinErr ? ROSE_TEXT : MINT_TEXT,
+              borderRadius: "16px",
             }}
           >
-            {joinMsg}
-          </div>
+            {joinErr ? "⚠️ " : "🎉 "}{joinMsg}
+          </motion.div>
         )}
 
-        {/* Verdict panel — the core room UI */}
         {user ? (
           <ChallengeVerdictPanel
             challengeId={challengeId}
@@ -173,48 +117,36 @@ export default function RoomClient({
             onCreditsMayChange={() => updateSession()}
           />
         ) : (
-          <div
-            className="rounded-2xl p-8 text-center space-y-4"
-            style={{
-              background:
-                "linear-gradient(165deg, rgba(18,18,40,0.98) 0%, rgba(8,8,20,0.98) 100%)",
-              border: "1px solid rgba(124,92,252,0.15)",
-            }}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className="lp-glass p-8 text-center"
+            style={{ borderRadius: "28px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}
           >
-            <h2 className="text-xl font-black text-text-primary">{title}</h2>
-            <p className="text-sm text-text-muted">
-              Sign in to view details, submit evidence, or accept this
-              challenge.
+            <div className="text-4xl mb-3">🎲</div>
+            <h2 className="text-xl font-extrabold mb-2" style={{ color: NAVY }}>{title}</h2>
+            <p className="text-sm font-medium mb-5" style={{ color: NAVY_DIM }}>
+              Sign in to view details, submit evidence, or accept this bet.
             </p>
-            <motion.button
-              onClick={() => setShowAuth(true)}
-              className="px-6 py-3 rounded-xl text-sm font-extrabold text-white"
-              style={{
-                background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                boxShadow: "0 4px 20px rgba(124,92,252,0.35)",
-              }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              Sign In to Continue
+            <motion.button onClick={() => setShowAuth(true)}
+              whileTap={{ scale: 0.95 }}
+              className="px-6 py-3 text-sm font-extrabold"
+              style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
+              Sign In to Continue ✨
             </motion.button>
-          </div>
+          </motion.div>
         )}
 
-        {/* Accept button for non-participants */}
+        {/* Accept button — only show when user is signed in but NOT yet a participant */}
         {user && (
           <div className="flex flex-wrap gap-2 justify-center">
             <motion.button
+              whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white"
-              style={{
-                background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)",
-                boxShadow: "0 4px 20px rgba(124,92,252,0.3)",
-              }}
+              className="px-5 py-2.5 text-sm font-bold"
+              style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
               onClick={handleAccept}
             >
-              I&apos;m the opponent — Accept
+              🎲 I&apos;m the opponent — Accept
             </motion.button>
           </div>
         )}

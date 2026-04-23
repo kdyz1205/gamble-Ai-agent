@@ -3,13 +3,15 @@ import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
-import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "@/lib/credits";
+import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { ChallengeStatus } from "@/lib/enums";
 
 /**
  * POST /api/challenges/[id]/judge
  * Body: { tier?: 1|2|3 }
  *
- * Burn 1 model token of the chosen tier, then AI judges + settles.
+ * Burn 1 model token of the chosen tier, then AI writes a recommended verdict.
+ * A human must confirm the recommendation before credits are settled.
  */
 export async function POST(
   req: NextRequest,
@@ -20,14 +22,16 @@ export async function POST(
 
   const { id } = await params;
   let tierId: TierId = 1;
+  let providerIdOverride: string | undefined;
+  let modelOverride: string | undefined;
   try {
     const body = await req.json();
     if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
+    if (typeof body?.providerId === "string") providerIdOverride = body.providerId;
+    if (typeof body?.model === "string") modelOverride = body.model;
   } catch { /* default to haiku */ }
 
   const cost = TIER_MULTIPLIER[tierId];
-  const balance = await getCredits(user.userId);
-  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
@@ -44,8 +48,16 @@ export async function POST(
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
   if (!["live", "judging"].includes(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
 
-  const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
-  if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+  // Free Mode: when the challenge has no stake, AI judgment is free.
+  // Paid challenges still charge the user's credits for the judgment inference.
+  const isFreeChallenge = (challenge.stake ?? 0) === 0;
+
+  if (!isFreeChallenge) {
+    const balance = await getCredits(user.userId);
+    if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
+    const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
+    if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+  }
 
   const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
   const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
@@ -57,15 +69,18 @@ export async function POST(
   const aiModel = getAiModel(tierId);
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
   const providerId =
-    envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
+    providerIdOverride && getProviderById(providerIdOverride)
+      ? providerIdOverride
+      : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
   const pdef = getProviderById(providerId);
   // tier model names are Claude IDs; only valid when routing to Anthropic.
   // For other providers, fall back to that provider's default model so the
   // call doesn't 404 and silently degrade to the random-winner fallback.
   const judgeModel =
-    providerId === DEFAULT_LLM_PROVIDER_ID
+    modelOverride?.trim() ||
+    (providerId === DEFAULT_LLM_PROVIDER_ID
       ? aiModel.model
-      : (pdef?.defaultModel ?? aiModel.model);
+      : (pdef?.defaultModel ?? aiModel.model));
   const aiModelLabel = `${pdef?.shortLabel ?? aiModel.displayName} · ${judgeModel}`;
 
   const result = await judgeChallenge({
@@ -94,34 +109,31 @@ export async function POST(
     include: { winner: { select: { id: true, username: true } } },
   });
 
-  let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
-  if (challenge.stake > 0) {
-    settlementResult = await settleChallenge(
-      id, result.winnerId, challenge.stake,
-      challenge.participants.map((p: { userId: string }) => ({ userId: p.userId })),
-    );
-  }
-
-  await prisma.challenge.update({ where: { id }, data: { status: "settled", aiModel: aiModelLabel } });
+  await prisma.challenge.update({
+    where: { id },
+    data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
+  });
 
   const winnerName = judgment.winner?.username || "No one";
   await prisma.activityEvent.create({
     data: {
-      type: "challenge_settled",
-      message: `"${challenge.title}" judged by ${aiModelLabel} — ${winnerName} wins!${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}`,
+      type: "challenge_verdict_recommended",
+      message: `"${challenge.title}" has an AI recommendation from ${aiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
       userId: result.winnerId,
       challengeId: id,
     },
   });
 
+  const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
   return Response.json({
     judgment,
-    settlement: settlementResult,
-    challenge: { id, status: "settled" },
+    settlement: { success: false, error: "Manual confirmation required" },
+    challenge: { id, status: ChallengeStatus.disputed },
     model: aiModelLabel,
     tierId,
-    creditsUsed: cost,
-    creditsRemaining: spend.balance,
-    txHash: spend.txHash || settlementResult.txHash || null,
+    creditsUsed: isFreeChallenge ? 0 : cost,
+    creditsRemaining: isFreeChallenge ? postBalance : undefined,
+    txHash: null,
+    freeMode: isFreeChallenge,
   });
 }

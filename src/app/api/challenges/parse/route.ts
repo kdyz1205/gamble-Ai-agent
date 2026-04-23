@@ -22,37 +22,25 @@ export async function POST(req: NextRequest) {
     }
 
     const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
-    const cost = TIER_MULTIPLIER[tierId];
     const balance = await getCredits(user.userId);
-    if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
-    // Parse FIRST — only charge if AI was actually used (not fallback)
+    // Parse is ALWAYS FREE — it's the top of the funnel (chat → structured draft),
+    // the cost is trivial (~$0.001 per call on Haiku), and charging here would
+    // scare off new users before they experience the product. Credit cost kicks
+    // in later when real stakes + AI judgment are involved.
     const { model: modelName } = getAiModel(tierId);
     const parsed = await parseChallenge(input, modelName);
     const clarifications = generateClarifications(parsed);
-
-    // Only charge if real AI was used (check if ANTHROPIC_API_KEY exists)
-    let creditsUsed = 0;
-    let creditsRemaining = balance;
-    let txHash: string | null = null;
-
-    if (process.env.ANTHROPIC_API_KEY) {
-      const result = await spendForInference(user.userId, tierId, "parse", `Parse: "${input.slice(0, 50)}…"`);
-      if (result.success) {
-        creditsUsed = cost;
-        creditsRemaining = result.balance;
-        txHash = result.txHash || null;
-      }
-    }
 
     return Response.json({
       parsed,
       clarifications,
       model: getAiModel(tierId).displayName,
       tierId,
-      creditsUsed,
-      creditsRemaining,
-      txHash,
+      creditsUsed: 0,
+      creditsRemaining: balance,
+      txHash: null,
+      freeMode: true,
     });
   } catch (err) {
     console.error("Parse error:", err);

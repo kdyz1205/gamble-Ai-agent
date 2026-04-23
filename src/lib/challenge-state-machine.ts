@@ -29,7 +29,12 @@ const EDGES: Record<ChallengeStatus, ReadonlySet<ChallengeStatus>> = {
   ]),
   [ChallengeStatus.settled]: new Set([]),
   [ChallengeStatus.cancelled]: new Set([]),
-  [ChallengeStatus.disputed]: new Set([ChallengeStatus.judging, ChallengeStatus.settled, ChallengeStatus.cancelled]),
+  [ChallengeStatus.disputed]: new Set([
+    ChallengeStatus.judging,
+    ChallengeStatus.pending_settlement,
+    ChallengeStatus.settled,
+    ChallengeStatus.cancelled,
+  ]),
 };
 
 export function validateChallengeTransition(

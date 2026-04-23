@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
+import EvidenceUploader from "./EvidenceUploader";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -22,6 +23,7 @@ function statusLabel(s: string): string {
     live: "In progress",
     judging: "Ready for AI verdict",
     pending_settlement: "Settling on-chain\u2026",
+    disputed: "AI recommendation ready",
     settled: "Settled",
     cancelled: "Cancelled",
     draft: "Draft",
@@ -35,6 +37,7 @@ function statusColor(s: string) {
     live:    { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     judging:            { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     pending_settlement: { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
+    disputed:           { color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     settled:            { color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
   };
   return m[s] ?? m.open;
@@ -125,6 +128,7 @@ export default function ChallengeVerdictPanel({
   const isCreator = challenge?.creatorId === userId;
   const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
   const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
+  const canConfirmAi = challenge && challenge.status === "disputed" && isCreator && challenge.judgments.length > 0;
   const settled = challenge?.status === "settled";
 
   const submitEvidence = async () => {
@@ -215,6 +219,21 @@ export default function ChallengeVerdictPanel({
     }
   };
 
+  const confirmAiRecommendation = async () => {
+    if (!challenge) return;
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      await api.confirmVerdict(challenge.id);
+      await refresh();
+      onCreditsMayChange();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not confirm AI recommendation");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyLink = () => {
     const url = `${window.location.origin}/challenge/${challengeId}`;
     void navigator.clipboard.writeText(url);
@@ -225,7 +244,7 @@ export default function ChallengeVerdictPanel({
   if (loadErr) {
     return (
       <div className="rounded-2xl p-5 text-sm font-bold glow-danger"
-           style={{ background: "rgba(255,71,87,0.06)", color: "#ff4757" }}>
+           style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "16px" }}>
         {loadErr}
       </div>
     );
@@ -260,22 +279,19 @@ export default function ChallengeVerdictPanel({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden"
+      className="lp-glass overflow-hidden"
       style={{
-        background: "linear-gradient(165deg, rgba(18,18,40,0.98) 0%, rgba(8,8,20,0.98) 100%)",
-        border: "1px solid rgba(124,92,252,0.15)",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.45), 0 0 1px rgba(124,92,252,0.15) inset",
+        borderRadius: "28px",
+        boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
       }}
     >
-      <div className="plasma-line" />
-
       <div className="p-6 md:p-7 space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent mb-1.5">Challenge Command</p>
-            <h3 className="text-xl font-black text-text-primary leading-tight">{challenge.title}</h3>
-            <p className="text-xs text-text-muted mt-1.5 max-w-xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The bet</p>
+            <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
+            <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B" }}>
               {challenge.rules || "AI reviews evidence against your challenge rules, then settles credits."}
             </p>
           </div>
@@ -329,52 +345,54 @@ export default function ChallengeVerdictPanel({
         </div>
 
         {/* Participants + evidence checklist */}
-        <div className="grid gap-3 sm:grid-cols-2 rounded-2xl p-3"
-             style={{ background: "rgba(6,6,15,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="grid gap-2 sm:grid-cols-2">
           {accepted.map((p, i) => {
             const ev = evidenceByUser.get(p.user.id);
             const isMe = p.user.id === userId;
+            const isCreator = p.role === "creator";
             return (
               <motion.div
                 key={p.id}
-                className="flex items-start gap-3 rounded-xl px-3 py-2.5 shine-card"
+                className="flex items-start gap-3 px-3.5 py-3"
                 style={{
-                  background: isMe ? "rgba(124,92,252,0.04)" : "rgba(255,255,255,0.02)",
-                  border: isMe ? "1px solid rgba(124,92,252,0.12)" : "1px solid transparent",
+                  background: "#FFFFFF",
+                  border: isMe ? "1.5px solid #FED7AA" : "1px solid #E2E8F0",
+                  borderRadius: "18px",
                 }}
-                initial={{ opacity: 0, x: i === 0 ? -10 : 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05, type: "spring", stiffness: 400, damping: 22 }}
               >
                 <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-black text-white shrink-0"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
                   style={{
-                    background: p.role === "creator" ? "linear-gradient(135deg, #7c5cfc, #5b3fd9)" : "linear-gradient(135deg, #00d4c8, #0d9488)",
-                    boxShadow: p.role === "creator" ? "0 0 12px rgba(124,92,252,0.2)" : "0 0 12px rgba(0,212,200,0.2)",
+                    background: isCreator ? "#FED7AA" : "#E9D5FF",
+                    color: isCreator ? "#7C2D12" : "#6B21A8",
                   }}
                 >
                   {p.user.username.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-text-primary truncate">
+                  <p className="text-sm font-bold truncate" style={{ color: "#1E293B" }}>
                     {p.user.username}
-                    {isMe && <span className="text-[9px] text-accent ml-1.5">(you)</span>}
+                    {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
                   </p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                    {p.role} · {ev ? "Evidence in" : "Waiting"}
+                  <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
+                    {isCreator ? "Creator" : "Opponent"} · {ev ? "Evidence in" : "Waiting"}
                   </p>
                   {ev && (
-                    <p className="text-xs text-text-secondary mt-1 line-clamp-2">{ev.description || ev.url || "—"}</p>
+                    <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
                   )}
                 </div>
                 {ev && (
                   <motion.div
-                    className="w-5 h-5 rounded-full bg-success flex items-center justify-center mt-0.5 shrink-0"
+                    className="w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0"
+                    style={{ background: "#A7F3D0" }}
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 400 }}
                   >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#065F46" strokeWidth="3" strokeLinecap="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </motion.div>
@@ -389,7 +407,7 @@ export default function ChallengeVerdictPanel({
           {verdictErr && (
             <motion.div
               className="text-xs font-bold px-4 py-3 rounded-xl glow-danger"
-              style={{ background: "rgba(255,71,87,0.06)", color: "#ff4757" }}
+              style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "16px" }}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -399,83 +417,46 @@ export default function ChallengeVerdictPanel({
           )}
         </AnimatePresence>
 
-        {/* Evidence form */}
+        {/* Evidence form — rich uploader with camera, file, URL, and text */}
         <AnimatePresence mode="wait">
           {canSubmitEvidence && (
-            <motion.div
-              key="evidence-form"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-3 overflow-hidden"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "rgba(124,92,252,0.15)" }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                </div>
-                <p className="text-xs font-bold text-accent uppercase tracking-wider">Your evidence</p>
-              </div>
-              <textarea
-                value={evidenceText}
-                onChange={(e) => setEvidenceText(e.target.value)}
-                placeholder="Describe what you did, times, reps, links to video, etc. Be specific — the AI uses this to judge."
-                rows={4}
-                className="w-full rounded-xl px-4 py-3 text-sm font-medium text-text-primary placeholder:text-text-muted/50 bg-bg-input border border-border-subtle resize-y min-h-[100px] transition-all"
-              />
-              <input
-                value={evidenceUrl}
-                onChange={(e) => setEvidenceUrl(e.target.value)}
-                placeholder="HTTPS link to image or direct MP4/WebM (for AI vision)"
-                className="w-full rounded-xl px-4 py-3 text-sm font-medium text-text-primary placeholder:text-text-muted/50 bg-bg-input border border-border-subtle transition-all"
-              />
-              <motion.button
-                type="button"
-                disabled={busy || !evidenceText.trim()}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => void submitEvidence()}
-                className="shimmer-btn w-full py-3 rounded-xl text-sm font-extrabold text-white disabled:opacity-40"
-                style={{
-                  background: "linear-gradient(135deg, #00d4c8, #7c5cfc)",
-                  boxShadow: "0 8px 32px rgba(0,212,200,0.2)",
-                }}
-              >
-                {busy ? "Submitting..." : "Submit Evidence"}
-              </motion.button>
-            </motion.div>
+            <EvidenceUploader
+              challengeId={challenge.id}
+              evidenceType={challenge.evidenceType || "text"}
+              onSubmitted={async () => {
+                await refresh();
+                onCreditsMayChange();
+              }}
+            />
           )}
         </AnimatePresence>
 
         {/* AI Judge section */}
         {challenge.status === "judging" && (
           <motion.div
-            className="space-y-4 p-5 rounded-2xl"
+            className="space-y-4 p-5"
             style={{
-              background: "rgba(245,166,35,0.04)",
-              border: "1px solid rgba(245,166,35,0.15)",
+              background: "#FFFFFF",
+              border: "1px solid #E2E8F0",
+              borderRadius: "24px",
             }}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
           >
-            <div className="flex items-center gap-3">
-              <motion.div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, #f5a623, #ea580c)" }}
-                animate={{ boxShadow: ["0 0 12px rgba(245,166,35,0.2)", "0 0 20px rgba(245,166,35,0.4)", "0 0 12px rgba(245,166,35,0.2)"] }}
-                transition={{ duration: 2, repeat: Infinity }}
+            <div className="flex items-start gap-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: "#FED7AA" }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C2D12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
-              </motion.div>
+              </div>
               <div>
-                <p className="text-sm font-extrabold text-amber-200">All evidence is in</p>
-                <p className="text-[10px] text-text-muted">
-                  {isCreator ? "Choose AI tier and render the verdict." : "Waiting for the creator to start the AI verdict."}
+                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All evidence is in</p>
+                <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
+                  {isCreator ? "AI writes a recommendation. You confirm before credits settle." : "Waiting for the creator to start AI judgment."}
                 </p>
               </div>
             </div>
@@ -483,57 +464,64 @@ export default function ChallengeVerdictPanel({
             {isCreator && challenge.judgments.length === 0 && (
               <>
                 <div className="grid grid-cols-3 gap-2">
-                  {([1, 2, 3] as const).map((t) => (
-                    <motion.button
-                      key={t}
-                      type="button"
-                      onClick={() => setTier(t)}
-                      whileHover={{ scale: 1.03, y: -1 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="relative rounded-xl p-3 text-center transition-all"
-                      style={{
-                        background: tier === t ? "rgba(245,166,35,0.12)" : "rgba(255,255,255,0.03)",
-                        border: `1px solid ${tier === t ? "rgba(245,166,35,0.35)" : "rgba(255,255,255,0.06)"}`,
-                      }}
-                    >
-                      <p className="text-xs font-black" style={{ color: tier === t ? "#f5a623" : "rgba(240,240,255,0.4)" }}>
-                        {TIER_LABEL[t]}
-                      </p>
-                      <p className="text-[9px] text-text-muted mt-0.5">{TIER_DESC[t]}</p>
-                      <p className="text-[10px] font-bold mt-1" style={{ color: tier === t ? "#f5a623" : "rgba(240,240,255,0.3)" }}>
-                        {TIER_COST[t]} cr
-                      </p>
-                    </motion.button>
-                  ))}
+                  {([1, 2, 3] as const).map((t) => {
+                    const selected = tier === t;
+                    return (
+                      <motion.button
+                        key={t}
+                        type="button"
+                        onClick={() => setTier(t)}
+                        whileTap={{ scale: 0.97 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                        className="p-3 text-center transition-colors"
+                        style={{
+                          background: selected ? "#FED7AA" : "#FFFFFF",
+                          border: selected ? "1.5px solid #FDBA74" : "1px solid #E2E8F0",
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <p className="text-xs font-bold" style={{ color: selected ? "#7C2D12" : "#334155" }}>
+                          {TIER_LABEL[t]}
+                        </p>
+                        <p className="text-[10px] font-medium mt-0.5" style={{ color: selected ? "#9A3412" : "#64748B" }}>{TIER_DESC[t]}</p>
+                        <p className="text-[11px] font-bold mt-1" style={{ color: selected ? "#7C2D12" : "#94A3B8" }}>
+                          {TIER_COST[t]} cr
+                        </p>
+                      </motion.button>
+                    );
+                  })}
                 </div>
                 <motion.button
                   type="button"
                   disabled={busy || !canRunAi}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
                   onClick={() => void runVerdict()}
-                  className="shimmer-btn w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40"
+                  className="w-full py-3.5 text-sm font-extrabold disabled:opacity-40"
                   style={{
-                    background: "linear-gradient(135deg, #f5a623, #7c5cfc)",
-                    boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
+                    color: "#7C2D12",
+                    background: "#FED7AA",
+                    borderRadius: "9999px",
+                    boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "AI Analyzing..." : `Run AI Verdict (${TIER_COST[tier]} credits)`}
+                  {busy ? "Analyzing…" : `Generate AI recommendation · ${TIER_COST[tier]} cr`}
                 </motion.button>
                 <motion.button
                   type="button"
                   disabled={busy || !canRunAi}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 22 }}
                   onClick={() => void runVerdictAsync()}
-                  className="w-full py-3 rounded-xl text-xs font-extrabold border border-amber-400/30 text-amber-100/80 disabled:opacity-40"
-                  style={{ background: "rgba(245,166,35,0.06)" }}
+                  className="w-full py-2.5 text-xs font-semibold disabled:opacity-40"
+                  style={{ color: "#64748B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
-                  Background verdict (recommended for video)
+                  Run in background (recommended for long video)
                 </motion.button>
                 {asyncHint && (
                   <motion.p
-                    className="text-[11px] font-bold text-amber-200/90 text-center"
+                    className="text-xs font-semibold text-center"
+                    style={{ color: "#64748B" }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
@@ -542,6 +530,35 @@ export default function ChallengeVerdictPanel({
                 )}
               </>
             )}
+          </motion.div>
+        )}
+
+        {canConfirmAi && verdictRow && (
+          <motion.div
+            className="space-y-3 p-5"
+            style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "24px" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          >
+            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>AI recommendation ready</p>
+            <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
+              Not final yet. Confirm to settle credits, or leave for manual review.
+            </p>
+            <motion.button
+              type="button"
+              disabled={busy}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => void confirmAiRecommendation()}
+              className="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40"
+              style={{
+                background: "linear-gradient(135deg, #f5a623, #7c5cfc)",
+                boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
+              }}
+            >
+              {busy ? "Settling..." : "Confirm AI Recommendation & Settle"}
+            </motion.button>
           </motion.div>
         )}
 
@@ -606,9 +623,9 @@ export default function ChallengeVerdictPanel({
               </div>
 
               {/* Reasoning with typewriter effect */}
-              <div className="rounded-xl p-4" style={{ background: "rgba(6,6,15,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">AI Reasoning</p>
-                <p className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed">
+              <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>AI Reasoning</p>
+                <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
               </div>
@@ -621,63 +638,62 @@ export default function ChallengeVerdictPanel({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-4 rounded-2xl overflow-hidden"
+            className="mt-4 overflow-hidden"
             style={{
-              background: "rgba(13,13,30,0.95)",
-              border: "1px solid rgba(124,92,252,0.2)",
-              boxShadow: "0 0 40px rgba(124,92,252,0.08)",
+              background: "#FFFFFF",
+              border: "1px solid #E2E8F0",
+              borderRadius: "24px",
+              boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
             }}
           >
-            <div className="h-0.5 bg-gradient-to-r from-accent via-teal to-accent" />
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
-                  AI Verdict Receipt
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>
+                  Verdict receipt
                 </span>
-                <span className="text-[10px] text-text-muted">
+                <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
                   {verdictRow.aiModel}
                 </span>
               </div>
 
-              <h4 className="text-base font-extrabold text-text-primary">
+              <h4 className="text-base font-extrabold" style={{ color: "#1E293B" }}>
                 {challenge.title}
               </h4>
 
               {verdictRow.winner && (
                 <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                  style={{ background: "rgba(0,232,122,0.08)", border: "1px solid rgba(0,232,122,0.15)" }}
+                  className="flex items-center gap-2 px-3 py-2"
+                  style={{ background: "#A7F3D0", borderRadius: "12px" }}
                 >
-                  <span className="text-lg">&#127942;</span>
-                  <span className="text-sm font-extrabold text-[#00e87a]">
-                    {verdictRow.winner.username} wins!
+                  <span className="text-lg">🏆</span>
+                  <span className="text-sm font-extrabold" style={{ color: "#065F46" }}>
+                    {verdictRow.winner.username} wins
                   </span>
                 </div>
               )}
 
               {verdictRow.reasoning && (
-                <p className="text-xs text-text-secondary leading-relaxed italic">
-                  &ldquo;{verdictRow.reasoning}&rdquo;
+                <p className="text-sm font-medium leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
+                  {verdictRow.reasoning}
                 </p>
               )}
 
               {verdictRow.confidence != null && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] text-text-muted">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-semibold" style={{ color: "#64748B" }}>
                     <span>Confidence</span>
                     <span>{Math.round(verdictRow.confidence * 100)}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-1.5 overflow-hidden" style={{ background: "#F1F5F9", borderRadius: "999px" }}>
                     <motion.div
-                      className="h-full rounded-full"
+                      className="h-full"
                       style={{
-                        background: verdictRow.confidence >= 0.85
-                          ? "linear-gradient(90deg, #00e87a, #00d4c8)"
-                          : "linear-gradient(90deg, #f5a623, #ff3b30)",
+                        background: verdictRow.confidence >= 0.85 ? "#A7F3D0" : "#FED7AA",
+                        borderRadius: "999px",
                       }}
                       initial={{ width: 0 }}
                       animate={{ width: `${verdictRow.confidence * 100}%` }}
-                      transition={{ duration: 1, ease: "easeOut" }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
                     />
                   </div>
                 </div>
@@ -685,15 +701,15 @@ export default function ChallengeVerdictPanel({
 
               <motion.button
                 onClick={() => {
-                  const text = `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins! (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
+                  const text = `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
                   void navigator.clipboard.writeText(text);
                 }}
-                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-text-secondary border border-border-subtle transition-all hover:border-accent/30 hover:text-text-primary"
-                style={{ background: "rgba(255,255,255,0.04)" }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className="w-full py-2.5 text-sm font-bold transition-colors"
+                style={{ color: "#334155", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
               >
-                Share Result
+                Share result
               </motion.button>
             </div>
           </motion.div>
@@ -703,27 +719,27 @@ export default function ChallengeVerdictPanel({
         <div className="flex flex-wrap gap-2 pt-1">
           <motion.button
             type="button"
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
             onClick={copyLink}
-            className="shimmer-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-border-subtle"
-            style={{ background: "rgba(255,255,255,0.04)", color: "rgba(240,240,255,0.85)" }}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold transition-colors"
+            style={{ background: "#FFFFFF", color: "#334155", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            {copied ? "Copied!" : "Copy invite link"}
+            {copied ? "Copied" : "Copy invite link"}
           </motion.button>
           <motion.button
             type="button"
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
             onClick={() => void refresh()}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-border-subtle"
-            style={{ background: "rgba(255,255,255,0.04)", color: "rgba(240,240,255,0.85)" }}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold transition-colors"
+            style={{ background: "#FFFFFF", color: "#334155", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>

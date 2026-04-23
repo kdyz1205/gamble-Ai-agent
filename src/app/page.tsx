@@ -9,9 +9,19 @@ import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
+import type { ParsedChallenge } from "@/lib/api-client";
 import { compileMarket, type MarketDraft, type Clarification, type CompileResult } from "@/lib/market-compiler";
 
 type AppState = "idle" | "compiling" | "drafting" | "publishing" | "live";
+type WorkflowPhase = "understanding" | "drafting" | "validating" | "publishing" | "published" | "failed";
+
+const WORKFLOW_STEPS: Array<{ key: WorkflowPhase; label: string }> = [
+  { key: "understanding", label: "Understanding request" },
+  { key: "drafting", label: "Drafting challenge" },
+  { key: "validating", label: "Validating stake and rules" },
+  { key: "publishing", label: "Publishing" },
+  { key: "published", label: "Published" },
+];
 
 export default function Home() {
   const router = useRouter();
@@ -23,10 +33,15 @@ export default function Home() {
   const [userInput, setUserInput] = useState("");
   const [understanding, setUnderstanding] = useState("");
   const [draft, setDraft] = useState<MarketDraft | null>(null);
+  const [richDraft, setRichDraft] = useState<ParsedChallenge | null>(null); // AI's rich output with per-field options + reasoning
   const [nextQuestion, setNextQuestion] = useState<Clarification | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
+  const [publishedMarketId, setPublishedMarketId] = useState<string | null>(null);
+  const [workflowPhase, setWorkflowPhase] = useState<WorkflowPhase | null>(null);
+  const [assistantNote, setAssistantNote] = useState("");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isTweaking, setIsTweaking] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
@@ -34,6 +49,10 @@ export default function Home() {
   const handleSubmit = useCallback(async (input: string) => {
     setUserInput(input);
     setError(null);
+    setShareLink(null);
+    setPublishedMarketId(null);
+    setWorkflowPhase("understanding");
+    setAssistantNote("I am reading the prompt and turning it into a structured challenge.");
     setAppState("compiling");
 
     // Try LLM-powered compile first (if logged in + API key set)
@@ -50,6 +69,7 @@ export default function Home() {
         }
 
         // LLM compiled a market — use it directly
+        setWorkflowPhase("drafting");
         const llmDraft: MarketDraft = {
           marketType: p.marketType || "challenge",
           proposition: p.proposition || p.title,
@@ -88,22 +108,46 @@ export default function Home() {
           : `${parts.join(" ")} — need: ${missing.join(", ")}`;
 
         setDraft(llmDraft);
-        setUnderstanding(understanding);
+        setRichDraft(p); // keep the AI's full rich output with per-field options + reasoning
+        setUnderstanding(p.recommendationSummary || understanding);
+        setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
 
-        // Use LLM's clarifying question or generate from missing fields
-        if (p.clarifyingQuestion && missing.length > 0) {
+        // Only show a clarifying question if the AI explicitly flagged one as needed.
+        // Per our new philosophy: AI decides by default, asks only when truly ambiguous.
+        if (p.clarifyingQuestion && (p.missingFields?.length ?? 0) > 0) {
+          const field = p.missingFields?.[0] || "stake";
+          // Use AI-generated options for the clarification, not hardcoded ones.
+          let aiOptions: Array<{ label: string; value: string | number | boolean; patch: Partial<MarketDraft> }> = [];
+          if (field === "stake" && p.stakeOptions?.length) {
+            aiOptions = p.stakeOptions.map(o => ({
+              label: o.amount === 0 ? `Free — ${o.label}` : `${o.amount} cr — ${o.label}`,
+              value: o.amount,
+              patch: { stake: o.amount, stakeUnit: (o.amount > 0 ? "credits" : "unset") as MarketDraft["stakeUnit"] },
+            }));
+          } else if (field === "evidence" && p.evidenceOptions?.length) {
+            aiOptions = p.evidenceOptions.map(o => ({
+              label: `${o.label}${o.required ? " (essential)" : ""}`,
+              value: o.type,
+              patch: { evidenceType: o.type },
+            }));
+          } else if (field === "deadline" && p.deadlineOptions?.length) {
+            aiOptions = p.deadlineOptions.map(o => ({
+              label: o.duration,
+              value: o.duration,
+              patch: { deadline: o.duration, eventTime: o.duration },
+            }));
+          }
           setNextQuestion({
-            field: (missing[0] || "stake") as keyof MarketDraft,
+            field: field as keyof MarketDraft,
             question: p.clarifyingQuestion,
-            options: getDefaultOptions(missing[0] || "stake"),
+            options: aiOptions.length > 0 ? aiOptions : getDefaultOptions(field),
           });
         } else {
-          // Use local compiler to generate missing field questions
-          const localResult = compileMarket(input);
-          setNextQuestion(localResult.nextQuestion);
+          setNextQuestion(null);
         }
 
         setAppState("drafting");
+        setWorkflowPhase("validating");
         return;
       } catch (parseErr) {
         // Show the user that AI failed, using local fallback
@@ -125,6 +169,8 @@ export default function Home() {
     setDraft(result.draft);
     setUnderstanding(result.understanding);
     setNextQuestion(result.nextQuestion);
+    setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
+    setWorkflowPhase("validating");
     setAppState("drafting");
   }, [user]);
 
@@ -170,27 +216,49 @@ export default function Home() {
       : draft;
 
     setAppState("publishing");
+    setWorkflowPhase("publishing");
+    setAssistantNote("Creating the challenge, locking any stake, and preparing the market page.");
     setError(null);
 
     try {
       const evidence = d.evidenceType === "unset" ? "self_report" : d.evidenceType.toLowerCase().replace(/ /g, "_");
       const res = await api.createChallenge({
         title: d.title,
+        description: d.proposition,
+        marketType: d.marketType,
+        proposition: d.proposition,
         type: d.type || "General",
         stake: d.stake || 0,
+        stakeToken: d.stakeToken,
         deadline: d.deadline || "24 hours",
+        eventTime: d.eventTime || d.deadline || undefined,
+        joinWindow: d.joinWindow,
+        proofWindow: d.proofWindow,
         rules: d.rules || d.title,
         evidenceType: evidence,
+        settlementMode: d.settlementMode,
+        proofSource: d.proofSource,
+        arbiter: d.arbiter,
+        fallbackRule: d.fallbackRule,
+        disputeWindow: d.disputeWindow,
         aiReview: true,
         isPublic: d.isPublic || false,
+        visibility: d.visibility,
       });
-      // Redirect to the market's permanent home
-      router.push(`/market/${res.challenge.id}`);
+      const link = `${window.location.origin}/market/${res.challenge.id}`;
+      setPublishedMarketId(res.challenge.id);
+      setShareLink(link);
+      setWorkflowPhase("published");
+      setAssistantNote("Published. The market now has a permanent page and invite link.");
+      setAppState("live");
+      await updateSession();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to publish");
+      setWorkflowPhase("failed");
+      setAssistantNote("Publishing failed. The draft is still intact, so you can edit and retry.");
       setAppState("drafting");
     }
-  }, [draft, user, router]);
+  }, [draft, user, updateSession]);
 
   const copyLink = useCallback(() => {
     if (!shareLink) return;
@@ -202,8 +270,9 @@ export default function Home() {
 
   const reset = useCallback(() => {
     setAppState("idle"); setUserInput(""); setUnderstanding("");
-    setDraft(null); setNextQuestion(null); setShareLink(null);
-    setCopied(false); setError(null);
+    setDraft(null); setRichDraft(null); setNextQuestion(null); setShareLink(null);
+    setPublishedMarketId(null); setWorkflowPhase(null); setAssistantNote("");
+    setCopied(false); setError(null); setIsTweaking(false);
   }, []);
 
   return (
@@ -268,6 +337,13 @@ export default function Home() {
       {/* ── Main ── */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-20">
         <div className="w-full max-w-lg">
+          {appState !== "idle" && (
+            <ConversationProgress
+              prompt={userInput}
+              phase={workflowPhase}
+              note={assistantNote}
+            />
+          )}
 
           {/* ── IDLE ── */}
           {appState === "idle" && (
@@ -378,7 +454,7 @@ export default function Home() {
                 <div className="mb-4 px-4 py-3 text-sm font-semibold" style={{ color: "#991B1B", background: "#FECACA", borderRadius: "16px", boxShadow: "0 4px 14px 0 rgba(254,202,202,0.60)" }}>⚠️ {error}</div>
               )}
 
-              {/* Live Draft Card */}
+              {/* Live Draft Card — now shows AI's full reasoning + clickable option chips */}
               <DraftPanel
                 draft={{
                   title: draft.title,
@@ -393,30 +469,79 @@ export default function Home() {
                   aiReview: draft.aiReview,
                   isPublic: draft.isPublic,
                 }}
+                rich={richDraft}
                 onPublish={handlePublish}
                 onEdit={() => {}}
+                onFieldChange={(patch) => {
+                  // User picked an alternative chip from AI's options — cascade into MarketDraft.
+                  const updated = { ...draft };
+                  if (patch.stake !== undefined) {
+                    updated.stake = patch.stake;
+                    updated.stakeUnit = patch.stake > 0 ? "credits" : "unset";
+                  }
+                  if (patch.deadline !== undefined) {
+                    updated.deadline = patch.deadline;
+                    updated.eventTime = patch.deadline;
+                  }
+                  if (patch.evidence !== undefined) {
+                    // evidence label → type slug (e.g. "Full video" → "video")
+                    const matched = richDraft?.evidenceOptions?.find(o => o.label === patch.evidence);
+                    updated.evidenceType = matched?.type || patch.evidence.toLowerCase();
+                  }
+                  setDraft(updated);
+                  // Mirror into richDraft so UI chip reflects the new active selection.
+                  if (richDraft) {
+                    setRichDraft({
+                      ...richDraft,
+                      suggestedStake: patch.stake ?? richDraft.suggestedStake,
+                      evidenceType: (richDraft.evidenceOptions?.find(o => o.label === patch.evidence)?.type) ?? richDraft.evidenceType,
+                      deadline: patch.deadline ?? richDraft.deadline,
+                    });
+                  }
+                }}
               />
 
-              {/* Inline edit */}
+              {/* Inline AI-powered tweak — natural language re-runs the full AI reasoning,
+                  not just a field edit. "raise stake to 500" will also update recommendations
+                  (higher stakes may trigger witness evidence suggestion, longer deadline, etc.) */}
               <div className="mt-4">
                 <CenteredComposer
-                  onSubmit={(input) => {
-                    // Re-compile with the edit text to patch the draft
-                    const editResult = compileMarket(input);
-                    if (editResult.draft) {
-                      const patched = { ...draft };
-                      if (editResult.draft.stake > 0) patched.stake = editResult.draft.stake;
-                      if (editResult.draft.evidenceType !== "unset") patched.evidenceType = editResult.draft.evidenceType;
-                      if (editResult.draft.eventTime) {
-                        patched.eventTime = editResult.draft.eventTime;
-                        patched.deadline = editResult.draft.eventTime;
-                      }
-                      setDraft(patched);
-                      setUnderstanding(`Updated: ${patched.title} | ${patched.stake > 0 ? `${patched.stake} credits` : "free"} | ${patched.evidenceType} | ${patched.deadline}`);
+                  onSubmit={async (input) => {
+                    if (!richDraft) return;
+                    setIsTweaking(true);
+                    setError(null);
+                    try {
+                      const res = await api.adjustDraft(input, richDraft);
+                      const p = res.draft;
+
+                      // Map the updated rich ParsedChallenge back to the MarketDraft used by publish.
+                      const updatedDraft: MarketDraft = {
+                        ...draft,
+                        title: p.title || draft.title,
+                        proposition: p.proposition || draft.proposition,
+                        marketType: (p.marketType || draft.marketType) as MarketDraft["marketType"],
+                        stake: p.suggestedStake ?? draft.stake,
+                        stakeUnit: (p.suggestedStake ?? 0) > 0 ? "credits" : "unset",
+                        evidenceType: p.evidenceType || draft.evidenceType,
+                        deadline: p.deadline || draft.deadline,
+                        eventTime: p.deadline || draft.eventTime,
+                        rules: p.rules || draft.rules,
+                        type: p.type || draft.type,
+                        isPublic: p.isPublic ?? draft.isPublic,
+                        visibility: p.isPublic ? "public" : "private",
+                        disputeWindow: (p.suggestedStake ?? 0) > 0 ? "24 hours" : null,
+                      };
+                      setDraft(updatedDraft);
+                      setRichDraft(p);
+                      setUnderstanding(p.recommendationSummary || res.message);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "AI tweak failed");
+                    } finally {
+                      setIsTweaking(false);
                     }
                   }}
                   isActive={true}
-                  isParsing={false}
+                  isParsing={isTweaking}
                 />
               </div>
             </motion.div>
@@ -465,6 +590,13 @@ export default function Home() {
                   <span className="px-3 py-1 text-xs font-bold" style={{ background: "#E9D5FF1A", color: "#9881C7", borderRadius: "999px" }}>{draft.evidenceType}</span>
                 </div>
               )}
+              {publishedMarketId && (
+                <motion.button onClick={() => router.push(`/market/${publishedMarketId}`)} whileTap={{ scale: 0.97 }}
+                  className="w-full py-3 text-sm font-bold transition-all mb-3"
+                  style={{ color: "#7C2D12", background: "#FED7AA", borderRadius: "999px", boxShadow: "0 4px 14px 0 rgba(251,146,60,0.39)" }}>
+                  Open market page
+                </motion.button>
+              )}
               <motion.button onClick={reset} whileTap={{ scale: 0.97 }}
                 className="w-full py-3 text-sm font-bold transition-all"
                 style={{ color: "#1E293B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "999px" }}>
@@ -481,6 +613,73 @@ export default function Home() {
 }
 
 /* ── Default options for clarification fields ── */
+function ConversationProgress({
+  prompt,
+  phase,
+  note,
+}: {
+  prompt: string;
+  phase: WorkflowPhase | null;
+  note: string;
+}) {
+  const activeIndex = phase
+    ? WORKFLOW_STEPS.findIndex((s) => s.key === phase)
+    : -1;
+  const failed = phase === "failed";
+
+  return (
+    <motion.div
+      className="mb-5 space-y-3"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      {prompt && (
+        <div className="ml-auto max-w-[88%] px-4 py-3 text-sm font-semibold"
+          style={{ background: "#FFFFFF", color: "#1E293B", border: "1px solid #E2E8F0", borderRadius: "20px 20px 6px 20px" }}>
+          {prompt}
+        </div>
+      )}
+      <div className="px-4 py-3"
+        style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}>
+        <p className="text-xs font-bold mb-2" style={{ color: failed ? "#991B1B" : "#7C2D12" }}>
+          {failed ? "Action needs attention" : "AI workflow"}
+        </p>
+        <div className="space-y-2">
+          {WORKFLOW_STEPS.map((step, index) => {
+            const done = activeIndex >= 0 && index < activeIndex;
+            const active = activeIndex === index && !failed;
+            return (
+              <div key={step.key} className="flex items-center gap-2">
+                <span className="w-5 h-5 flex items-center justify-center text-[10px] font-black"
+                  style={{
+                    background: done ? "#A7F3D0" : active ? "#FED7AA" : "#F8FAFC",
+                    color: done ? "#065F46" : active ? "#7C2D12" : "#64748B",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "999px",
+                  }}>
+                  {done ? "✓" : index + 1}
+                </span>
+                <span className="text-xs font-bold" style={{ color: active || done ? "#1E293B" : "#64748B" }}>
+                  {step.label}
+                </span>
+                {active && (
+                  <motion.span
+                    className="ml-auto w-2 h-2 rounded-full"
+                    style={{ background: "#FDBA74" }}
+                    animate={{ scale: [1, 1.35, 1], opacity: [0.6, 1, 0.6] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {note && <p className="mt-3 text-xs font-medium leading-relaxed" style={{ color: "#64748B" }}>{note}</p>}
+      </div>
+    </motion.div>
+  );
+}
+
 function getDefaultOptions(field: string): Clarification["options"] {
   switch (field) {
     case "stake":

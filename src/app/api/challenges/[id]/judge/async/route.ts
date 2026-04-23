@@ -13,7 +13,7 @@ export const maxDuration = 300;
  * POST /api/challenges/[id]/judge/async
  * Body: { tier?, providerId?, model?, webhookUrl? }
  *
- * Returns 202 immediately; work continues via `after()` (ffmpeg + vision + settle).
+ * Returns 202 immediately; work continues via `after()` (ffmpeg + vision + recommendation).
  * Poll GET /api/judge-jobs/[jobId] or receive optional HTTPS webhook.
  */
 export async function POST(
@@ -106,7 +106,7 @@ export async function POST(
       pollUrl: `/api/judge-jobs/${job.id}`,
       pollUrlAbsolute: origin ? pollUrl : undefined,
       message:
-        "Verdict runs in the background (video frames + vision + settlement). Poll pollUrl or use webhookUrl.",
+        "AI recommendation runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; creator confirmation settles credits.",
     },
     { status: 202 },
   );
