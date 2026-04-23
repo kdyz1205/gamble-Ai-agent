@@ -120,13 +120,37 @@ async function prepareVideo(
     let paths: string[];
     let mode: "scene_change" | "uniform_fallback" = "uniform_fallback";
 
-    if (plan.extractionMode === "scene_change") {
-      const result = await extractSceneChangeFrames(url, plan.frameCount, tmp);
+    // One retry on transient failures (network blip, partial read).
+    // Scene-change extraction can fail on weird codecs; if so we try uniform
+    // once before giving up entirely.
+    const tryExtract = async () => {
+      if (plan.extractionMode === "scene_change") {
+        const result = await extractSceneChangeFrames(url, plan.frameCount, tmp);
+        return { paths: result.paths, mode: result.mode };
+      }
+      return {
+        paths: await extractScreenshotsFromUrl(url, plan.frameCount, tmp),
+        mode: "uniform_fallback" as const,
+      };
+    };
+
+    try {
+      const result = await tryExtract();
       paths = result.paths;
       mode = result.mode;
-    } else {
-      paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
-      mode = "uniform_fallback";
+    } catch (firstErr) {
+      console.warn("[pre-extract] first extraction attempt failed, retrying uniform:", firstErr);
+      try {
+        paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
+        mode = "uniform_fallback";
+      } catch (secondErr) {
+        return {
+          frames: [],
+          durationSec: duration,
+          mode: "none",
+          error: secondErr instanceof Error ? secondErr.message.slice(0, 200) : String(secondErr),
+        };
+      }
     }
 
     if (paths.length === 0) {

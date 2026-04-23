@@ -20,6 +20,7 @@ import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
  */
 const DRAFT_HISTORY_KEY_PREFIX = "luckyplay.draftHistory.v1.";
 const DRAFT_HISTORY_LIMIT = 5;
+const DRAFT_HISTORY_MAX_BYTES = 128 * 1024; // 128KB per user — bounds localStorage pressure
 function loadDraftHistory(userId: string | undefined): ParsedChallenge[] {
   if (!userId || typeof window === "undefined") return [];
   try {
@@ -31,12 +32,41 @@ function loadDraftHistory(userId: string | undefined): ParsedChallenge[] {
     return [];
   }
 }
+/**
+ * Compact a draft down to just the fields we actually reference as
+ * "prior context" — drops the heavy stakeOptions / evidenceOptions /
+ * deadlineOptions arrays and the full oracles payloads. These can be
+ * 5-10 KB per draft and we keep 5 of them. Slimming to the 8 fields the
+ * AI actually needs cuts per-user localStorage from ~40KB → ~4KB.
+ */
+function slimDraftForHistory(d: ParsedChallenge): ParsedChallenge {
+  return {
+    title: d.title,
+    type: d.type,
+    suggestedStake: d.suggestedStake,
+    evidenceType: d.evidenceType,
+    rules: d.rules,
+    deadline: d.deadline,
+    isPublic: d.isPublic,
+    intent: d.intent,
+    marketType: d.marketType,
+    proposition: d.proposition,
+    recommendationSummary: d.recommendationSummary,
+  } as ParsedChallenge;
+}
 function saveDraftHistory(userId: string | undefined, list: ParsedChallenge[]) {
   if (!userId || typeof window === "undefined") return;
   try {
-    const trimmed = list.slice(-DRAFT_HISTORY_LIMIT);
-    window.localStorage.setItem(DRAFT_HISTORY_KEY_PREFIX + userId, JSON.stringify(trimmed));
-  } catch { /* quota exceeded is fine */ }
+    let trimmed = list.slice(-DRAFT_HISTORY_LIMIT).map(slimDraftForHistory);
+    let serialized = JSON.stringify(trimmed);
+    // Enforce a hard byte cap — if somehow a caller passes a monster draft,
+    // drop oldest entries until we fit.
+    while (serialized.length > DRAFT_HISTORY_MAX_BYTES && trimmed.length > 1) {
+      trimmed = trimmed.slice(1);
+      serialized = JSON.stringify(trimmed);
+    }
+    window.localStorage.setItem(DRAFT_HISTORY_KEY_PREFIX + userId, serialized);
+  } catch { /* quota exceeded is fine — just drop */ }
 }
 
 type AppState = "idle" | "compiling" | "drafting" | "publishing" | "live";

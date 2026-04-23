@@ -198,12 +198,35 @@ export async function prepareParticipantVisuals(
   }
 }
 
-/** Keep provider latency/cost bounded. */
-export function capJudgeVisuals(a: JudgeVisionImage[], b: JudgeVisionImage[], maxTotal = 24): JudgeVisionImage[] {
+/**
+ * Keep provider latency/cost bounded, with TWO caps:
+ *  1. maxTotal images (default 24)
+ *  2. maxTotalBytes aggregate payload (default 12 MB)
+ * Previously we only capped count, which meant a single participant uploading
+ * 24 frames close to 4.5 MB each could push 100 MB+ of base64 payload to
+ * the vision provider — slow, expensive, and sometimes rejected. Now we
+ * progressively drop frames (starting from the denser side) until payload
+ * fits the byte budget.
+ */
+export function capJudgeVisuals(
+  a: JudgeVisionImage[],
+  b: JudgeVisionImage[],
+  maxTotal = 24,
+  maxTotalBytes = 12 * 1024 * 1024,
+): JudgeVisionImage[] {
   const all = [...a, ...b];
-  if (all.length <= maxTotal) return all;
-  const step = Math.ceil(all.length / maxTotal);
-  return all.filter((_, i) => i % step === 0).slice(0, maxTotal);
+  let picked = all;
+  if (picked.length > maxTotal) {
+    const step = Math.ceil(picked.length / maxTotal);
+    picked = picked.filter((_, i) => i % step === 0).slice(0, maxTotal);
+  }
+  // Estimate payload by base64 length (each char = 1 byte).
+  const size = (arr: JudgeVisionImage[]) => arr.reduce((acc, im) => acc + im.base64.length, 0);
+  while (size(picked) > maxTotalBytes && picked.length > 2) {
+    // Drop every other frame until we fit. Preserves first/last context.
+    picked = picked.filter((_, i) => i % 2 === 0);
+  }
+  return picked;
 }
 
 /**
