@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     providerPing = { skipped: true, reason: `env ${def?.envVar} is not set` };
   }
 
-  // Step 2: real parseChallenge on a standard test prompt — end-to-end
+  // Step 2a: real parseChallenge on a pushup prompt — exercises core path
   let parseHealth: Record<string, unknown> = { skipped: true };
   if (envKey && providerPing.ok) {
     const t0 = Date.now();
@@ -106,6 +106,39 @@ export async function GET(req: NextRequest) {
       };
     } catch (e) {
       parseHealth = {
+        ok: false,
+        error: e instanceof Error ? e.message.slice(0, 300) : String(e),
+      };
+    }
+  }
+
+  // Step 2b: parse a crypto prompt — exercises OpenAI tool-calling (CoinGecko).
+  // Proves the agentic loop is alive end-to-end on prod. Skip if basic parse failed.
+  let oracleHealth: Record<string, unknown> = { skipped: true };
+  if (parseHealth.ok) {
+    const t0 = Date.now();
+    try {
+      const p = await parseChallenge("I bet BTC will hit 100k USD by tomorrow");
+      oracleHealth = {
+        ok: true,
+        ms: Date.now() - t0,
+        title: p.title,
+        toolInvocationsCount: p.toolInvocations?.length ?? 0,
+        toolNames: (p.toolInvocations ?? []).map((t) => t.name),
+        oraclesAttached: (p.oracles ?? []).map((o) => ({
+          source: o.source,
+          label: o.label,
+          currentValue: o.currentValue,
+        })),
+        // A working agentic pass should have: toolInvocations.length > 0 AND
+        // oracles.length > 0 with CoinGecko data.
+        healthy:
+          (p.toolInvocations?.length ?? 0) > 0 &&
+          (p.oracles?.length ?? 0) > 0 &&
+          (p.oracles ?? []).some((o) => o.source === "CoinGecko" && !!o.currentValue),
+      };
+    } catch (e) {
+      oracleHealth = {
         ok: false,
         error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       };
@@ -214,6 +247,7 @@ export async function GET(req: NextRequest) {
     env: envSnapshot,
     providerPing,
     parseHealth,
+    oracleHealth,
     e2e,
     note: "If parseHealth.looksLikeFallback is true, AI was not reached. If providerPing.ok === false, check the error message — most likely an expired API key. Add ?e2e=publish while signed-in to run full parse→create→fetch→cleanup trace.",
   });
