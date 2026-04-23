@@ -1,5 +1,6 @@
-import { completeOraclePrompt, completeOracleJudgeVision } from "./llm-router";
+import { completeOraclePrompt, completeOraclePromptWithTools, completeOracleJudgeVision, type ToolInvocation } from "./llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import {
   prepareParticipantVisuals,
   prepareParticipantVisualsFast,
@@ -89,6 +90,18 @@ export interface ParsedChallenge {
   // ── What's still unclear ──
   missingFields?: string[];
   clarifyingQuestion?: string;         // in user's input language
+
+  // ── Oracle attachments (populated when AI calls real-world tools during parse) ──
+  oracles?: OracleAttachment[];        // e.g. [{ source: "CoinGecko", currentValue: "$63,421", ... }]
+  toolInvocations?: Array<{ name: string; ok: boolean; error?: string }>; // audit trail
+
+  // ── Proactive action suggestions (AI-generated UI affordances) ──
+  actionItems?: Array<{
+    type: "topup" | "adjust_stake" | "add_opponent" | "reduce_scope" | "other";
+    label: string;                     // in user's language; e.g. "Top up 25 credits"
+    reasoning: string;                 // why AI is suggesting this
+    payload?: Record<string, unknown>; // { amount: 25 } etc.
+  }>;
 }
 
 export interface JudgmentResult {
@@ -118,6 +131,23 @@ The user wants the platform to do the thinking for them. Don't force questions w
 - clarifyingQuestion should be null unless you truly need the user to pick between two different kinds of challenges.
 - A missing stake, vague evidence, or no deadline is NOT "missing" — it's "use your best judgment based on the challenge context."
 - User can always tap any chip later to override. Your job is to make the first guess smart.
+
+TOOLS YOU CAN CALL:
+You have real tools available for verifying prediction-market propositions against ground truth. USE THEM when the user proposes a bet on an external real-world quantity:
+- "BTC hits 70k by Friday" / "ETH above 4000 next week" / "SOL price prediction" → call check_crypto_price with that symbol. Use the returned current price to sanity-check the threshold (is it already there? a 2x stretch? impossible?), then craft rules that reference the oracle (e.g. "settle by CoinGecko BTC/USD spot at 2026-04-30 00:00 UTC").
+- "Will it rain in Seattle on April 30?" / "High temp above 30°C in Paris next Tuesday" → call check_weather_forecast with lat/lng + date.
+- If the tool fails or the market isn't resolvable externally (e.g. "who wins this private chess match"), skip tools — don't invent data.
+
+After a tool call, include its findings in your rules/proposition so settlement has a ground-truth source to check at the deadline. Example: "Bitcoin (BTC) must close above $70,000 USD per CoinGecko spot price on any day before 2026-05-01." That turns self-report into auto-settleable.
+
+PROACTIVE ACTION SUGGESTIONS (actionItems):
+When you spot a concrete next-step the user might want, emit it as an actionItem so the UI can render a clickable button. Supported types:
+- "topup":          user wants to stake more than they have. Payload: { amount: <credits needed> }
+- "adjust_stake":   their stake looks wrong for the challenge shape. Payload: { newAmount: <number> }
+- "add_opponent":   challenge is 1v1 but no opponent mentioned. Payload: {}
+- "reduce_scope":   the scope looks too big / risky / illegal. Payload: {}
+- "other":          any other suggestion. Payload: free-form.
+Keep labels in the user's language. Only emit actionItems when they're genuinely useful — empty array [] is fine.
 
 STEPS:
 
@@ -235,49 +265,103 @@ function safeParseJson(text: string): unknown | null {
   return null;
 }
 
+/**
+ * Parse natural-language input into a structured challenge draft.
+ * Pipeline:
+ *  1. Resolve provider from ORACLE_DEFAULT_PROVIDER (no hard-coded Anthropic).
+ *  2. Call LLM with a tool belt (CoinGecko / Open-Meteo) so that prediction
+ *     markets come back with a real oracle source attached, not self-report.
+ *  3. Fall back to a plain (no-tools) prompt if the provider doesn't support
+ *     function calling. Final fallback: deterministic parser.
+ *  4. Self-correct: if the first pass returned obvious garbage (no title, no
+ *     options), try once more on a stronger model in the same family.
+ */
 export async function parseChallenge(input: string, preferredModel?: string): Promise<ParsedChallenge> {
-  // Route through the same llm-router used by judge + adjust-draft so that
-  // ORACLE_DEFAULT_PROVIDER (anthropic / openai / google / etc.) is honored.
-  // Previously this was hardcoded to Anthropic SDK, so an OpenAI-only deploy
-  // silently fell through to the deterministic fallback — the user saw "Standard
-  // general challenge — AI reviewed" boilerplate every time instead of real AI
-  // thinking. That was the actual bug report.
   const { providerId, model } = resolveOracle(preferredModel);
 
   if (!oracleKeyAvailable(providerId)) {
-    console.warn(`[parseChallenge] provider=${providerId} has no API key set; falling back to deterministic parser. Set the provider's env key or switch ORACLE_DEFAULT_PROVIDER.`);
+    console.warn(`[parseChallenge] provider=${providerId} has no API key set; falling back to deterministic parser.`);
     return parseChallengeFallback(input);
   }
 
-  try {
-    const text = await completeOraclePrompt({
-      providerId,
-      model,
-      system: MARKET_COMPILER_PROMPT,
-      user: input,
-      maxTokens: 3000, // rich output with per-option reasoning
-      temperature: 0.3,
-    });
-
-    const parsed = safeParseJson(text) as ParsedChallenge | null;
-    if (parsed) {
-      parsed.title = parsed.title || input.slice(0, 64);
-      parsed.type = parsed.type || "General";
-      parsed.suggestedStake = typeof parsed.suggestedStake === "number" ? parsed.suggestedStake : 0;
-      parsed.evidenceType = parsed.evidenceType || "self_report";
-      parsed.rules = parsed.rules || "";
-      parsed.deadline = parsed.deadline || "24 hours";
-      parsed.isPublic = parsed.isPublic ?? false;
-      if (!Array.isArray(parsed.redFlags)) parsed.redFlags = [];
-      if (!Array.isArray(parsed.missingFields)) parsed.missingFields = [];
-      return parsed;
+  const runOnce = async (useModel: string): Promise<{ parsed: ParsedChallenge | null; invocations: ToolInvocation[] }> => {
+    try {
+      // OpenAI-compat backends get the real tool-calling loop; others fall through.
+      const providerDef = getProviderById(providerId);
+      const canUseTools = providerDef?.kind === "openai_compat";
+      if (canUseTools) {
+        const { text, toolInvocations } = await completeOraclePromptWithTools({
+          providerId,
+          model: useModel,
+          system: MARKET_COMPILER_PROMPT,
+          user: input,
+          tools: ORACLE_TOOLS,
+          maxTokens: 3000,
+          temperature: 0.3,
+          maxIterations: 3,
+        });
+        return { parsed: safeParseJson(text) as ParsedChallenge | null, invocations: toolInvocations };
+      }
+      const text = await completeOraclePrompt({
+        providerId,
+        model: useModel,
+        system: MARKET_COMPILER_PROMPT,
+        user: input,
+        maxTokens: 3000,
+        temperature: 0.3,
+      });
+      return { parsed: safeParseJson(text) as ParsedChallenge | null, invocations: [] };
+    } catch (err) {
+      console.error(`[parseChallenge] LLM call failed (provider=${providerId}, model=${useModel}):`, err instanceof Error ? err.message : err);
+      return { parsed: null, invocations: [] };
     }
-    console.error("[parseChallenge] LLM returned no JSON:", text.slice(0, 200));
-  } catch (err) {
-    console.error(`[parseChallenge] LLM call failed (provider=${providerId}, model=${model}):`, err instanceof Error ? err.message : err);
+  };
+
+  // First pass — default model.
+  let { parsed, invocations } = await runOnce(model);
+
+  // Self-correction: if the first pass failed OR returned an obvious stub
+  // (no stakeOptions, no rules), retry once on a bigger model in the family.
+  const looksStub = parsed && !(
+    (parsed.stakeOptions?.length ?? 0) > 0 ||
+    (parsed.evidenceOptions?.length ?? 0) > 0 ||
+    (parsed.rules && parsed.rules.length > 10)
+  );
+  const escalated = escalateModelForLowConfidence(providerId, model, parsed ? (looksStub ? 0.4 : 1) : 0);
+  if ((!parsed || looksStub) && escalated && escalated !== model) {
+    console.log(`[parseChallenge] self-correcting via ${escalated} (first pass was weak/failed)`);
+    const second = await runOnce(escalated);
+    if (second.parsed) {
+      parsed = second.parsed;
+      invocations = [...invocations, ...second.invocations];
+    }
   }
 
-  return parseChallengeFallback(input);
+  if (!parsed) return parseChallengeFallback(input);
+
+  // Normalize / defaults.
+  parsed.title = parsed.title || input.slice(0, 64);
+  parsed.type = parsed.type || "General";
+  parsed.suggestedStake = typeof parsed.suggestedStake === "number" ? parsed.suggestedStake : 0;
+  parsed.evidenceType = parsed.evidenceType || "self_report";
+  parsed.rules = parsed.rules || "";
+  parsed.deadline = parsed.deadline || "24 hours";
+  parsed.isPublic = parsed.isPublic ?? false;
+  if (!Array.isArray(parsed.redFlags)) parsed.redFlags = [];
+  if (!Array.isArray(parsed.missingFields)) parsed.missingFields = [];
+
+  // Attach oracle results + tool audit trail.
+  const oracles: OracleAttachment[] = [];
+  const toolAudit: Array<{ name: string; ok: boolean; error?: string }> = [];
+  for (const inv of invocations) {
+    toolAudit.push({ name: inv.name, ok: inv.result.ok, error: inv.result.error });
+    const att = toAttachment(inv.result);
+    if (att) oracles.push(att);
+  }
+  if (oracles.length > 0) parsed.oracles = oracles;
+  if (toolAudit.length > 0) parsed.toolInvocations = toolAudit;
+
+  return parsed;
 }
 
 /**

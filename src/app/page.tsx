@@ -510,6 +510,39 @@ export default function Home() {
                     });
                   }
                 }}
+                onActionItem={(a) => {
+                  // AI proposed a next-step — wire each type to the right handler.
+                  if (a.type === "adjust_stake") {
+                    const newAmount = Number(a.payload?.newAmount ?? 0);
+                    if (draft) {
+                      const updated = { ...draft, stake: newAmount, stakeUnit: (newAmount > 0 ? "credits" : "unset") as typeof draft.stakeUnit };
+                      setDraft(updated);
+                      if (richDraft) setRichDraft({ ...richDraft, suggestedStake: newAmount });
+                    }
+                  } else if (a.type === "topup") {
+                    // Route to profile / top-up drawer. For now: open profile.
+                    setShowProfile(true);
+                  } else if (a.type === "reduce_scope") {
+                    // Ask AI to re-draft more conservatively via adjust-draft.
+                    (async () => {
+                      if (!richDraft) return;
+                      setIsTweaking(true);
+                      try {
+                        const res = await api.adjustDraft("reduce scope and stakes — make it safer and smaller", richDraft);
+                        setRichDraft(res.draft);
+                        if (draft) setDraft({ ...draft, stake: res.draft.suggestedStake ?? 0, deadline: res.draft.deadline ?? draft.deadline });
+                        setAssistantNote(res.message);
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Could not reduce scope");
+                      } finally {
+                        setIsTweaking(false);
+                      }
+                    })();
+                  } else {
+                    // "add_opponent" / "other" — just surface the AI's suggestion as a note for now.
+                    setAssistantNote(a.reasoning);
+                  }
+                }}
               />
 
               {/* Inline AI-powered tweak — natural language re-runs the full AI reasoning,

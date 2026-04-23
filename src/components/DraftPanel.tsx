@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { ParsedChallenge } from "@/lib/api-client";
+import type { ParsedChallenge, ActionItem } from "@/lib/api-client";
 
 export interface ChallengeDraft {
   title: string;
@@ -26,6 +26,8 @@ interface Props {
   onEdit: () => void;
   /** Called when user picks a different stake/evidence/deadline option from AI's list. */
   onFieldChange?: (patch: Partial<ChallengeDraft>) => void;
+  /** Called when the user clicks one of AI's proactive action suggestions (top up, reduce scope, …). */
+  onActionItem?: (a: ActionItem) => void;
 }
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
@@ -37,12 +39,13 @@ const PEACH_DARK = "#FDBA74";
 const PEACH_TEXT = "#7C2D12";
 const ORANGE_GLOW = "rgba(251,146,60,0.39)";
 const MINT = "#A7F3D0";
+const MINT_TEXT = "#065F46";
 const LAVENDER = "#E9D5FF";
 const CREAM = "#FFEDD5";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
-export default function DraftPanel({ draft, rich, onPublish, onFieldChange }: Props) {
+export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onActionItem }: Props) {
   const [d, setD] = useState<ChallengeDraft>(draft);
   const [openField, setOpenField] = useState<null | "stake" | "evidence" | "deadline" | "type">(null);
   useEffect(() => setD(draft), [draft]);
@@ -96,6 +99,42 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange }: Pr
           </p>
         )}
 
+        {/* Oracle attachments — AI called real tools and wired them into the bet.
+            Rendered as a dashed card with source + current value + verify link. */}
+        {rich?.oracles && rich.oracles.length > 0 && (
+          <div
+            className="mb-4 px-3 py-2.5"
+            style={{
+              background: `linear-gradient(135deg, ${MINT}33, ${LAVENDER}22)`,
+              border: `1.5px dashed ${MINT_TEXT}`,
+              borderRadius: "14px",
+            }}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>🔗 Oracle attached</p>
+            {rich.oracles.map((o, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 mb-1 last:mb-0">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold truncate" style={{ color: NAVY }}>{o.source} · {o.label}</p>
+                  {o.currentValue && (
+                    <p className="text-[11px] font-semibold" style={{ color: MINT_TEXT }}>Now: {o.currentValue}</p>
+                  )}
+                </div>
+                {o.oracleUrl && (
+                  <a
+                    href={o.oracleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-bold shrink-0 px-2 py-0.5 hover:underline"
+                    style={{ background: "#FFFFFF", color: MINT_TEXT, borderRadius: "999px", border: `1px solid ${MINT_TEXT}` }}
+                  >
+                    verify ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Red flags — AI-raised concerns */}
         {rich?.redFlags && rich.redFlags.length > 0 && (
           <div
@@ -105,6 +144,31 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange }: Pr
             <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: ROSE_TEXT }}>⚠️ Heads up</p>
             {rich.redFlags.map((f, i) => (
               <p key={i} className="text-xs font-medium leading-relaxed" style={{ color: ROSE_TEXT }}>• {f}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Proactive action items — AI proposes clickable next-steps (top up, reduce scope, etc.)
+            Parent handles actual click via onActionItem; we just render buttons. */}
+        {rich?.actionItems && rich.actionItems.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {rich.actionItems.map((a, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onActionItem?.(a)}
+                title={a.reasoning}
+                className="px-3 py-1.5 text-[11px] font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: PEACH,
+                  color: PEACH_TEXT,
+                  borderRadius: "999px",
+                  border: `1.5px solid ${PEACH_DARK}`,
+                  boxShadow: `0 2px 8px ${ORANGE_GLOW}`,
+                }}
+              >
+                ✨ {a.label}
+              </button>
             ))}
           </div>
         )}

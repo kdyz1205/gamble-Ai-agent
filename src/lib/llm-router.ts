@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getProviderById, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
+import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
 
 export interface LlmCompleteParams {
   providerId: string;
@@ -245,6 +246,170 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
     default:
       throw new Error(`Unsupported backend: ${def.kind}`);
   }
+}
+
+// ────────────────────────────────────────────────────────────────
+// TOOL CALLING — lets parse-time LLM actually invoke real-world lookups
+// (CoinGecko, Open-Meteo, …) rather than guessing at truth. Only implemented
+// for openai_compat backends for now; anthropic/google use different shapes.
+// ────────────────────────────────────────────────────────────────
+
+export interface ToolInvocation {
+  name: string;
+  args: unknown;
+  result: OracleToolResult;
+}
+
+export interface ToolCompletionResult {
+  text: string;
+  toolInvocations: ToolInvocation[];
+}
+
+type OpenAiChatMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | { role: "tool"; tool_call_id: string; content: string }
+  | {
+      role: "assistant";
+      content: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+    };
+
+async function openAiCompatibleWithTools(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+  tools: OpenAiTool[],
+  maxTokens: number,
+  querySuffix = "",
+  temperature?: number,
+  maxIterations = 3,
+): Promise<ToolCompletionResult> {
+  const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
+  const messages: OpenAiChatMessage[] = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+  const toolInvocations: ToolInvocation[] = [];
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const useTools = iter < maxIterations - 1; // on the last pass force a final text answer
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages,
+        ...(useTools ? { tools, tool_choice: "auto" } : {}),
+        ...(temperature !== undefined ? { temperature } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`LLM tool HTTP ${res.status}: ${err.slice(0, 400)}`);
+    }
+    const data = (await res.json()) as {
+      choices?: Array<{
+        message?: {
+          role: "assistant";
+          content?: string | null;
+          tool_calls?: Array<{
+            id: string;
+            type: "function";
+            function: { name: string; arguments: string };
+          }>;
+        };
+      }>;
+    };
+    const msg = data.choices?.[0]?.message;
+    if (!msg) return { text: "", toolInvocations };
+
+    // If the model asked for tool calls, execute them and feed results back.
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
+      for (const call of msg.tool_calls) {
+        let parsedArgs: unknown;
+        try { parsedArgs = JSON.parse(call.function.arguments || "{}"); } catch { parsedArgs = {}; }
+        const result = await executeOracleTool(call.function.name, parsedArgs);
+        toolInvocations.push({ name: call.function.name, args: parsedArgs, result });
+        messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+      }
+      continue; // loop — next pass, model sees the tool output and writes the final answer
+    }
+
+    // No tool calls — this is the final answer.
+    return { text: msg.content ?? "", toolInvocations };
+  }
+
+  // Loop exhausted (rare). Return whatever we have.
+  return { text: "", toolInvocations };
+}
+
+/**
+ * Tool-using text completion. Currently openai_compat only — for other
+ * backends we fall through to a plain completeOraclePrompt() call so the
+ * caller still gets usable output (no tool trail).
+ */
+export async function completeOraclePromptWithTools(params: {
+  providerId: string;
+  model: string;
+  system: string;
+  user: string;
+  tools: OpenAiTool[];
+  maxTokens?: number;
+  temperature?: number;
+  maxIterations?: number;
+}): Promise<ToolCompletionResult> {
+  const def = getProviderById(params.providerId);
+  if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
+
+  const maxTokens = params.maxTokens ?? 1024;
+  const temperature = params.temperature;
+  const key = process.env[def.envVar];
+
+  if (def.kind !== "openai_compat") {
+    // Graceful degrade: use plain prompt, no tools.
+    const text = await completeOraclePrompt({
+      providerId: params.providerId,
+      model: params.model,
+      system: params.system,
+      user: params.user,
+      maxTokens,
+      temperature,
+    });
+    return { text, toolInvocations: [] };
+  }
+  if (!key) throw new Error(`${def.envVar} is not set`);
+
+  let baseUrl = def.baseUrl;
+  let querySuffix = "";
+  if (def.id === "azure_openai") {
+    baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
+    if (!baseUrl) throw new Error("AZURE_OPENAI_BASE_URL is not set");
+    const ver = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
+    querySuffix = `?api-version=${encodeURIComponent(ver)}`;
+  }
+  if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
+
+  return openAiCompatibleWithTools(
+    baseUrl,
+    key,
+    params.model,
+    params.system,
+    params.user,
+    params.tools,
+    maxTokens,
+    querySuffix,
+    temperature,
+    params.maxIterations,
+  );
 }
 
 /**

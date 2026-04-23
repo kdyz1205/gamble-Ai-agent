@@ -242,6 +242,21 @@ export interface DeadlineOption {
   reasoning: string;
 }
 
+export interface OracleAttachment {
+  source: string;           // "CoinGecko" | "Open-Meteo" | ...
+  label: string;            // "BTC/USD spot price"
+  currentValue?: string;    // pretty string like "$77,291.00"
+  oracleUrl?: string;       // public URL for humans to verify at settlement time
+  queriedAt: string;        // ISO timestamp of the lookup
+}
+
+export interface ActionItem {
+  type: "topup" | "adjust_stake" | "add_opponent" | "reduce_scope" | "other";
+  label: string;            // in user's language; e.g. "Top up 25 credits"
+  reasoning: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface ParsedChallenge {
   // Core
   title: string;
@@ -270,6 +285,13 @@ export interface ParsedChallenge {
   // What's still unclear (AI should minimize these — defaults preferred)
   missingFields?: string[];
   clarifyingQuestion?: string;
+
+  // Oracle attachments populated when parse-time LLM called real tools
+  oracles?: OracleAttachment[];
+  toolInvocations?: Array<{ name: string; ok: boolean; error?: string }>;
+
+  // Proactive clickable suggestions (AI wrote these, frontend renders buttons)
+  actionItems?: ActionItem[];
 }
 
 export async function parseChallenge(input: string, tier: 1 | 2 | 3 = 1): Promise<{
