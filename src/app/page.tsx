@@ -11,6 +11,7 @@ import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import type { ParsedChallenge } from "@/lib/api-client";
 import { compileMarket, type MarketDraft, type Clarification, type CompileResult } from "@/lib/market-compiler";
+import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
 
 /**
  * Conversation memory — localStorage-backed so "再来一个 / another one / make
@@ -71,6 +72,7 @@ export default function Home() {
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [draftHistory, setDraftHistory] = useState<ParsedChallenge[]>([]);
+  const allowAmbient = useAmbientMotionAllowed();
 
   // Rehydrate draft history from localStorage once the user session is known.
   useEffect(() => {
@@ -402,12 +404,14 @@ export default function Home() {
           {/* ── IDLE ── */}
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-              {/* Cute mascot — animated cloud blob */}
+              {/* Cute mascot — cloud blob. Animations gated by useAmbientMotionAllowed
+                  so that prefers-reduced-motion / hidden-tab / low-end devices get a
+                  still mascot (addresses the "phone gets hot" user report). */}
               <motion.div
                 className="mx-auto mb-4 relative"
                 style={{ width: 96, height: 96 }}
-                animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                animate={allowAmbient ? { y: [0, -6, 0] } : { y: 0 }}
+                transition={allowAmbient ? { duration: 3, repeat: Infinity, ease: "easeInOut" } : { duration: 0 }}
               >
                 <svg viewBox="0 0 120 120" width="96" height="96" style={{ filter: "drop-shadow(0 6px 12px rgba(251,207,232,0.50))" }}>
                   {/* body */}
@@ -425,13 +429,23 @@ export default function Home() {
                   {/* mouth */}
                   <path d="M 52 78 Q 60 84 68 78" stroke="#1E293B" strokeWidth="2.5" fill="none" strokeLinecap="round" />
                 </svg>
-                {/* sparkles */}
-                <motion.span className="absolute" style={{ top: -4, right: -2, fontSize: 18 }}
-                  animate={{ rotate: [0, 20, -20, 0], scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2.5, repeat: Infinity }}>✨</motion.span>
-                <motion.span className="absolute" style={{ bottom: 0, left: -8, fontSize: 14 }}
-                  animate={{ rotate: [0, -15, 15, 0], scale: [1, 1.15, 1] }}
-                  transition={{ duration: 2.8, repeat: Infinity, delay: 0.5 }}>⭐</motion.span>
+                {/* sparkles — also gated on motion policy */}
+                {allowAmbient && (
+                  <>
+                    <motion.span className="absolute" style={{ top: -4, right: -2, fontSize: 18 }}
+                      animate={{ rotate: [0, 20, -20, 0], scale: [1, 1.2, 1] }}
+                      transition={{ duration: 2.5, repeat: Infinity }}>✨</motion.span>
+                    <motion.span className="absolute" style={{ bottom: 0, left: -8, fontSize: 14 }}
+                      animate={{ rotate: [0, -15, 15, 0], scale: [1, 1.15, 1] }}
+                      transition={{ duration: 2.8, repeat: Infinity, delay: 0.5 }}>⭐</motion.span>
+                  </>
+                )}
+                {!allowAmbient && (
+                  <>
+                    <span className="absolute" style={{ top: -4, right: -2, fontSize: 18 }}>✨</span>
+                    <span className="absolute" style={{ bottom: 0, left: -8, fontSize: 14 }}>⭐</span>
+                  </>
+                )}
               </motion.div>
 
               <h1 className="text-center text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ color: "#1E293B" }}>
