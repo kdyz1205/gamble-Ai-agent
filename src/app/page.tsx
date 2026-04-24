@@ -8,6 +8,7 @@ import CenteredComposer from "@/components/CenteredComposer";
 import DraftPanel from "@/components/DraftPanel";
 import type { ChallengeDraft } from "@/components/DraftPanel";
 import AuthModal from "@/components/AuthModal";
+import ChatConversation, { type Turn } from "@/components/ChatConversation";
 import * as api from "@/lib/api-client";
 import type { ParsedChallenge } from "@/lib/api-client";
 import { compileMarket, type MarketDraft, type Clarification, type CompileResult } from "@/lib/market-compiler";
@@ -102,6 +103,10 @@ export default function Home() {
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [draftHistory, setDraftHistory] = useState<ParsedChallenge[]>([]);
+  // Chat-style conversation turns. Each user submit + AI reply becomes two turns.
+  // An AI turn may carry an inline card (the live draft) rendered below the bubble.
+  const [conversation, setConversation] = useState<Turn[]>([]);
+  const conversationIdRef = useCallback(() => Math.random().toString(36).slice(2, 10), []);
   const allowAmbient = useAmbientMotionAllowed();
 
   // Rehydrate draft history from localStorage once the user session is known.
@@ -118,6 +123,14 @@ export default function Home() {
     setWorkflowPhase("understanding");
     setAssistantNote("I am reading the prompt and turning it into a structured challenge.");
     setAppState("compiling");
+
+    // Append the user's message to the chat thread immediately so they see
+    // their own input appear before AI responds. This is what makes the
+    // product feel like chatting with an AI instead of a form submission.
+    setConversation((prev) => [
+      ...prev,
+      { id: conversationIdRef(), role: "user", text: input },
+    ]);
 
     // Try LLM-powered compile first (if logged in + API key set).
     // Pass the most-recent prior draft so AI can handle "another one /
@@ -146,10 +159,14 @@ export default function Home() {
         if (p.intent === "ordinary_chat" && !hasRichDraft) {
           // Use AI's own recommendationSummary when present — it's usually
           // a friendlier, context-aware nudge than our hardcoded fallback.
-          setUnderstanding(
+          const chatReply =
             p.recommendationSummary?.trim() ||
-              "Tell me what you want to bet on — like \"10 pushups in 60s\" or \"BTC above 70k by Friday\". I can also generate one for you: try \"surprise me\".",
-          );
+              "Tell me what you want to bet on — like \"10 pushups in 60s\" or \"BTC above 70k by Friday\". I can also generate one for you: try \"surprise me\".";
+          setUnderstanding(chatReply);
+          setConversation((prev) => [
+            ...prev,
+            { id: conversationIdRef(), role: "ai", text: chatReply },
+          ]);
           setAppState("idle");
           return;
         }
@@ -197,6 +214,20 @@ export default function Home() {
         setRichDraft(p); // keep the AI's full rich output with per-field options + reasoning
         setUnderstanding(p.recommendationSummary || understanding);
         setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
+
+        // Append AI turn to the chat thread. The text is AI's own conversational
+        // summary. The card itself (DraftPanel) is rendered outside the thread
+        // for now — see the drafting render path — but the thread gives the
+        // "AI talking back to me" feel that's missing when the page jumps
+        // straight to a silent card.
+        setConversation((prev) => [
+          ...prev,
+          {
+            id: conversationIdRef(),
+            role: "ai",
+            text: p.recommendationSummary || understanding || "Here's a draft based on what you said.",
+          },
+        ]);
 
         // Only show a clarifying question if the AI explicitly flagged one as needed.
         // Per our new philosophy: AI decides by default, asks only when truly ambiguous.
@@ -359,6 +390,7 @@ export default function Home() {
     setDraft(null); setRichDraft(null); setNextQuestion(null); setShareLink(null);
     setPublishedMarketId(null); setWorkflowPhase(null); setAssistantNote("");
     setCopied(false); setError(null); setIsTweaking(false);
+    setConversation([]); // clear the chat thread on explicit "Start over"
   }, []);
 
   return (
@@ -431,6 +463,14 @@ export default function Home() {
             />
           )}
 
+          {/* Chat thread when idle — shown when user got an ordinary_chat rejection
+              so the AI's reply lives in the chat instead of a floating tag. */}
+          {appState === "idle" && conversation.length > 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
+              <ChatConversation turns={conversation} isAiThinking={false} />
+            </motion.div>
+          )}
+
           {/* ── IDLE ── */}
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -496,8 +536,14 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* ── COMPILING ── */}
-          {appState === "compiling" && (
+          {/* ── COMPILING ── show thread so far + typing indicator; replaces the
+              empty-spinner screen that felt like the app froze. */}
+          {appState === "compiling" && conversation.length > 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <ChatConversation turns={conversation} isAiThinking={true} />
+            </motion.div>
+          )}
+          {appState === "compiling" && conversation.length === 0 && (
             <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent"
                 style={{ borderColor: "#FED7AA", borderTopColor: "transparent" }}
@@ -540,12 +586,15 @@ export default function Home() {
                   style={{ color: "#9A3412", background: "#FFEDD5", border: "1px solid #FFE0CC" }}>✏️ Edit input</button>
               </div>
 
-              {/* System Understanding Card */}
-              <div className="mb-4 p-4 shadow-sm" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#A7F3D0" }}>🧠 What I heard</p>
-                <p className="text-sm font-medium leading-relaxed" style={{ color: "#1E293B" }}
-                   dangerouslySetInnerHTML={{ __html: understanding.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#9A3412">$1</strong>') }} />
-              </div>
+              {/* Chat thread — every user submit + AI reply lives here. The draft
+                  card itself (DraftPanel) sits below as the single "active canvas";
+                  the thread is the conversation ABOUT it. This is what makes the
+                  product feel like talking to ChatGPT instead of filling a form. */}
+              {conversation.length > 0 && (
+                <div className="mb-5">
+                  <ChatConversation turns={conversation} isAiThinking={isTweaking} />
+                </div>
+              )}
 
               {/* Next Missing Field — ONE question at a time */}
               {nextQuestion && (
@@ -660,6 +709,12 @@ export default function Home() {
                 <CenteredComposer
                   onSubmit={async (input) => {
                     if (!richDraft) return;
+                    // Append the user's tweak to the chat thread so they see
+                    // what they just asked for, then wait for AI to reply.
+                    setConversation((prev) => [
+                      ...prev,
+                      { id: conversationIdRef(), role: "user", text: input },
+                    ]);
                     setIsTweaking(true);
                     setError(null);
                     try {
@@ -686,8 +741,26 @@ export default function Home() {
                       setDraft(updatedDraft);
                       setRichDraft(p);
                       setUnderstanding(p.recommendationSummary || res.message);
+                      // Append AI's reply to the chat thread.
+                      setConversation((prev) => [
+                        ...prev,
+                        {
+                          id: conversationIdRef(),
+                          role: "ai",
+                          text: res.message || p.recommendationSummary || "Updated the draft.",
+                        },
+                      ]);
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : "AI tweak failed");
+                      const msg = err instanceof Error ? err.message : "AI tweak failed";
+                      setError(msg);
+                      setConversation((prev) => [
+                        ...prev,
+                        {
+                          id: conversationIdRef(),
+                          role: "ai",
+                          text: `Sorry — couldn't apply that tweak. ${msg}`,
+                        },
+                      ]);
                     } finally {
                       setIsTweaking(false);
                     }
