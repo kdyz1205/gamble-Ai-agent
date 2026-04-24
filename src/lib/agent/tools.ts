@@ -41,6 +41,11 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
   const evidenceType = String(args.evidenceType ?? draft.evidenceType ?? "self_report");
   const judgeRule = String(args.judgeRule ?? draft.judgeRule ?? "");
   const timeWindow = String(args.timeWindow ?? draft.timeWindow ?? "24 hours");
+  // Default challenges to PUBLIC so /markets actually has something to show
+  // and strangers can find + accept. Agent can override with isPublic=false
+  // if the user explicitly says "just me and my friend" / "private".
+  const rawIsPublic = args.isPublic;
+  const isPublic = rawIsPublic === undefined ? true : Boolean(rawIsPublic);
 
   if (!title) return { ok: false, error: "title required" };
 
@@ -69,8 +74,8 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
         rules: judgeRule || proposition || title,
         evidenceType,
         settlementMode: "mutual_confirmation",
-        isPublic: false,
-        visibility: "private",
+        isPublic,
+        visibility: isPublic ? "public" : "private",
         maxParticipants: 2,
         aiReview: true,
         status: "open",
@@ -324,6 +329,115 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
 
 /* ─────────────────────────────────────────────── */
 
+/**
+ * findOpenMarkets — list public open challenges the user could accept.
+ * The agent uses this when the user says things like "给我找个挑战" /
+ * "match me with someone" / "有什么可以玩的". Returns up to `limit` items
+ * with enough info for the agent to summarize naturally.
+ */
+async function findOpenMarketsTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const limit = Math.min(Math.max(1, Math.floor(Number(args.limit ?? 10))), 50);
+  const typeFilter = typeof args.type === "string" ? args.type : undefined;
+  const markets = await prisma.challenge.findMany({
+    where: {
+      status: "open",
+      isPublic: true,
+      // Don't suggest user's own markets
+      creatorId: { not: ctx.userId },
+      // Hide full ones (shouldn't be status=open if full, but belt+suspenders)
+      participants: { none: { userId: ctx.userId } },
+      ...(typeFilter ? { type: typeFilter } : {}),
+    },
+    take: limit,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true, title: true, proposition: true, type: true, stake: true,
+      evidenceType: true, deadline: true, createdAt: true,
+      creator: { select: { username: true } },
+      _count: { select: { participants: true } },
+    },
+  });
+  return {
+    ok: true,
+    data: {
+      count: markets.length,
+      markets: markets.map((m) => ({
+        id: m.id,
+        title: m.title,
+        proposition: m.proposition,
+        type: m.type,
+        stake: m.stake,
+        evidenceType: m.evidenceType,
+        creator: m.creator.username,
+        participants: m._count.participants,
+        shareUrl: `${ctx.baseUrl}/join/${m.id}`,
+      })),
+    },
+  };
+}
+
+/**
+ * matchMe — auto-accept the best-fitting open public market for the user.
+ * Picks the newest non-full, non-owned, public, open challenge; falls back
+ * to "no match available" if nothing fits. Accepts it under the user's
+ * identity (atomic race-safe via the same acceptChallenge tool).
+ */
+async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const typeFilter = typeof args.type === "string" ? args.type : undefined;
+  const maxStake = typeof args.maxStake === "number" ? args.maxStake : undefined;
+
+  // Pick one — newest-first, not user's own, not full.
+  const candidate = await prisma.challenge.findFirst({
+    where: {
+      status: "open",
+      isPublic: true,
+      creatorId: { not: ctx.userId },
+      participants: { none: { userId: ctx.userId } },
+      ...(typeFilter ? { type: typeFilter } : {}),
+      ...(maxStake !== undefined ? { stake: { lte: maxStake } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, title: true, stake: true, maxParticipants: true, type: true },
+  });
+
+  if (!candidate) {
+    return {
+      ok: true,
+      data: {
+        matched: false,
+        message: "No open public markets matched right now. Create your own — opponents will find it.",
+      },
+    };
+  }
+
+  // Reuse the same atomic accept logic (stake escrow + race-safe participant insert).
+  const accept = await acceptChallengeTool(ctx, { challengeId: candidate.id });
+  if (!accept.ok) {
+    return {
+      ok: true,
+      data: {
+        matched: false,
+        candidateId: candidate.id,
+        title: candidate.title,
+        reason: accept.error,
+      },
+    };
+  }
+  return {
+    ok: true,
+    data: {
+      matched: true,
+      challengeId: candidate.id,
+      title: candidate.title,
+      stake: candidate.stake,
+      type: candidate.type,
+      marketUrl: `${ctx.baseUrl}/market/${candidate.id}`,
+    },
+  };
+}
+
+/* ─────────────────────────────────────────────── */
+
 async function updateDraftTool(_ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   // The server already merges draftPatch from every LLM response. This tool
   // is exposed so the LLM can EXPLICITLY request a full replacement — we just
@@ -345,6 +459,8 @@ export async function executeAgentTool(
     case "uploadEvidence":     return uploadEvidenceTool(ctx, args);
     case "runVisionJudge":     return runVisionJudgeTool(ctx, args);
     case "confirmVerdict":     return confirmVerdictTool(ctx, args);
+    case "findOpenMarkets":    return findOpenMarketsTool(ctx, args);
+    case "matchMe":            return matchMeTool(ctx, args);
     case "updateDraft":        return updateDraftTool(ctx, args);
     case "extractVideoFrames":
       // Pre-extraction runs automatically inside evidence POST. Expose as a

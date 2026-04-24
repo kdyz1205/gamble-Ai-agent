@@ -67,7 +67,9 @@ export type AgentToolName =
   | "extractVideoFrames"   // trigger the already-running pre-extract on an evidence row (no-op if already done)
   | "runVisionJudge"       // executeChallengeJudgment — real OpenAI vision call on extracted frames
   | "confirmVerdict"       // creator confirmation → settleCredits → settled status
-  | "settleCredits";       // internal — tools above already call credits helpers; exposed for completeness
+  | "settleCredits"        // internal — tools above already call credits helpers; exposed for completeness
+  | "findOpenMarkets"      // list public open challenges the user could join
+  | "matchMe";             // auto-accept the best open market for the user (WeChat drift-bottle style)
 
 /** Structured output the LLM is REQUIRED to return. */
 export interface RawAgentResponse {

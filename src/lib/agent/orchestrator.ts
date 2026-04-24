@@ -36,6 +36,7 @@ const ALLOWED_ACTIONS: AgentAction[] = [
 const ALLOWED_TOOLS: AgentToolName[] = [
   "updateDraft", "createChallenge", "acceptChallenge", "generateShareLink",
   "uploadEvidence", "extractVideoFrames", "runVisionJudge", "confirmVerdict", "settleCredits",
+  "findOpenMarkets", "matchMe",
 ];
 
 export interface AgentTurnInput {

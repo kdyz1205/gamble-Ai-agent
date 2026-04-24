@@ -37,14 +37,51 @@ export default function MarketsPage() {
   const { data: session } = useSession();
   const user = session?.user as { id?: string; username?: string } | undefined;
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
+  const [openPublic, setOpenPublic] = useState<ChallengeData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matching, setMatching] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    api.listChallenges({ mine: true, limit: 50 })
-      .then(res => { setMarkets(res.challenges); setLoading(false); })
+    // Load BOTH "my markets" AND "open public markets other people are waiting
+    // for an opponent on". Without the second list the page feels empty the
+    // first time a user opens it. Drives discovery — the user explicitly
+    // called this out ("我根本没办法看到任何挑战任何市场").
+    Promise.all([
+      api.listChallenges({ mine: true, limit: 50 }),
+      api.listChallenges({ status: "open", limit: 30 }),
+    ])
+      .then(([mine, publ]) => {
+        setMarkets(mine.challenges);
+        // Strip my own markets out of the "public" list so they don't show twice
+        setOpenPublic((publ.challenges || []).filter((c) => c.creator.id !== user.id));
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [user]);
+
+  // "Match me" — WeChat-drift-bottle-style: agent picks the best open public
+  // market and accepts it on your behalf. Goes through the agent orchestrator
+  // so the LLM gets a chance to pick something that fits (e.g. not a BTC bet
+  // if the user's history is fitness) and gives a friendly reply.
+  const tryMatchMe = async () => {
+    setMatching(true);
+    setMatchError(null);
+    try {
+      const r = await api.agentRespond("给我匹配一个挑战", [], api.emptyAgentDraftState());
+      const tr = r.toolResult as { matched?: boolean; marketUrl?: string; challengeId?: string; message?: string; reason?: string } | undefined;
+      if (tr?.matched && tr.marketUrl) {
+        window.location.href = tr.marketUrl;
+        return;
+      }
+      setMatchError(tr?.message || tr?.reason || r.userVisibleReply || "No open challenges to match right now.");
+    } catch (e) {
+      setMatchError(e instanceof Error ? e.message : "Couldn't match right now");
+    } finally {
+      setMatching(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -74,6 +111,67 @@ export default function MarketsPage() {
       </header>
 
       <main className="relative z-10 max-w-lg mx-auto px-4 py-4">
+        {/* Match-me CTA — AI drift-bottle style. When there's no one to bet
+            with, this is the "just give me an opponent" escape hatch. */}
+        <motion.div
+          className="mb-5 lp-glass p-4 rounded-[20px]"
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: `linear-gradient(135deg, ${PEACH}33, ${MINT}22, ${LAVENDER}22)`,
+            border: `1px solid ${NAVY_FAINT}`,
+          }}
+        >
+          <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: PEACH_TEXT }}>
+            🎯 Match me with an open challenge
+          </p>
+          <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
+            Don&apos;t feel like creating one? Let AI pair you with someone else&apos;s open bet — like shaking WeChat for a drift bottle.
+          </p>
+          <button
+            onClick={tryMatchMe}
+            disabled={matching}
+            className="w-full py-3 text-sm font-black rounded-full active:scale-95 disabled:opacity-50 transition-all"
+            style={{
+              background: PEACH, color: PEACH_TEXT,
+              boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
+              border: `1.5px solid ${PEACH_TEXT}22`,
+            }}
+          >
+            {matching ? "🔍 Looking…" : "🎲 Match me now"}
+          </button>
+          {matchError && (
+            <p className="text-[11px] font-semibold mt-2" style={{ color: ROSE_TEXT }}>{matchError}</p>
+          )}
+        </motion.div>
+
+        {/* Open public markets — what other people are waiting for an opponent on */}
+        {openPublic.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-xs font-black uppercase tracking-wider mb-3" style={{ color: MINT_TEXT }}>
+              ✨ Open for anyone — {openPublic.length} waiting
+            </h2>
+            <div className="space-y-2">
+              {openPublic.slice(0, 5).map((m) => (
+                <Link key={m.id} href={`/join/${m.id}`}
+                  className="block p-3 rounded-2xl lp-glass active:scale-[0.98] transition-transform"
+                  style={{ border: `1px solid ${NAVY_FAINT}` }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate mb-0.5" style={{ color: NAVY }}>{m.title}</p>
+                      <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>
+                        by {m.creator.username} · {m.type} · {m.stake > 0 ? `${m.stake} cr` : "free"}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full"
+                      style={{ background: PEACH, color: PEACH_TEXT }}>Join →</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My markets 🎲</h1>
 
         {loading ? (

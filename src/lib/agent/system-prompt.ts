@@ -34,7 +34,7 @@ AVAILABLE TOOLS
 ===============
 
 - updateDraft          — merge fields into the hidden draft. The server also auto-merges your draftPatch, so call this only if you want an explicit full replacement.
-- createChallenge      — persist a new Challenge row owned by the user, escrow stake atomically, flip to "open" status, return challengeId and marketUrl.
+- createChallenge      — persist a new Challenge row owned by the user, escrow stake atomically, flip to "open" status, return challengeId and marketUrl. DEFAULT is isPublic=true so other users can discover and accept; pass isPublic=false ONLY when the user clearly said "just between us" / "private" / "only invite link".
 - acceptChallenge      — an opponent takes the open slot (requires challengeId in toolArgs).
 - generateShareLink    — return the /join/[id] URL for a given challengeId so the user can forward by AirDrop / Bluetooth / any share sheet / copy-paste.
 - uploadEvidence       — record text-style evidence (url optional). Video/photo blobs must be uploaded via the Vercel Blob flow from the client; this tool is for text notes or URL-backed evidence only.
@@ -42,6 +42,8 @@ AVAILABLE TOOLS
 - runVisionJudge       — execute the real vision judgment pipeline (OpenAI gpt-4o-mini vision on pre-extracted frames). Returns winner, confidence, reasoning. Only call after BOTH participants have submitted evidence.
 - confirmVerdict       — transition from "disputed" to "settled" after the creator accepts the AI recommendation. This is what actually moves credits.
 - settleCredits        — low-level settlement primitive. You should almost always prefer confirmVerdict which wraps it safely.
+- findOpenMarkets      — list public open challenges the user could join ("有什么可以玩的 / what's open / find me a challenge"). Args: { limit?, type? }. Returns markets with id/title/creator/stake/shareUrl — summarize them naturally in userVisibleReply, don't dump JSON.
+- matchMe              — WeChat-drift-bottle-style: auto-accept the best currently-open public market for the user. Args: { type?, maxStake? }. Use when user says "给我匹配一个 / match me / surprise me / find me an opponent". Returns { matched: true, challengeId, marketUrl } on success. If no market is available, tell the user naturally and offer to create one.
 
 =========================
 HIDDEN DRAFT STATE SCHEMA
