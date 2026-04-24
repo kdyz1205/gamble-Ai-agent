@@ -344,7 +344,22 @@ export async function transcribeAudio(
   options?: { languageHint?: "en" | "zh"; previewText?: string },
 ): Promise<TranscriptionResponse> {
   const form = new FormData();
-  const filename = options?.languageHint ? `voice-${options.languageHint}.webm` : "voice.webm";
+
+  // Derive the file extension from the blob's MIME type so OpenAI can auto-
+  // detect format. Previously we hard-coded .webm for every blob; iOS Safari
+  // records audio/mp4 (AAC), which OpenAI's Whisper then refused to decode
+  // because the extension and actual bytes disagreed, returning an empty
+  // transcript — "Mic says Chinese, nothing comes back" bug.
+  const t = (file.type || "").toLowerCase();
+  const ext =
+    t.includes("webm") ? "webm" :
+    t.includes("ogg") ? "ogg" :
+    t.includes("mp4") || t.includes("aac") || t.includes("mp4a") ? "m4a" :
+    t.includes("mpeg") ? "mp3" :
+    t.includes("wav") ? "wav" :
+    "webm"; // best-effort default when blob.type is empty
+  const baseName = options?.languageHint ? `voice-${options.languageHint}` : "voice";
+  const filename = `${baseName}.${ext}`;
   form.append("file", file, filename);
   if (options?.languageHint) form.append("languageHint", options.languageHint);
   if (options?.previewText) form.append("previewText", options.previewText);

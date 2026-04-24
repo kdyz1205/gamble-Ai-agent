@@ -190,12 +190,43 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     streamRef.current = stream;
     audioChunksRef.current = [];
 
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : "audio/webm";
+    // CROSS-BROWSER MIME NEGOTIATION — this matters a lot for iOS Safari.
+    //
+    // iOS Safari's MediaRecorder does NOT support audio/webm (any variant).
+    // Its native output is audio/mp4 (AAC). Previous code only tried webm and
+    // silently failed on iPhone — which is exactly the "I said Chinese and
+    // nothing came back" bug. Try in order of (desktop-preferred → mobile
+    // Safari → progressive fallbacks) and stop at the first supported one.
+    //
+    // If NONE of our explicit candidates are supported we fall through to
+    // `new MediaRecorder(stream)` with no mimeType, letting the browser pick
+    // its default — which is always guaranteed to work if MediaRecorder
+    // itself exists. We then read `recorder.mimeType` to know what format
+    // we actually got, and forward that to the backend so OpenAI can decode.
+    const MIME_CANDIDATES = [
+      "audio/webm;codecs=opus",     // Chrome, Edge, Firefox (desktop + Android)
+      "audio/ogg;codecs=opus",      // Firefox, older Chrome
+      "audio/mp4;codecs=mp4a.40.2", // iOS Safari (AAC-LC)
+      "audio/mp4",                  // iOS Safari fallback
+      "audio/webm",                 // generic webm
+      "audio/aac",                  // rare but worth trying
+    ];
+    const chosenMime = MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m));
 
-    const recorder = new MediaRecorder(stream, { mimeType });
+    let recorder: MediaRecorder;
+    try {
+      recorder = chosenMime
+        ? new MediaRecorder(stream, { mimeType: chosenMime })
+        : new MediaRecorder(stream);
+    } catch {
+      // Absolute last-resort: some browsers throw even when isTypeSupported
+      // said yes. Retry with no options so we at least get default-encoded audio.
+      recorder = new MediaRecorder(stream);
+    }
     mediaRecorderRef.current = recorder;
+    if (typeof console !== "undefined") {
+      console.log(`[mic] recording with mime=${recorder.mimeType || "(browser default)"}`);
+    }
 
     recorder.ondataavailable = (event: BlobEvent) => {
       if (event.data && event.data.size > 0) {
