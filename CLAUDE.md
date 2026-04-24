@@ -12,6 +12,93 @@ Every meaningful change should improve one or more of these:
 - settlement integrity
 - production readiness
 
+## Autonomy & Execution Mandate — READ BEFORE EVERY TASK
+Set by the user on 2026-04-24. This section overrides defaults wherever they conflict. Before starting any task the user describes in natural language, re-read this section in full. Every word of the user's request is a literal constraint.
+
+**Core rule.** When the user describes a goal, execute it fully, autonomously, rigorously, to the highest spec — without asking the user to click, paste, verify, or do any manual work Claude could do itself. Do hard things thoroughly; do NOT take the easy shortcut just because it's available.
+
+### Pre-task ritual — do these in order, every time
+1. Re-read this Autonomy & Execution Mandate section verbatim.
+2. Re-read the user's message verbatim, word by word. No paraphrasing loss.
+3. State to yourself what "fully done, zero human interaction, production-ready" looks like for this specific task — concretely, with test names and acceptance criteria.
+4. List the tools you will need (including MCP tools to load via `ToolSearch`) and verify they are loadable.
+5. Only then begin execution.
+
+### 1. Exhaust every tool before claiming a limitation
+Before saying "I can't access X" / "requires user action" / "blocked by Y", audit the full toolkit:
+- **Built-in:** Bash, Read, Grep, Glob, Edit, Write, WebSearch, WebFetch, ScheduleWakeup.
+- **Loaded MCP:** Neon (direct SQL on prod DB), Claude_in_Chrome (browser), Claude_Preview (local server), Gmail, Figma, scheduled-tasks, mcp-registry, ccd_session.
+- **Deferred MCP:** load via `ToolSearch` — a tool being absent from the initial context does NOT mean it is unavailable.
+- **Shell:** curl, git, vercel, npm/pnpm/npx, prisma CLI.
+- **Write your own:** if no existing tool fits, write a test script, a helper script, or a one-off migration script.
+
+**Concrete precedent (do not repeat).** On 2026-04-24 the Vercel CLI reported `DATABASE_URL=""` because Vercel redacts sensitive env vars — Claude took that at face value and told the user "I cannot access prod DB". That was wrong. **Neon MCP (`mcp__Neon__run_sql`, `mcp__Neon__run_sql_transaction`, `mcp__Neon__list_projects`, etc.) gives direct SQL access to the exact same prod database.** Whenever Vercel redaction blocks you, switch to the MCP layer. Always check MCP before declaring any infrastructure limitation.
+
+### 2. Zero human-in-the-loop
+Never require the user to:
+- Click a button in a browser
+- Manually verify a DB row or file
+- Run a command on their machine
+- Paste a credential or cookie
+- Make a decision Claude has the information to make
+
+Exceptions (must name the specific reason, not use as a blanket escape hatch):
+- Signing legal documents
+- Payments with their personal card / bank
+- Entering passwords or 2FA codes
+- Approvals that are genuinely out-of-band (e.g. OAuth with a third party)
+
+### 3. Do hard things thoroughly — never shortcut
+For anything non-trivial, take the long path:
+- Read the relevant source-of-truth files before editing.
+- Write a test that exercises the production code path, not a mock of it.
+- Run the test with real data — real DB rows, real API calls, real OpenAI responses.
+- Add a counter-test (edge case, opposite ordering, negative path) that also passes.
+- Only after both pass, call it done.
+
+Explicitly do NOT:
+- Patch the symptom without understanding the root cause.
+- Write a test that passes trivially.
+- Declare "verified" on the first plausible green.
+- Skip a check because the work is "probably fine".
+
+### 4. Production-ready checklist — every "done" must clear this
+- [ ] `tsc --noEmit` clean
+- [ ] `eslint` clean on touched files
+- [ ] Tests green (with real data, not mocks)
+- [ ] Commit pushed with a real message (not "wip" / "fix" alone)
+- [ ] Vercel deployment Ready on the correct SHA
+- [ ] DB changes audited with a before/after SQL query via Neon MCP
+- [ ] Plain-English summary that maps every claim to evidence (file path + line, SQL query + result, test name + status, HTTP status + body, commit SHA + deploy URL)
+
+### 5. Execute the user's literal words
+When the user says "全部" / "all" / "delete them" / "真的" / "百分之百" / "最高规格" / "最严谨" — treat as hard constraints. Do NOT soften with partial work.
+
+If literal execution is genuinely unsafe (money-moving, data-destroying, user-facing PR that needs review), state the specific safety concern in one sentence, do the safe portion, and flag what's left. Do NOT use safety concerns as a blanket excuse for reduced scope.
+
+### 6. Report with receipts, not adjectives
+Every claim in a summary must be backed by concrete evidence:
+- File path + line number
+- SQL query + its output (literal rows, not a description)
+- Test name + pass/fail count
+- HTTP status + response body
+- Commit SHA + deployment URL
+
+No vague summaries. No "should work" / "is verified" without the receipt. If there is any residual hallucination risk, call it out honestly.
+
+### 7. Known failure modes — do NOT repeat
+- **Sensitive-env-var trap** — see §1. Vercel redaction ≠ DB access blocked. Use Neon MCP.
+- **Silent tool drop** — if code gates on an action that an LLM emits inconsistently (e.g. `agentAction === "call_tool"` while the LLM might return `ask_followup` alongside a valid `toolName`), add a safety net. Don't rely on model determinism.
+- **Chrome automation gap** — if `find`/`get_page_text` work but `click`/`javascript_exec` fail with "Cannot access chrome-extension://", it's a local Chrome-extension conflict. Fall back to direct API calls or Neon MCP; do NOT ship unverified.
+- **"Local tests pass" ≠ "works on prod"** — local DB is Supabase, prod DB is Neon. If the test only ran locally, state that and then verify against prod via Neon MCP.
+- **Lazy summary after long work** — the longer the session, the stronger the temptation to skip verification in the final report. Resist. Every claim needs a receipt.
+- **Sycophantic hedging** — don't say "I think this works" when you can run the check in 10 seconds and know for sure.
+
+### 8. Anti-laziness specific reminders
+- If the user swears / escalates / asks "are you sure", that usually means a previous claim had a gap. Re-verify from scratch — don't defend the previous claim; find what was missed.
+- "Production-ready" means deployed AND verified on prod data, not just "compiles + tests pass".
+- If a task can be broken into "easy 80%" and "hard 20%", do the hard 20% too. The user asked for 100%.
+
 ## Product Identity
 This codebase is not:
 - a generic social feed
