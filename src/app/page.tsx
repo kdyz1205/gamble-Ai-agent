@@ -10,8 +10,10 @@ import type { ChallengeDraft } from "@/components/DraftPanel";
 import AuthModal from "@/components/AuthModal";
 import ChatConversation, { type Turn } from "@/components/ChatConversation";
 import * as api from "@/lib/api-client";
-import type { ParsedChallenge } from "@/lib/api-client";
-import { compileMarket, type MarketDraft, type Clarification, type CompileResult } from "@/lib/market-compiler";
+import type { ParsedChallenge, AgentDraftState, AgentTurn } from "@/lib/api-client";
+import { emptyAgentDraftState } from "@/lib/api-client";
+import { compileMarket, type MarketDraft, type Clarification } from "@/lib/market-compiler";
+void compileMarket; // reserved for future legacy-fallback path; silence lint
 import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
 
 /**
@@ -55,7 +57,7 @@ function slimDraftForHistory(d: ParsedChallenge): ParsedChallenge {
     recommendationSummary: d.recommendationSummary,
   } as ParsedChallenge;
 }
-function saveDraftHistory(userId: string | undefined, list: ParsedChallenge[]) {
+function _saveDraftHistory(userId: string | undefined, list: ParsedChallenge[]) {
   if (!userId || typeof window === "undefined") return;
   try {
     let trimmed = list.slice(-DRAFT_HISTORY_LIMIT).map(slimDraftForHistory);
@@ -102,231 +104,149 @@ export default function Home() {
   const [isTweaking, setIsTweaking] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [draftHistory, setDraftHistory] = useState<ParsedChallenge[]>([]);
+  // Legacy draft history (pre-agent). Kept only so load/save effect below can
+  // still read localStorage without erroring; not actually used in the agent flow.
+  const [, setDraftHistory] = useState<ParsedChallenge[]>([]);
   // Chat-style conversation turns. Each user submit + AI reply becomes two turns.
   // An AI turn may carry an inline card (the live draft) rendered below the bubble.
   const [conversation, setConversation] = useState<Turn[]>([]);
   const conversationIdRef = useCallback(() => Math.random().toString(36).slice(2, 10), []);
   const allowAmbient = useAmbientMotionAllowed();
 
+  // Hidden agent draft state — persisted across turns of the conversation.
+  // The server merges draftPatch into this each turn and returns it back so
+  // React state always matches what the LLM sees next turn.
+  const [agentDraft, setAgentDraft] = useState<AgentDraftState>(emptyAgentDraftState);
+  const [agentHistory, setAgentHistory] = useState<AgentTurn[]>([]);
+
   // Rehydrate draft history from localStorage once the user session is known.
   useEffect(() => {
     setDraftHistory(loadDraftHistory(user?.id));
   }, [user?.id]);
 
-  /* ── Compile: natural language → market draft ── */
-  const handleSubmit = useCallback(async (input: string) => {
+  /* ── Agent turn: one conversational round with GambleAI Orchestrator.
+   * Replaces the legacy parseChallenge / adjust-draft path. Every user
+   * submit (text input OR Publish button on the draft card OR opponent
+   * accept etc.) becomes a turn through /api/agent/respond — the agent
+   * decides whether to ask back, show a draft, or call a tool.
+   */
+  const runAgentTurn = useCallback(async (input: string): Promise<void> => {
     setUserInput(input);
     setError(null);
-    setShareLink(null);
-    setPublishedMarketId(null);
-    setWorkflowPhase("understanding");
-    setAssistantNote("I am reading the prompt and turning it into a structured challenge.");
-    setAppState("compiling");
 
-    // Append the user's message to the chat thread immediately so they see
-    // their own input appear before AI responds. This is what makes the
-    // product feel like chatting with an AI instead of a form submission.
+    // Push user bubble immediately so UI feels responsive.
     setConversation((prev) => [
       ...prev,
       { id: conversationIdRef(), role: "user", text: input },
     ]);
+    // Tell the server what the user said + all prior turns + current draft.
+    const historyForServer: AgentTurn[] = [
+      ...agentHistory,
+      { role: "user", content: input },
+    ];
+    setAppState("compiling");
+    setWorkflowPhase("understanding");
+    setAssistantNote("AI is thinking...");
 
-    // Try LLM-powered compile first (if logged in + API key set).
-    // Pass the most-recent prior draft so AI can handle "another one /
-    // 再来一个 / make it bigger" as continuation rather than fresh start.
-    if (user) {
-      try {
-        const priorDraft = draftHistory.length > 0 ? draftHistory[draftHistory.length - 1] : undefined;
-        const res = await api.parseChallenge(input, 1, priorDraft);
-        const p = res.parsed;
+    let res: Awaited<ReturnType<typeof api.agentRespond>>;
+    try {
+      res = await api.agentRespond(input, historyForServer, agentDraft);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Agent request failed");
+      setAppState("idle");
+      return;
+    }
 
-        // Push the new draft onto history — but only if it looks like a real
-        // draft (not an ordinary_chat fallthrough).
-        if (p && p.intent !== "ordinary_chat") {
-          const nextHistory = [...draftHistory, p].slice(-DRAFT_HISTORY_LIMIT);
-          setDraftHistory(nextHistory);
-          saveDraftHistory(user.id, nextHistory);
-        }
+    // Append AI bubble
+    setConversation((prev) => [
+      ...prev,
+      { id: conversationIdRef(), role: "ai", text: res.userVisibleReply },
+    ]);
+    setAgentHistory([...historyForServer, { role: "ai", content: res.userVisibleReply }]);
+    setAgentDraft(res.draftState);
 
-        // LLM said it's genuinely ordinary chat (greetings, off-topic).
-        // If the AI still generated option lists (rich draft), trust it anyway —
-        // means the prompt produced something useful despite the intent tag.
-        const hasRichDraft =
-          (p.stakeOptions?.length ?? 0) > 0 ||
-          (p.evidenceOptions?.length ?? 0) > 0 ||
-          (p.deadlineOptions?.length ?? 0) > 0;
-        if (p.intent === "ordinary_chat" && !hasRichDraft) {
-          // Use AI's own recommendationSummary when present — it's usually
-          // a friendlier, context-aware nudge than our hardcoded fallback.
-          const chatReply =
-            p.recommendationSummary?.trim() ||
-              "Tell me what you want to bet on — like \"10 pushups in 60s\" or \"BTC above 70k by Friday\". I can also generate one for you: try \"surprise me\".";
-          setUnderstanding(chatReply);
-          setConversation((prev) => [
-            ...prev,
-            { id: conversationIdRef(), role: "ai", text: chatReply },
-          ]);
-          setAppState("idle");
-          return;
-        }
-
-        // "chat_reply" mode: AI wants to ask ONE follow-up question before
-        // committing to a full draft. Render the question as a chat bubble
-        // and stay in idle state so the composer keeps accepting the user's
-        // next reply — which parseChallenge picks up via priorDraft context.
-        // This is the multi-turn conversation pattern the user asked for
-        // (AI: "要赌多少?" → user: "不赌钱" → AI: "OK, 要录视频吗?" → ...).
-        if (p.intent === "chat_reply") {
-          const question =
-            p.recommendationSummary?.trim() ||
-            p.clarifyingQuestion?.trim() ||
-            "Tell me a bit more so I can set this up right.";
-          setConversation((prev) => [
-            ...prev,
-            { id: conversationIdRef(), role: "ai", text: question },
-          ]);
-          // Keep a "slim" prior draft for the next turn so the AI sees what
-          // it already knows (even without a card). This lets the AI chain
-          // subsequent chat_reply turns or finally pivot to a real draft.
-          setRichDraft({
-            ...(richDraft ?? {} as ParsedChallenge),
-            intent: "chat_reply",
-            title: p.title || input.slice(0, 64),
-            proposition: p.proposition,
-            type: p.type || "General",
-            recommendationSummary: question,
-            suggestedStake: p.suggestedStake ?? 0,
-            evidenceType: p.evidenceType || "self_report",
-            deadline: p.deadline || "24 hours",
-            rules: p.rules || "",
-            isPublic: p.isPublic ?? false,
-          });
-          setUnderstanding(question);
-          setAppState("idle"); // stay on composer — user will reply
-          setWorkflowPhase(null);
-          return;
-        }
-
-        // LLM compiled a market — use it directly
-        setWorkflowPhase("drafting");
-        const llmDraft: MarketDraft = {
-          marketType: p.marketType || "challenge",
-          proposition: p.proposition || p.title,
-          title: p.title || input.slice(0, 64),
-          subject: p.subject || null,
-          stake: p.suggestedStake || 0,
-          stakeUnit: p.suggestedStake > 0 ? "credits" : "unset",
+    switch (res.agentAction) {
+      case "ask_followup":
+      case "refuse_or_redirect":
+        // stay on idle screen — composer remains, waiting for next reply
+        setAppState("idle");
+        setWorkflowPhase(null);
+        setAssistantNote("");
+        return;
+      case "show_draft": {
+        // Map hidden agent draft → the MarketDraft shape the existing
+        // DraftPanel renders. No option chips — chat IS the refinement UI now.
+        const ad = res.draftState;
+        const md: MarketDraft = {
+          marketType: "challenge",
+          proposition: ad.proposition || ad.title || input,
+          title: ad.title || input.slice(0, 64),
+          subject: null,
+          stake: ad.stake ?? 0,
+          stakeUnit: (ad.stake ?? 0) > 0 ? "credits" : "unset",
           stakeToken: "credits",
-          evidenceType: p.evidenceType || "unset",
-          eventTime: null,
+          evidenceType: ad.evidenceType || "unset",
+          eventTime: ad.timeWindow,
           joinWindow: null,
           proofWindow: null,
           proofSource: null,
           arbiter: null,
           fallbackRule: null,
-          disputeWindow: p.suggestedStake > 0 ? "24 hours" : null,
+          disputeWindow: (ad.stake ?? 0) > 0 ? "24 hours" : null,
           settlementMode: "mutual_confirmation",
-          visibility: p.isPublic ? "public" : "private",
-          type: p.type || "General",
-          deadline: p.deadline || "24 hours",
-          rules: p.rules || p.proposition || p.title,
+          visibility: "private",
+          type: "General",
+          deadline: ad.timeWindow || "24 hours",
+          rules: ad.judgeRule || ad.proposition || ad.title || "",
           aiReview: true,
-          isPublic: p.isPublic ?? false,
+          isPublic: false,
         };
-
-        // Build understanding from LLM
-        const parts = [];
-        parts.push(`**${(p.marketType || "challenge").replace(/_/g, " ")}**`);
-        if (p.proposition) parts.push(`→ "${p.proposition}"`);
-        if (p.suggestedStake > 0) parts.push(`| ${p.suggestedStake} credits`);
-        if (p.deadline && p.deadline !== "24 hours") parts.push(`| by ${p.deadline}`);
-
-        const missing = p.missingFields || [];
-        const understanding = missing.length === 0
-          ? `Ready to publish: ${parts.join(" ")}`
-          : `${parts.join(" ")} — need: ${missing.join(", ")}`;
-
-        setDraft(llmDraft);
-        setRichDraft(p); // keep the AI's full rich output with per-field options + reasoning
-        setUnderstanding(p.recommendationSummary || understanding);
-        setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
-
-        // Append AI turn to the chat thread. The text is AI's own conversational
-        // summary. The card itself (DraftPanel) is rendered outside the thread
-        // for now — see the drafting render path — but the thread gives the
-        // "AI talking back to me" feel that's missing when the page jumps
-        // straight to a silent card.
-        setConversation((prev) => [
-          ...prev,
-          {
-            id: conversationIdRef(),
-            role: "ai",
-            text: p.recommendationSummary || understanding || "Here's a draft based on what you said.",
-          },
-        ]);
-
-        // Only show a clarifying question if the AI explicitly flagged one as needed.
-        // Per our new philosophy: AI decides by default, asks only when truly ambiguous.
-        if (p.clarifyingQuestion && (p.missingFields?.length ?? 0) > 0) {
-          const field = p.missingFields?.[0] || "stake";
-          // Use AI-generated options for the clarification, not hardcoded ones.
-          let aiOptions: Array<{ label: string; value: string | number | boolean; patch: Partial<MarketDraft> }> = [];
-          if (field === "stake" && p.stakeOptions?.length) {
-            aiOptions = p.stakeOptions.map(o => ({
-              label: o.amount === 0 ? `Free — ${o.label}` : `${o.amount} cr — ${o.label}`,
-              value: o.amount,
-              patch: { stake: o.amount, stakeUnit: (o.amount > 0 ? "credits" : "unset") as MarketDraft["stakeUnit"] },
-            }));
-          } else if (field === "evidence" && p.evidenceOptions?.length) {
-            aiOptions = p.evidenceOptions.map(o => ({
-              label: `${o.label}${o.required ? " (essential)" : ""}`,
-              value: o.type,
-              patch: { evidenceType: o.type },
-            }));
-          } else if (field === "deadline" && p.deadlineOptions?.length) {
-            aiOptions = p.deadlineOptions.map(o => ({
-              label: o.duration,
-              value: o.duration,
-              patch: { deadline: o.duration, eventTime: o.duration },
-            }));
-          }
-          setNextQuestion({
-            field: field as keyof MarketDraft,
-            question: p.clarifyingQuestion,
-            options: aiOptions.length > 0 ? aiOptions : getDefaultOptions(field),
-          });
-        } else {
-          setNextQuestion(null);
-        }
-
-        setAppState("drafting");
+        setDraft(md);
+        // Synthesize a minimal ParsedChallenge so existing DraftPanel code
+        // (rich.recommendationSummary etc.) has something to read.
+        setRichDraft({
+          title: md.title, type: md.type,
+          suggestedStake: md.stake, evidenceType: md.evidenceType,
+          rules: md.rules || "", deadline: md.deadline, isPublic: false,
+          intent: "candidate_market",
+          marketType: "challenge",
+          proposition: md.proposition,
+          recommendationSummary: res.userVisibleReply,
+          redFlags: ad.safetyNotes,
+          missingFields: [],
+        });
         setWorkflowPhase("validating");
+        setAppState("drafting");
         return;
-      } catch (parseErr) {
-        // Show the user that AI failed, using local fallback
-        const msg = parseErr instanceof Error ? parseErr.message : "AI parse failed";
-        console.error("LLM parse error:", msg);
-        setUnderstanding(`⚠ AI unavailable (${msg}) — using local analysis`);
       }
+      case "call_tool": {
+        // The agent asked the server to do something. For createChallenge
+        // the tool result carries challengeId + shareUrl — we surface the
+        // live challenge screen immediately so the user can share it.
+        const tr = res.toolResult as { challengeId?: string; shareUrl?: string; marketUrl?: string } | undefined;
+        if (res.toolName === "createChallenge" && tr?.challengeId) {
+          setPublishedMarketId(tr.challengeId);
+          setShareLink(tr.shareUrl || tr.marketUrl || null);
+          setAppState("live");
+          setWorkflowPhase("published");
+          await updateSession(); // refresh credits in header
+          return;
+        }
+        // Other tools: just stay on current screen + surface any error
+        if (res.toolError) setError(res.toolError);
+        setAppState("drafting");
+        return;
+      }
+      case "judge":
+      case "confirm":
+        // Not used from the home flow yet (judge/confirm happen on /market/[id]).
+        // Fall back to idle.
+        setAppState("idle");
+        return;
     }
+  }, [agentHistory, agentDraft, conversationIdRef, updateSession]);
 
-    // Local fallback compile (no API key or not logged in)
-    const result: CompileResult = compileMarket(input);
-
-    if (result.level === "ordinary_chat") {
-      setUnderstanding(result.understanding);
-      setAppState("idle");
-      return;
-    }
-
-    setDraft(result.draft);
-    setUnderstanding(result.understanding);
-    setNextQuestion(result.nextQuestion);
-    setAssistantNote("Draft ready. You can publish it or keep editing in plain language.");
-    setWorkflowPhase("validating");
-    setAppState("drafting");
-  }, [user, draftHistory]);
+  // (legacy parseChallenge flow removed — agent orchestrator at runAgentTurn() is the sole intake.)
 
   /* ── Apply clarification answer → patch draft ── */
   const handleClarificationAnswer = useCallback((patch: Partial<MarketDraft>) => {
@@ -569,7 +489,7 @@ export default function Home() {
                   {understanding}
                 </motion.p>
               )}
-              <CenteredComposer onSubmit={handleSubmit} isActive={false} initialValue={userInput} />
+              <CenteredComposer onSubmit={runAgentTurn} isActive={false} initialValue={userInput} />
             </motion.div>
           )}
 
@@ -745,59 +665,15 @@ export default function Home() {
               <div className="mt-4">
                 <CenteredComposer
                   onSubmit={async (input) => {
-                    if (!richDraft) return;
-                    // Append the user's tweak to the chat thread so they see
-                    // what they just asked for, then wait for AI to reply.
-                    setConversation((prev) => [
-                      ...prev,
-                      { id: conversationIdRef(), role: "user", text: input },
-                    ]);
+                    // The in-drafting composer now routes through the same
+                    // Agent Orchestrator as the initial compose — every user
+                    // message (including "create it", "加 10 credits", "换成
+                    // photo") becomes another conversational turn. No special-
+                    // cased adjustDraft. The agent decides whether to ask back,
+                    // re-render the card, or call createChallenge.
                     setIsTweaking(true);
-                    setError(null);
                     try {
-                      const res = await api.adjustDraft(input, richDraft);
-                      const p = res.draft;
-
-                      // Map the updated rich ParsedChallenge back to the MarketDraft used by publish.
-                      const updatedDraft: MarketDraft = {
-                        ...draft,
-                        title: p.title || draft.title,
-                        proposition: p.proposition || draft.proposition,
-                        marketType: (p.marketType || draft.marketType) as MarketDraft["marketType"],
-                        stake: p.suggestedStake ?? draft.stake,
-                        stakeUnit: (p.suggestedStake ?? 0) > 0 ? "credits" : "unset",
-                        evidenceType: p.evidenceType || draft.evidenceType,
-                        deadline: p.deadline || draft.deadline,
-                        eventTime: p.deadline || draft.eventTime,
-                        rules: p.rules || draft.rules,
-                        type: p.type || draft.type,
-                        isPublic: p.isPublic ?? draft.isPublic,
-                        visibility: p.isPublic ? "public" : "private",
-                        disputeWindow: (p.suggestedStake ?? 0) > 0 ? "24 hours" : null,
-                      };
-                      setDraft(updatedDraft);
-                      setRichDraft(p);
-                      setUnderstanding(p.recommendationSummary || res.message);
-                      // Append AI's reply to the chat thread.
-                      setConversation((prev) => [
-                        ...prev,
-                        {
-                          id: conversationIdRef(),
-                          role: "ai",
-                          text: res.message || p.recommendationSummary || "Updated the draft.",
-                        },
-                      ]);
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "AI tweak failed";
-                      setError(msg);
-                      setConversation((prev) => [
-                        ...prev,
-                        {
-                          id: conversationIdRef(),
-                          role: "ai",
-                          text: `Sorry — couldn't apply that tweak. ${msg}`,
-                        },
-                      ]);
+                      await runAgentTurn(input);
                     } finally {
                       setIsTweaking(false);
                     }
@@ -942,31 +818,4 @@ function ConversationProgress({
   );
 }
 
-function getDefaultOptions(field: string): Clarification["options"] {
-  switch (field) {
-    case "stake":
-      return [
-        { label: "Free", value: 0, patch: { stake: 0, stakeUnit: "credits" } },
-        { label: "5 credits", value: 5, patch: { stake: 5, stakeUnit: "credits" } },
-        { label: "10 credits", value: 10, patch: { stake: 10, stakeUnit: "credits" } },
-        { label: "25 credits", value: 25, patch: { stake: 25, stakeUnit: "credits" } },
-      ];
-    case "evidenceType":
-      return [
-        { label: "Video proof", value: "Video proof", patch: { evidenceType: "Video proof" } },
-        { label: "Photo", value: "Photo evidence", patch: { evidenceType: "Photo evidence" } },
-        { label: "Self-report", value: "Self-report", patch: { evidenceType: "Self-report" } },
-      ];
-    case "deadline":
-      return [
-        { label: "1 hour", value: "1 hour", patch: { deadline: "1 hour", eventTime: "1 hour" } },
-        { label: "24 hours", value: "24 hours", patch: { deadline: "24 hours", eventTime: "24 hours" } },
-        { label: "1 week", value: "7 days", patch: { deadline: "7 days", eventTime: "7 days" } },
-      ];
-    default:
-      return [
-        { label: "Yes", value: "yes", patch: {} },
-        { label: "No", value: "no", patch: {} },
-      ];
-  }
-}
+// getDefaultOptions removed with legacy flow

@@ -30,7 +30,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { parseChallenge } from "@/lib/ai-engine";
-import { spendCredits, addCredits, getCredits } from "@/lib/credits";
+import { spendCredits, getCredits } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { COSTS } from "@/lib/credits";
 
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.title) return Response.json({ error: "parse returned no title", trace }, { status: 502 });
 
   // 4. Charge creator stake
-  const cSpend = await mark("stake_creator", async () => {
+  const _cSpend = await mark("stake_creator", async () => {
     const r = await spendCredits(creator.id, stake, "stake", `Staked ${stake} credits on "${parsed.title.slice(0, 40)}"`);
     if (!r.success) throw new Error(r.error || "creator stake failed");
     return r;

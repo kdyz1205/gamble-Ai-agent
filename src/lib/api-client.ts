@@ -296,6 +296,69 @@ export interface ParsedChallenge {
   actionItems?: ActionItem[];
 }
 
+/* ── Agent Orchestrator — the one conversational entry point ── */
+
+export type AgentAction =
+  | "ask_followup" | "show_draft" | "call_tool" | "judge" | "confirm" | "refuse_or_redirect";
+
+export interface AgentDraftState {
+  title: string | null;
+  proposition: string | null;
+  participants: string | null;
+  stake: number | null;
+  stakeType: "credits" | "none" | null;
+  evidenceType: "video" | "photo" | "text" | null;
+  judgeRule: string | null;
+  timeWindow: string | null;
+  safetyNotes: string[];
+  readyToPublish: boolean;
+}
+
+export interface AgentTurn {
+  role: "user" | "ai";
+  content: string;
+}
+
+export interface AgentResponse {
+  userVisibleReply: string;
+  agentAction: AgentAction;
+  draftPatch: Partial<AgentDraftState>;
+  toolName: string | null;
+  toolArgs: Record<string, unknown> | null;
+  draftState: AgentDraftState;
+  toolResult?: {
+    challengeId?: string;
+    shareUrl?: string;
+    marketUrl?: string;
+    [key: string]: unknown;
+  } | unknown;
+  toolError?: string;
+}
+
+export function emptyAgentDraftState(): AgentDraftState {
+  return {
+    title: null, proposition: null, participants: null,
+    stake: null, stakeType: null, evidenceType: null,
+    judgeRule: null, timeWindow: null,
+    safetyNotes: [], readyToPublish: false,
+  };
+}
+
+/**
+ * One conversational turn with GambleAI. Frontend keeps conversationHistory
+ * and draftState in React; each call sends them back for server-side merge.
+ */
+export async function agentRespond(
+  message: string,
+  conversationHistory: AgentTurn[],
+  draftState: AgentDraftState,
+): Promise<AgentResponse> {
+  return apiFetch("/agent/respond", {
+    method: "POST",
+    body: JSON.stringify({ message, conversationHistory, draftState }),
+  });
+}
+
 export async function parseChallenge(
   input: string,
   tier: 1 | 2 | 3 = 1,

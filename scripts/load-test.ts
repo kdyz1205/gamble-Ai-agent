@@ -28,7 +28,7 @@ dotenvLocal({ path: ".env.local" });
 const BASE = process.env.LOAD_BASE || "https://gamble-ai-agent.vercel.app";
 const N_PAIRS = Number(process.env.N_PAIRS || "20");
 const STAKE = Number(process.env.STAKE || "5");
-const RUN_ID = Math.random().toString(36).slice(2, 8);
+const RUN_ID = process.env.LOAD_RUN_ID || Math.random().toString(36).slice(2, 8);
 
 interface UserCtx {
   idx: number;
@@ -118,7 +118,7 @@ async function register(user: UserCtx, jar: Map<string, string>): Promise<void> 
   if (loc) await cookieFetch(jar, loc.startsWith("http") ? loc : BASE + loc);
 }
 
-async function getSession(user: UserCtx, jar: Map<string, string>): Promise<any> {
+async function _getSession(user: UserCtx, jar: Map<string, string>): Promise<any> {
   const res = await cookieFetch(jar, `${BASE}/api/auth/session`);
   if (!res.ok) throw new Error(`session fetch ${res.status}`);
   return res.json();
@@ -203,9 +203,18 @@ async function confirmVerdict(user: UserCtx, jar: Map<string, string>, id: strin
 }
 
 async function getCredits(user: UserCtx, jar: Map<string, string>): Promise<number> {
-  const res = await cookieFetch(jar, `${BASE}/api/auth/session`);
+  // Hit /api/credits (DB read) rather than /api/auth/session (JWT cache) so
+  // the test sees real post-settlement balance, not the stale token snapshot.
+  const res = await cookieFetch(jar, `${BASE}/api/credits`);
+  if (!res.ok) {
+    // Session endpoint fallback — will be stale if JWT not refreshed, but
+    // at least something to report.
+    const s = await cookieFetch(jar, `${BASE}/api/auth/session`);
+    const j = await s.json() as any;
+    return Number(j?.user?.credits ?? 0);
+  }
   const j = await res.json() as any;
-  return Number(j?.user?.credits ?? 0);
+  return Number(j?.credits ?? 0);
 }
 
 /* ── per-pair scenario ─────────────────────────────────────── */
@@ -241,7 +250,7 @@ const CHINESE_PROMPTS = [
 ];
 
 async function runPair(pairIdx: number): Promise<PairResult> {
-  const now = Date.now();
+  const _now = Date.now();
   const creator: UserCtx = {
     idx: pairIdx * 2,
     email: `loadtest-${RUN_ID}-c${pairIdx}@luckyplay.test`,
@@ -314,10 +323,14 @@ async function runPair(pairIdx: number): Promise<PairResult> {
   steps.accept = { ok: accepted.ok, ms: accepted.ms, error: accepted.error };
   if (!accepted.ok) return result;
 
-  // 6. Both submit evidence (parallel — tests the (challengeId,userId) @@unique + status race guard)
+  // 6. Both submit evidence (parallel — tests the (challengeId,userId) @@unique + status race guard).
+  // Evidence is intentionally asymmetric so the AI judge picks a definite winner
+  // (the creator) instead of returning null/tie which would refund both — that
+  // would make the ledger-sanity check meaningless for exercising settleChallenge's
+  // winner/loser paths.
   const [evC, evO] = await Promise.all([
-    mark(() => submitEvidence(creator, cJar, challengeId, `Creator P${pairIdx} finished the challenge successfully.`)),
-    mark(() => submitEvidence(opponent, oJar, challengeId, `Opponent P${pairIdx} also finished — pretty close call.`)),
+    mark(() => submitEvidence(creator, cJar, challengeId, `I FINISHED the challenge 100% completely and correctly. All requirements met with timestamp video and GPS logs. Clear success across every criterion. No partial completion — done in full.`)),
+    mark(() => submitEvidence(opponent, oJar, challengeId, `I could not finish. Gave up halfway through and did not submit the required evidence. Failed the attempt.`)),
   ]);
   steps.evidenceCreator = { ok: evC.ok, ms: evC.ms, error: evC.error };
   steps.evidenceOpponent = { ok: evO.ok, ms: evO.ms, error: evO.error };
