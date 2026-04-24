@@ -21,6 +21,7 @@ export async function POST(
   if (!user) return unauthorized();
 
   const { id } = await params;
+  try {
   const challenge = await prisma.challenge.findUnique({
     where: { id },
     include: {
@@ -121,4 +122,11 @@ export async function POST(
   });
 
   return Response.json({ challenge: updated, judgment, settlement });
+  } catch (err) {
+    console.error(`[confirm-verdict ${id}] uncaught:`, err);
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Confirm verdict failed" },
+      { status: 500 },
+    );
+  }
 }
