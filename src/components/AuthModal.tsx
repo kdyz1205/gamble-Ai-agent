@@ -43,7 +43,38 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
     }
   }, [open]);
 
+  /**
+   * Detect in-app webviews where Google blocks OAuth ("disallowed_useragent"
+   * — Google's 2022+ policy to prevent OAuth token interception by embedded
+   * browsers). Users who tapped the link from Messages / WeChat / Weibo /
+   * Slack / Instagram / FB Messenger / Line / QQ / TikTok / a QR-code
+   * preview get hit by this. The only real fix is to open the URL in the
+   * actual OS browser.
+   */
+  const isBlockedWebview = (): boolean => {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent || "";
+    // Classic in-app webview signatures
+    if (/FB_IAB|FBAN|FBAV|Instagram|Line\/|MicroMessenger|QQBrowser|Weibo|Twitter|TikTok|Snapchat/i.test(ua)) return true;
+    // iOS WKWebView — an app embeds Safari's engine but without the URL bar
+    // Heuristic: iPhone/iPad + "AppleWebKit" but NO "Safari/" token means webview
+    if (/(iPhone|iPad|iPod)/i.test(ua) && !/Safari\//i.test(ua)) return true;
+    // Android Chrome WebView
+    if (/\bwv\b/.test(ua)) return true;
+    return false;
+  };
+
+  const [webviewWarning, setWebviewWarning] = useState(false);
+
   const handleGoogleLogin = () => {
+    // Guard: in-app webview → Google will reject with "disallowed_useragent".
+    // Show a copy-the-link prompt instead of the normal flow so the user can
+    // paste into real Safari / Chrome. We do NOT kick off signIn in this case.
+    if (isBlockedWebview()) {
+      setWebviewWarning(true);
+      return;
+    }
+
     // Before starting the OAuth flow, nuke any stale state/PKCE cookies from a
     // previously-abandoned attempt. Without this, if the user clicks Sign In,
     // closes the modal, then clicks again, NextAuth compares the new URL state
@@ -60,6 +91,15 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     }
     signIn("google", { callbackUrl: "/", prompt: "select_account" });
+  };
+
+  const copySiteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert("Link copied. Open Safari or Chrome and paste it — Google sign-in works there.");
+    } catch {
+      // no-op
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,6 +257,25 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                     </motion.div>
                   </AnimatePresence>
                 </div>
+
+                {/* In-app webview warning — Google blocks OAuth here.
+                    Appears only when the user tapped the link from Messages /
+                    WeChat / Slack / Instagram / similar embedded browsers. */}
+                {webviewWarning && (
+                  <div className="mb-4 px-4 py-3 rounded-2xl text-xs font-semibold leading-relaxed"
+                    style={{ background: ROSE_BG, color: ROSE_TEXT, border: `1px solid ${ROSE_TEXT}33` }}>
+                    <p className="mb-2">
+                      Google blocks sign-in from in-app browsers. Open this page in <b>Safari</b> or <b>Chrome</b> directly, or use email + password below.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={copySiteLink}
+                      className="px-3 py-1.5 text-[11px] font-black rounded-full active:scale-95 transition-transform"
+                      style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}>
+                      📋 Copy link
+                    </button>
+                  </div>
+                )}
 
                 {/* Google Sign In */}
                 <motion.button
