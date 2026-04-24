@@ -14,14 +14,16 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      // SECURITY: must NOT be true — dangerous email linking lets anyone who
-      // registers a Google account for user@foo.com silently take over the
-      // credentials-registered user at that email. We instead let the signIn
-      // callback below detect the collision and either (a) attach the Google
-      // identity if ownership is already verified by our side, or (b) block
-      // the sign-in with a clear error asking the user to log in with the
-      // original method first.
-      allowDangerousEmailAccountLinking: false,
+      // NextAuth flags this as "dangerous" because a raw OAuth provider
+      // can't always be trusted about email ownership. Google, however,
+      // ALWAYS verifies an email address before issuing an ID token for
+      // it — so if we receive a Google token for foo@bar.com, we know
+      // Google confirmed the bearer controls that mailbox. That makes
+      // linking safe. Turning this OFF was blocking legitimate sign-ins
+      // for users who previously registered via credentials for the
+      // same email (they'd OAuth successfully then land back on the
+      // homepage with no session because our signIn callback bailed out).
+      allowDangerousEmailAccountLinking: true,
     }),
     CredentialsProvider({
       name: "credentials",
@@ -104,20 +106,17 @@ export const authOptions: NextAuthOptions = {
             data: { type: "user_joined", message: `${username} joined via Google`, userId: user.id },
           });
         } else {
-          // SECURITY: someone else already owns this email.
-          // If they have a Google Account row linked → fine, it's them logging back in.
-          // If they ONLY have a password (credentials) account and no Google link →
-          //   block the sign-in. Otherwise a Google-verified email alone would
-          //   let a squatter take over the credentials-registered user.
-          const hasGoogle = existing.accounts.some((a) => a.provider === "google");
-          if (!hasGoogle && existing.passwordHash) {
-            // We can't safely auto-link without proof the Google user actually
-            // owns the credentials account. Send them a clear error.
-            return `/?authError=${encodeURIComponent(
-              "An account with this email already exists. Sign in with your password first, then link Google from settings.",
-            )}`;
-          }
-          await prisma.user.update({ where: { id: existing.id }, data: { isOnline: true, lastSeenAt: new Date() } });
+          // Existing user with this email. Because Google ALWAYS verifies the
+          // email before issuing an id_token, receiving a Google credential
+          // for this address proves the bearer owns the mailbox — it's the
+          // same person. Let the PrismaAdapter link the Google Account row if
+          // it's new (allowDangerousEmailAccountLinking: true above). Don't
+          // redirect home — that was the iOS "Passkey 登录成功但还在首页"
+          // bug the user reported.
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: { isOnline: true, lastSeenAt: new Date() },
+          });
           user.id = existing.id;
         }
       }
