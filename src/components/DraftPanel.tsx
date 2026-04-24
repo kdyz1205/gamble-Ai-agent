@@ -65,7 +65,12 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
       style={{
         borderRadius: "28px",
         boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
-        overflow: "hidden",
+        // NO overflow: hidden here — it was clipping the absolute-positioned
+        // ClickableField dropdowns, making the options INVISIBLE and the user's
+        // click fall through to whichever sibling field was underneath. Reported
+        // as "can't pick the stake amount, clicks do nothing". The top sticker
+        // tab doesn't actually need the clip because its own background is
+        // contained to the header div.
       }}
     >
       {/* Top sticker tab */}
@@ -306,7 +311,11 @@ function ClickableField({ label, value, tint, emoji, isOpen, onToggle, options, 
   };
 
   return (
-    <div className="relative">
+    // When this field is open, raise its whole stacking context so the
+    // dropdown sits visually above sibling fields in the grid (e.g. Stake
+    // dropdown must appear ON TOP of the Evidence/Type cells below it,
+    // otherwise clicks on dropdown options fall through to those cells).
+    <div className="relative" style={{ zIndex: isOpen ? 30 : 1 }}>
       <motion.button
         onClick={onToggle}
         whileTap={clickable ? { scale: 0.97 } : undefined}
