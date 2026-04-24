@@ -62,7 +62,7 @@ export interface DeadlineOption {
 
 export interface ParsedChallenge {
   // ── Intent classification ──
-  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
+  intent?: "definite_market" | "candidate_market" | "ordinary_chat" | "chat_reply";
 
   // ── Core understanding ──
   title: string;
@@ -155,6 +155,13 @@ STEPS:
    - "definite_market": Clear bet/challenge with enough info to publish
    - "candidate_market": Clearly a bet but missing key fields
    - "ordinary_chat": Genuinely unrelated to betting (greetings, personal questions to you, off-topic talk). Use this SPARINGLY.
+   - "chat_reply": The user made a betting-relevant statement but you WANT to ask ONE short follow-up before committing to a full draft. Use when:
+     · input gives you the proposition but no hint about stake or money intent ("我跟他赌谁能先喝完这瓶酒" / "let's bet who's faster") → ask "要赌多少? 不赌钱也行"
+     · input gives stake but not evidence/proof format for a physical action → ask "要录视频吗还是自己汇报?"
+     · input gives TWO different valid interpretations of the same line → ask which
+     In chat_reply mode, put ONE short conversational question in recommendationSummary (in the user's language). Leave stakeOptions / evidenceOptions / deadlineOptions EMPTY. Don't produce a finished draft yet. The UI will NOT render a draft card for chat_reply — it will just show your question as a chat bubble.
+     Next turn the user will reply, and you'll get their prior state via priorDraft context — at that point pivot to candidate_market / definite_market with a real draft.
+     Limit: don't chain more than 2 chat_reply rounds in a row. After 2 back-and-forths, commit to a draft with your best guesses — keep momentum.
 
    CRITICAL — DO NOT REJECT WHEN THE USER HANDED YOU THE WHEEL:
    If the user explicitly asks YOU to pick / generate / invent / suggest a challenge

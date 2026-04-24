@@ -171,6 +171,43 @@ export default function Home() {
           return;
         }
 
+        // "chat_reply" mode: AI wants to ask ONE follow-up question before
+        // committing to a full draft. Render the question as a chat bubble
+        // and stay in idle state so the composer keeps accepting the user's
+        // next reply — which parseChallenge picks up via priorDraft context.
+        // This is the multi-turn conversation pattern the user asked for
+        // (AI: "要赌多少?" → user: "不赌钱" → AI: "OK, 要录视频吗?" → ...).
+        if (p.intent === "chat_reply") {
+          const question =
+            p.recommendationSummary?.trim() ||
+            p.clarifyingQuestion?.trim() ||
+            "Tell me a bit more so I can set this up right.";
+          setConversation((prev) => [
+            ...prev,
+            { id: conversationIdRef(), role: "ai", text: question },
+          ]);
+          // Keep a "slim" prior draft for the next turn so the AI sees what
+          // it already knows (even without a card). This lets the AI chain
+          // subsequent chat_reply turns or finally pivot to a real draft.
+          setRichDraft({
+            ...(richDraft ?? {} as ParsedChallenge),
+            intent: "chat_reply",
+            title: p.title || input.slice(0, 64),
+            proposition: p.proposition,
+            type: p.type || "General",
+            recommendationSummary: question,
+            suggestedStake: p.suggestedStake ?? 0,
+            evidenceType: p.evidenceType || "self_report",
+            deadline: p.deadline || "24 hours",
+            rules: p.rules || "",
+            isPublic: p.isPublic ?? false,
+          });
+          setUnderstanding(question);
+          setAppState("idle"); // stay on composer — user will reply
+          setWorkflowPhase(null);
+          return;
+        }
+
         // LLM compiled a market — use it directly
         setWorkflowPhase("drafting");
         const llmDraft: MarketDraft = {

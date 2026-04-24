@@ -267,8 +267,10 @@ export interface ParsedChallenge {
   deadline: string;
   isPublic: boolean;
 
-  // Intent classification
-  intent?: "definite_market" | "candidate_market" | "ordinary_chat";
+  // Intent classification. "chat_reply" means AI wants to ask one follow-up
+  // question before committing to a draft — UI should render the question
+  // as a plain chat bubble and NOT a DraftPanel card.
+  intent?: "definite_market" | "candidate_market" | "ordinary_chat" | "chat_reply";
   marketType?: "yes_no" | "threshold" | "head_to_head" | "challenge";
   proposition?: string;
   subject?: string;
