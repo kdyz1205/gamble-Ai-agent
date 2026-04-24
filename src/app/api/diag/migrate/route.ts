@@ -26,6 +26,24 @@ export const maxDuration = 60;
 // idempotent (IF NOT EXISTS / IF EXISTS). We run them in order — any that
 // were already present are no-ops.
 const DDL: Array<{ id: string; sql: string }> = [
+  // ── ChallengeStatus enum values (Neon DB uses a real Postgres ENUM; our
+  //    Prisma schema treats status as String and introduced values the enum
+  //    never got: pending_settlement, disputed, etc.). ALTER TYPE ADD VALUE
+  //    IF NOT EXISTS is idempotent. Must run OUTSIDE any transaction block —
+  //    Postgres rejects adding enum values inside a tx.                      ──
+  { id: "enum_status_draft",              sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'draft'` },
+  { id: "enum_status_open",               sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'open'` },
+  { id: "enum_status_matched",            sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'matched'` },
+  { id: "enum_status_live",               sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'live'` },
+  { id: "enum_status_judging",            sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'judging'` },
+  { id: "enum_status_pending_settlement", sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'pending_settlement'` },
+  { id: "enum_status_disputed",           sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'disputed'` },
+  { id: "enum_status_settled",            sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'settled'` },
+  { id: "enum_status_cancelled",          sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'cancelled'` },
+  { id: "enum_status_resolved",           sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'resolved'` },
+  { id: "enum_status_void",               sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'void'` },
+  { id: "enum_status_funded",             sql: `ALTER TYPE "ChallengeStatus" ADD VALUE IF NOT EXISTS 'funded'` },
+
   // ── Evidence pre-extract columns (commit d7bac2c era) ──
   { id: "evidence_preparedFrames",       sql: `ALTER TABLE "Evidence" ADD COLUMN IF NOT EXISTS "preparedFrames" TEXT` },
   { id: "evidence_preparedAt",           sql: `ALTER TABLE "Evidence" ADD COLUMN IF NOT EXISTS "preparedAt" TIMESTAMP(3)` },
