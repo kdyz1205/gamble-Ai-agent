@@ -75,12 +75,25 @@ export async function GET(req: NextRequest) {
   // Earlier revision returned `openAiKeyPrefix: key.slice(0, 8)` which leaked
   // the provider prefix (e.g. "sk-proj-") — by itself not enough to reconstruct
   // the key but enough to fingerprint it against logs, so we dropped it.
+  // Extract JUST the database hostname (not credentials) so we can verify
+  // which DB instance the running lambda is talking to. `prisma db push` from
+  // a dev machine has to go to the same hostname or schema drifts silently —
+  // that's exactly the bug the load test caught ("column Evidence.preparedFrames
+  // does not exist").
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  const dbHost = (() => {
+    try {
+      return new URL(dbUrl).hostname || null;
+    } catch { return null; }
+  })();
+
   const envSnapshot = {
     ORACLE_DEFAULT_PROVIDER: process.env.ORACLE_DEFAULT_PROVIDER || null,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || null,
     hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
     hasGoogleClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    databaseHost: dbHost,
     hasBlobToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
     hasOpenAiKey: Boolean(process.env.OPENAI_API_KEY),
     hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
