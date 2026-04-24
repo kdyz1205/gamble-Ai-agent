@@ -2,9 +2,9 @@
   "buildCommand": "prisma generate && next build",
   "crons": [
     {
-      "// note": "Was daily 08:00; that meant a verdict could sit stuck for up to a day if async judgment crashed mid-flight. Moved to every 15min so the stuck-job sweeper fires in time to unblock real users. Vercel Hobby plan may cap cron frequency; if so, set to the tightest allowed (hourly on Hobby).",
+      "// note": "Vercel Hobby tier only allows ONE cron per day. On Pro, we'd run */15 * * * * so stuck JudgeJobs are swept within minutes. Until then daily 08:00 UTC is the tightest allowed. If an async verdict hangs the sweeper won't fire until the next day — as a mitigation, clients that poll a stuck job now self-terminate with a visible message after 15min (see ChallengeVerdictPanel). The same handler also accepts a manual POST with Bearer CRON_SECRET to force an immediate sweep + pending-judgment run.",
       "path": "/api/cron/challenge-judgment",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
