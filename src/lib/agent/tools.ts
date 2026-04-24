@@ -49,6 +49,28 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
 
   if (!title) return { ok: false, error: "title required" };
 
+  // ── Sanity guard: reject unjudgeable / nonsense challenges ──
+  //
+  // Background: earlier agent versions occasionally called createChallenge
+  // with the user's raw throwaway input as the title (e.g. "I'm so hungry",
+  // "我好饿啊") and no judgeRule, producing markets that nobody can actually
+  // settle. This guard is a last-line defense so bad drafts never reach the
+  // DB even if the LLM misbehaves. The system prompt ALSO teaches the LLM
+  // to refuse these — this is belt-and-suspenders.
+  const looksLikeMoodOrGarbage =
+    /^(i['']?m|我(好|很|超)?)\s*(so\s+)?(hungry|tired|bored|sad|happy|饿|累|困|饱|烦)/i.test(title) ||
+    /^(hi|hello|hey|嗨|你好|哈喽|喂|在吗)[\s!?.]*$/i.test(title) ||
+    /^(帮我|给我|随便).{0,8}(生成|来|做)/i.test(title);
+  const propositionIsJustTitle = !proposition || proposition.trim() === title.trim();
+  const judgeRuleTooThin = !judgeRule || judgeRule.trim().length < 20;
+  if (looksLikeMoodOrGarbage || (propositionIsJustTitle && judgeRuleTooThin)) {
+    return {
+      ok: false,
+      error:
+        "This doesn't look like a judgeable challenge yet — I need a clear win condition (who does what, and how do we decide who wins). Can you tell me what you actually want to compete on?",
+    };
+  }
+
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
   const deadline = parseTimeWindowToDate(timeWindow);
 

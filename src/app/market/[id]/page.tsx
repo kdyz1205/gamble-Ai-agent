@@ -340,7 +340,11 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         )}
 
         {market.status === "live" && (
-          <Link href={`/challenge/${id}/evidence`}
+          // The evidence-submission surface is the versus page. A previous
+          // version linked to /challenge/[id]/evidence which doesn't exist,
+          // so tapping this on a live market fell through to Next.js's
+          // default "This page could not be found" 404.
+          <Link href={`/challenge/${id}/versus`}
             className="block w-full py-4 text-center text-base font-extrabold active:scale-[0.97] transition-transform"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 rgba(110,231,183,0.40)` }}>
             📸 Submit your evidence
