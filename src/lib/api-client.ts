@@ -190,6 +190,10 @@ export async function acceptChallenge(id: string): Promise<{ challenge: Challeng
   return apiFetch(`/challenges/${id}/accept`, { method: "POST" });
 }
 
+export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId: string; refundedStake: number }> {
+  return apiFetch(`/challenges/${id}`, { method: "DELETE" });
+}
+
 export async function submitEvidence(id: string, data: {
   type?: string; url?: string; description?: string; metadata?: Record<string, unknown>;
 }): Promise<{ evidence: unknown }> {

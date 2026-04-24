@@ -3,6 +3,7 @@
 import { useState, useEffect, use, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
@@ -45,6 +46,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const { data: session } = useSession();
   const user = session?.user as { id?: string; username?: string } | undefined;
+  const router = useRouter();
 
   const [market, setMarket] = useState<ChallengeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,8 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "deleting">("idle");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     api.getChallenge(id)
@@ -94,6 +98,22 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       setConfirming(false);
     }
   }, [id]);
+
+  // Creator-only delete. Two-step (confirm first) so one accidental tap doesn't
+  // vaporize a market with participants or submitted evidence. Backend guards
+  // on status so only draft / open / cancelled markets are deletable; refund
+  // happens server-side atomically before the row is dropped.
+  const deleteMarket = useCallback(async () => {
+    setDeleteStep("deleting");
+    setDeleteError(null);
+    try {
+      await api.deleteChallenge(id);
+      router.push("/markets");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete this market");
+      setDeleteStep("confirm");
+    }
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -366,6 +386,59 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             <p className="text-sm font-semibold" style={{ color: "#0369A1" }}>
               📦 {market._count.evidence} evidence submission{market._count.evidence > 1 ? "s" : ""}
             </p>
+          </div>
+        )}
+
+        {/* Creator-only: delete this market. Hidden once a market is live or
+            past — money is moving, so destruction would orphan audit records. */}
+        {isCreator && ["draft", "open", "cancelled"].includes(market.status) && (
+          <div className="mt-8 flex flex-col items-center gap-2">
+            {deleteStep === "idle" && (
+              <button
+                type="button"
+                onClick={() => setDeleteStep("confirm")}
+                className="text-xs font-bold px-4 py-2 active:scale-95 transition-colors"
+                style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "9999px" }}
+              >
+                🗑 Delete this market
+              </button>
+            )}
+            {deleteStep !== "idle" && (
+              <div className="w-full max-w-sm px-4 py-3 flex flex-col items-center gap-2"
+                style={{ background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "20px" }}>
+                <p className="text-xs font-bold text-center" style={{ color: ROSE_TEXT }}>
+                  Delete this market permanently?
+                  {market.stake > 0 && (
+                    <span className="block mt-1" style={{ color: NAVY_DIM, fontWeight: 600 }}>
+                      {market.stake} cr will be refunded.
+                    </span>
+                  )}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={deleteMarket}
+                    disabled={deleteStep === "deleting"}
+                    className="text-xs font-extrabold px-4 py-2 disabled:opacity-60"
+                    style={{ color: "#FFFFFF", background: ROSE_TEXT, borderRadius: "9999px" }}
+                  >
+                    {deleteStep === "deleting" ? "Deleting…" : "Yes, delete"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteStep("idle"); setDeleteError(null); }}
+                    disabled={deleteStep === "deleting"}
+                    className="text-xs font-bold px-4 py-2 disabled:opacity-60"
+                    style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {deleteError && (
+                  <p className="text-[11px] font-semibold" style={{ color: ROSE_TEXT }}>{deleteError}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
