@@ -1,0 +1,147 @@
+{
+  "runAt": "2026-04-24T19:59:26.924Z",
+  "playerA": {
+    "id": "cmodbhogu0000rwdfpbwk8s2a",
+    "email": "playera@luckyplay.test",
+    "username": "player_a",
+    "finalCredits": 500
+  },
+  "playerB": {
+    "id": "cmodbhoyu0002rwdfyvp82kvg",
+    "email": "playerb@luckyplay.test",
+    "username": "player_b",
+    "finalCredits": 500
+  },
+  "settledChallengeCount": 10,
+  "expected": 10,
+  "perGamble": [
+    {
+      "idx": 1,
+      "id": "cmodbsril000o6sdft2lqe9a5",
+      "title": "Planking Contest",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A demonstrated holding the plank position for a significant time, while Participant B acknowledged they failed to complete the r…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 2,
+      "id": "cmodbtj8800106sdfu6dqstgh",
+      "title": "Who finishes a 500ml water bottle first",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A finished the bottle in the stated time, while Participant B explicitly did not finish due to coughing. Therefore, Participant …",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 3,
+      "id": "cmodbu9jm001c6sdfy4e9rwed",
+      "title": "Who can make 5 three-pointers first?",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A fulfilled the challenge by making 5 three-pointers, while Participant B did not make any successful attempts, thereby losing b…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 4,
+      "id": "cmodbuweb001o6sdfqv31v0j0",
+      "title": "Who can do more burpees in 90 seconds",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A clearly completed more burpees (28), validated by a visible timer, while Participant B only completed 6. This decisively makes…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 5,
+      "id": "cmodbvlas00206sdf27pg8oao",
+      "title": "Who can cook an omelette faster",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 1,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A successfully cooked and served an omelette within the time specified, while Participant B did not finish the challenge. Theref…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 6,
+      "id": "cmodbx3t2002n6sdf6gu7nqtk",
+      "title": "Who can solve a 4x4 Rubik's cube first",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A claims to have successfully solved the cube while participant B explicitly states they did not complete the task, giving up in…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 7,
+      "id": "cmodby6vb002z6sdfc3dkpfyw",
+      "title": "Who can do 20 squats faster",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A successfully completed the required 20 squats with a clear time recorded. Participant B's incomplete and poorly executed attem…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 8,
+      "id": "cmodbz4je003b6sdffpg64kox",
+      "title": "30 jumping jacks fastest",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 1,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A clearly completed the required 30 jumping jacks, while Participant B did not complete the task and even noted stopping at 12, …",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 9,
+      "id": "cmodc0ovx003n6sdfdqhfe4bp",
+      "title": "Who can do more pushups in 60 seconds",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 0.95,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A's claim of 42 pushups within the time limit is significantly higher and fulfills the challenge's requirements better than Part…",
+      "evidenceCount": 2
+    },
+    {
+      "idx": 10,
+      "id": "cmodc1lkm003z6sdfn1iyljcb",
+      "title": "Longest handstand hold against a wall",
+      "status": "settled",
+      "judgmentCount": 1,
+      "aiModel": "OpenAI · gpt-4o-mini",
+      "confidence": 1,
+      "winnerUsername": "player_a",
+      "reasoningSnippet": "Participant A clearly completed the task with a recorded time of 47 seconds in their handstand, while Participant B did not perform any hand…",
+      "evidenceCount": 2
+    }
+  ],
+  "allChecks": {
+    "tenSettled": true,
+    "allHaveJudgment": true,
+    "allWinnersPlayerA": true,
+    "allOpenAIModel": true,
+    "allHighConfidence": true,
+    "everyoneHasTwoEvidence": true
+  }
+}

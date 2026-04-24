@@ -13,6 +13,11 @@
 /test-results/
 /screenshots/
 
+# playwright internals (reports + per-test scratch). We DO commit
+# gambles-recordings/ — those WebMs are the deliverable.
+/playwright-report/
+/tests/e2e-gambles/.playwright/
+
 # next.js
 /.next/
 /out/
