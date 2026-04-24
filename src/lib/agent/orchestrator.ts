@@ -114,10 +114,25 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     safetyNotes: mergeSafetyNotes(draftState.safetyNotes, validated.draftPatch.safetyNotes),
   };
 
-  // Execute tool if requested
+  // Execute tool if the LLM named one.
+  //
+  // IMPORTANT: we used to gate this behind `agentAction === "call_tool"`, but
+  // in practice the LLM occasionally returns `agentAction: ask_followup` while
+  // still filling in `toolName` (e.g. "I'll find a challenge for you" + tool).
+  // When that happens, gating on the action caused the tool to be silently
+  // dropped and the LLM's userVisibleReply became a hallucination of data it
+  // never actually queried. Instead, treat any valid `toolName` as intent to
+  // call the tool, promote the action to "call_tool" for client consistency,
+  // and — if the reply was composed without tool results — do a 2nd grounded
+  // LLM round so we don't show a fabricated answer.
   let toolResult: unknown = undefined;
   let toolError: string | undefined;
-  if (validated.agentAction === "call_tool" && validated.toolName) {
+  let finalReply = validated.userVisibleReply;
+  let finalAction = validated.agentAction;
+  let finalPatch = validated.draftPatch;
+  let finalDraftState = newDraftState;
+
+  if (validated.toolName) {
     const result = await executeAgentTool(
       validated.toolName,
       { userId: input.userId, baseUrl: input.baseUrl, draftState: newDraftState },
@@ -128,18 +143,115 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     } else {
       toolError = result.error;
     }
+
+    // Always normalize to call_tool — we did actually call a tool.
+    finalAction = "call_tool";
+
+    // If the first-turn reply was generated with no knowledge of the tool
+    // outcome (LLM chose ask_followup/show_draft/etc but still requested a
+    // tool), do a grounded 2nd turn so the reply reflects real data. For
+    // clean `call_tool` responses we trust the first reply (usually a short
+    // "doing it now…" placeholder before the client renders toolResult).
+    const firstReplyWasUngrounded = validated.agentAction !== "call_tool";
+    if (firstReplyWasUngrounded) {
+      const grounded = await groundedReplyTurn({
+        providerId,
+        model,
+        historyText,
+        userMessage: input.message,
+        draftStateBeforeTool: newDraftState,
+        toolName: validated.toolName,
+        toolArgs: validated.toolArgs ?? {},
+        toolResult,
+        toolError,
+      });
+      if (grounded) {
+        finalReply = grounded.userVisibleReply || finalReply;
+        finalPatch = { ...finalPatch, ...grounded.draftPatch };
+        finalDraftState = {
+          ...newDraftState,
+          ...grounded.draftPatch,
+          safetyNotes: mergeSafetyNotes(newDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
+        };
+      }
+    }
   }
 
   return {
-    userVisibleReply: validated.userVisibleReply,
-    agentAction: validated.agentAction,
-    draftPatch: validated.draftPatch,
+    userVisibleReply: finalReply,
+    agentAction: finalAction,
+    draftPatch: finalPatch,
     toolName: validated.toolName,
     toolArgs: validated.toolArgs,
-    draftState: newDraftState,
+    draftState: finalDraftState,
     toolResult,
     toolError,
   };
+}
+
+/**
+ * Second LLM pass that runs AFTER a tool executed. We feed the real tool
+ * result back into the model so its userVisibleReply is grounded in reality
+ * instead of hallucinated. We keep this cheap (short prompt, low tokens) and
+ * ignore it on failure — the first-turn reply remains as a fallback.
+ */
+async function groundedReplyTurn(args: {
+  providerId: string;
+  model: string;
+  historyText: string;
+  userMessage: string;
+  draftStateBeforeTool: DraftState;
+  toolName: AgentToolName;
+  toolArgs: Record<string, unknown>;
+  toolResult: unknown;
+  toolError: string | undefined;
+}): Promise<RawAgentResponse | null> {
+  const toolPayload = args.toolError
+    ? { error: args.toolError }
+    : { data: args.toolResult };
+
+  const userPayload = [
+    `You just called the backend tool \`${args.toolName}\` with these args:`,
+    "```json",
+    JSON.stringify(args.toolArgs, null, 2),
+    "```",
+    "",
+    `The tool returned:`,
+    "```json",
+    JSON.stringify(toolPayload, null, 2),
+    "```",
+    "",
+    `Current hidden draft state:`,
+    "```json",
+    JSON.stringify(args.draftStateBeforeTool, null, 2),
+    "```",
+    "",
+    args.historyText ? `Conversation so far:\n${args.historyText}\n` : "",
+    `Original user message:\n${args.userMessage}`,
+    "",
+    `Now write ONE short natural reply (userVisibleReply) grounded in the actual tool result — no invented details. If the tool failed or returned nothing useful, say so naturally and offer a next step.`,
+    `Respond with the same JSON object format (userVisibleReply, agentAction, draftPatch, toolName: null, toolArgs: null). Do NOT request another tool. No markdown fences. agentAction should reflect what you want to do NEXT (usually ask_followup or show_draft or refuse_or_redirect).`,
+  ].join("\n");
+
+  try {
+    const rawText = await completeOraclePrompt({
+      providerId: args.providerId,
+      model: args.model,
+      system: AGENT_SYSTEM_PROMPT,
+      user: userPayload,
+      maxTokens: 400,
+      temperature: 0.3,
+    });
+    const parsed = safeParseAgentJson(rawText);
+    if (!parsed) return null;
+    const validated = validateAgentResponse(parsed);
+    // Defensive: strip any tool re-request so we don't infinite-loop.
+    validated.toolName = null;
+    validated.toolArgs = null;
+    return validated;
+  } catch {
+    return null;
+  }
 }
 
 /** Merge safety notes by union — never lose a redirect. */
