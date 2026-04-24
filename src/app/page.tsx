@@ -428,8 +428,14 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* ── IDLE ── */}
-          {appState === "idle" && (
+          {/* ── IDLE — empty state (mascot + "Say the bet") shown ONLY when
+              there's no conversation yet. Once the user has exchanged a
+              message with the agent, the mascot hides so the chat thread
+              becomes the dominant surface. Bouncing back to the idle
+              splash between turns made the flow feel reset; now it feels
+              like one continuous chat (as the user specifically asked
+              for — "一直聊下去才对"). ── */}
+          {appState === "idle" && conversation.length === 0 && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
               {/* Cute mascot — cloud blob. Animations gated by useAmbientMotionAllowed
                   so that prefers-reduced-motion / hidden-tab / low-end devices get a
@@ -489,8 +495,15 @@ export default function Home() {
                   {understanding}
                 </motion.p>
               )}
-              <CenteredComposer onSubmit={runAgentTurn} isActive={false} initialValue={userInput} />
             </motion.div>
+          )}
+
+          {/* Composer — lives OUTSIDE the empty-state block so it stays as the
+              chat input even while the thread is filling up. When the
+              conversation is non-empty the mascot/title are hidden but the
+              composer remains as the bottom-anchored reply bar. */}
+          {appState === "idle" && (
+            <CenteredComposer onSubmit={runAgentTurn} isActive={false} initialValue={userInput} />
           )}
 
           {/* ── COMPILING ── show thread so far + typing indicator; replaces the
