@@ -69,7 +69,7 @@ export type AgentToolName =
   | "confirmVerdict"       // creator confirmation → settleCredits → settled status
   | "settleCredits"        // internal — tools above already call credits helpers; exposed for completeness
   | "findOpenMarkets"      // list public open challenges the user could join
-  | "matchMe";             // auto-accept the best open market for the user (WeChat drift-bottle style)
+  | "matchMe";             // find best open challenge and return its join contract URL
 
 /** Structured output the LLM is REQUIRED to return. */
 export interface RawAgentResponse {

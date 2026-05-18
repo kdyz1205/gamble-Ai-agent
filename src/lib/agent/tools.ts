@@ -503,12 +503,14 @@ async function findOpenMarketsTool(ctx: ToolContext, args: Record<string, unknow
 }
 
 /**
- * matchMe — auto-accept the best-fitting open public market for the user.
- * Picks the newest non-full, non-owned, public, open challenge; falls back
- * to "no match available" if nothing fits. Accepts it under the user's
- * identity (atomic race-safe via the same acceptChallenge tool).
+ * matchMe - find the best-fitting open public challenge and send the user to
+ * the join contract. It must not auto-accept because the opponent has to read
+ * and accept the rules, evidence standard, AI judging, dispute window, and
+ * credit settlement terms before becoming a participant.
  */
 async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  // Important: this only returns a join URL. Acceptance and escrow must happen
+  // after the user reviews the challenge contract on /join/:id.
   const typeFilter = typeof args.type === "string" ? args.type : undefined;
   const maxStake = typeof args.maxStake === "number" ? args.maxStake : undefined;
 
@@ -531,24 +533,11 @@ async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Pro
       ok: true,
       data: {
         matched: false,
-        message: "No open public markets matched right now. Create your own — opponents will find it.",
+        message: "No open public challenges matched right now. Create your own - opponents will find it.",
       },
     };
   }
 
-  // Reuse the same atomic accept logic (stake escrow + race-safe participant insert).
-  const accept = await acceptChallengeTool(ctx, { challengeId: candidate.id });
-  if (!accept.ok) {
-    return {
-      ok: true,
-      data: {
-        matched: false,
-        candidateId: candidate.id,
-        title: candidate.title,
-        reason: accept.error,
-      },
-    };
-  }
   return {
     ok: true,
     data: {
@@ -557,8 +546,10 @@ async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Pro
       title: candidate.title,
       stake: candidate.stake,
       type: candidate.type,
+      joinUrl: `${ctx.baseUrl}/join/${candidate.id}`,
       marketUrl: `${ctx.baseUrl}/challenge/${candidate.id}`,
       challengeUrl: `${ctx.baseUrl}/challenge/${candidate.id}`,
+      message: "Review and accept the challenge rules before joining.",
     },
   };
 }

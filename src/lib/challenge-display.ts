@@ -48,18 +48,45 @@ function normalizeRuleKey(raw: string) {
   return raw.trim().toLowerCase();
 }
 
+function normalizeRuleValue(raw: string) {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function pickCard(cards: ChallengeRuleCard[], labels: string[]) {
+  return labels
+    .map((label) => cards.find((card) => card.label === label))
+    .find((card): card is ChallengeRuleCard => Boolean(card));
+}
+
+function joinUnique(parts: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    const value = part?.trim();
+    if (!value) continue;
+    const normalized = normalizeRuleValue(value);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(value);
+  }
+  return out.join(" ");
+}
+
 export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
   const cards: ChallengeRuleCard[] = [];
   const seen = new Set<string>();
+  const seenValues = new Set<string>();
 
   for (const line of (challenge.rules || "").split(/\n+/)) {
     const match = line.match(/^([^:]+):\s*(.+)$/);
     if (!match) continue;
     const label = RULE_LABELS[normalizeRuleKey(match[1])];
     const value = match[2]?.trim();
-    if (!label || !value || seen.has(label)) continue;
+    const normalizedValue = value ? normalizeRuleValue(value) : "";
+    if (!label || !value || seen.has(label) || seenValues.has(normalizedValue)) continue;
     cards.push({ label, value });
     seen.add(label);
+    seenValues.add(normalizedValue);
   }
 
   if (!seen.has("Goal")) {
@@ -89,6 +116,28 @@ export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard
     const bi = CARD_ORDER.indexOf(b.label);
     return (ai === -1 ? CARD_ORDER.length : ai) - (bi === -1 ? CARD_ORDER.length : bi);
   });
+}
+
+export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
+  const cards = parseChallengeRules(challenge);
+  const goal = pickCard(cards, ["Goal"])?.value || challenge.title;
+  const win = pickCard(cards, ["Scoring", "Win condition"])?.value || goal;
+  const evidence = joinUnique([
+    pickCard(cards, ["Evidence required"])?.value,
+    pickCard(cards, ["Recording standard"])?.value,
+  ]) || (challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "Required evidence");
+  const time = pickCard(cards, ["Time limit"])?.value || challenge.proofWindow || "Before the challenge window closes";
+  const review = joinUnique([
+    pickCard(cards, ["Dispute window"])?.value,
+    pickCard(cards, ["Settlement"])?.value,
+  ]) || settlementSummary(challenge);
+
+  return [
+    { label: "Match", value: goal },
+    { label: "How to win", value: win },
+    { label: "Evidence", value: evidence },
+    { label: "Time + review", value: `${time}. ${review}` },
+  ];
 }
 
 export function acceptanceContract(challenge: ChallengeLike): string[] {

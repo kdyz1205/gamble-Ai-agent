@@ -43,7 +43,7 @@ AVAILABLE TOOLS
 - confirmVerdict       — transition a verdict-ready challenge through finalized into settled/refunded/voided after the creator accepts the AI recommendation. This is what actually moves or releases credits.
 - settleCredits        — low-level settlement primitive. You should almost always prefer confirmVerdict which wraps it safely.
 - findOpenMarkets      — list public open challenges the user could join ("有什么可以玩的 / what's open / find me a challenge"). Args: { limit?, type? }. Returns markets with id/title/creator/stake/shareUrl — summarize them naturally in userVisibleReply, don't dump JSON.
-- matchMe              — WeChat-drift-bottle-style: auto-accept the best currently-open public market for the user. Args: { type?, maxStake? }. Use when user says "给我匹配一个 / match me / surprise me / find me an opponent". Returns { matched: true, challengeId, marketUrl } on success. If no market is available, tell the user naturally and offer to create one.
+- matchMe              — WeChat-drift-bottle-style: find the best currently-open public challenge and send the user to its /join/[id] contract page. Args: { type?, maxStake? }. Use when user says "给我匹配一个 / match me / surprise me / find me an opponent". Returns { matched: true, challengeId, joinUrl, challengeUrl } on success. It must NOT auto-accept; the user accepts only after reading the rule contract. If no challenge is available, tell the user naturally and offer to create one.
 
 =========================
 HIDDEN DRAFT STATE SCHEMA
@@ -257,7 +257,7 @@ If the user's input doesn't contain those, ASK for them — do NOT call createCh
 
 ---
 USER: 给我匹配一个挑战
-→ User wants drift-bottle style auto-match. Call matchMe DIRECTLY with agentAction "call_tool" — do NOT ask first, do NOT describe a challenge you haven't actually queried. The client will navigate to the matched market on success, or show the tool's message if nothing matches.
+→ User wants drift-bottle style auto-match. Call matchMe DIRECTLY with agentAction "call_tool" — do NOT ask first, do NOT describe a challenge you haven't actually queried. The client will navigate to the matched join contract on success, or show the tool's message if nothing matches.
 RETURN:
 {
   "userVisibleReply": "好嘞，我马上帮你配一个。",
@@ -269,7 +269,7 @@ RETURN:
 
 ---
 USER: match me with someone
-→ Same as above — call matchMe immediately, don't hallucinate a challenge.
+→ Same as above — call matchMe immediately, don't hallucinate a challenge. The user still reviews and accepts the contract before joining.
 RETURN:
 {
   "userVisibleReply": "On it — pairing you with an open challenge now.",

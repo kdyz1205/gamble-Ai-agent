@@ -6,8 +6,8 @@
  *   1. Agent picked agentAction=call_tool with toolName=matchMe
  *   2. Tool actually dispatched (toolResult populated)
  *   3. toolResult.matched === true
- *   4. toolResult.marketUrl points at the seeded market
- *   5. The opponent is now a Participant on the market
+ *   4. toolResult.joinUrl points at the seeded market join contract
+ *   5. The opponent is NOT silently added before accepting the contract
  *
  * Also tests a second scenario: "有什么可以玩的" → findOpenMarkets with
  * a grounded reply that mentions the real market title.
@@ -96,28 +96,29 @@ async function main() {
     console.log("toolResult:", JSON.stringify(r.toolResult, null, 2));
     if (r.toolError) console.log("toolError:", r.toolError);
 
-    const tr = r.toolResult as { matched?: boolean; marketUrl?: string; challengeId?: string } | undefined;
+    const tr = r.toolResult as { matched?: boolean; joinUrl?: string; challengeUrl?: string; challengeId?: string } | undefined;
     const checks: [string, boolean][] = [
       ["agentAction === call_tool", r.agentAction === "call_tool"],
       ["toolName === matchMe", r.toolName === "matchMe"],
       ["tool dispatched (toolResult populated)", tr !== undefined],
       ["matched === true", tr?.matched === true],
-      ["marketUrl mentions seeded market id", typeof tr?.marketUrl === "string" && tr!.marketUrl!.includes(market.id)],
+      ["joinUrl mentions seeded market id", typeof tr?.joinUrl === "string" && tr!.joinUrl!.includes(`/join/${market.id}`)],
+      ["challengeUrl mentions seeded market id", typeof tr?.challengeUrl === "string" && tr!.challengeUrl!.includes(`/challenge/${market.id}`)],
     ];
     for (const [name, ok] of checks) {
       console.log(` ${ok ? PASS : FAIL} ${name}`);
       if (!ok) allPassed = false;
     }
 
-    // Verify opponent is now a participant on the market
+    // Verify opponent is not a participant yet. Joining requires accepting the contract on /join/:id.
     const partRow = await prisma.participant.findFirst({ where: { challengeId: market.id, userId: opp.id } });
-    const partOk = !!partRow;
-    console.log(` ${partOk ? PASS : FAIL} DB: opponent Participant row exists on market`);
+    const partOk = !partRow;
+    console.log(` ${partOk ? PASS : FAIL} DB: opponent not silently joined before accepting contract`);
     if (!partOk) allPassed = false;
   }
 
   // ─── Scenario 2: "有什么可以玩的" → should hit findOpenMarkets ───────
-  // Create a second market for this scenario (the first was just accepted).
+  // Create a second market for this scenario.
   const market2 = await prisma.challenge.create({
     data: {
       creatorId: creator.id,
@@ -144,7 +145,7 @@ async function main() {
   });
   console.log(`\nSeeded second market ${market2.id} "${market2.title}"`);
 
-  // Make another throwaway opp so matchMe's "already participating" filter doesn't exclude market1
+  // Make another throwaway opp for the browse-only scenario.
   const opp2 = await prisma.user.create({
     data: {
       email: `matchtest-opp2-${suffix}@luckyplay.test`,

@@ -8,7 +8,7 @@ import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
-import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { acceptanceContract, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 import {
   isAiReviewStatus,
   isEvidenceWindowStatus,
@@ -330,6 +330,7 @@ export default function ChallengeVerdictPanel({
   const verdictRow = challenge.judgments?.[0] ?? null;
   const sc = statusColor(challenge.status);
   const ruleCards = parseChallengeRules(challenge);
+  const compactRules = compactChallengeRules(challenge);
   const contractBullets = acceptanceContract(challenge);
   const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
 
@@ -421,21 +422,53 @@ export default function ChallengeVerdictPanel({
           </motion.div>
         )}
 
-        <div className="grid gap-2 md:grid-cols-2">
-          {ruleCards.slice(0, 8).map((card) => (
-            <div
-              key={card.label}
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: "#047857" }}>
+              How this challenge works
+            </p>
+            <p className="text-xs font-semibold mt-1" style={{ color: "#64748B" }}>
+              The short version first. Full contract is below.
+            </p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {compactRules.map((card) => (
+              <div
+                key={card.label}
+                className="px-3.5 py-3"
+                style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "16px" }}
+              >
+                <p className="text-[10px] font-black uppercase tracking-wider mb-1" style={{ color: "#047857" }}>
+                  {card.label}
+                </p>
+                <p className="text-xs font-semibold leading-relaxed" style={{ color: "#334155" }}>
+                  {card.value}
+                </p>
+              </div>
+            ))}
+          </div>
+          {ruleCards.length > 0 && (
+            <details
               className="px-3.5 py-3"
-              style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "16px" }}
+              style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "16px" }}
             >
-              <p className="text-[10px] font-black uppercase tracking-wider mb-1" style={{ color: "#047857" }}>
-                {card.label}
-              </p>
-              <p className="text-xs font-semibold leading-relaxed" style={{ color: "#334155" }}>
-                {card.value}
-              </p>
-            </div>
-          ))}
+              <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>
+                Full rule contract
+              </summary>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {ruleCards.map((card) => (
+                  <div key={card.label}>
+                    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>
+                      {card.label}
+                    </p>
+                    <p className="text-xs font-semibold leading-relaxed" style={{ color: "#334155" }}>
+                      {card.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
 
         {isOpenForOpponentStatus(challenge.status) && !isCreator && !me && (

@@ -83,7 +83,7 @@ export default function MarketsPage() {
         setOpenPublic((publ.challenges || []).filter((c) => c.creator.id !== userId));
       })
       .catch((err) => {
-        if (active) setMessage(err instanceof Error ? err.message : "Couldn't load markets");
+        if (active) setMessage(err instanceof Error ? err.message : "Couldn't load challenges");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -102,9 +102,9 @@ export default function MarketsPage() {
     setMessage(null);
     try {
       const r = await api.agentRespond("给我匹配一个挑战", [], api.emptyAgentDraftState());
-      const tr = r.toolResult as { matched?: boolean; marketUrl?: string; message?: string; reason?: string } | undefined;
-      if (tr?.matched && tr.marketUrl) {
-        window.location.href = tr.marketUrl;
+      const tr = r.toolResult as { matched?: boolean; joinUrl?: string; challengeUrl?: string; marketUrl?: string; message?: string; reason?: string } | undefined;
+      if (tr?.matched) {
+        window.location.href = tr.joinUrl || tr.challengeUrl || tr.marketUrl || "/markets";
         return;
       }
       setMessage(tr?.message || tr?.reason || r.userVisibleReply || "No open challenges to match right now.");
@@ -125,7 +125,7 @@ export default function MarketsPage() {
       setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
       setMessage(res.refundedStake > 0 ? `Closed. ${res.refundedStake} credits refunded.` : "Closed.");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Couldn't close this market");
+      setMessage(e instanceof Error ? e.message : "Couldn't close this challenge");
     } finally {
       setClosingId(null);
     }
