@@ -1,10 +1,9 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
-import { addCredits } from "@/lib/credits";
 
 /**
- * GET /api/challenges/[id] — Get a single challenge with full details
+ * GET /api/challenges/[id] - Get a single challenge with full details.
  */
 export async function GET(
   _req: NextRequest,
@@ -41,23 +40,13 @@ export async function GET(
 }
 
 /**
- * DELETE /api/challenges/[id] — creator deletes their own market.
+ * DELETE /api/challenges/[id] - creator closes/deletes their own empty market.
  *
- * Safety rules (refuse if any fails):
- *   - Must be the creator.
- *   - Status must be one of {draft, open, cancelled}. Once a market is live /
- *     judging / settled / disputed, money-moving flows are in motion and
- *     deletion would orphan audit records — those must be resolved, not deleted.
- *   - If the creator staked credits (stake > 0) and the market is still draft /
- *     open, we refund the stake back to them atomically BEFORE deletion. This
- *     keeps the credits ledger consistent. (Settled markets are already
- *     out-of-scope per the status rule.)
- *
- * Cascade behavior: Prisma schema has onDelete: Cascade on Challenge for
- * Participant / Evidence / Judgment / JudgeJob / ActivityEvent / AuditLog, so
- * the single delete sweeps those rows too. CreditTx rows that reference the
- * challenge are nullable (onDelete: SetNull), so the ledger itself is
- * preserved — only the FK is cleared.
+ * Safety rules:
+ * - Must be the creator.
+ * - Status must be draft, open, or cancelled.
+ * - Must not have any non-creator participant.
+ * - Refund and delete happen in one transaction.
  */
 export async function DELETE(
   _req: NextRequest,
@@ -69,7 +58,14 @@ export async function DELETE(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    select: { id: true, creatorId: true, status: true, stake: true, title: true },
+    select: {
+      id: true,
+      creatorId: true,
+      status: true,
+      stake: true,
+      title: true,
+      participants: { select: { userId: true, status: true } },
+    },
   });
   if (!challenge) {
     return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -88,31 +84,55 @@ export async function DELETE(
     );
   }
 
-  // Refund stake FIRST. If the refund throws we don't delete, so credits and
-  // the challenge row stay in sync. Prisma's cascade handles child rows.
-  // addCredits returns { balance } and throws on failure (e.g. user row
-  // disappeared mid-request) — we catch and bail without touching the row.
-  if (challenge.stake > 0) {
-    try {
-      await addCredits(
-        user.userId,
-        challenge.stake,
-        "refund",
-        `Refund — deleted market "${challenge.title.slice(0, 40)}"`,
-      );
-    } catch (err) {
-      return Response.json(
-        { error: "Refund failed, not deleting", detail: err instanceof Error ? err.message : String(err) },
-        { status: 500 },
-      );
-    }
+  const hasOtherParticipant = challenge.participants.some(
+    (participant) => participant.userId !== challenge.creatorId && participant.status !== "declined",
+  );
+  if (hasOtherParticipant) {
+    return Response.json(
+      { error: "Can't close this market because another participant has already joined." },
+      { status: 409 },
+    );
   }
 
-  await prisma.challenge.delete({ where: { id } });
+  let refundedStake = 0;
+  try {
+    refundedStake = await prisma.$transaction(async (tx) => {
+      let refunded = 0;
+
+      if (challenge.stake > 0) {
+        const updated = await tx.user.update({
+          where: { id: user.userId },
+          data: { credits: { increment: challenge.stake } },
+          select: { credits: true },
+        });
+
+        await tx.creditTx.create({
+          data: {
+            userId: user.userId,
+            type: "refund",
+            amount: challenge.stake,
+            balanceAfter: updated.credits,
+            description: `Refund - closed empty market "${challenge.title.slice(0, 40)}"`,
+            challengeId: id,
+          },
+        });
+
+        refunded = challenge.stake;
+      }
+
+      await tx.challenge.delete({ where: { id } });
+      return refunded;
+    });
+  } catch (err) {
+    return Response.json(
+      { error: "Close failed, market was not deleted", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
+  }
 
   return Response.json({
     ok: true,
     deletedId: id,
-    refundedStake: challenge.stake > 0 ? challenge.stake : 0,
+    refundedStake,
   });
 }
