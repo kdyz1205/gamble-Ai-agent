@@ -58,7 +58,8 @@ function hasOtherParticipant(market: ChallengeData, userId?: string) {
 }
 
 export default function MarketsPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  const sessionLoading = sessionStatus === "loading";
   const user = session?.user as { id?: string; username?: string } | undefined;
   const userId = user?.id;
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
@@ -69,6 +70,7 @@ export default function MarketsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (sessionLoading) return;
     let active = true;
     setLoading(true);
     Promise.all([
@@ -89,7 +91,7 @@ export default function MarketsPage() {
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [sessionLoading, userId]);
 
   const tryMatchMe = async () => {
     if (!user) {
@@ -215,7 +217,7 @@ export default function MarketsPage() {
         )}
 
         <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>
-          {user ? "My challenges" : "Open challenges"}
+          {sessionLoading ? "Challenges" : user ? "My challenges" : "Open challenges"}
         </h1>
 
         {loading ? (

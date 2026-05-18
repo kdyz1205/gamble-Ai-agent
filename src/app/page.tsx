@@ -128,7 +128,8 @@ async function getBrowserLocationSnapshot(timeoutMs = 3500): Promise<api.Locatio
 
 export default function Home() {
   const router = useRouter();
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, status: sessionStatus, update: updateSession } = useSession();
+  const sessionLoading = sessionStatus === "loading";
   const rawUser = session?.user as { id?: string; username?: string; name?: string; email?: string; credits?: number } | undefined;
   const user = useMemo(
     () => rawUser ? { ...rawUser, username: rawUser.username || rawUser.name || rawUser.email?.split("@")[0] || "User" } : undefined,
@@ -412,6 +413,10 @@ export default function Home() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+          ) : sessionLoading ? (
+            <div className="px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#64748B", background: "#FFFFFF", borderRadius: "999px", border: "1px solid #E2E8F0" }}>
+              Checking...
             </div>
           ) : (
             <button onClick={() => setShowAuth(true)} className="px-4 py-2 text-sm font-bold shadow-sm active:scale-95 transition-transform" style={{ color: "#064E3B", background: "#A7F3D0", borderRadius: "999px" }}>

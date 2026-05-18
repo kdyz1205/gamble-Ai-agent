@@ -23,7 +23,8 @@ export default function RoomClient({
   challengeId: string;
   title: string;
 }) {
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, status: sessionStatus, update: updateSession } = useSession();
+  const sessionLoading = sessionStatus === "loading";
   const user = session?.user as
     | { id: string; username: string; credits?: number; image?: string | null }
     | undefined;
@@ -79,6 +80,18 @@ export default function RoomClient({
                 {user.credits ?? 0}
               </span>
             </div>
+          ) : sessionLoading ? (
+            <div
+              className="px-4 py-2 text-sm font-bold"
+              style={{
+                color: NAVY_DIM,
+                background: "#FFFFFF",
+                border: `1px solid ${NAVY_FAINT}`,
+                borderRadius: "9999px",
+              }}
+            >
+              Checking...
+            </div>
           ) : (
             <motion.button
               onClick={() => setShowAuth(true)}
@@ -105,6 +118,20 @@ export default function RoomClient({
             credits={user.credits ?? 0}
             onCreditsMayChange={() => updateSession()}
           />
+        ) : sessionLoading ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lp-glass p-8 text-center"
+            style={{ borderRadius: "28px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}
+          >
+            <h2 className="text-xl font-extrabold mb-2" style={{ color: NAVY }}>
+              {title}
+            </h2>
+            <p className="text-sm font-medium" style={{ color: NAVY_DIM }}>
+              Loading your challenge access...
+            </p>
+          </motion.div>
         ) : (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
