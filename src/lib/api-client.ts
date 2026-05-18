@@ -12,8 +12,22 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   };
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "API Error");
+  const text = await res.text();
+  let data: unknown = {};
+  if (text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const preview = text.replace(/\s+/g, " ").slice(0, 180);
+      throw new Error(`API returned non-JSON (${res.status}) from ${path}: ${preview || "empty response"}`);
+    }
+  }
+  if (!res.ok) {
+    const error = data && typeof data === "object" && "error" in data
+      ? String((data as { error?: unknown }).error)
+      : `API request failed (${res.status})`;
+    throw new Error(error);
+  }
   return data as T;
 }
 

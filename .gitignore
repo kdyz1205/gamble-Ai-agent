@@ -67,3 +67,24 @@ devserver-*.err.log
 # ad-hoc scratch
 scratch/
 .tmp/
+
+# local browser / verification artifacts
+.chrome-shot-profile/
+/data/
+*cookies*.txt
+auth-test-env.txt
+latest-*.json
+latest-*.txt
+latest2-*.json
+prod-*.json
+prod-*.txt
+prod-*.png
+check-*.json
+create-challenge.json
+creator-evidence*.json
+opponent-evidence*.json
+blob-event*.json
+shell-spec.json
+spec-request.json
+site-preview-*.png
+open-gamble-ai-agent*.cmd
