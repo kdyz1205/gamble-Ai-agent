@@ -148,6 +148,7 @@ export default function Home() {
   const [publishedId, setPublishedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyNotice, setCopyNotice] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [openChallenges, setOpenChallenges] = useState<api.ChallengeData[]>([]);
@@ -169,6 +170,7 @@ export default function Home() {
     setPublishedId(null);
     setError(null);
     setCopied(false);
+    setCopyNotice("");
   }, []);
 
   const handleGenerate = useCallback(async (input: string) => {
@@ -357,10 +359,20 @@ export default function Home() {
 
   const copyLink = useCallback(() => {
     if (!shareLink) return;
-    navigator.clipboard.writeText(shareLink).then(() => {
+    const showCopied = (message: string) => {
       setCopied(true);
+      setCopyNotice(message);
       setTimeout(() => setCopied(false), 1600);
-    });
+    };
+
+    if (!navigator.clipboard?.writeText) {
+      showCopied("Clipboard is blocked here. Use the visible join link.");
+      return;
+    }
+
+    navigator.clipboard.writeText(shareLink)
+      .then(() => showCopied("Join link copied."))
+      .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
   }, [shareLink]);
 
   return (
@@ -510,9 +522,14 @@ export default function Home() {
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
+              {copyNotice && (
+                <p className="text-xs font-bold text-center" style={{ color: copied ? "#047857" : "#64748B" }}>
+                  {copyNotice}
+                </p>
+              )}
               <div className="grid gap-2 sm:grid-cols-3">
-                <button onClick={() => publishedId && router.push(`/challenge/${publishedId}`)} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>Challenge room</button>
-                <button onClick={() => router.push("/markets")} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
+                <button type="button" onClick={() => { if (publishedId) window.location.href = `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>Challenge room</button>
+                <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
                 <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
               </div>
             </motion.div>

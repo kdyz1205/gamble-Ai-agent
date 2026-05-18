@@ -72,6 +72,18 @@ function joinUnique(parts: Array<string | null | undefined>) {
   return out.join(" ");
 }
 
+function withoutTrailingSentencePunctuation(value: string) {
+  return value.trim().replace(/[.!?]+$/g, "");
+}
+
+function joinSentences(first: string, second: string) {
+  const a = withoutTrailingSentencePunctuation(first);
+  const b = second.trim();
+  if (!a) return b;
+  if (!b) return a;
+  return `${a}. ${b}`;
+}
+
 export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
   const cards: ChallengeRuleCard[] = [];
   const seen = new Set<string>();
@@ -136,7 +148,7 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     { label: "Match", value: goal },
     { label: "How to win", value: win },
     { label: "Evidence", value: evidence },
-    { label: "Time + review", value: `${time}. ${review}` },
+    { label: "Time + review", value: joinSentences(time, review) },
   ];
 }
 

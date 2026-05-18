@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
-import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { acceptanceContract, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 interface Challenge {
@@ -126,6 +126,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const c = challenge!;
   const stakeLabel = c.stake > 0 ? `${c.stake} cr` : "Free";
   const ruleCards = parseChallengeRules(c);
+  const compactRules = compactChallengeRules(c);
   const contract = acceptanceContract(c);
 
   return (
@@ -184,6 +185,15 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               {c.title}
             </h1>
 
+            <div className="mb-5 px-4 py-3" style={{ background: `${MINT}14`, border: `1px solid ${MINT}55`, borderRadius: "16px" }}>
+              <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>
+                What you are joining
+              </p>
+              <p className="text-sm font-semibold leading-relaxed" style={{ color: NAVY }}>
+                This is an AI-judged challenge between two people. Join only if you agree to the rules. Upload evidence when done. AI reviews the evidence and recommends a winner.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-2.5 mb-5">
               <div
                 className="px-3 py-3"
@@ -214,7 +224,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             <div className="grid gap-2 mb-5">
-              {ruleCards.slice(0, 7).map((card) => (
+              {compactRules.map((card) => (
                 <div
                   key={card.label}
                   className="px-4 py-3"
@@ -228,6 +238,25 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   </p>
                 </div>
               ))}
+              {ruleCards.length > 0 && (
+                <details className="px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
+                  <summary className="cursor-pointer text-xs font-black" style={{ color: NAVY }}>
+                    Full rule contract
+                  </summary>
+                  <div className="mt-3 grid gap-2">
+                    {ruleCards.map((card) => (
+                      <div key={card.label}>
+                        <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: NAVY_DIM }}>
+                          {card.label}
+                        </p>
+                        <p className="text-xs font-semibold leading-relaxed" style={{ color: NAVY }}>
+                          {card.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
 
             <div className="mb-5 px-4 py-3" style={{ background: CREAM, border: "1px solid #FFE0CC", borderRadius: "16px" }}>

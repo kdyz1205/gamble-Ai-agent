@@ -86,6 +86,8 @@ export default function ChallengeVerdictPanel({
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyNotice, setCopyNotice] = useState("");
+  const [origin, setOrigin] = useState("");
   const [acceptingChallenge, setAcceptingChallenge] = useState(false);
   const [acceptContractChecked, setAcceptContractChecked] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -102,6 +104,10 @@ export default function ChallengeVerdictPanel({
   }, [challengeId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -244,9 +250,20 @@ export default function ChallengeVerdictPanel({
 
   const copyLink = () => {
     const url = `${window.location.origin}/join/${challengeId}`;
-    void navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const showCopied = (message: string) => {
+      setCopied(true);
+      setCopyNotice(message);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    if (!navigator.clipboard?.writeText) {
+      showCopied("Clipboard is blocked here. Use the visible join link.");
+      return;
+    }
+
+    navigator.clipboard.writeText(url)
+      .then(() => showCopied("Join link copied."))
+      .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
   };
 
   const shareInvite = async () => {
@@ -333,6 +350,7 @@ export default function ChallengeVerdictPanel({
   const compactRules = compactChallengeRules(challenge);
   const contractBullets = acceptanceContract(challenge);
   const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
+  const inviteUrl = `${origin || ""}/join/${challengeId}`;
 
   return (
     <motion.div
@@ -351,7 +369,7 @@ export default function ChallengeVerdictPanel({
             <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The bet</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
             <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              AI reviews evidence against the rule contract below. Settlement happens only after verdict confirmation.
+              This is an AI-judged challenge between two people. Join only if you agree to the rules, upload evidence when done, and the AI reviews the evidence to recommend a winner.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -419,6 +437,19 @@ export default function ChallengeVerdictPanel({
             <p className="text-[11px] font-bold" style={{ color: "#9A3412" }}>
               Escrow: {settlementSummary(challenge)}
             </p>
+            <div className="flex flex-col gap-1">
+              <input
+                readOnly
+                value={inviteUrl}
+                className="w-full rounded-xl border bg-white px-3 py-2 text-xs font-bold focus:outline-none"
+                style={{ borderColor: "#FED7AA", color: "#7C2D12" }}
+              />
+              {copyNotice && (
+                <p className="text-[11px] font-black" style={{ color: "#9A3412" }}>
+                  {copyNotice}
+                </p>
+              )}
+            </div>
           </motion.div>
         )}
 
