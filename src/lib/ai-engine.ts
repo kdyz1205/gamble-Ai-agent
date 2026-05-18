@@ -109,6 +109,9 @@ export interface JudgmentResult {
   winnerId: string | null;
   reasoning: string;
   confidence: number;
+  evidenceQuality?: "good" | "unclear" | "invalid";
+  settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
+  source?: "deterministic" | "llm" | "fallback";
 }
 
 const MARKET_COMPILER_PROMPT = `You are the AI brain of a challenge/betting platform. The user describes a challenge in natural language (any language — English, Chinese, mixed, Spanish, etc.). You must ALWAYS respond in the user's input language for any human-facing text fields (labels, reasoning, clarifyingQuestion, recommendationSummary, redFlags).
@@ -458,6 +461,86 @@ async function getVisualsForParticipant(
   });
 }
 
+function normalizeObjectiveAnswer(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized.length > 0 ? normalized : null;
+}
+
+function extractExpectedAnswer(params: Pick<JudgeChallengeParams, "title" | "rules" | "description">): string | null {
+  const text = [params.rules, params.description, params.title].filter(Boolean).join("\n");
+  const match = text.match(/\b(?:expected[_ -]?answer|correct[_ -]?answer)\s*[:=]\s*([^\n\r;]+)/i);
+  return match ? match[1].trim() : null;
+}
+
+function extractSubmittedAnswer(evidence: JudgeEvidencePayload | null): string | null {
+  if (!evidence) return null;
+  const metadataAnswer = evidence.metadata?.answer;
+  if (typeof metadataAnswer === "string" && metadataAnswer.trim()) {
+    return metadataAnswer.trim();
+  }
+  const description = evidence.description ?? "";
+  const match = description.match(/\b(?:answer|final answer|response)\s*[:=]\s*([^\n\r;]+)/i);
+  return match ? match[1].trim() : null;
+}
+
+function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentResult | null {
+  if (!params.participantBId || !params.evidenceA || !params.evidenceB) return null;
+
+  const expectedRaw = extractExpectedAnswer(params);
+  const expected = normalizeObjectiveAnswer(expectedRaw);
+  if (!expected) return null;
+
+  const answerARaw = extractSubmittedAnswer(params.evidenceA);
+  const answerBRaw = extractSubmittedAnswer(params.evidenceB);
+  const answerA = normalizeObjectiveAnswer(answerARaw);
+  const answerB = normalizeObjectiveAnswer(answerBRaw);
+  if (!answerA && !answerB) return null;
+
+  const aCorrect = answerA === expected;
+  const bCorrect = answerB === expected;
+
+  if (aCorrect !== bCorrect) {
+    const winnerId = aCorrect ? params.participantAId : params.participantBId;
+    const winnerLabel = aCorrect ? "Participant A" : "Participant B";
+    return {
+      winnerId,
+      confidence: 0.99,
+      evidenceQuality: "good",
+      settlementRecommendation: "settle_winner",
+      source: "deterministic",
+      reasoning:
+        `Deterministic objective answer check: expected "${expectedRaw}". ` +
+        `Participant A submitted "${answerARaw ?? "(none)"}"; Participant B submitted "${answerBRaw ?? "(none)"}". ` +
+        `Only ${winnerLabel} matched the expected answer, so ${winnerLabel} wins.`,
+    };
+  }
+
+  if (aCorrect && bCorrect) {
+    return {
+      winnerId: null,
+      confidence: 0.72,
+      evidenceQuality: "unclear",
+      settlementRecommendation: "manual_review",
+      source: "deterministic",
+      reasoning:
+        `Both participants submitted the expected answer "${expectedRaw}". ` +
+        "The objective answer check cannot break the tie without an additional timing or ordering rule.",
+    };
+  }
+
+  return {
+    winnerId: null,
+    confidence: 0.4,
+    evidenceQuality: "invalid",
+    settlementRecommendation: "refund",
+    source: "deterministic",
+    reasoning:
+      `Neither participant submitted the expected answer "${expectedRaw}". ` +
+      `Participant A submitted "${answerARaw ?? "(none)"}"; Participant B submitted "${answerBRaw ?? "(none)"}".`,
+  };
+}
+
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
   let { evidenceA, evidenceB } = params;
   const { participantAId, participantBId, title, type, rules } = params;
@@ -516,6 +599,13 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   }
 
   // ── System: strict, rubric-based, honest about uncertainty ──
+  const deterministicResult = tryDeterministicObjectiveJudge({
+    ...params,
+    evidenceA,
+    evidenceB,
+  });
+  if (deterministicResult) return deterministicResult;
+
   const system = `You are an impartial AI judge for a two-player challenge that settles REAL credits. A wrong call takes money from a real person, so be careful, explicit, and honest about uncertainty.
 
 Your job:
@@ -555,7 +645,9 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   "analysis": "<2-4 sentence step-by-step examination of both sides' evidence>",
   "winner": "A" | "B" | null,
   "reasoning": "<one short paragraph explaining the call in plain language for the loser to understand>",
-  "confidence": 0.0-1.0
+  "confidence": 0.0-1.0,
+  "evidenceQuality": "good" | "unclear" | "invalid",
+  "settlementRecommendation": "settle_winner" | "refund" | "manual_review"
 }`;
 
   // ── Try to extract real visual evidence ──
@@ -578,6 +670,9 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
       winnerId: null,
       reasoning: "Shared same-camera evidence requires visual inspection of both people in the same media, but no frames could be extracted or attached. Manual review required; no winner should be inferred from text alone.",
       confidence: 0.4,
+      evidenceQuality: "unclear",
+      settlementRecommendation: "manual_review",
+      source: "fallback",
     };
   }
 
@@ -600,7 +695,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
 
   // One-shot vision call, with optional low-confidence escalation to a bigger model
   // in the same family. Default path: gpt-4o-mini (fast/cheap). Escalation: gpt-4o.
-  const runJudge = async (modelName: string): Promise<{ winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string } | null> => {
+  const runJudge = async (modelName: string): Promise<{
+    winner: "A" | "B" | null;
+    reasoning: string;
+    confidence: number;
+    analysis?: string;
+    evidenceQuality?: "good" | "unclear" | "invalid";
+    settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
+  } | null> => {
     try {
       const text = allVisuals.length > 0
         ? await completeOracleJudgeVision({
@@ -620,7 +722,28 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           });
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;
-      return JSON.parse(jsonMatch[0]) as { winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string };
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        winner?: unknown;
+        reasoning?: unknown;
+        confidence?: unknown;
+        analysis?: unknown;
+        evidenceQuality?: unknown;
+        settlementRecommendation?: unknown;
+      };
+      if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) return null;
+      if (typeof parsed.reasoning !== "string" || typeof parsed.confidence !== "number") return null;
+      return {
+        winner: parsed.winner as "A" | "B" | null,
+        reasoning: parsed.reasoning,
+        confidence: parsed.confidence,
+        analysis: typeof parsed.analysis === "string" ? parsed.analysis : undefined,
+        evidenceQuality: ["good", "unclear", "invalid"].includes(parsed.evidenceQuality as string)
+          ? parsed.evidenceQuality as "good" | "unclear" | "invalid"
+          : undefined,
+        settlementRecommendation: ["settle_winner", "refund", "manual_review"].includes(parsed.settlementRecommendation as string)
+          ? parsed.settlementRecommendation as "settle_winner" | "refund" | "manual_review"
+          : undefined,
+      };
     } catch {
       return null;
     }
@@ -652,6 +775,15 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       winnerId,
       reasoning: fullReasoning,
       confidence: parsedResult.confidence,
+      evidenceQuality: parsedResult.evidenceQuality ?? (winnerId && parsedResult.confidence >= 0.85 ? "good" : "unclear"),
+      settlementRecommendation:
+        parsedResult.settlementRecommendation ??
+        (winnerId && parsedResult.confidence >= 0.85
+          ? "settle_winner"
+          : winnerId
+            ? "manual_review"
+            : "refund"),
+      source: "llm",
     };
   }
 
@@ -791,6 +923,9 @@ function judgeChallengeFallback(
     // Below both the 0.70 escalation trigger and the 0.85 auto-settle gate
     // — guarantees this cannot settle credits automatically.
     confidence: 0.4,
+    evidenceQuality: "unclear",
+    settlementRecommendation: "manual_review",
+    source: "fallback",
     reasoning:
       `AI was unable to evaluate "${challengeTitle}" (primary and escalated model calls both failed or returned malformed JSON). ` +
       `Marking this challenge as needing manual review. No credits will move until the creator explicitly confirms a winner.`,

@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
     }
 
     const stakeInt = Math.max(0, Math.floor(stake));
+    let creatorStakeTxId: string | undefined;
 
     // ── ATOMIC ESCROW + CREATE ──
     // Previous flow:
@@ -133,6 +134,7 @@ export async function POST(req: NextRequest) {
 
       const result = await spendCredits(user.userId, stakeInt, "stake", `Staked ${stakeInt} credits on "${title.slice(0, 40)}"`, undefined);
       if (!result.success) return noCredits(stakeInt, result.balance);
+      creatorStakeTxId = result.txId;
     }
 
     let deadlineDate: Date | null = null;
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
       else deadlineDate.setHours(deadlineDate.getHours() + 48);
     }
 
-    let challenge;
+    let challenge: { id: string; title: string } | null = null;
     try {
       challenge = await prisma.challenge.create({
         data: {
@@ -195,6 +197,20 @@ export async function POST(req: NextRequest) {
           },
         },
       });
+      if (creatorStakeTxId) {
+        const createdChallengeId = challenge.id;
+        await prisma.creditTx.update({
+          where: { id: creatorStakeTxId },
+          data: { challengeId: createdChallengeId },
+        }).catch((linkErr) => {
+          console.error("CRITICAL: creator stake tx could not be linked to challenge", {
+            userId: user.userId,
+            challengeId: createdChallengeId,
+            creatorStakeTxId,
+            linkErr,
+          });
+        });
+      }
     } catch (createErr) {
       // Compensating refund — never leave a user charged with no Challenge.
       if (stakeInt > 0) {

@@ -145,7 +145,7 @@ export async function spendCredits(
   type: string,
   description: string,
   challengeId?: string,
-): Promise<{ success: boolean; balance: number; error?: string }> {
+): Promise<{ success: boolean; balance: number; error?: string; txId?: string }> {
   if (amount <= 0) {
     return { success: false, balance: 0, error: "Invalid spend amount" };
   }
@@ -158,10 +158,10 @@ export async function spendCredits(
     return { success: false, balance: current?.credits ?? 0, error: "Insufficient credits" };
   }
   const after = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-  await prisma.creditTx.create({
+  const tx = await prisma.creditTx.create({
     data: { userId, type, amount: -amount, balanceAfter: after?.credits ?? 0, description, challengeId },
   });
-  return { success: true, balance: after?.credits ?? 0 };
+  return { success: true, balance: after?.credits ?? 0, txId: tx.id };
 }
 
 export async function addCredits(

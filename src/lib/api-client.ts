@@ -306,6 +306,20 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerId?: string;
   model?: string;
 }): Promise<{
+  status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
+  winnerId: string | null;
+  confidence: number;
+  reasoning: string;
+  evidenceQuality: "good" | "unclear" | "invalid";
+  settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+  verdict: {
+    status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
+    winnerId: string | null;
+    confidence: number;
+    reasoning: string;
+    evidenceQuality: "good" | "unclear" | "invalid";
+    settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+  };
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
   model: string;

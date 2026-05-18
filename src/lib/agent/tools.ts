@@ -107,12 +107,14 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
   const deadline = parseTimeWindowToDate(timeWindow);
 
   // Atomic escrow then create; refund on throw — same pattern POST /api/challenges uses.
+  let creatorStakeTxId: string | undefined;
   if (stake > 0) {
     const spend = await spendCredits(ctx.userId, stake, "stake", `Staked ${stake} credits on "${title.slice(0, 40)}"`);
     if (!spend.success) return { ok: false, error: spend.error || "Insufficient credits" };
+    creatorStakeTxId = spend.txId;
   }
 
-  let challenge;
+  let challenge: { id: string; title: string; status: string; stake: number; evidenceType: string } | null = null;
   try {
     challenge = await prisma.challenge.create({
       data: {
@@ -145,6 +147,20 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
         },
       },
     });
+    if (creatorStakeTxId) {
+      const createdChallengeId = challenge.id;
+      await prisma.creditTx.update({
+        where: { id: creatorStakeTxId },
+        data: { challengeId: createdChallengeId },
+      }).catch((linkErr) => {
+        console.error("CRITICAL: creator stake tx could not be linked to agent-created challenge", {
+          userId: ctx.userId,
+          challengeId: createdChallengeId,
+          creatorStakeTxId,
+          linkErr,
+        });
+      });
+    }
   } catch (err) {
     if (stake > 0) {
       await addCredits(ctx.userId, stake, "refund", `Refund — challenge creation failed`);

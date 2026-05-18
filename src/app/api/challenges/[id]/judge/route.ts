@@ -7,6 +7,38 @@ import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
 import { isAiReviewStatus } from "@/lib/challenge-state-machine";
 
+type VerdictStatus = "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
+type EvidenceQuality = "good" | "unclear" | "invalid";
+type SettlementRecommendation = "settle_winner" | "refund" | "manual_review";
+
+function statusForVerdict(result: { winnerId: string | null; confidence: number }): VerdictStatus {
+  if (!result.winnerId || result.confidence < 0.6) return ChallengeStatus.ai_inconclusive;
+  if (result.confidence < 0.85) return ChallengeStatus.manual_review_required;
+  return ChallengeStatus.ai_verdict_ready;
+}
+
+function evidenceQualityForVerdict(result: {
+  winnerId: string | null;
+  confidence: number;
+  evidenceQuality?: EvidenceQuality;
+}): EvidenceQuality {
+  if (result.evidenceQuality) return result.evidenceQuality;
+  if (result.winnerId && result.confidence >= 0.85) return "good";
+  if (result.confidence >= 0.6) return "unclear";
+  return "invalid";
+}
+
+function recommendationForVerdict(result: {
+  winnerId: string | null;
+  confidence: number;
+  settlementRecommendation?: SettlementRecommendation;
+}): SettlementRecommendation {
+  if (result.settlementRecommendation) return result.settlementRecommendation;
+  if (result.winnerId && result.confidence >= 0.85) return "settle_winner";
+  if (!result.winnerId && result.confidence < 0.6) return "refund";
+  return "manual_review";
+}
+
 /**
  * POST /api/challenges/[id]/judge
  * Body: { tier?: 1|2|3 }
@@ -136,13 +168,20 @@ export async function POST(
     model: judgeModel,
     providerId,
   });
+  const verdictStatus = statusForVerdict(result);
+  const evidenceQuality = evidenceQualityForVerdict(result);
+  const settlementRecommendation = recommendationForVerdict(result);
+  const effectiveAiModelLabel =
+    result.source === "deterministic"
+      ? "Deterministic · objective-answer-v1"
+      : aiModelLabel;
 
   const judgment = await prisma.judgment.create({
     data: {
       challengeId: id,
       winnerId: result.winnerId,
       method: "ai",
-      aiModel: aiModelLabel,
+      aiModel: effectiveAiModelLabel,
       reasoning: result.reasoning,
       confidence: result.confidence,
       status: "completed",
@@ -150,34 +189,45 @@ export async function POST(
     include: { winner: { select: { id: true, username: true } } },
   });
 
-  const nextStatus =
-    result.confidence < 0.6 || !result.winnerId
-      ? ChallengeStatus.ai_inconclusive
-      : result.confidence < 0.85
-        ? ChallengeStatus.manual_review_required
-        : ChallengeStatus.dispute_window_open;
-
   await prisma.challenge.update({
     where: { id },
-    data: { status: nextStatus, aiModel: aiModelLabel },
+    data: { status: verdictStatus, aiModel: effectiveAiModelLabel },
   });
 
   const winnerName = judgment.winner?.username || "No one";
   await prisma.activityEvent.create({
     data: {
       type: "challenge_verdict_recommended",
-      message: `"${challenge.title}" has an AI recommendation from ${aiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
+      message: `"${challenge.title}" has an AI recommendation from ${effectiveAiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
       userId: result.winnerId,
       challengeId: id,
     },
   });
 
   const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
+  const verdict = {
+    status: verdictStatus,
+    winnerId: result.winnerId,
+    confidence: result.confidence,
+    reasoning: result.reasoning,
+    evidenceQuality,
+    settlementRecommendation,
+  } satisfies {
+    status: VerdictStatus;
+    winnerId: string | null;
+    confidence: number;
+    reasoning: string;
+    evidenceQuality: EvidenceQuality;
+    settlementRecommendation: SettlementRecommendation;
+  };
+
   return Response.json({
+    ...verdict,
+    verdict,
     judgment,
     settlement: { success: false, error: "Manual confirmation required" },
-    challenge: { id, status: nextStatus },
-    model: aiModelLabel,
+    challenge: { id, status: verdictStatus },
+    model: effectiveAiModelLabel,
     tierId,
     creditsUsed: isFreeChallenge ? 0 : cost,
     creditsRemaining: isFreeChallenge ? postBalance : undefined,
