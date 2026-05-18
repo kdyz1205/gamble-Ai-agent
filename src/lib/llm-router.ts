@@ -205,6 +205,7 @@ async function openAiCompatibleVisionComplete(
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
+      ...(baseUrl.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: userContent },

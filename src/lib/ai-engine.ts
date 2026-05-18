@@ -802,6 +802,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             userText,
             images: allVisuals,
             maxTokens: 1200,
+            temperature: 0.1,
           })
         : await completeOraclePrompt({
             providerId: params.providerId,
@@ -809,9 +810,18 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             system,
             user: userText,
             maxTokens: 1200,
+            temperature: 0.1,
           });
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return null;
+      if (!jsonMatch) {
+        console.warn("[judgeChallenge] LLM judge returned no JSON object", {
+          providerId: params.providerId,
+          model: modelName,
+          visualFrames: allVisuals.length,
+          sample: text.slice(0, 300),
+        });
+        return null;
+      }
       const parsed = JSON.parse(jsonMatch[0]) as {
         winner?: unknown;
         reasoning?: unknown;
@@ -836,7 +846,13 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           : undefined,
         videoMetrics: coerceVideoMetrics(parsed.videoMetrics, allVisuals.length, rules || title),
       };
-    } catch {
+    } catch (err) {
+      console.warn("[judgeChallenge] LLM judge call failed", {
+        providerId: params.providerId,
+        model: modelName,
+        visualFrames: allVisuals.length,
+        error: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+      });
       return null;
     }
   };
