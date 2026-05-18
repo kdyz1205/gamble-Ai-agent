@@ -27,8 +27,8 @@ export interface JudgeVisionImage {
 async function bufferToVisionImage(buffer: Buffer, caption: string): Promise<JudgeVisionImage | null> {
   const jpeg = await sharp(buffer)
     .rotate()
-    .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 84, mozjpeg: true })
+    .resize({ width: 768, height: 768, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer();
   if (jpeg.length > 4.5 * 1024 * 1024) return null;
   return { caption, mimeType: "image/jpeg", base64: jpeg.toString("base64") };

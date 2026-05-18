@@ -142,6 +142,7 @@ model Challenge {
   // ── Rules & Evidence ──
   rules         String?
   evidenceType  String   @default("self_report") // video | photo | gps | self_report
+  livenessPrompt String?
 
   // ── Settlement ──
   settlementMode String  @default("mutual_confirmation") // oracle | arbiter | mutual_confirmation
@@ -245,6 +246,7 @@ model Judgment {
   aiModel      String?
   reasoning    String?
   confidence   Float?
+  metricsJson  String?
   status       String   @default("pending") // pending | completed | disputed
   createdAt    DateTime @default(now())
 

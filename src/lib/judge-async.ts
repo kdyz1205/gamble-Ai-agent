@@ -83,6 +83,7 @@ export async function runJudgeJob(jobId: string): Promise<void> {
       reasoning: result.judgment.reasoning,
       confidence: result.judgment.confidence,
       aiModel: result.judgment.aiModel,
+      metricsJson: result.judgment.metricsJson,
     },
     settlement: result.settlementResult,
     challenge: { id: job.challengeId, status: challengeStatus?.status ?? "unknown" },

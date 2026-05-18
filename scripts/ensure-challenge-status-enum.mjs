@@ -45,6 +45,10 @@ async function main() {
   const client = new Client({ connectionString });
   await client.connect();
   try {
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "livenessPrompt" TEXT`);
+    await client.query(`ALTER TABLE "Judgment" ADD COLUMN IF NOT EXISTS "metricsJson" TEXT`);
+    console.log("[status-enum] ensured liveness/judgment metric columns.");
+
     const typeResult = await client.query(
       "SELECT 1 FROM pg_type WHERE typname = $1",
       ["ChallengeStatus"],

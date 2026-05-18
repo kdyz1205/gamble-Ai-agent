@@ -5,6 +5,7 @@ import { getCredits, spendCredits, addCredits } from "@/lib/credits";
 import { evaluateRuleSafety } from "@/lib/rule-safety";
 import { ChallengeStatus } from "@/lib/enums";
 import { expandChallengeStatusFilter } from "@/lib/challenge-state-machine";
+import { generateLivenessPhrase } from "@/lib/liveness";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -153,6 +154,10 @@ export async function POST(req: NextRequest) {
     }
 
     let challenge: { id: string; title: string } | null = null;
+    const livenessPrompt =
+      String(evidenceType).toLowerCase() === "video"
+        ? generateLivenessPhrase()
+        : null;
     try {
       challenge = await prisma.challenge.create({
         data: {
@@ -171,6 +176,7 @@ export async function POST(req: NextRequest) {
           proofWindow,
           rules,
           evidenceType,
+          livenessPrompt,
           settlementMode,
           proofSource,
           arbiter,

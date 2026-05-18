@@ -1,0 +1,2 @@
+ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "livenessPrompt" TEXT;
+ALTER TABLE "Judgment" ADD COLUMN IF NOT EXISTS "metricsJson" TEXT;

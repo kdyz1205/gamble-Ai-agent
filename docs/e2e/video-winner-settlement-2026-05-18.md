@@ -2,7 +2,9 @@
 
 Date: 2026-05-18
 
-Commit SHA: `2f342bcfb72fd1ab2ad7506568b3c06977bd571b`
+Proof run commit: `2f342bcfb72fd1ab2ad7506568b3c06977bd571b`
+
+Docs/current HEAD commit when this proof was recorded: `20d4e9bbbed9323a6e620da1660f699cc5f84c68`
 
 Production deployment:
 - Alias: `https://gamble-ai-agent.vercel.app`
@@ -15,6 +17,8 @@ Scope:
 - Production E2E used stable generated push-up fixture videos with visual rep labels and 60-second duration.
 - This proves the production video evidence -> vision judge -> auto-settlement -> ledger path.
 - It does not prove unconstrained real-human pose-estimation reliability for arbitrary phone videos.
+
+This proof used generated fixture videos and does not prove arbitrary real phone video reliability.
 
 ## Redacted Test Accounts
 

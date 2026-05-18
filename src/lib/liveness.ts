@@ -17,6 +17,11 @@ export function generateLivenessPrompt(): string {
   return GESTURE_PROMPTS[Math.floor(Math.random() * GESTURE_PROMPTS.length)];
 }
 
+export function generateLivenessPhrase(): string {
+  const code = randomBytes(3).toString("hex").toUpperCase();
+  return `GambleAI ${code}`;
+}
+
 /* ── Screen-flash color sequence (layer 2 — anti-splice) ── */
 
 /**
