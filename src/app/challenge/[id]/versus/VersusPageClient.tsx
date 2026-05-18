@@ -465,16 +465,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const acceptChallenge = async () => {
     if (!challenge || !uid) return;
-    setBusy(true);
-    try {
-      await api.acceptChallenge(challenge.id);
-      showNote("You joined the battle!", "success");
-      await refresh();
-    } catch (e) {
-      showNote(e instanceof Error ? e.message : "Could not join", "error");
-    } finally {
-      setBusy(false);
-    }
+    window.location.href = `/join/${challenge.id}`;
   };
 
   const copyLink = () => {
@@ -747,7 +738,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   boxShadow: "0 8px 40px rgba(124,92,252,0.35), 0 0 80px rgba(0,212,200,0.1)",
                 }}
               >
-                {busy ? "Joining..." : "Enter the Arena — Accept Challenge"}
+                {busy ? "Opening..." : "Review rules and join"}
               </motion.button>
             </motion.div>
           )}

@@ -4,6 +4,7 @@ import { generateChallengeSpec } from "@/lib/challenge-spec";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { configuredProviders, getProviderById, isPaidProvider, isProviderConfigured, resolveTierModel, resolveTierProvider } from "@/lib/llm-providers";
 import { rateLimit } from "@/lib/rate-limit";
+import { evaluateRuleSafety } from "@/lib/rule-safety";
 
 const INVITE_MODES: ChallengeSpec["invite_mode"][] = ["nearby", "invite_link", "direct_friend", "same_device"];
 const PARTICIPATION_MODES: ChallengeSpec["participation_mode"][] = ["remote_async", "remote_live", "same_camera", "in_person"];
@@ -147,6 +148,17 @@ export async function POST(req: NextRequest) {
   }
   if (inputText.length > 2000) {
     return Response.json({ error: "Challenge prompt is too long. Keep it under 2000 characters." }, { status: 400 });
+  }
+
+  const safety = evaluateRuleSafety(inputText);
+  if (!safety.allowed) {
+    return Response.json(
+      {
+        error: safety.reason,
+        safety,
+      },
+      { status: 400 },
+    );
   }
 
   const fallback = generateChallengeSpec(inputText);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import * as api from "@/lib/api-client";
+import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 
 interface Props {
   challenge: {
@@ -11,6 +12,9 @@ interface Props {
     stake: number;
     rules: string | null;
     type: string;
+    evidenceType?: string | null;
+    stakeToken?: string | null;
+    disputeWindow?: string | null;
   };
   userCredits: number;
   onConfirmed: (challengeId: string) => void;
@@ -20,10 +24,17 @@ interface Props {
 
 export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed, onCancel, onError }: Props) {
   const [accepting, setAccepting] = useState(false);
+  const [contractAccepted, setContractAccepted] = useState(false);
   const insufficientFunds = challenge.stake > 0 && userCredits < challenge.stake;
+  const ruleCards = parseChallengeRules(challenge);
+  const contract = acceptanceContract(challenge);
 
   const handleAccept = async () => {
     if (insufficientFunds || accepting) return;
+    if (!contractAccepted) {
+      onError("Accept the rule contract first.");
+      return;
+    }
     setAccepting(true);
     try {
       await api.acceptChallenge(challenge.id);
@@ -52,15 +63,20 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
       <div className="p-6 space-y-4">
         <h3 className="text-lg font-extrabold text-text-primary">{challenge.title}</h3>
 
-        {challenge.rules && (
-          <div className="px-3 py-2.5 rounded-xl text-xs text-amber-200 leading-relaxed"
-               style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.2)" }}>
-            <span className="font-bold text-amber-400 text-[10px] uppercase tracking-wider block mb-1">
-              AI Judge Rules
-            </span>
-            {challenge.rules}
-          </div>
-        )}
+        <div className="grid gap-2">
+          {ruleCards.slice(0, 5).map((card) => (
+            <div
+              key={card.label}
+              className="px-3 py-2.5 rounded-xl text-xs leading-relaxed"
+              style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.2)" }}
+            >
+              <span className="font-bold text-amber-400 text-[10px] uppercase tracking-wider block mb-1">
+                {card.label}
+              </span>
+              <span className="text-amber-100">{card.value}</span>
+            </div>
+          ))}
+        </div>
 
         {challenge.stake > 0 && (
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl"
@@ -77,19 +93,39 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
           </div>
         )}
 
+        <div className="px-3 py-2.5 rounded-xl text-xs text-text-secondary space-y-2"
+             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p className="font-black uppercase tracking-wider text-[10px] text-text-primary">Acceptance contract</p>
+          <ul className="space-y-1">
+            {contract.map((item) => (
+              <li key={item}>- {item}</li>
+            ))}
+          </ul>
+          <p className="font-bold text-amber-300">{settlementSummary(challenge)}</p>
+          <label className="flex items-start gap-2 font-bold text-text-primary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={contractAccepted}
+              onChange={(event) => setContractAccepted(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>I agree to the rules, evidence requirements, AI judging, dispute window, and credit settlement.</span>
+          </label>
+        </div>
+
         <div className="flex gap-3">
           <motion.button
             onClick={handleAccept}
-            disabled={insufficientFunds || accepting}
-            whileHover={!insufficientFunds ? { scale: 1.02 } : {}}
-            whileTap={!insufficientFunds ? { scale: 0.97 } : {}}
+            disabled={insufficientFunds || accepting || !contractAccepted}
+            whileHover={!insufficientFunds && contractAccepted ? { scale: 1.02 } : {}}
+            whileTap={!insufficientFunds && contractAccepted ? { scale: 0.97 } : {}}
             className={`flex-1 py-3.5 rounded-xl text-sm font-extrabold transition-all ${
-              insufficientFunds
+              insufficientFunds || !contractAccepted
                 ? "bg-gray-800 text-gray-500 cursor-not-allowed"
                 : "bg-gradient-to-r from-accent to-teal text-white shadow-lg shadow-accent/30"
             }`}
           >
-            {accepting ? "Locking stake..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Lock ${challenge.stake} Credits & Accept` : "Accept Challenge"}
+            {accepting ? "Locking stake..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Accept rules and lock ${challenge.stake} credits` : "Accept rules"}
           </motion.button>
 
           <motion.button

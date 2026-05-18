@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits, addCredits } from "@/lib/credits";
+import { evaluateRuleSafety } from "@/lib/rule-safety";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -77,6 +78,24 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!title) return Response.json({ error: "title is required" }, { status: 400 });
+    const safety = evaluateRuleSafety([
+      title,
+      description,
+      proposition,
+      type,
+      rules,
+      evidenceType,
+    ].filter(Boolean).join("\n"));
+    if (!safety.allowed) {
+      return Response.json(
+        {
+          error: safety.reason,
+          safety,
+        },
+        { status: 400 },
+      );
+    }
+
     const hasDiscoveryArgs = discoveryLat !== undefined || discoveryLng !== undefined;
     const validDiscoveryLocation =
       typeof discoveryLat === "number" &&

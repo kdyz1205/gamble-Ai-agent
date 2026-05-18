@@ -262,7 +262,7 @@ export default function ChallengeCard({
             disabled={!onAcceptChallenge || acceptChallengePending}
             className="flex-1 py-2.5 text-sm font-semibold text-white bg-accent rounded-xl hover:bg-accent-dark transition-colors shadow-sm hover:shadow-md disabled:opacity-45 disabled:pointer-events-none"
           >
-            {acceptChallengePending ? "Accepting…" : "Accept Challenge"}
+            {acceptChallengePending ? "Opening..." : "Review rules"}
           </button>
         )}
         {challenge.status === "live" && (

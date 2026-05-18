@@ -151,7 +151,7 @@ export default function Home() {
   const [openChallenges, setOpenChallenges] = useState<api.ChallengeData[]>([]);
   const [discoveryMessage, setDiscoveryMessage] = useState("");
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
-  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const joiningId: string | null = null;
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
 
@@ -327,7 +327,7 @@ export default function Home() {
   const handleJoinChallenge = useCallback(async (challenge: api.ChallengeData) => {
     setJoinMessage(null);
     if (!user) {
-      setShowAuth(true);
+      router.push(`/join/${challenge.id}`);
       return;
     }
     if (challenge.creatorId === user.id) {
@@ -339,17 +339,8 @@ export default function Home() {
       return;
     }
 
-    setJoiningId(challenge.id);
-    try {
-      await api.acceptChallenge(challenge.id);
-      router.push(`/challenge/${challenge.id}/versus`);
-    } catch (err) {
-      setJoinMessage(err instanceof Error ? err.message : "Could not join this challenge.");
-      await loadOpenChallenges();
-    } finally {
-      setJoiningId(null);
-    }
-  }, [loadOpenChallenges, router, user]);
+    router.push(`/join/${challenge.id}`);
+  }, [router, user]);
 
   const handleSelectVisibility = useCallback((value: api.ChallengeSpec["public_or_private"]) => {
     setSpec((current) => {
@@ -615,7 +606,7 @@ function OpenChallengeStrip({
                   className="mt-3 w-full rounded-full px-3 py-2 text-xs font-black disabled:opacity-60"
                   style={{ background: mine ? "#F8FAFC" : "#A7F3D0", color: mine ? "#64748B" : "#065F46" }}
                 >
-                  {joiningId === challenge.id ? "Joining..." : mine ? "Open yours" : joined ? "Open room" : "Join challenge"}
+                  {joiningId === challenge.id ? "Opening..." : mine ? "Open yours" : joined ? "Open room" : "Review rules"}
                 </button>
               </article>
             );

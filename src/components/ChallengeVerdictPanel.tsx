@@ -8,6 +8,7 @@ import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
+import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -92,6 +93,8 @@ export default function ChallengeVerdictPanel({
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [acceptingChallenge, setAcceptingChallenge] = useState(false);
+  const [acceptContractChecked, setAcceptContractChecked] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -247,10 +250,57 @@ export default function ChallengeVerdictPanel({
   };
 
   const copyLink = () => {
-    const url = `${window.location.origin}/challenge/${challengeId}`;
+    const url = `${window.location.origin}/join/${challengeId}`;
     void navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareInvite = async () => {
+    const url = `${window.location.origin}/join/${challengeId}`;
+    const shareData = {
+      title: challenge?.title || "Join my challenge",
+      text: `Accept this challenge: ${challenge?.title || "Challenge"}`,
+      url,
+    };
+    try {
+      if (navigator.share) await navigator.share(shareData);
+      else await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // User cancelled native share sheet.
+    }
+  };
+
+  const closeEmptyChallenge = async () => {
+    if (!challenge) return;
+    if (!window.confirm(`Close "${challenge.title}"? This only works before another participant joins.`)) return;
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      await api.deleteChallenge(challenge.id);
+      window.location.href = "/";
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not close this challenge");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const acceptFromContract = async () => {
+    if (!challenge || !acceptContractChecked) return;
+    setAcceptingChallenge(true);
+    setVerdictErr("");
+    try {
+      await api.acceptChallenge(challenge.id);
+      await refresh();
+      onCreditsMayChange();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not accept this challenge");
+    } finally {
+      setAcceptingChallenge(false);
+    }
   };
 
   if (loadErr) {
@@ -286,6 +336,9 @@ export default function ChallengeVerdictPanel({
 
   const verdictRow = challenge.judgments?.[0] ?? null;
   const sc = statusColor(challenge.status);
+  const ruleCards = parseChallengeRules(challenge);
+  const contractBullets = acceptanceContract(challenge);
+  const canCloseEmpty = isCreator && challenge.status === "open" && !hasOpponent;
 
   return (
     <motion.div
@@ -303,8 +356,8 @@ export default function ChallengeVerdictPanel({
           <div className="flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The bet</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
-            <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B" }}>
-              {challenge.rules || "AI reviews evidence against your challenge rules, then settles credits."}
+            <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
+              AI reviews evidence against the rule contract below. Settlement happens only after verdict confirmation.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -321,6 +374,108 @@ export default function ChallengeVerdictPanel({
             )}
           </div>
         </div>
+
+        {challenge.status === "open" && isCreator && (
+          <motion.div
+            className="space-y-3 p-4"
+            style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "22px" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-extrabold" style={{ color: "#7C2D12" }}>Waiting for opponent</p>
+                <p className="text-xs font-semibold mt-0.5" style={{ color: "#9A3412" }}>
+                  Send the invite or keep it public so someone can join. The challenge starts when the opponent accepts the rule contract.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={shareInvite}
+                  className="px-4 py-2 text-xs font-black"
+                  style={{ background: "#FED7AA", color: "#7C2D12", borderRadius: "9999px", boxShadow: "0 4px 14px rgba(251,146,60,0.25)" }}
+                >
+                  Share to friend
+                </motion.button>
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={copyLink}
+                  className="px-4 py-2 text-xs font-black"
+                  style={{ background: "#FFFFFF", color: "#334155", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
+                >
+                  {copied ? "Invite copied" : "Copy invite link"}
+                </motion.button>
+                {canCloseEmpty && (
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.97 }}
+                    disabled={busy}
+                    onClick={() => void closeEmptyChallenge()}
+                    className="px-4 py-2 text-xs font-black disabled:opacity-50"
+                    style={{ background: "#FFFFFF", color: "#991B1B", border: "1px solid #FECACA", borderRadius: "9999px" }}
+                  >
+                    Close bet
+                  </motion.button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] font-bold" style={{ color: "#9A3412" }}>
+              Escrow: {settlementSummary(challenge)}
+            </p>
+          </motion.div>
+        )}
+
+        <div className="grid gap-2 md:grid-cols-2">
+          {ruleCards.slice(0, 8).map((card) => (
+            <div
+              key={card.label}
+              className="px-3.5 py-3"
+              style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "16px" }}
+            >
+              <p className="text-[10px] font-black uppercase tracking-wider mb-1" style={{ color: "#047857" }}>
+                {card.label}
+              </p>
+              <p className="text-xs font-semibold leading-relaxed" style={{ color: "#334155" }}>
+                {card.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {challenge.status === "open" && !isCreator && !me && (
+          <div className="p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
+            <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>Before joining</p>
+            <ul className="space-y-1.5">
+              {contractBullets.map((item) => (
+                <li key={item} className="text-xs font-semibold" style={{ color: "#334155", lineHeight: 1.5 }}>
+                  - {item}
+                </li>
+              ))}
+            </ul>
+            <label className="flex items-start gap-2 mt-3 text-xs font-bold cursor-pointer" style={{ color: "#334155" }}>
+              <input
+                type="checkbox"
+                checked={acceptContractChecked}
+                onChange={(event) => setAcceptContractChecked(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>I accept this rule contract and understand the evidence, AI judging, dispute, and credit settlement terms.</span>
+            </label>
+            <motion.button
+              type="button"
+              disabled={!acceptContractChecked || acceptingChallenge}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => void acceptFromContract()}
+              className="mt-3 w-full py-3 text-sm font-black disabled:opacity-40"
+              style={{ background: "#A7F3D0", color: "#065F46", borderRadius: "9999px" }}
+            >
+              {acceptingChallenge ? "Joining..." : "Accept rules and join"}
+            </motion.button>
+          </div>
+        )}
 
         {/* Phase track */}
         <div className="flex items-center gap-2 flex-wrap">

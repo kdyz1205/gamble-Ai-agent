@@ -173,12 +173,12 @@ function LiveContent() {
 
 /* ── Discover open challenges ── */
 function DiscoverContent({
-  onRequireAuth,
+  onRequireAuth: _onRequireAuth,
   onOpenChallenge: _onOpenChallenge,
   onCloseDrawer,
 }: {
   onRequireAuth: () => void;
-  /** Parent may sync home state; join flow uses router to /challenge/[id]/versus */
+  /** Parent may sync home state; join flow uses router to /join/[id] */
   onOpenChallenge: (challengeId: string) => void;
   onCloseDrawer?: () => void;
 }) {
@@ -210,7 +210,8 @@ function DiscoverContent({
 
   const join = async (c: ChallengeData) => {
     if (status !== "authenticated" || !uid) {
-      onRequireAuth();
+      onCloseDrawer?.();
+      router.push(`/join/${c.id}`);
       return;
     }
     if (c.creatorId === uid) {
@@ -222,13 +223,8 @@ function DiscoverContent({
       router.push(`/challenge/${c.id}/versus`);
       return;
     }
-    try {
-      await api.acceptChallenge(c.id);
-      onCloseDrawer?.();
-      router.push(`/challenge/${c.id}/versus`);
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Could not join");
-    }
+    onCloseDrawer?.();
+    router.push(`/join/${c.id}`);
   };
 
   if (loading) return <p className="text-sm text-text-muted">Loading open challenges…</p>;
@@ -297,7 +293,7 @@ function DiscoverContent({
                 className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)" }}
               >
-                {mine ? "Yours" : joined ? "Open room" : "Join as opponent"}
+                {mine ? "Yours" : joined ? "Open room" : "Review rules"}
               </motion.button>
               <motion.button
                 type="button"
