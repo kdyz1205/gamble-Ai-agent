@@ -11,7 +11,11 @@ export interface LlmProviderDefinition {
   kind: LlmBackendKind;
   /** OpenAI-compatible base URL (no trailing slash), when kind === openai_compat */
   baseUrl?: string;
+  /** Optional env override for OpenAI-compatible base URL. */
+  baseUrlEnv?: string;
   envVar: string;
+  /** Local providers such as Ollama can run without a paid API key. */
+  apiKeyOptional?: boolean;
   defaultModel: string;
   /** Suggested models in the collapsed panel */
   models: string[];
@@ -19,6 +23,19 @@ export interface LlmProviderDefinition {
 }
 
 export const LLM_PROVIDERS: LlmProviderDefinition[] = [
+  {
+    id: "local_ollama",
+    label: "Local Ollama / Llama",
+    shortLabel: "Local",
+    kind: "openai_compat",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    baseUrlEnv: "OLLAMA_BASE_URL",
+    envVar: "OLLAMA_API_KEY",
+    apiKeyOptional: true,
+    defaultModel: "llama4:latest",
+    models: ["llama4:latest", "llama3.3:latest", "llama3.2-vision:latest", "qwen2.5:latest"],
+    docsUrl: "https://ollama.com",
+  },
   {
     id: "anthropic",
     label: "Anthropic (Claude)",
@@ -36,11 +53,6 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.openai.com/v1",
     envVar: "OPENAI_API_KEY",
-    // gpt-4o-mini is our default now: it handles the kind of frames we get after
-    // pre-extraction (already scene-change sampled + sharp-normalized to 1568px
-    // JPEGs) for ~1/17 the cost and ~3x the speed of gpt-4o. Judge latency wins
-    // are the user-visible metric. If it ever returns confidence < 0.70, the
-    // judge auto-escalates to gpt-4o for a second pass (see ai-engine.ts).
     defaultModel: "gpt-4o-mini",
     models: ["gpt-4o-mini", "gpt-4o", "o4-mini", "o3-mini"],
     docsUrl: "https://platform.openai.com/docs",
@@ -88,6 +100,17 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     defaultModel: "mistral-small-latest",
     models: ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
     docsUrl: "https://docs.mistral.ai",
+  },
+  {
+    id: "moonshot",
+    label: "Moonshot AI (Kimi)",
+    shortLabel: "Kimi",
+    kind: "openai_compat",
+    baseUrl: "https://api.moonshot.ai/v1",
+    envVar: "MOONSHOT_API_KEY",
+    defaultModel: "kimi-k2-0711-preview",
+    models: ["kimi-k2-0711-preview", "moonshot-v1-8k", "moonshot-v1-32k"],
+    docsUrl: "https://platform.moonshot.ai/docs",
   },
   {
     id: "deepseek",
@@ -139,4 +162,61 @@ export function getProviderById(id: string): LlmProviderDefinition | undefined {
   return LLM_PROVIDERS.find((p) => p.id === id);
 }
 
-export const DEFAULT_LLM_PROVIDER_ID = "anthropic";
+export function providerBaseUrl(def: LlmProviderDefinition) {
+  return (def.baseUrlEnv ? process.env[def.baseUrlEnv] : undefined) || def.baseUrl || "";
+}
+
+export function isProviderConfigured(defOrId: LlmProviderDefinition | string | undefined) {
+  const def = typeof defOrId === "string" ? getProviderById(defOrId) : defOrId;
+  if (!def) return false;
+  if (def.id === "local_ollama") {
+    return process.env.LOCAL_LLM_ENABLED === "1" || Boolean(process.env.OLLAMA_BASE_URL);
+  }
+  if (process.env.ALLOW_PAID_AI !== "1") return false;
+  return Boolean(process.env[def.envVar]);
+}
+
+export function isPaidProvider(def: LlmProviderDefinition | undefined) {
+  return Boolean(def && !def.apiKeyOptional);
+}
+
+export function configuredProviders() {
+  return LLM_PROVIDERS.filter((provider) => isProviderConfigured(provider));
+}
+
+export function resolveTierProvider(tierId: 1 | 2 | 3, needsVision = false) {
+  const envDefault = process.env.ORACLE_DEFAULT_PROVIDER;
+  if (envDefault && isProviderConfigured(envDefault)) return getProviderById(envDefault);
+
+  if (tierId === 1 && isProviderConfigured("local_ollama")) return getProviderById("local_ollama");
+
+  if (needsVision && isProviderConfigured("google")) return getProviderById("google");
+
+  if (tierId === 2) {
+    for (const id of ["moonshot", "deepseek", "groq", "mistral", "together"]) {
+      if (isProviderConfigured(id)) return getProviderById(id);
+    }
+  }
+
+  if (tierId === 3) {
+    for (const id of ["openai", "anthropic", "google", "xai"]) {
+      if (isProviderConfigured(id)) return getProviderById(id);
+    }
+  }
+
+  return configuredProviders()[0] ?? getProviderById("local_ollama");
+}
+
+export function resolveTierModel(provider: LlmProviderDefinition | undefined, tierId: 1 | 2 | 3, needsVision = false) {
+  if (!provider) return "unconfigured-model";
+  if (provider.id === "local_ollama") {
+    if (needsVision && process.env.LOCAL_VISION_MODEL) return process.env.LOCAL_VISION_MODEL;
+    return process.env.LOCAL_LLM_MODEL || provider.defaultModel;
+  }
+  if (provider.id === "google" && needsVision) return "gemini-2.0-flash";
+  if (provider.id === "openai" && tierId === 3) return process.env.OPENAI_JUDGE_MODEL || provider.defaultModel;
+  if (provider.id === "anthropic" && tierId === 3) return process.env.ANTHROPIC_JUDGE_MODEL || provider.defaultModel;
+  return provider.defaultModel;
+}
+
+export const DEFAULT_LLM_PROVIDER_ID = "local_ollama";

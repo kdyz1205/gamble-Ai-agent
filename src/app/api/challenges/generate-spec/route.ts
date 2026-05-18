@@ -1,51 +1,146 @@
 import { NextRequest } from "next/server";
-import { parseChallenge } from "@/lib/ai-engine";
+import type { ChallengeSpec } from "@/lib/challenge-spec";
+import { generateChallengeSpec } from "@/lib/challenge-spec";
+import { completeOraclePrompt } from "@/lib/llm-router";
+import { configuredProviders, getProviderById, isPaidProvider, isProviderConfigured, resolveTierModel, resolveTierProvider } from "@/lib/llm-providers";
+import { rateLimit } from "@/lib/rate-limit";
 
-function toSpec(inputText: string, parsed: Awaited<ReturnType<typeof parseChallenge>>) {
-  const text = `${inputText} ${parsed.rules ?? ""} ${parsed.evidenceType ?? ""}`.toLowerCase();
-  const sameCamera = /same[_ -]?camera|same phone|one phone|single phone|shared video|same video|together/.test(text);
+const INVITE_MODES: ChallengeSpec["invite_mode"][] = ["nearby", "invite_link", "direct_friend", "same_device"];
+const PARTICIPATION_MODES: ChallengeSpec["participation_mode"][] = ["remote_async", "remote_live", "same_camera", "in_person"];
+
+function pickProvider(requested?: string) {
+  const requestedProviderFromBody = requested ? getProviderById(requested) : undefined;
+  if (requestedProviderFromBody && isProviderConfigured(requestedProviderFromBody)) return requestedProviderFromBody;
+  const requestedFromEnv = process.env.ORACLE_DEFAULT_PROVIDER;
+  const requestedProvider = requestedFromEnv ? getProviderById(requestedFromEnv) : undefined;
+  if (requestedProvider && configuredProviders().some((provider) => provider.id === requestedProvider.id)) {
+    return requestedProvider;
+  }
+  return resolveTierProvider(1) ?? configuredProviders()[0];
+}
+
+function extractJson(raw: string) {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const text = fenced || raw;
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("LLM did not return JSON");
+  return JSON.parse(match[0]) as Partial<ChallengeSpec>;
+}
+
+function asString(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function asNumber(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : fallback;
+}
+
+function normalizeSpec(ai: Partial<ChallengeSpec>, fallback: ChallengeSpec): ChallengeSpec {
+  const invite = INVITE_MODES.includes(ai.invite_mode as ChallengeSpec["invite_mode"])
+    ? ai.invite_mode as ChallengeSpec["invite_mode"]
+    : fallback.invite_mode;
+  const participation = PARTICIPATION_MODES.includes(ai.participation_mode as ChallengeSpec["participation_mode"])
+    ? ai.participation_mode as ChallengeSpec["participation_mode"]
+    : fallback.participation_mode;
+  const aiStake = asNumber(ai.stake_amount, fallback.stake_amount);
+
   return {
-    challenge_title: parsed.title,
-    challenge_type: parsed.type,
-    participants: [
-      { role: "creator", label: "You" },
-      { role: "opponent", label: "Opponent" },
-    ],
-    stake_amount: parsed.suggestedStake,
-    currency_or_points: "credits",
-    public_or_private: parsed.isPublic ? "public" : "private",
-    invite_mode: "invite_link",
-    participation_mode: sameCamera ? "same_camera" : parsed.evidenceType === "video" ? "remote_live" : "remote_async",
-    objective: parsed.proposition || parsed.title || inputText,
-    winning_condition: parsed.proposition || parsed.rules || parsed.title || inputText,
-    required_evidence: sameCamera ? "same_camera_video" : parsed.evidenceType || "video",
-    video_capture_instructions: sameCamera
-      ? "Record one continuous video on one phone with both participants visible; keep creator left and opponent right when possible."
-      : parsed.evidenceType === "video"
-      ? "Record continuous video showing the full attempt and both participants when possible."
-      : "Submit evidence that clearly proves the result.",
-    start_condition: "Challenge starts when the opponent accepts.",
-    end_condition: parsed.deadline || "24 hours",
-    timing_method: parsed.deadline || "24 hours",
-    valid_repetition_definition: parsed.rules || parsed.proposition || inputText,
-    scoring_method: parsed.rules || "AI reviews submitted evidence against the challenge rules.",
-    allowed_attempts: "One official attempt per participant unless both agree otherwise.",
-    anti_cheat_rules: parsed.redFlags?.length
-      ? parsed.redFlags
-      : ["Evidence must be original, timestamped when possible, and not edited to misrepresent the result."],
-    ai_judging_method: "AI recommends a verdict from submitted evidence; unclear cases require manual review.",
-    dispute_window: "24 hours",
-    fallback_manual_review: "Manual review required if AI confidence is low or evidence is ambiguous.",
-    payout_rule: "Winner receives the internal credits according to the challenge stake.",
-    safety_warning: "Do not attempt unsafe, illegal, or non-consensual challenges.",
-    legal_compliance_flag: "internal_points_only",
-    deadline: parsed.deadline || "24 hours",
+    ...fallback,
+    ...ai,
+    challenge_title: asString(ai.challenge_title, fallback.challenge_title),
+    challenge_type: asString(ai.challenge_type, fallback.challenge_type),
+    participants: Array.isArray(ai.participants) && ai.participants.length >= 2 ? ai.participants : fallback.participants,
+    stake_amount: fallback.stake_amount > 0 && aiStake === 0 ? fallback.stake_amount : aiStake,
+    currency_or_points: ai.currency_or_points === "credits" ? "credits" : "points",
+    public_or_private: ai.public_or_private === "public" ? "public" : "private",
+    invite_mode: invite,
+    participation_mode: participation,
+    objective: asString(ai.objective, fallback.objective),
+    winning_condition: asString(ai.winning_condition, fallback.winning_condition),
+    required_evidence: asString(ai.required_evidence, fallback.required_evidence),
+    video_capture_instructions: asString(ai.video_capture_instructions, fallback.video_capture_instructions),
+    start_condition: asString(ai.start_condition, fallback.start_condition),
+    end_condition: asString(ai.end_condition, fallback.end_condition),
+    timing_method: asString(ai.timing_method, fallback.timing_method),
+    valid_repetition_definition: asString(ai.valid_repetition_definition, fallback.valid_repetition_definition),
+    scoring_method: asString(ai.scoring_method, fallback.scoring_method),
+    allowed_attempts: asString(ai.allowed_attempts, fallback.allowed_attempts),
+    anti_cheat_rules: Array.isArray(ai.anti_cheat_rules) && ai.anti_cheat_rules.length > 0
+      ? ai.anti_cheat_rules.map((rule) => String(rule)).filter(Boolean)
+      : fallback.anti_cheat_rules,
+    ai_judging_method: asString(ai.ai_judging_method, fallback.ai_judging_method),
+    dispute_window: asString(ai.dispute_window, fallback.dispute_window),
+    fallback_manual_review: asString(ai.fallback_manual_review, fallback.fallback_manual_review),
+    payout_rule: asString(ai.payout_rule, fallback.payout_rule),
+    safety_warning: asString(ai.safety_warning, fallback.safety_warning),
+    legal_compliance_flag: ai.legal_compliance_flag === "requires_legal_review" ? "requires_legal_review" : "internal_points_only",
+    mode_options: fallback.mode_options,
+  };
+}
+
+async function generateAiSpec(inputText: string, fallback: ChallengeSpec, prefs?: { providerId?: string; model?: string }) {
+  const provider = pickProvider(prefs?.providerId);
+  if (!provider) throw new Error("No LLM provider key is configured");
+  const model = prefs?.model?.trim() || resolveTierModel(provider, 1);
+
+  const system = `You are GambleAI's challenge architect. Convert one natural-language user sentence into one complete executable peer-to-peer challenge wager.
+
+Return ONLY valid JSON matching this TypeScript shape:
+{
+  "challenge_title": string,
+  "challenge_type": string,
+  "participants": [{"role":"creator","label":"You"},{"role":"opponent","label":string}],
+  "stake_amount": number,
+  "currency_or_points": "points" | "credits",
+  "public_or_private": "public" | "private",
+  "invite_mode": "nearby" | "invite_link" | "direct_friend" | "same_device",
+  "participation_mode": "remote_async" | "remote_live" | "same_camera" | "in_person",
+  "objective": string,
+  "winning_condition": string,
+  "required_evidence": string,
+  "video_capture_instructions": string,
+  "start_condition": string,
+  "end_condition": string,
+  "timing_method": string,
+  "valid_repetition_definition": string,
+  "scoring_method": string,
+  "allowed_attempts": string,
+  "anti_cheat_rules": string[],
+  "ai_judging_method": string,
+  "dispute_window": string,
+  "fallback_manual_review": string,
+  "payout_rule": string,
+  "safety_warning": string,
+  "legal_compliance_flag": "internal_points_only" | "requires_legal_review"
+}
+
+Do not ask follow-up questions. Use 0 credits unless the user specifies money or credits. Keep real-money settlement out of scope; use internal points/credits. For physical challenges, require clear continuous video and explain AI judging and manual review.`;
+
+  const raw = await completeOraclePrompt({
+    providerId: provider.id,
+    model,
+    system,
+    user: `User sentence: ${inputText}\n\nFallback shape to improve from:\n${JSON.stringify(fallback, null, 2)}`,
+    maxTokens: 1800,
+    temperature: 0.2,
+  });
+  return {
+    spec: normalizeSpec(extractJson(raw), fallback),
+    model: `${provider.shortLabel} - ${model}`,
+    providerId: provider.id,
+    externalApiCharged: isPaidProvider(provider),
   };
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimit(req, { scope: "generate-spec", limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
+
   const body = await req.json().catch(() => ({}));
-  const inputText = String(body.inputText || body.input || body.message || "").trim();
+  const inputText = String(body.inputText || body.input || "").trim();
+  const providerId = typeof body.providerId === "string" ? body.providerId.trim() : undefined;
+  const model = typeof body.model === "string" ? body.model.trim() : undefined;
 
   if (!inputText) {
     return Response.json({ error: "inputText is required" }, { status: 400 });
@@ -54,22 +149,27 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Challenge prompt is too long. Keep it under 2000 characters." }, { status: 400 });
   }
 
+  const fallback = generateChallengeSpec(inputText);
   try {
-    const parsed = await parseChallenge(inputText, typeof body.model === "string" ? body.model : undefined);
+    const ai = await generateAiSpec(inputText, fallback, { providerId, model });
     return Response.json({
       rawPrompt: inputText,
-      parsed,
-      spec: toSpec(inputText, parsed),
-      model: "compat-parse",
-      source: "compat",
-      providerId: "compat",
-      externalApiCharged: false,
+      spec: ai.spec,
+      model: ai.model,
+      source: "llm",
+      providerId: ai.providerId,
+      externalApiCharged: ai.externalApiCharged,
     });
   } catch (err) {
-    console.error("[generate-spec compat]", err);
-    return Response.json(
-      { error: err instanceof Error ? err.message : "Failed to generate challenge spec" },
-      { status: 500 },
-    );
+    console.error("ChallengeSpec LLM fallback:", err);
+    return Response.json({
+      rawPrompt: inputText,
+      spec: fallback,
+      model: "local-challenge-spec-v1",
+      source: "fallback",
+      providerId: "local_fallback",
+      externalApiCharged: false,
+      fallbackReason: err instanceof Error ? err.message : "LLM generation failed",
+    });
   }
 }

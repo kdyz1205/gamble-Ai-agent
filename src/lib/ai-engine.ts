@@ -1,5 +1,5 @@
 import { completeOraclePrompt, completeOraclePromptWithTools, completeOracleJudgeVision, type ToolInvocation } from "./llm-router";
-import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured } from "./llm-providers";
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import {
   prepareParticipantVisuals,
@@ -36,6 +36,7 @@ function resolveOracle(preferredModel?: string): { providerId: string; model: st
 function oracleKeyAvailable(providerId: string): boolean {
   const def = getProviderById(providerId);
   if (!def) return false;
+  if (def.apiKeyOptional) return isProviderConfigured(def);
   return Boolean(process.env[def.envVar]?.trim());
 }
 

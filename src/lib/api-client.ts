@@ -106,6 +106,35 @@ export interface LocationSnapshot {
   lng: number;
 }
 
+export interface ChallengeSpec {
+  challenge_title: string;
+  challenge_type: string;
+  participants: Array<{ role: "creator" | "opponent"; label: string; user_id?: string | null }>;
+  stake_amount: number;
+  currency_or_points: "points" | "credits";
+  public_or_private: "public" | "private";
+  invite_mode: "nearby" | "invite_link" | "direct_friend" | "same_device";
+  participation_mode: "remote_async" | "remote_live" | "same_camera" | "in_person";
+  objective: string;
+  winning_condition: string;
+  required_evidence: string;
+  video_capture_instructions: string;
+  start_condition: string;
+  end_condition: string;
+  timing_method: string;
+  valid_repetition_definition: string;
+  scoring_method: string;
+  allowed_attempts: string;
+  anti_cheat_rules: string[];
+  ai_judging_method: string;
+  dispute_window: string;
+  fallback_manual_review: string;
+  payout_rule: string;
+  safety_warning: string;
+  legal_compliance_flag: "internal_points_only" | "requires_legal_review";
+  mode_options?: Array<{ label: string; value: string; description: string }>;
+}
+
 export interface ChallengeData {
   id: string;
   creatorId: string;
@@ -113,6 +142,11 @@ export interface ChallengeData {
   description: string | null;
   marketType: string;
   proposition: string | null;
+  rawPrompt?: string | null;
+  challengeSpecJson?: string | null;
+  inviteCode?: string | null;
+  currencyType?: string | null;
+  participationMode?: string | null;
   type: string;
   status: string;
   stake: number;
@@ -181,9 +215,32 @@ export async function getChallenge(id: string): Promise<{ challenge: ChallengeDa
   return apiFetch(`/challenges/${id}`);
 }
 
+export async function generateChallengeSpec(inputText: string, prefs?: {
+  providerId?: string;
+  model?: string | null;
+}): Promise<{
+  rawPrompt: string;
+  spec: ChallengeSpec;
+  model: string;
+  source?: "llm" | "fallback";
+  providerId?: string;
+  externalApiCharged?: boolean;
+  fallbackReason?: string;
+}> {
+  return apiFetch("/challenges/generate-spec", {
+    method: "POST",
+    body: JSON.stringify({ inputText, ...prefs }),
+  });
+}
+
 export async function createChallenge(data: {
   title: string;
   description?: string;
+  rawPrompt?: string;
+  challengeSpecJson?: string;
+  inviteCode?: string;
+  currencyType?: string;
+  participationMode?: string;
   marketType?: string;
   proposition?: string;
   type?: string;

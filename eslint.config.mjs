@@ -5,7 +5,7 @@ const coreWebVitals = require("eslint-config-next/core-web-vitals");
 const typescript = require("eslint-config-next/typescript");
 
 const config = [
-  { ignores: [".next/**", "out/**", "build/**", "node_modules/**", "src/generated/**"] },
+  { ignores: [".next/**", "out/**", "build/**", "node_modules/**", "src/generated/**", ".chrome-shot-profile/**"] },
   ...coreWebVitals,
   ...typescript,
   {

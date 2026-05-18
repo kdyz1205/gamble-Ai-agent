@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getProviderById, type LlmProviderDefinition } from "./llm-providers";
+import { getProviderById, isProviderConfigured, providerBaseUrl, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
 import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
 
@@ -43,7 +43,7 @@ async function anthropicComplete(def: LlmProviderDefinition, model: string, syst
 
 async function openAiCompatibleComplete(
   baseUrl: string,
-  apiKey: string,
+  apiKey: string | null,
   model: string,
   system: string,
   user: string,
@@ -56,7 +56,7 @@ async function openAiCompatibleComplete(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     },
     body: JSON.stringify({
       model,
@@ -177,7 +177,7 @@ async function anthropicCompleteVision(
 
 async function openAiCompatibleVisionComplete(
   baseUrl: string,
-  apiKey: string,
+  apiKey: string | null,
   model: string,
   system: string,
   userText: string,
@@ -200,7 +200,7 @@ async function openAiCompatibleVisionComplete(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     },
     body: JSON.stringify({
       model,
@@ -237,8 +237,9 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
     case "anthropic":
       return anthropicComplete(def, params.model, params.system, params.user, maxTokens, temperature);
     case "openai_compat": {
-      if (!key) throw new Error(`${def.envVar} is not set`);
-      let baseUrl = def.baseUrl;
+      if (!def.apiKeyOptional && !key) throw new Error(`${def.envVar} is not set`);
+      if (!isProviderConfigured(def)) throw new Error(`Provider ${def.id} is not configured`);
+      let baseUrl = providerBaseUrl(def);
       let querySuffix = "";
       if (def.id === "azure_openai") {
         baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
@@ -249,7 +250,7 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
       return openAiCompatibleComplete(
         baseUrl,
-        key,
+        key || null,
         params.model,
         params.system,
         params.user,
@@ -300,7 +301,7 @@ type OpenAiChatMessage =
 
 async function openAiCompatibleWithTools(
   baseUrl: string,
-  apiKey: string,
+  apiKey: string | null,
   model: string,
   system: string,
   user: string,
@@ -321,7 +322,10 @@ async function openAiCompatibleWithTools(
     const useTools = iter < maxIterations - 1; // on the last pass force a final text answer
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
@@ -405,9 +409,10 @@ export async function completeOraclePromptWithTools(params: {
     });
     return { text, toolInvocations: [] };
   }
-  if (!key) throw new Error(`${def.envVar} is not set`);
+  if (!def.apiKeyOptional && !key) throw new Error(`${def.envVar} is not set`);
+  if (!isProviderConfigured(def)) throw new Error(`Provider ${def.id} is not configured`);
 
-  let baseUrl = def.baseUrl;
+  let baseUrl = providerBaseUrl(def);
   let querySuffix = "";
   if (def.id === "azure_openai") {
     baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
@@ -419,7 +424,7 @@ export async function completeOraclePromptWithTools(params: {
 
   return openAiCompatibleWithTools(
     baseUrl,
-    key,
+    key || null,
     params.model,
     params.system,
     params.user,
@@ -465,8 +470,9 @@ export async function completeOracleJudgeVision(params: {
     case "anthropic":
       return anthropicCompleteVision(def, params.model, params.system, params.userText, params.images, maxTokens, temperature);
     case "openai_compat": {
-      if (!key) throw new Error(`${def.envVar} is not set`);
-      let baseUrl = def.baseUrl;
+      if (!def.apiKeyOptional && !key) throw new Error(`${def.envVar} is not set`);
+      if (!isProviderConfigured(def)) throw new Error(`Provider ${def.id} is not configured`);
+      let baseUrl = providerBaseUrl(def);
       let querySuffix = "";
       if (def.id === "azure_openai") {
         baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
@@ -477,7 +483,7 @@ export async function completeOracleJudgeVision(params: {
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
       return openAiCompatibleVisionComplete(
         baseUrl,
-        key,
+        key || null,
         params.model,
         params.system,
         params.userText,

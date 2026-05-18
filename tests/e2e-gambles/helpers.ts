@@ -1,5 +1,4 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect } from "@playwright/test";
 import { PLAYER_A, PLAYER_B } from "./users";
 export { PLAYER_A, PLAYER_B };
 
