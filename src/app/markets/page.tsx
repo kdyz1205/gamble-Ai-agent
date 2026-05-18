@@ -215,7 +215,7 @@ export default function MarketsPage() {
         )}
 
         <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>
-          {user ? "My markets" : "Open challenges"}
+          {user ? "My challenges" : "Open challenges"}
         </h1>
 
         {loading ? (
@@ -240,7 +240,7 @@ export default function MarketsPage() {
           </div>
         ) : markets.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No markets yet.</p>
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No challenges yet.</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
@@ -298,7 +298,7 @@ export default function MarketsPage() {
 
                   <div className="mt-3 flex items-center gap-2">
                     <Link
-                      href={`/market/${m.id}`}
+                      href={`/challenge/${m.id}`}
                       className="flex-1 text-center py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
                     >

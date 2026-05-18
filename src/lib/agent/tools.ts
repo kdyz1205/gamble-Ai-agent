@@ -197,7 +197,8 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
       stake: challenge.stake,
       evidenceType: challenge.evidenceType,
       shareUrl: `${ctx.baseUrl}/join/${challenge.id}`,
-      marketUrl: `${ctx.baseUrl}/market/${challenge.id}`,
+      marketUrl: `${ctx.baseUrl}/challenge/${challenge.id}`,
+      challengeUrl: `${ctx.baseUrl}/challenge/${challenge.id}`,
       hasDiscoveryLocation: Boolean(locationSnapshot),
     },
   };
@@ -308,7 +309,8 @@ async function generateShareLinkTool(ctx: ToolContext, args: Record<string, unkn
     ok: true,
     data: {
       shareUrl: `${ctx.baseUrl}/join/${challengeId}`,
-      marketUrl: `${ctx.baseUrl}/market/${challengeId}`,
+      marketUrl: `${ctx.baseUrl}/challenge/${challengeId}`,
+      challengeUrl: `${ctx.baseUrl}/challenge/${challengeId}`,
     },
   };
 }
@@ -555,7 +557,8 @@ async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Pro
       title: candidate.title,
       stake: candidate.stake,
       type: candidate.type,
-      marketUrl: `${ctx.baseUrl}/market/${candidate.id}`,
+      marketUrl: `${ctx.baseUrl}/challenge/${candidate.id}`,
+      challengeUrl: `${ctx.baseUrl}/challenge/${candidate.id}`,
     },
   };
 }

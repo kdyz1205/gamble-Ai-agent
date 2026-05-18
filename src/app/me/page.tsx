@@ -161,7 +161,7 @@ export default function MePage() {
               <motion.div key={m.id}
                 initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}>
-                <Link href={`/market/${m.id}`} className="block p-4 lp-glass transition-all hover:shadow-lg"
+                <Link href={`/challenge/${m.id}`} className="block p-4 lp-glass transition-all hover:shadow-lg"
                   style={{ borderRadius: "24px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">

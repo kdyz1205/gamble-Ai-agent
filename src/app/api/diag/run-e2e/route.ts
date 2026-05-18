@@ -240,7 +240,8 @@ export async function POST(req: NextRequest) {
   return Response.json({
     ok: judgeResult.ok,
     challengeId: challenge.id,
-    marketUrl: `${req.nextUrl.origin}/market/${challenge.id}`,
+    marketUrl: `${req.nextUrl.origin}/challenge/${challenge.id}`,
+    challengeUrl: `${req.nextUrl.origin}/challenge/${challenge.id}`,
     creator: {
       id: creator.id,
       email: creator.email,
