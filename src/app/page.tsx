@@ -13,6 +13,8 @@ import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
+type DiscoveryLocationState = "checking" | "ready" | "global" | "blocked" | "unavailable";
+type BrowserLocationStatus = "ready" | "blocked" | "timeout" | "unavailable" | "error";
 
 const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:local|llama|ollama)$/i, providerId: "local_ollama" },
@@ -74,14 +76,19 @@ function rulesFromSpec(spec: api.ChallengeSpec): string {
   ].join("\n");
 }
 
-function getBrowserLocationSnapshot(timeoutMs = 3500): Promise<api.LocationSnapshot | null> {
-  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+function requestBrowserLocation(timeoutMs = 3500): Promise<{
+  snapshot: api.LocationSnapshot | null;
+  status: BrowserLocationStatus;
+}> {
+  if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve({ snapshot: null, status: "unavailable" });
+  }
   return new Promise((resolve) => {
     let settled = false;
     const timer = window.setTimeout(() => {
       if (settled) return;
       settled = true;
-      resolve(null);
+      resolve({ snapshot: null, status: "timeout" });
     }, timeoutMs);
 
     navigator.geolocation.getCurrentPosition(
@@ -91,18 +98,31 @@ function getBrowserLocationSnapshot(timeoutMs = 3500): Promise<api.LocationSnaps
         window.clearTimeout(timer);
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        if (Number.isFinite(lat) && Number.isFinite(lng)) resolve({ lat, lng });
-        else resolve(null);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          resolve({ snapshot: { lat, lng }, status: "ready" });
+        } else {
+          resolve({ snapshot: null, status: "error" });
+        }
       },
-      () => {
+      (err) => {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
-        resolve(null);
+        resolve({
+          snapshot: null,
+          status: err.code === err.PERMISSION_DENIED
+            ? "blocked"
+            : err.code === err.TIMEOUT ? "timeout" : "error",
+        });
       },
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60_000 },
     );
   });
+}
+
+async function getBrowserLocationSnapshot(timeoutMs = 3500): Promise<api.LocationSnapshot | null> {
+  const result = await requestBrowserLocation(timeoutMs);
+  return result.snapshot;
 }
 
 export default function Home() {
@@ -133,6 +153,7 @@ export default function Home() {
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
 
   const reset = useCallback(() => {
     setAppState("idle");
@@ -254,16 +275,15 @@ export default function Home() {
     });
   }, []);
 
-  const loadOpenChallenges = useCallback(async () => {
+  const loadOpenChallenges = useCallback(async (options?: { promptForLocation?: boolean }) => {
     setDiscoveryLoading(true);
     setJoinMessage(null);
+    setLocationState("checking");
     try {
-      let locationSnapshot: api.LocationSnapshot | null = null;
-      if (typeof navigator !== "undefined" && navigator.geolocation) {
-        locationSnapshot = await getBrowserLocationSnapshot(2500);
-        if (locationSnapshot && user) {
-          void api.updateMyLocation(locationSnapshot).catch(() => null);
-        }
+      const locationResult = await requestBrowserLocation(options?.promptForLocation ? 10_000 : 3500);
+      const locationSnapshot = locationResult.snapshot;
+      if (locationSnapshot && user) {
+        void api.updateMyLocation(locationSnapshot).catch(() => null);
       }
 
       const res = await api.discoverChallenges({
@@ -275,13 +295,25 @@ export default function Home() {
         challenge.participants.length < (challenge.maxParticipants ?? 2)
       ));
       setOpenChallenges(visible);
+      setLocationState(
+        locationSnapshot
+          ? "ready"
+          : locationResult.status === "blocked"
+            ? "blocked"
+            : locationResult.status === "unavailable" ? "unavailable" : "global",
+      );
       setDiscoveryMessage(
         locationSnapshot
           ? res.levelMessage
-          : "Location not enabled yet. Showing open public challenges globally.",
+          : locationResult.status === "blocked"
+            ? "Location blocked. Allow location in your browser to sort nearby; showing global challenges for now."
+            : locationResult.status === "unavailable"
+              ? "This browser cannot share location. Showing open public challenges globally."
+              : "Location not enabled yet. Tap Enable location to sort nearby; showing global challenges for now.",
       );
     } catch (err) {
       setOpenChallenges([]);
+      setLocationState("global");
       setDiscoveryMessage(err instanceof Error ? err.message : "Could not load open challenges.");
     } finally {
       setDiscoveryLoading(false);
@@ -289,7 +321,7 @@ export default function Home() {
   }, [user]);
 
   useEffect(() => {
-    void loadOpenChallenges();
+    void loadOpenChallenges({ promptForLocation: true });
   }, [loadOpenChallenges]);
 
   const handleJoinChallenge = useCallback(async (challenge: api.ChallengeData) => {
@@ -420,7 +452,9 @@ export default function Home() {
                 message={discoveryMessage}
                 joiningId={joiningId}
                 joinMessage={joinMessage}
+                locationState={locationState}
                 onRefresh={loadOpenChallenges}
+                onEnableLocation={() => loadOpenChallenges({ promptForLocation: true })}
                 onJoin={handleJoinChallenge}
               />
             </motion.div>
@@ -501,7 +535,9 @@ function OpenChallengeStrip({
   message,
   joiningId,
   joinMessage,
+  locationState,
   onRefresh,
+  onEnableLocation,
   onJoin,
 }: {
   userId?: string;
@@ -510,9 +546,12 @@ function OpenChallengeStrip({
   message: string;
   joiningId: string | null;
   joinMessage: string | null;
+  locationState: DiscoveryLocationState;
   onRefresh: () => void;
+  onEnableLocation: () => void;
   onJoin: (challenge: api.ChallengeData) => void;
 }) {
+  const canAskForLocation = locationState !== "ready" && locationState !== "unavailable";
   return (
     <section className="mt-6 text-left">
       <div className="flex items-center justify-between gap-3 mb-2">
@@ -522,15 +561,28 @@ function OpenChallengeStrip({
             {message || "Open public challenges waiting for an opponent."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className="rounded-full border bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
-          style={{ borderColor: "#D1FAE5", color: "#047857" }}
-        >
-          {loading ? "Checking" : "Refresh"}
-        </button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {canAskForLocation && (
+            <button
+              type="button"
+              onClick={onEnableLocation}
+              disabled={loading}
+              className="rounded-full border px-3 py-2 text-xs font-black disabled:opacity-50"
+              style={{ borderColor: "#10B981", color: "#065F46", background: "#D1FAE5" }}
+            >
+              {locationState === "checking" ? "Asking..." : locationState === "blocked" ? "Try location" : "Enable location"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="rounded-full border bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
+            style={{ borderColor: "#D1FAE5", color: "#047857" }}
+          >
+            {loading ? "Checking" : "Refresh"}
+          </button>
+        </div>
       </div>
       {joinMessage && <ErrorBox message={joinMessage} />}
       <div className="grid gap-2 md:grid-cols-3">
