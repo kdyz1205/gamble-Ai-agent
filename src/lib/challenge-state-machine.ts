@@ -159,6 +159,7 @@ const EDGES: Record<Status, ReadonlySet<Status>> = {
   [ChallengeStatus.ai_inconclusive]: new Set([
     ChallengeStatus.manual_review_required,
     ChallengeStatus.disputed,
+    ChallengeStatus.finalized,
     ChallengeStatus.refunded,
     ChallengeStatus.voided,
   ]),
