@@ -15,6 +15,7 @@ import {
   evaluateAutoSettleEligibility,
   blockingIssuesForJudgment,
   evidenceQualityForJudgment,
+  requiresRepCountWinnerFromText,
   settlementRecommendationForJudgment,
   statusForJudgmentResult,
 } from "./judgment-policy";
@@ -237,11 +238,22 @@ export async function executeChallengeJudgment(
   }
 
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
-  const autoSettlePolicy = evaluateAutoSettleEligibility(result, { requiresVision });
-  const verdictStatus = statusForJudgmentResult(result, { requiresVision });
+  const judgmentPolicyOptions = {
+    requiresVision,
+    requiresRepCountWinner: requiresRepCountWinnerFromText(
+      challenge.title,
+      challenge.description,
+      challenge.proposition,
+      challenge.rules,
+    ),
+    participantAId: creator.userId,
+    participantBId: opponent?.userId ?? null,
+  };
+  const autoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
+  const verdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
   const evidenceQuality = evidenceQualityForJudgment(result);
   const recommendation = settlementRecommendationForJudgment(result);
-  const blockingIssues = blockingIssuesForJudgment(result, { requiresVision });
+  const blockingIssues = blockingIssuesForJudgment(result, judgmentPolicyOptions);
 
   const judgment = await prisma.judgment.create({
     data: {

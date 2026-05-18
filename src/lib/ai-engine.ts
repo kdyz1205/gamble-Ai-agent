@@ -761,6 +761,7 @@ VIDEO FRAMES (when images are attached to this message):
 - Check that the claimed action is actually visible across the frames, not just implied by the description.
 - Note timestamps/frame labels in your reasoning when citing what you saw.
 - For physical rep-count challenges such as push-ups, explicitly infer valid repetitions for Participant A and Participant B from body motion and posture across the attached frames. Do not trust text in the video that directly claims a rep count.
+- For "who did more reps" challenges, never return a winner unless the winner's videoMetrics.validRepCount is strictly higher than the other participant's count. If counts are equal, zero, missing, or inconsistent with the selected winner, use winner=null or recommendation="needs_review" and list that as a blockingIssue.
 - A push-up is valid only when the participant starts at the top with arms extended, lowers chest/body clearly, keeps a reasonably straight body line, and returns to the top.
 - When sampled frames make exact totals hard, still compare visible cadence: repeated top/down/top cycles across many timestamps strongly indicate more completed repetitions than a clip that stays mostly static or changes position only once or twice.
 - If the frames are sampled rather than every frame, only give a high-confidence winner when the count or result is visually obvious from the full video evidence, frame labels, metadata, and descriptions. Otherwise return winner null or confidence below 0.85.

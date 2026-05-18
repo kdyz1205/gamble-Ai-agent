@@ -12,6 +12,7 @@ import {
   evaluateAutoSettleEligibility,
   blockingIssuesForJudgment,
   evidenceQualityForJudgment,
+  requiresRepCountWinnerFromText,
   settlementRecommendationForJudgment,
   statusForJudgmentResult,
   type EvidenceQuality,
@@ -165,11 +166,22 @@ export async function POST(
     livenessPrompt: challenge.livenessPrompt,
   });
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
-  const autoSettlePolicy = evaluateAutoSettleEligibility(result, { requiresVision });
-  const verdictStatus = statusForJudgmentResult(result, { requiresVision });
+  const judgmentPolicyOptions = {
+    requiresVision,
+    requiresRepCountWinner: requiresRepCountWinnerFromText(
+      challenge.title,
+      challenge.description,
+      challenge.proposition,
+      challenge.rules,
+    ),
+    participantAId: creator.userId,
+    participantBId: opponent?.userId ?? null,
+  };
+  const autoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
+  const verdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
   const evidenceQuality = evidenceQualityForJudgment(result) as EvidenceQuality;
   const recommendation = settlementRecommendationForJudgment(result) as VerdictRecommendation;
-  const blockingIssues = blockingIssuesForJudgment(result, { requiresVision });
+  const blockingIssues = blockingIssuesForJudgment(result, judgmentPolicyOptions);
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"

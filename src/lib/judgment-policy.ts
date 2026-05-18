@@ -15,6 +15,9 @@ export type VerdictStatus =
 
 export interface JudgmentPolicyOptions {
   requiresVision?: boolean;
+  requiresRepCountWinner?: boolean;
+  participantAId?: string | null;
+  participantBId?: string | null;
 }
 
 export interface AutoSettlePolicyResult {
@@ -54,6 +57,14 @@ function uniqueIssues(issues: string[]) {
   return [...new Set(issues.filter((issue) => issue.trim()).map((issue) => issue.trim()))];
 }
 
+export function requiresRepCountWinnerFromText(...parts: Array<string | null | undefined>): boolean {
+  const text = parts.filter(Boolean).join("\n").toLowerCase();
+  if (!text) return false;
+  const hasRepSubject = /\b(push[-\s]?ups?|reps?|repetitions?|valid reps?|valid push[-\s]?ups?)\b/.test(text);
+  const hasCountScoring = /\b(more|most|highest|count|counts|counting|many|number|as many|valid rep count)\b/.test(text);
+  return hasRepSubject && hasCountScoring;
+}
+
 function participantBlockingIssues(
   label: string,
   metrics: VideoJudgmentParticipantMetrics | undefined,
@@ -71,6 +82,44 @@ function participantBlockingIssues(
   for (const flag of metrics.antiCheatFlags ?? []) {
     issues.push(`${label} anti-cheat flag: ${flag}`);
   }
+  return issues;
+}
+
+function numericRepCount(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function repCountWinnerIssues(
+  result: JudgmentResult,
+  options: JudgmentPolicyOptions,
+): string[] {
+  if (!options.requiresRepCountWinner) return [];
+  if (!result.videoMetrics) return ["Rep-count challenge requires structured video metrics."];
+  const countA = numericRepCount(result.videoMetrics.participantA?.validRepCount);
+  const countB = numericRepCount(result.videoMetrics.participantB?.validRepCount);
+  const issues: string[] = [];
+
+  if (countA === null || countB === null) {
+    issues.push("Valid rep counts are required for both participants before settlement.");
+    return issues;
+  }
+  if (countA === countB) {
+    issues.push(`Valid rep counts are tied at ${countA}; no winner can auto-settle from rep count.`);
+    return issues;
+  }
+
+  const participantAId = options.participantAId ?? null;
+  const participantBId = options.participantBId ?? null;
+  if (result.winnerId && participantAId && result.winnerId === participantAId && countA <= countB) {
+    issues.push(`Participant A was selected as winner, but video metrics show ${countA} valid reps versus Participant B's ${countB}.`);
+  } else if (result.winnerId && participantBId && result.winnerId === participantBId && countB <= countA) {
+    issues.push(`Participant B was selected as winner, but video metrics show ${countB} valid reps versus Participant A's ${countA}.`);
+  } else if (result.winnerId && participantAId && participantBId && ![participantAId, participantBId].includes(result.winnerId)) {
+    issues.push("Winner cannot be mapped to Participant A or Participant B.");
+  } else if (result.winnerId && (!participantAId || !participantBId)) {
+    issues.push("Participant identity mapping is required before rep-count settlement.");
+  }
+
   return issues;
 }
 
@@ -99,6 +148,7 @@ export function blockingIssuesForJudgment(
     } else {
       issues.push(...participantBlockingIssues("Participant A", result.videoMetrics.participantA));
       issues.push(...participantBlockingIssues("Participant B", result.videoMetrics.participantB));
+      issues.push(...repCountWinnerIssues(result, options));
     }
   }
 

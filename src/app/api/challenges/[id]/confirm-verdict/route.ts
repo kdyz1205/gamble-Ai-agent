@@ -8,6 +8,12 @@ import {
   assertChallengeTransition,
   isVerdictReadyStatus,
 } from "@/lib/challenge-state-machine";
+import {
+  evaluateAutoSettleEligibility,
+  requiresRepCountWinnerFromText,
+  type EvidenceQuality,
+  type VerdictRecommendation,
+} from "@/lib/judgment-policy";
 
 export const runtime = "nodejs";
 
@@ -86,16 +92,35 @@ export async function POST(
         : typeof metrics.settlementRecommendation === "string"
           ? metrics.settlementRecommendation
           : judgment.winnerId && (judgment.confidence ?? 0) >= 0.85 ? "settle_winner" : "needs_review";
-    const blockingIssues = stringArray(metrics.blockingIssues);
+    const persistedBlockingIssues = stringArray(metrics.blockingIssues);
     const confidence = judgment.confidence ?? 0;
+    const opponent = challenge.participants.find((p) => p.role === "opponent");
+    const policy = evaluateAutoSettleEligibility(
+      {
+        winnerId: judgment.winnerId,
+        reasoning: judgment.reasoning ?? "",
+        confidence,
+        evidenceQuality: evidenceQuality as EvidenceQuality,
+        recommendation: recommendation as VerdictRecommendation,
+        blockingIssues: persistedBlockingIssues,
+        source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "fallback" : undefined,
+        videoMetrics: metrics.videoMetrics as never,
+      },
+      {
+        requiresVision: challenge.evidenceType === "video",
+        requiresRepCountWinner: requiresRepCountWinnerFromText(
+          challenge.title,
+          challenge.description,
+          challenge.proposition,
+          challenge.rules,
+        ),
+        participantAId: challenge.creatorId,
+        participantBId: opponent?.userId ?? null,
+      },
+    );
+    const blockingIssues = policy.blockingIssues;
     const persistedEligible = metrics.autoSettleEligible !== false;
-    const settlementAllowed =
-      recommendation === "settle_winner" &&
-      confidence >= 0.85 &&
-      evidenceQuality === "good" &&
-      Boolean(judgment.winnerId) &&
-      blockingIssues.length === 0 &&
-      persistedEligible;
+    const settlementAllowed = policy.eligible && persistedEligible;
 
     if (!settlementAllowed) {
       await prisma.challenge.update({
