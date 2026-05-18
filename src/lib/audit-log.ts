@@ -23,13 +23,20 @@ export async function appendAuditLog(entry: {
   payload?: Prisma.InputJsonValue;
 }): Promise<void> {
   try {
+    const payload =
+      entry.payload == null
+        ? undefined
+        : typeof entry.payload === "string"
+          ? entry.payload
+          : JSON.stringify(entry.payload);
+
     await prisma.auditLog.create({
       data: {
         action: entry.action,
         actorUserId: entry.actorUserId ?? undefined,
         targetUserId: entry.targetUserId ?? undefined,
         challengeId: entry.challengeId ?? undefined,
-        payload: entry.payload ?? undefined,
+        payload,
       },
     });
   } catch (e) {
