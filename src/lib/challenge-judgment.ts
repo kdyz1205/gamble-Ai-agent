@@ -10,6 +10,11 @@ import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "./credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
 import { isAiReviewStatus } from "./challenge-state-machine";
+import {
+  buildJudgmentMetricsJson,
+  evaluateAutoSettleEligibility,
+  statusForJudgmentResult,
+} from "./judgment-policy";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -228,6 +233,10 @@ export async function executeChallengeJudgment(
     return { ok: false, error: err instanceof Error ? err.message : "Judge call failed", status: 502 };
   }
 
+  const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
+  const autoSettlePolicy = evaluateAutoSettleEligibility(result, { requiresVision });
+  const verdictStatus = statusForJudgmentResult(result, { requiresVision });
+
   const judgment = await prisma.judgment.create({
     data: {
       challengeId,
@@ -237,17 +246,20 @@ export async function executeChallengeJudgment(
       reasoning: result.reasoning,
       confidence: result.confidence,
       status: "completed",
+      metricsJson: buildJudgmentMetricsJson(result, {
+        model: aiModelLabel,
+        autoSettlePolicy,
+        status: verdictStatus,
+      }),
     },
     include: { winner: { select: { id: true, username: true } } },
   });
 
   if (process.env.AI_VERDICT_MODE !== "auto_settle") {
     const nextStatus =
-      result.confidence < 0.6 || !result.winnerId
-        ? ChallengeStatus.ai_inconclusive
-        : result.confidence < 0.85
-          ? ChallengeStatus.manual_review_required
-          : ChallengeStatus.dispute_window_open;
+      verdictStatus === ChallengeStatus.ai_verdict_ready
+        ? ChallengeStatus.dispute_window_open
+        : verdictStatus;
     await prisma.challenge.update({
       where: { id: challengeId },
       data: { status: nextStatus, aiModel: aiModelLabel },
@@ -264,6 +276,10 @@ export async function executeChallengeJudgment(
         settlementOk: false,
         reviewRequired: nextStatus !== ChallengeStatus.dispute_window_open,
         newStatus: nextStatus,
+        source: result.source,
+        evidenceQuality: result.evidenceQuality,
+        settlementRecommendation: result.settlementRecommendation,
+        autoSettleBlockReason: autoSettlePolicy.reason,
         reasoning: result.reasoning?.slice(0, 500),
       },
     });
@@ -291,11 +307,12 @@ export async function executeChallengeJudgment(
     };
   }
 
-  // Low confidence or no clear winner: do not settle automatically.
-  if (result.confidence < 0.85 || !result.winnerId) {
-    const nextStatus = result.confidence < 0.6 || !result.winnerId
-      ? ChallengeStatus.ai_inconclusive
-      : ChallengeStatus.manual_review_required;
+  // Strict policy gate: do not auto-settle unclear, fallback, or incomplete video judgments.
+  if (!autoSettlePolicy.eligible) {
+    const nextStatus =
+      verdictStatus === ChallengeStatus.ai_verdict_ready
+        ? ChallengeStatus.manual_review_required
+        : verdictStatus;
     await prisma.challenge.update({
       where: { id: challengeId },
       data: { status: nextStatus },
@@ -308,8 +325,11 @@ export async function executeChallengeJudgment(
       payload: {
         previousStatus: challenge.status,
         newStatus: nextStatus,
-        reason: "low_confidence",
+        reason: autoSettlePolicy.reason ?? "auto_settle_policy_blocked",
         confidence: result.confidence,
+        source: result.source,
+        evidenceQuality: result.evidenceQuality,
+        settlementRecommendation: result.settlementRecommendation,
         judgmentId: judgment.id,
       },
     });
@@ -317,7 +337,7 @@ export async function executeChallengeJudgment(
     return {
       ok: true,
       judgment,
-      settlementResult: { success: false, error: "Low confidence — marked for review" },
+      settlementResult: { success: false, error: autoSettlePolicy.reason || "Marked for review" },
       challengeId,
       model: aiModelLabel,
       tierId,
@@ -452,6 +472,10 @@ export async function executeChallengeJudgment(
       judgmentId: judgment.id,
       confidence: result.confidence,
       settlementOk: settlementResult.success,
+      source: result.source,
+      evidenceQuality: result.evidenceQuality,
+      settlementRecommendation: result.settlementRecommendation,
+      autoSettleEligible: autoSettlePolicy.eligible,
       reasoning: result.reasoning?.slice(0, 500),
     },
   });

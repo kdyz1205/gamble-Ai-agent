@@ -157,6 +157,7 @@ export interface ChallengeData {
   proofWindow: string | null;
   rules: string | null;
   evidenceType: string;
+  livenessPrompt?: string | null;
   settlementMode: string;
   proofSource: string | null;
   arbiter: string | null;
@@ -192,6 +193,7 @@ export interface ChallengeData {
     aiModel: string | null;
     reasoning: string | null;
     confidence: number | null;
+    metricsJson?: string | null;
     status: string;
     createdAt: string;
     winner?: { id: string; username: string } | null;

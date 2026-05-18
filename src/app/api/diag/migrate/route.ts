@@ -108,6 +108,9 @@ const DDL: Array<{ id: string; sql: string }> = [
   { id: "judgejob_startedAt",            sql: `ALTER TABLE "JudgeJob" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3)` },
   { id: "judgejob_heartbeatAt",          sql: `ALTER TABLE "JudgeJob" ADD COLUMN IF NOT EXISTS "heartbeatAt" TIMESTAMP(3)` },
   { id: "judgejob_idx_status_started",   sql: `CREATE INDEX IF NOT EXISTS "JudgeJob_status_startedAt_idx" ON "JudgeJob" ("status", "startedAt")` },
+
+  { id: "challenge_livenessPrompt",      sql: `ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "livenessPrompt" TEXT` },
+  { id: "judgment_metricsJson",          sql: `ALTER TABLE "Judgment" ADD COLUMN IF NOT EXISTS "metricsJson" TEXT` },
 ];
 
 export async function POST(req: NextRequest) {

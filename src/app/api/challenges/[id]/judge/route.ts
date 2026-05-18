@@ -7,38 +7,17 @@ import { getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from 
 import { ChallengeStatus } from "@/lib/enums";
 import { assertChallengeTransition, isAiReviewStatus } from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import {
+  buildJudgmentMetricsJson,
+  evaluateAutoSettleEligibility,
+  evidenceQualityForJudgment,
+  settlementRecommendationForJudgment,
+  statusForJudgmentResult,
+  type VerdictStatus,
+} from "@/lib/judgment-policy";
 
-type VerdictStatus = "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
 type EvidenceQuality = "good" | "unclear" | "invalid";
 type SettlementRecommendation = "settle_winner" | "refund" | "manual_review";
-
-function statusForVerdict(result: { winnerId: string | null; confidence: number }): VerdictStatus {
-  if (!result.winnerId || result.confidence < 0.6) return ChallengeStatus.ai_inconclusive;
-  if (result.confidence < 0.85) return ChallengeStatus.manual_review_required;
-  return ChallengeStatus.ai_verdict_ready;
-}
-
-function evidenceQualityForVerdict(result: {
-  winnerId: string | null;
-  confidence: number;
-  evidenceQuality?: EvidenceQuality;
-}): EvidenceQuality {
-  if (result.evidenceQuality) return result.evidenceQuality;
-  if (result.winnerId && result.confidence >= 0.85) return "good";
-  if (result.confidence >= 0.6) return "unclear";
-  return "invalid";
-}
-
-function recommendationForVerdict(result: {
-  winnerId: string | null;
-  confidence: number;
-  settlementRecommendation?: SettlementRecommendation;
-}): SettlementRecommendation {
-  if (result.settlementRecommendation) return result.settlementRecommendation;
-  if (result.winnerId && result.confidence >= 0.85) return "settle_winner";
-  if (!result.winnerId && result.confidence < 0.6) return "refund";
-  return "manual_review";
-}
 
 /**
  * POST /api/challenges/[id]/judge
@@ -183,19 +162,20 @@ export async function POST(
     participantBId: opponent?.userId ?? null,
     model: judgeModel,
     providerId,
+    livenessPrompt: challenge.livenessPrompt,
   });
-  const verdictStatus = statusForVerdict(result);
-  const evidenceQuality = evidenceQualityForVerdict(result);
-  const settlementRecommendation = recommendationForVerdict(result);
+  const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
+  const autoSettlePolicy = evaluateAutoSettleEligibility(result, { requiresVision });
+  const verdictStatus = statusForJudgmentResult(result, { requiresVision });
+  const evidenceQuality = evidenceQualityForJudgment(result) as EvidenceQuality;
+  const settlementRecommendation = settlementRecommendationForJudgment(result) as SettlementRecommendation;
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
       : aiModelLabel;
 
   const shouldAutoSettle =
-    Boolean(result.winnerId) &&
-    result.confidence >= 0.85 &&
-    settlementRecommendation === "settle_winner" &&
+    autoSettlePolicy.eligible &&
     (
       autoSettleRequested ||
       process.env.AI_VERDICT_MODE === "auto_settle" ||
@@ -211,6 +191,11 @@ export async function POST(
       reasoning: result.reasoning,
       confidence: result.confidence,
       status: "completed",
+      metricsJson: buildJudgmentMetricsJson(result, {
+        model: effectiveAiModelLabel,
+        autoSettlePolicy,
+        status: verdictStatus,
+      }),
     },
     include: { winner: { select: { id: true, username: true } } },
   });
@@ -225,6 +210,8 @@ export async function POST(
     settlementRecommendation,
     source: result.source ?? "llm",
     videoMetrics: result.videoMetrics ?? null,
+    autoSettleEligible: autoSettlePolicy.eligible,
+    autoSettleBlockReason: autoSettlePolicy.reason,
   } satisfies {
     status: VerdictStatus;
     winnerId: string | null;
@@ -234,6 +221,8 @@ export async function POST(
     settlementRecommendation: SettlementRecommendation;
     source: string;
     videoMetrics: unknown;
+    autoSettleEligible: boolean;
+    autoSettleBlockReason: string | null;
   };
 
   if (!shouldAutoSettle) {
@@ -256,6 +245,7 @@ export async function POST(
         source: result.source,
         evidenceQuality,
         settlementRecommendation,
+        autoSettleBlockReason: autoSettlePolicy.reason,
         reasoning: result.reasoning?.slice(0, 500),
       },
     });

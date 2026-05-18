@@ -56,8 +56,8 @@ async function normalizeJpegBuffer(buf: Buffer): Promise<Buffer | null> {
   try {
     const jpeg = await sharp(buf)
       .rotate()
-      .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 84, mozjpeg: true })
+      .resize({ width: 768, height: 768, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
       .toBuffer();
     // vision providers cap ~5MB per image; leave margin.
     if (jpeg.length > 4.5 * 1024 * 1024) return null;

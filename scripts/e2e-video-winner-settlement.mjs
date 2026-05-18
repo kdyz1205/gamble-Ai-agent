@@ -126,22 +126,34 @@ function requireCheck(proof, name, passed, detail) {
   if (!passed) throw new Error(`E2E check failed: ${name}`);
 }
 
-function svgFrame({ role, color, repCount, frameNo, phase, livenessPhrase }) {
+function pushupPhaseAt({ repCount, durationSec, elapsedSec }) {
+  const cycleSec = durationSec / repCount;
+  const within = (elapsedSec % cycleSec) / cycleSec;
+  if (within < 0.18 || within > 0.82) return "top";
+  if (within > 0.38 && within < 0.62) return "down";
+  return "transition";
+}
+
+function svgFrame({ role, color, frameNo, phase, livenessPhrase, elapsedSec, durationSec }) {
   const isDown = phase === "down";
-  const shoulderY = isDown ? 300 : 230;
-  const hipY = isDown ? 316 : 248;
-  const ankleY = isDown ? 336 : 268;
-  const elbowY = isDown ? 340 : 260;
-  const headY = isDown ? 278 : 206;
+  const isTransition = phase === "transition";
+  const shoulderY = isDown ? 300 : isTransition ? 266 : 230;
+  const hipY = isDown ? 316 : isTransition ? 282 : 248;
+  const ankleY = isDown ? 336 : isTransition ? 302 : 268;
+  const elbowY = isDown ? 340 : isTransition ? 300 : 260;
+  const headY = isDown ? 278 : isTransition ? 242 : 206;
+  const elapsedLabel = `00:${String(elapsedSec).padStart(2, "0")}`;
   return `
 <svg width="960" height="540" viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg">
   <rect width="960" height="540" fill="#111827"/>
   <rect x="30" y="30" width="900" height="480" rx="28" fill="#f8fafc"/>
-  <text x="70" y="86" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" fill="#111827">PUSH-UP VIDEO FIXTURE</text>
+  <text x="70" y="86" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" fill="#111827">PUSH-UP VIDEO PROOF</text>
   <text x="70" y="130" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="${color}">${role}</text>
-  <text x="70" y="176" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#0f172a">VALID PUSHUPS: ${repCount}</text>
-  <text x="70" y="214" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#334155">60-second official attempt. Continuous video. No cuts. Full body visible.</text>
+  <text x="70" y="176" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#0f172a">Timer ${elapsedLabel} / 01:00</text>
+  <text x="70" y="214" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#334155">Continuous attempt. No cuts. Full body visible.</text>
   <text x="70" y="248" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#334155">Challenge phrase: ${livenessPhrase}</text>
+  <rect x="70" y="270" width="280" height="10" rx="5" fill="#cbd5e1"/>
+  <rect x="70" y="270" width="${Math.max(6, Math.round((elapsedSec / durationSec) * 280))}" height="10" rx="5" fill="${color}"/>
   <line x1="120" y1="390" x2="840" y2="390" stroke="#64748b" stroke-width="8" stroke-linecap="round"/>
   <circle cx="300" cy="${headY}" r="24" fill="${color}"/>
   <line x1="340" y1="${shoulderY}" x2="540" y2="${hipY}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>
@@ -151,15 +163,16 @@ function svgFrame({ role, color, repCount, frameNo, phase, livenessPhrase }) {
   <line x1="450" y1="${shoulderY + 20}" x2="455" y2="${elbowY}" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
   <line x1="455" y1="${elbowY}" x2="440" y2="390" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
   <circle cx="724" cy="${ankleY}" r="15" fill="#0f172a"/>
-  <text x="650" y="456" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#111827">Frame ${frameNo}: ${phase.toUpperCase()} position</text>
+  <text x="650" y="456" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#111827">Frame ${frameNo}</text>
 </svg>`;
 }
 
 async function makePushupVideo(dir, { filename, role, color, repCount, livenessPhrase }) {
   const framePaths = [];
-  for (let i = 0; i < 12; i += 1) {
-    const phase = i % 2 === 0 ? "top" : "down";
-    const svg = svgFrame({ role, color, repCount, frameNo: i + 1, phase, livenessPhrase });
+  const durationSec = 60;
+  for (let i = 0; i < durationSec; i += 1) {
+    const phase = pushupPhaseAt({ repCount, durationSec, elapsedSec: i });
+    const svg = svgFrame({ role, color, frameNo: i + 1, phase, livenessPhrase, elapsedSec: i, durationSec });
     const framePath = path.join(dir, `${filename}-${String(i).padStart(2, "0")}.png`);
     await sharp(Buffer.from(svg)).png().toFile(framePath);
     framePaths.push(framePath);
@@ -167,7 +180,7 @@ async function makePushupVideo(dir, { filename, role, color, repCount, livenessP
 
   const concatPath = path.join(dir, `${filename}.txt`);
   const concatBody = framePaths
-    .map((framePath) => `file '${framePath.replace(/\\/g, "/").replace(/'/g, "'\\''")}'\nduration 5.0`)
+    .map((framePath) => `file '${framePath.replace(/\\/g, "/").replace(/'/g, "'\\''")}'\nduration 1.0`)
     .join("\n");
   await writeFile(concatPath, `${concatBody}\nfile '${framePaths.at(-1).replace(/\\/g, "/").replace(/'/g, "'\\''")}'\n`, "utf8");
 
@@ -268,7 +281,6 @@ function rulesFromSpec(spec) {
 }
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const livenessPhrase = `GambleAI video proof ${stamp}`;
 const proof = {
   base,
   deploymentUrl: base,
@@ -343,6 +355,7 @@ try {
     visibility: "public",
   });
   const challengeId = created.challenge.id;
+  const livenessPhrase = created.challenge.livenessPrompt || `GambleAI video proof ${stamp}`;
   proof.challenge = {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,
@@ -350,6 +363,7 @@ try {
     stake: created.challenge.stake,
     evidenceType: created.challenge.evidenceType,
     settlementMode: created.challenge.settlementMode,
+    livenessPrompt: livenessPhrase,
   };
 
   const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
@@ -369,7 +383,7 @@ try {
     filename: `opponent-pushups-${stamp}`,
     role: "OPPONENT / PARTICIPANT B",
     color: "#b91c1c",
-    repCount: 6,
+    repCount: 1,
     livenessPhrase,
   });
 
@@ -434,6 +448,10 @@ try {
     reasoning: judged.reasoning,
     videoMetrics: judged.videoMetrics,
   };
+  proof.fixture = {
+    directRepCountLabelsRemoved: true,
+    visibleLabelsAllowed: ["role", "liveness phrase", "timer"],
+  };
 
   const finalChallenge = await getJson(creator.jar, `/api/challenges/${challengeId}`);
   const afterCreator = await getJson(creator.jar, "/api/credits");
@@ -466,6 +484,14 @@ try {
   requireCheck(proof, "judge_source_is_vision", judged.source === "vision_llm", judged.source);
   requireCheck(proof, "judge_model_is_real_vision_provider", !/Deterministic/i.test(judged.model) && /OpenAI|Google|Anthropic|gpt|gemini|claude/i.test(judged.model), judged.model);
   requireCheck(proof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
+  requireCheck(proof, "fixture_has_no_direct_rep_count_labels", proof.fixture.directRepCountLabelsRemoved === true, proof.fixture);
+  requireCheck(proof, "creator_liveness_visible", judged.videoMetrics?.participantA?.livenessPhraseVisible === true, judged.videoMetrics?.participantA);
+  requireCheck(proof, "opponent_liveness_visible", judged.videoMetrics?.participantB?.livenessPhraseVisible === true, judged.videoMetrics?.participantB);
+  requireCheck(proof, "creator_full_body_visible", judged.videoMetrics?.participantA?.fullBodyVisible === true, judged.videoMetrics?.participantA);
+  requireCheck(proof, "opponent_full_body_visible", judged.videoMetrics?.participantB?.fullBodyVisible === true, judged.videoMetrics?.participantB);
+  requireCheck(proof, "creator_duration_covered", judged.videoMetrics?.participantA?.fullDurationCovered === true && judged.videoMetrics?.participantA?.videoTooShort !== true, judged.videoMetrics?.participantA);
+  requireCheck(proof, "opponent_duration_covered", judged.videoMetrics?.participantB?.fullDurationCovered === true && judged.videoMetrics?.participantB?.videoTooShort !== true, judged.videoMetrics?.participantB);
+  requireCheck(proof, "no_loop_or_editing_flags", judged.videoMetrics?.participantA?.suspectedEditingOrLoop !== true && judged.videoMetrics?.participantB?.suspectedEditingOrLoop !== true, judged.videoMetrics);
   requireCheck(proof, "creator_rep_count_higher", Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? 0), judged.videoMetrics);
   requireCheck(proof, "judge_valid_creator_winner", judged.winnerId === creator.session.user.id, proof.judgment);
   requireCheck(proof, "judge_high_confidence", judged.confidence >= 0.85, judged.confidence);

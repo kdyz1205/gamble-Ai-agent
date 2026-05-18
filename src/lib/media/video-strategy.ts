@@ -36,7 +36,7 @@ export function planVideoVisuals(durationSec: number | null): VideoVisualPlan {
   }
   if (durationSec <= 120) {
     return {
-      frameCount: 10,
+      frameCount: 16,
       maxDownloadBytes: 70 * 1024 * 1024,
       label: `~${Math.round(durationSec)}s — 10 scene-change frames, ≤70MB`,
       extractionMode: "scene_change",
