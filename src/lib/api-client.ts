@@ -211,6 +211,28 @@ export async function listChallenges(params?: {
   return apiFetch(`/challenges?${q.toString()}`);
 }
 
+export async function discoverChallenges(params?: {
+  lat?: number; lng?: number; radiusMiles?: number; limit?: number;
+}): Promise<{
+  challenges: ChallengeData[];
+  discoveryLevel: "precise" | "global";
+  levelMessage: string;
+}> {
+  const q = new URLSearchParams();
+  if (params?.lat !== undefined) q.set("lat", String(params.lat));
+  if (params?.lng !== undefined) q.set("lng", String(params.lng));
+  if (params?.radiusMiles !== undefined) q.set("radiusMiles", String(params.radiusMiles));
+  if (params?.limit) q.set("limit", String(params.limit));
+  return apiFetch(`/challenges/discover?${q.toString()}`);
+}
+
+export async function updateMyLocation(snapshot: LocationSnapshot): Promise<{ success: boolean }> {
+  return apiFetch("/me/location", {
+    method: "POST",
+    body: JSON.stringify(snapshot),
+  });
+}
+
 export async function getChallenge(id: string): Promise<{ challenge: ChallengeData }> {
   return apiFetch(`/challenges/${id}`);
 }

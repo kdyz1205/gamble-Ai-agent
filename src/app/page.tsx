@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut, useSession } from "next-auth/react";
@@ -128,6 +128,11 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [openChallenges, setOpenChallenges] = useState<api.ChallengeData[]>([]);
+  const [discoveryMessage, setDiscoveryMessage] = useState("");
+  const [discoveryLoading, setDiscoveryLoading] = useState(true);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setAppState("idle");
@@ -245,10 +250,74 @@ export default function Home() {
       return {
         ...current,
         participation_mode: value,
-        invite_mode: value === "same_camera" ? "same_device" : current.invite_mode,
       };
     });
   }, []);
+
+  const loadOpenChallenges = useCallback(async () => {
+    setDiscoveryLoading(true);
+    setJoinMessage(null);
+    try {
+      let locationSnapshot: api.LocationSnapshot | null = null;
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        locationSnapshot = await getBrowserLocationSnapshot(2500);
+        if (locationSnapshot && user) {
+          void api.updateMyLocation(locationSnapshot).catch(() => null);
+        }
+      }
+
+      const res = await api.discoverChallenges({
+        ...(locationSnapshot ? { lat: locationSnapshot.lat, lng: locationSnapshot.lng } : {}),
+        limit: 6,
+      });
+      const visible = res.challenges.filter((challenge) => (
+        challenge.status === "open" &&
+        challenge.participants.length < (challenge.maxParticipants ?? 2)
+      ));
+      setOpenChallenges(visible);
+      setDiscoveryMessage(
+        locationSnapshot
+          ? res.levelMessage
+          : "Location not enabled yet. Showing open public challenges globally.",
+      );
+    } catch (err) {
+      setOpenChallenges([]);
+      setDiscoveryMessage(err instanceof Error ? err.message : "Could not load open challenges.");
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadOpenChallenges();
+  }, [loadOpenChallenges]);
+
+  const handleJoinChallenge = useCallback(async (challenge: api.ChallengeData) => {
+    setJoinMessage(null);
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+    if (challenge.creatorId === user.id) {
+      router.push(`/challenge/${challenge.id}`);
+      return;
+    }
+    if (challenge.participants.some((participant) => participant.user.id === user.id)) {
+      router.push(`/challenge/${challenge.id}/versus`);
+      return;
+    }
+
+    setJoiningId(challenge.id);
+    try {
+      await api.acceptChallenge(challenge.id);
+      router.push(`/challenge/${challenge.id}/versus`);
+    } catch (err) {
+      setJoinMessage(err instanceof Error ? err.message : "Could not join this challenge.");
+      await loadOpenChallenges();
+    } finally {
+      setJoiningId(null);
+    }
+  }, [loadOpenChallenges, router, user]);
 
   const handleSelectVisibility = useCallback((value: api.ChallengeSpec["public_or_private"]) => {
     setSpec((current) => {
@@ -281,8 +350,8 @@ export default function Home() {
               New
             </button>
           )}
-          <button onClick={() => router.push("/markets")} className="hidden sm:block text-xs font-bold uppercase tracking-wide" style={{ color: "#64748B" }}>
-            Challenges
+          <button onClick={() => router.push("/markets")} className="text-xs font-bold uppercase tracking-wide" style={{ color: "#64748B" }}>
+            Join
           </button>
           {user ? (
             <div className="relative">
@@ -344,6 +413,16 @@ export default function Home() {
               {error && <ErrorBox message={error} />}
               <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} />
               <ModelModeBar prefs={oraclePrefs} onSelectProvider={handleSelectProvider} />
+              <OpenChallengeStrip
+                userId={user?.id}
+                challenges={openChallenges}
+                loading={discoveryLoading}
+                message={discoveryMessage}
+                joiningId={joiningId}
+                joinMessage={joinMessage}
+                onRefresh={loadOpenChallenges}
+                onJoin={handleJoinChallenge}
+              />
             </motion.div>
           )}
 
@@ -402,7 +481,7 @@ export default function Home() {
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 <button onClick={() => publishedId && router.push(`/challenge/${publishedId}`)} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>Challenge room</button>
-                <button onClick={() => publishedId && router.push(`/challenge/${publishedId}`)} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>Open room</button>
+                <button onClick={() => router.push("/markets")} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
                 <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
               </div>
             </motion.div>
@@ -412,6 +491,86 @@ export default function Home() {
 
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} onSuccess={() => updateSession()} />
     </div>
+  );
+}
+
+function OpenChallengeStrip({
+  userId,
+  challenges,
+  loading,
+  message,
+  joiningId,
+  joinMessage,
+  onRefresh,
+  onJoin,
+}: {
+  userId?: string;
+  challenges: api.ChallengeData[];
+  loading: boolean;
+  message: string;
+  joiningId: string | null;
+  joinMessage: string | null;
+  onRefresh: () => void;
+  onJoin: (challenge: api.ChallengeData) => void;
+}) {
+  return (
+    <section className="mt-6 text-left">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Join nearby</p>
+          <p className="text-xs font-semibold" style={{ color: "#64748B" }}>
+            {message || "Open public challenges waiting for an opponent."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="rounded-full border bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
+          style={{ borderColor: "#D1FAE5", color: "#047857" }}
+        >
+          {loading ? "Checking" : "Refresh"}
+        </button>
+      </div>
+      {joinMessage && <ErrorBox message={joinMessage} />}
+      <div className="grid gap-2 md:grid-cols-3">
+        {loading ? (
+          [0, 1, 2].map((item) => (
+            <div key={item} className="h-24 animate-pulse rounded-2xl border bg-white/70" style={{ borderColor: "#E2E8F0" }} />
+          ))
+        ) : challenges.length === 0 ? (
+          <div className="md:col-span-3 rounded-2xl border bg-white px-4 py-4 text-sm font-semibold" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
+            No open public challenge is waiting right now.
+          </div>
+        ) : (
+          challenges.slice(0, 3).map((challenge) => {
+            const mine = userId === challenge.creatorId;
+            const joined = Boolean(userId && challenge.participants.some((participant) => participant.user.id === userId));
+            const distance = challenge.discovery?.distanceMiles;
+            return (
+              <article key={challenge.id} className="rounded-2xl border bg-white p-3 shadow-sm" style={{ borderColor: "#E2E8F0" }}>
+                <div className="min-h-12">
+                  <p className="line-clamp-2 text-sm font-extrabold" style={{ color: "#172033" }}>{challenge.title}</p>
+                  <p className="mt-1 text-[11px] font-semibold" style={{ color: "#64748B" }}>
+                    @{challenge.creator.username} / {challenge.stake > 0 ? `${challenge.stake} pts` : "free"}
+                    {distance != null ? ` / ${distance} mi` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onJoin(challenge)}
+                  disabled={joiningId === challenge.id}
+                  className="mt-3 w-full rounded-full px-3 py-2 text-xs font-black disabled:opacity-60"
+                  style={{ background: mine ? "#F8FAFC" : "#A7F3D0", color: mine ? "#64748B" : "#065F46" }}
+                >
+                  {joiningId === challenge.id ? "Joining..." : mine ? "Open yours" : joined ? "Open room" : "Join challenge"}
+                </button>
+              </article>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }
 

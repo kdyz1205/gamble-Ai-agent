@@ -129,7 +129,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       setIsTranscribing(false);
       audioChunksRef.current = [];
     }
-  }, [getLanguageHint, onSubmit]);
+  }, [getLanguageHint]);
 
   const startPreviewRecognition = useCallback(() => {
     const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;

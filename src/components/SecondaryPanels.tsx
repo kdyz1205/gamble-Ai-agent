@@ -303,7 +303,7 @@ function DiscoverContent({
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 onClick={() => {
-                  void navigator.clipboard.writeText(`${window.location.origin}/?challenge=${c.id}`);
+                  void navigator.clipboard.writeText(`${window.location.origin}/join/${c.id}`);
                   setMsg("Link copied — send it to your opponent.");
                   setTimeout(() => setMsg(null), 2500);
                 }}

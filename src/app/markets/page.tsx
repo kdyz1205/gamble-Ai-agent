@@ -47,6 +47,7 @@ function hasOtherParticipant(market: ChallengeData, userId?: string) {
 export default function MarketsPage() {
   const { data: session } = useSession();
   const user = session?.user as { id?: string; username?: string } | undefined;
+  const userId = user?.id;
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
   const [openPublic, setOpenPublic] = useState<ChallengeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,17 +56,16 @@ export default function MarketsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
     let active = true;
     setLoading(true);
     Promise.all([
-      api.listChallenges({ mine: true, limit: 50 }),
-      api.listChallenges({ status: "open", limit: 30 }),
+      userId ? api.listChallenges({ mine: true, limit: 50 }) : Promise.resolve({ challenges: [], total: 0 }),
+      api.discoverChallenges({ limit: 30 }),
     ])
       .then(([mine, publ]) => {
         if (!active) return;
         setMarkets(mine.challenges);
-        setOpenPublic((publ.challenges || []).filter((c) => c.creator.id !== user.id));
+        setOpenPublic((publ.challenges || []).filter((c) => c.creator.id !== userId));
       })
       .catch((err) => {
         if (active) setMessage(err instanceof Error ? err.message : "Couldn't load markets");
@@ -76,9 +76,13 @@ export default function MarketsPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [userId]);
 
   const tryMatchMe = async () => {
+    if (!user) {
+      setMessage("Sign in to be matched into a challenge.");
+      return;
+    }
     setMatching(true);
     setMessage(null);
     try {
@@ -111,21 +115,6 @@ export default function MarketsPage() {
       setClosingId(null);
     }
   };
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5">
-        <p className="text-base font-bold" style={{ color: NAVY }}>Sign in to see your markets.</p>
-        <Link
-          href="/"
-          className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
-          style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
-        >
-          Go home
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="relative min-h-screen">
@@ -212,7 +201,9 @@ export default function MarketsPage() {
           </section>
         )}
 
-        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My markets</h1>
+        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>
+          {user ? "My markets" : "Open challenges"}
+        </h1>
 
         {loading ? (
           <div className="text-center py-16">
@@ -222,6 +213,17 @@ export default function MarketsPage() {
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             />
+          </div>
+        ) : !user ? (
+          <div className="text-center py-10">
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>Sign in when you are ready to join or create.</p>
+            <Link
+              href="/"
+              className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
+              style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
+            >
+              Sign in / create
+            </Link>
           </div>
         ) : markets.length === 0 ? (
           <div className="text-center py-16">
