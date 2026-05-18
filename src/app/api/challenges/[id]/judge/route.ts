@@ -74,6 +74,17 @@ export async function POST(
       return null;
     }
   };
+  const parseMetadata = (raw: string | null | undefined): Record<string, unknown> | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  };
 
   const aiModel = getAiModel(tierId);
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -102,6 +113,7 @@ export async function POST(
           description: evidenceA.description,
           type: evidenceA.type,
           url: evidenceA.url,
+          metadata: parseMetadata(evidenceA.metadata),
           preparedFrames: parseFrames(evidenceA.preparedFrames),
           preparedDurationSec: evidenceA.preparedDurationSec,
           preparedMode: evidenceA.preparedMode,
@@ -112,6 +124,7 @@ export async function POST(
           description: evidenceB.description,
           type: evidenceB.type,
           url: evidenceB.url,
+          metadata: parseMetadata(evidenceB.metadata),
           preparedFrames: parseFrames(evidenceB.preparedFrames),
           preparedDurationSec: evidenceB.preparedDurationSec,
           preparedMode: evidenceB.preparedMode,

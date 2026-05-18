@@ -72,6 +72,46 @@ function _saveDraftHistory(userId: string | undefined, list: ParsedChallenge[]) 
   } catch { /* quota exceeded is fine — just drop */ }
 }
 
+function getBrowserLocationSnapshot(timeoutMs = 3500): Promise<api.LocationSnapshot | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(null);
+    }, timeoutMs);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        if (Number.isFinite(lat) && Number.isFinite(lng)) resolve({ lat, lng });
+        else resolve(null);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60_000 },
+    );
+  });
+}
+
+function shouldCapturePublishLocation(input: string, draft: AgentDraftState): boolean {
+  if (draft.readyToPublish) return true;
+  return /\b(create|publish|post|start|launch|go live|make it|do it)\b|发布|创建|开始|发出去|搞定/i.test(input);
+}
+
+function shouldSnapshotDraftLocation(d: MarketDraft): boolean {
+  return Boolean(d.isPublic || d.visibility === "public");
+}
+
 type AppState = "idle" | "compiling" | "drafting" | "publishing" | "live";
 type WorkflowPhase = "understanding" | "drafting" | "validating" | "publishing" | "published" | "failed";
 
@@ -148,9 +188,13 @@ export default function Home() {
     setWorkflowPhase("understanding");
     setAssistantNote("AI is thinking...");
 
+    const locationSnapshot = shouldCapturePublishLocation(input, agentDraft)
+      ? await getBrowserLocationSnapshot()
+      : null;
+
     let res: Awaited<ReturnType<typeof api.agentRespond>>;
     try {
-      res = await api.agentRespond(input, historyForServer, agentDraft);
+      res = await api.agentRespond(input, historyForServer, agentDraft, locationSnapshot);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Agent request failed");
       setAppState("idle");
@@ -296,6 +340,7 @@ export default function Home() {
 
     try {
       const evidence = d.evidenceType === "unset" ? "self_report" : d.evidenceType.toLowerCase().replace(/ /g, "_");
+      const locationSnapshot = shouldSnapshotDraftLocation(d) ? await getBrowserLocationSnapshot() : null;
       const res = await api.createChallenge({
         title: d.title,
         description: d.proposition,
@@ -318,6 +363,7 @@ export default function Home() {
         aiReview: true,
         isPublic: d.isPublic || false,
         visibility: d.visibility,
+        ...(locationSnapshot ? { discoveryLat: locationSnapshot.lat, discoveryLng: locationSnapshot.lng } : {}),
       });
       const link = `${window.location.origin}/market/${res.challenge.id}`;
       setPublishedMarketId(res.challenge.id);

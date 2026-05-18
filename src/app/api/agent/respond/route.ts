@@ -73,6 +73,24 @@ function sanitizeDraftState(raw: unknown): DraftState {
   };
 }
 
+function sanitizeLocationSnapshot(raw: unknown): { lat: number; lng: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const lat = r.lat;
+  const lng = r.lng;
+  if (
+    typeof lat !== "number" ||
+    typeof lng !== "number" ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180
+  ) {
+    return null;
+  }
+  return { lat, lng };
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -97,6 +115,7 @@ export async function POST(req: NextRequest) {
 
   const history = sanitizeHistory(body.conversationHistory);
   const draftState = sanitizeDraftState(body.draftState);
+  const locationSnapshot = sanitizeLocationSnapshot(body.locationSnapshot);
 
   // Base URL for share links is taken from the incoming request so dev/staging
   // point at the right host.
@@ -111,6 +130,7 @@ export async function POST(req: NextRequest) {
       message,
       history,
       draftState,
+      locationSnapshot,
     });
     return Response.json(result);
   } catch (err) {

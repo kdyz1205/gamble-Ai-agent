@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { parseChallenge } from "@/lib/ai-engine";
 
 function toSpec(inputText: string, parsed: Awaited<ReturnType<typeof parseChallenge>>) {
+  const text = `${inputText} ${parsed.rules ?? ""} ${parsed.evidenceType ?? ""}`.toLowerCase();
+  const sameCamera = /same[_ -]?camera|same phone|one phone|single phone|shared video|same video|together/.test(text);
   return {
     challenge_title: parsed.title,
     challenge_type: parsed.type,
@@ -13,11 +15,13 @@ function toSpec(inputText: string, parsed: Awaited<ReturnType<typeof parseChalle
     currency_or_points: "credits",
     public_or_private: parsed.isPublic ? "public" : "private",
     invite_mode: "invite_link",
-    participation_mode: parsed.evidenceType === "video" ? "remote_live" : "remote_async",
+    participation_mode: sameCamera ? "same_camera" : parsed.evidenceType === "video" ? "remote_live" : "remote_async",
     objective: parsed.proposition || parsed.title || inputText,
     winning_condition: parsed.proposition || parsed.rules || parsed.title || inputText,
-    required_evidence: parsed.evidenceType || "video",
-    video_capture_instructions: parsed.evidenceType === "video"
+    required_evidence: sameCamera ? "same_camera_video" : parsed.evidenceType || "video",
+    video_capture_instructions: sameCamera
+      ? "Record one continuous video on one phone with both participants visible; keep creator left and opponent right when possible."
+      : parsed.evidenceType === "video"
       ? "Record continuous video showing the full attempt and both participants when possible."
       : "Submit evidence that clearly proves the result.",
     start_condition: "Challenge starts when the opponent accepts.",

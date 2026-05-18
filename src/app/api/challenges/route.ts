@@ -72,9 +72,25 @@ export async function POST(req: NextRequest) {
       aiReview = true,
       isPublic = true,
       visibility,
+      discoveryLat,
+      discoveryLng,
     } = body;
 
     if (!title) return Response.json({ error: "title is required" }, { status: 400 });
+    const hasDiscoveryArgs = discoveryLat !== undefined || discoveryLng !== undefined;
+    const validDiscoveryLocation =
+      typeof discoveryLat === "number" &&
+      typeof discoveryLng === "number" &&
+      Number.isFinite(discoveryLat) &&
+      Number.isFinite(discoveryLng) &&
+      Math.abs(discoveryLat) <= 90 &&
+      Math.abs(discoveryLng) <= 180;
+    if (hasDiscoveryArgs && !validDiscoveryLocation) {
+      return Response.json(
+        { error: "discoveryLat must be in [-90,90] and discoveryLng in [-180,180]" },
+        { status: 400 },
+      );
+    }
 
     const stakeInt = Math.max(0, Math.floor(stake));
 
@@ -139,6 +155,13 @@ export async function POST(req: NextRequest) {
           aiReview,
           isPublic,
           visibility: visibility || (isPublic ? "public" : "private"),
+          ...(validDiscoveryLocation
+            ? {
+                discoveryLat,
+                discoveryLng,
+                discoveryCapturedAt: new Date(),
+              }
+            : {}),
           participants: {
             create: { userId: user.userId, role: "creator", status: "accepted" },
           },
@@ -160,6 +183,17 @@ export async function POST(req: NextRequest) {
         }
       }
       throw createErr;
+    }
+
+    if (validDiscoveryLocation) {
+      await prisma.user.update({
+        where: { id: user.userId },
+        data: {
+          latitude: discoveryLat,
+          longitude: discoveryLng,
+          locationUpdatedAt: new Date(),
+        },
+      }).catch(() => null);
     }
 
     await prisma.activityEvent.create({

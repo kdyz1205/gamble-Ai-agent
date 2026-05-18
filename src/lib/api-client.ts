@@ -101,6 +101,11 @@ export async function topUpCredits(usdcAmount: number, txHash: string): Promise<
 
 /* ── Challenges ── */
 
+export interface LocationSnapshot {
+  lat: number;
+  lng: number;
+}
+
 export interface ChallengeData {
   id: string;
   creatorId: string;
@@ -128,6 +133,7 @@ export interface ChallengeData {
   visibility: string;
   maxParticipants: number;
   createdAt: string;
+  discovery?: { distanceMiles: number | null; source: "snapshot" | "creator_live" | "none" };
   creator: { id: string; username: string; image: string | null; credits?: number };
   participants: Array<{
     id: string;
@@ -141,6 +147,7 @@ export interface ChallengeData {
     type: string;
     url: string | null;
     description: string | null;
+    metadata?: string | null;
     createdAt: string;
     user?: { id: string; username: string; image?: string | null };
   }>;
@@ -196,6 +203,8 @@ export async function createChallenge(data: {
   aiReview?: boolean;
   isPublic?: boolean;
   visibility?: string;
+  discoveryLat?: number;
+  discoveryLng?: number;
 }): Promise<{ challenge: ChallengeData }> {
   return apiFetch("/challenges", { method: "POST", body: JSON.stringify(data) });
 }
@@ -210,7 +219,7 @@ export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId
 
 export async function submitEvidence(id: string, data: {
   type?: string; url?: string; description?: string; metadata?: Record<string, unknown>;
-}): Promise<{ evidence: unknown }> {
+}): Promise<{ evidence: unknown; sharedEvidenceCount?: number }> {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
 
@@ -370,10 +379,11 @@ export async function agentRespond(
   message: string,
   conversationHistory: AgentTurn[],
   draftState: AgentDraftState,
+  locationSnapshot?: LocationSnapshot | null,
 ): Promise<AgentResponse> {
   return apiFetch("/agent/respond", {
     method: "POST",
-    body: JSON.stringify({ message, conversationHistory, draftState }),
+    body: JSON.stringify({ message, conversationHistory, draftState, locationSnapshot }),
   });
 }
 

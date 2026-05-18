@@ -22,12 +22,34 @@ export interface ToolContext {
   userId: string;
   baseUrl: string; // used to construct share links
   draftState: DraftState;
+  locationSnapshot?: { lat: number; lng: number } | null;
 }
 
 export interface ToolResult {
   ok: boolean;
   data?: unknown;
   error?: string;
+}
+
+function readLocationSnapshot(
+  args: Record<string, unknown>,
+  fallback?: { lat: number; lng: number } | null,
+): { lat: number; lng: number } | null {
+  const argLat = args.discoveryLat ?? args.lat;
+  const argLng = args.discoveryLng ?? args.lng;
+  const lat = typeof argLat === "number" ? argLat : fallback?.lat;
+  const lng = typeof argLng === "number" ? argLng : fallback?.lng;
+  if (
+    typeof lat !== "number" ||
+    typeof lng !== "number" ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180
+  ) {
+    return null;
+  }
+  return { lat, lng };
 }
 
 /* ─────────────────────────────────────────────── */
@@ -46,6 +68,7 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
   // if the user explicitly says "just me and my friend" / "private".
   const rawIsPublic = args.isPublic;
   const isPublic = rawIsPublic === undefined ? true : Boolean(rawIsPublic);
+  const locationSnapshot = isPublic ? readLocationSnapshot(args, ctx.locationSnapshot) : null;
 
   if (!title) return { ok: false, error: "title required" };
 
@@ -98,6 +121,13 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
         settlementMode: "mutual_confirmation",
         isPublic,
         visibility: isPublic ? "public" : "private",
+        ...(locationSnapshot
+          ? {
+              discoveryLat: locationSnapshot.lat,
+              discoveryLng: locationSnapshot.lng,
+              discoveryCapturedAt: new Date(),
+            }
+          : {}),
         maxParticipants: 2,
         aiReview: true,
         status: "open",
@@ -111,6 +141,17 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
       await addCredits(ctx.userId, stake, "refund", `Refund — challenge creation failed`);
     }
     return { ok: false, error: err instanceof Error ? err.message : "Challenge create failed" };
+  }
+
+  if (locationSnapshot) {
+    await prisma.user.update({
+      where: { id: ctx.userId },
+      data: {
+        latitude: locationSnapshot.lat,
+        longitude: locationSnapshot.lng,
+        locationUpdatedAt: new Date(),
+      },
+    }).catch(() => null);
   }
 
   await prisma.activityEvent.create({
@@ -132,6 +173,7 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
       evidenceType: challenge.evidenceType,
       shareUrl: `${ctx.baseUrl}/join/${challenge.id}`,
       marketUrl: `${ctx.baseUrl}/market/${challenge.id}`,
+      hasDiscoveryLocation: Boolean(locationSnapshot),
     },
   };
 }

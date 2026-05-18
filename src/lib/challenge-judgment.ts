@@ -140,12 +140,24 @@ export async function executeChallengeJudgment(
       return null;
     }
   };
+  const parseMetadata = (raw: string | null | undefined): Record<string, unknown> | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  };
   const mapEv = (e: (typeof challenge.evidence)[0] | null | undefined) =>
     e
       ? {
           description: e.description,
           type: e.type,
           url: e.url,
+          metadata: parseMetadata(e.metadata),
           preparedFrames: parseFrames(e.preparedFrames),
           preparedDurationSec: e.preparedDurationSec,
           preparedMode: e.preparedMode,

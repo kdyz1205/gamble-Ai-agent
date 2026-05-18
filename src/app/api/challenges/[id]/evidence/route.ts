@@ -22,6 +22,10 @@ export async function POST(
   try {
     const body = await req.json();
     const { type = "text", url, description, metadata } = body;
+    const metadataRecord =
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {};
 
     // Verify challenge exists and user is participant
     const challenge = await prisma.challenge.findUnique({
@@ -42,38 +46,66 @@ export async function POST(
       return Response.json({ error: "You are not a participant in this challenge" }, { status: 403 });
     }
 
+    const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
+    const sharedSameCamera = metadataRecord.sharedSameCamera === true;
+    const evidenceDescription = sharedSameCamera
+      ? [
+          description ?? null,
+          "Shared same-camera evidence for both accepted participants. Judge must identify both people in the same media and compare the visible result; unclear identity or finish order requires no winner.",
+        ].filter(Boolean).join("\n")
+      : (description ?? null);
+    const metadataFor = (targetUserId: string) => {
+      const next: Record<string, unknown> = { ...metadataRecord };
+      if (sharedSameCamera) {
+        next.sharedSameCamera = true;
+        next.sharedUploadedBy = user.userId;
+        next.sharedEvidenceFor = targetUserId;
+        next.identityGuidance = "Creator/Participant A should be on the left and opponent/Participant B on the right when possible.";
+      }
+      return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
+    };
+    const upsertEvidenceFor = (targetUserId: string) =>
+      prisma.evidence.upsert({
+        where: {
+          challengeId_userId: { challengeId: id, userId: targetUserId },
+        },
+        create: {
+          challengeId: id,
+          userId: targetUserId,
+          type,
+          url: url ?? null,
+          description: evidenceDescription,
+          metadata: metadataFor(targetUserId),
+        },
+        update: {
+          type,
+          url: url ?? null,
+          description: evidenceDescription,
+          metadata: metadataFor(targetUserId),
+          preparedFrames: null,
+          preparedAt: null,
+          preparedDurationSec: null,
+          preparedMode: null,
+          prepareError: null,
+        },
+        include: {
+          user: { select: { id: true, username: true } },
+        },
+      });
+
     // Upsert — one Evidence row per (challengeId, userId), matching the new
     // @@unique([challengeId, userId]) constraint. If the user re-submits we
     // replace the old evidence instead of stacking N rows and confusing the
     // judge's `.find(e => e.userId === creator)` which picks the first match.
     // Also clears prepared frames so the background pre-extract starts fresh.
-    const evidence = await prisma.evidence.upsert({
-      where: {
-        challengeId_userId: { challengeId: id, userId: user.userId },
-      },
-      create: {
-        challengeId: id,
-        userId: user.userId,
-        type,
-        url: url ?? null,
-        description: description ?? null,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-      },
-      update: {
-        type,
-        url: url ?? null,
-        description: description ?? null,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        preparedFrames: null,
-        preparedAt: null,
-        preparedDurationSec: null,
-        preparedMode: null,
-        prepareError: null,
-      },
-      include: {
-        user: { select: { id: true, username: true } },
-      },
-    });
+    const evidenceRows = [await upsertEvidenceFor(user.userId)];
+    if (sharedSameCamera) {
+      for (const participant of activeParticipants) {
+        if (participant.userId === user.userId) continue;
+        evidenceRows.push(await upsertEvidenceFor(participant.userId));
+      }
+    }
+    const evidence = evidenceRows[0];
 
     // Activity event
     await prisma.activityEvent.create({
@@ -90,7 +122,6 @@ export async function POST(
     // allEvidenceUsers.length >= N and try to set status=judging; that's
     // benign here but makes a noisy activity feed. updateMany with a status
     // guard ensures exactly one transition lands.
-    const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
     const allEvidenceUsers = await prisma.evidence.findMany({
       where: { challengeId: id },
       select: { userId: true },
@@ -107,18 +138,20 @@ export async function POST(
     // can skip ffmpeg entirely. Runs AFTER response is sent; errors are captured
     // into Evidence.prepareError (never crashes the request).
     if (url && (type === "video" || type === "photo" || type === "image")) {
-      after(async () => {
-        await preExtractAndPersistFrames({
-          evidenceId: evidence.id,
-          challengeId: id,
-          userId: user.userId,
-          type,
-          url,
+      for (const row of evidenceRows) {
+        after(async () => {
+          await preExtractAndPersistFrames({
+            evidenceId: row.id,
+            challengeId: id,
+            userId: row.userId,
+            type,
+            url,
+          });
         });
-      });
+      }
     }
 
-    return Response.json({ evidence }, { status: 201 });
+    return Response.json({ evidence, sharedEvidenceCount: evidenceRows.length }, { status: 201 });
   } catch (err) {
     console.error(`[evidence POST ${id}] uncaught:`, err);
     return Response.json(

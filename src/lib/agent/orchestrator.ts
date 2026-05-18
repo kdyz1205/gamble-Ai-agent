@@ -45,6 +45,7 @@ export interface AgentTurnInput {
   message: string;
   history: AgentMessage[];
   draftState?: DraftState;
+  locationSnapshot?: { lat: number; lng: number } | null;
   maxToolRounds?: number; // safety cap; default 1
 }
 
@@ -135,7 +136,12 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   if (validated.toolName) {
     const result = await executeAgentTool(
       validated.toolName,
-      { userId: input.userId, baseUrl: input.baseUrl, draftState: newDraftState },
+      {
+        userId: input.userId,
+        baseUrl: input.baseUrl,
+        draftState: newDraftState,
+        locationSnapshot: input.locationSnapshot ?? null,
+      },
       validated.toolArgs ?? {},
     );
     if (result.ok) {

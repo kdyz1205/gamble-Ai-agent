@@ -131,6 +131,7 @@ function extractSubject(s: string): string | null {
 
 function extractEvidenceType(s: string): string {
   const lower = s.toLowerCase();
+  if (/same[_ -]?camera|same phone|one phone|single phone|shared video|same video/i.test(lower)) return "same_camera_video";
   if (/video|录像|视频|record|拍/i.test(lower)) return "Video proof";
   if (/photo|照片|pic|截图|screenshot/i.test(lower)) return "Photo evidence";
   if (/gps|location|位置/i.test(lower)) return "GPS tracking";
@@ -148,6 +149,7 @@ function extractEventTime(s: string): string | null {
 }
 
 function extractProofSource(s: string): string | null {
+  if (/same[_ -]?camera|same phone|one phone|single phone|shared video|same video/i.test(s)) return "same_camera";
   const match = s.match(/(\w+)\s*(?:发结果|来发|provides?|submits?|reports?)/i);
   if (match) return match[1];
   return null;

@@ -38,6 +38,7 @@ function evidenceBlobPathname(challengeId: string, filename: string): string {
 }
 
 export default function EvidenceUploader({ challengeId, evidenceType, onSubmitted }: Props) {
+  const sameCameraEvidenceType = /same[_ -]?camera|one phone|single phone|shared video|same video/i.test(evidenceType);
   const [mode, setMode] = useState<Mode>(null);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -47,6 +48,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [sharedSameCamera, setSharedSameCamera] = useState(sameCameraEvidenceType);
 
   // Webcam state
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -74,6 +76,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       if (stream) stream.getTracks().forEach(t => t.stop());
     };
   }, [stream]);
+
+  useEffect(() => {
+    if (sameCameraEvidenceType) setSharedSameCamera(true);
+  }, [sameCameraEvidenceType]);
 
   const pickFile = (kind: "video" | "photo") => {
     const input = document.createElement("input");
@@ -237,7 +243,16 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       await api.submitEvidence(challengeId, {
         type: finalType,
         url: finalUrl,
-        description: trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted"),
+        description: sharedSameCamera
+          ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted")}`
+          : trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted"),
+        metadata: sharedSameCamera
+          ? {
+              sharedSameCamera: true,
+              captureMode: "one_phone_same_camera",
+              identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
+            }
+          : undefined,
       });
       resetAll();
       setMode(null);
@@ -365,6 +380,23 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             ← Back to upload options
           </button>
         </div>
+      )}
+
+      {sameCameraEvidenceType && (
+        <label
+          className="flex items-start gap-2 mt-3 mb-3 px-3 py-2 cursor-pointer"
+          style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "14px" }}
+        >
+          <input
+            type="checkbox"
+            checked={sharedSameCamera}
+            onChange={(event) => setSharedSameCamera(event.target.checked)}
+            className="mt-0.5"
+          />
+          <span className="text-xs font-semibold" style={{ color: NAVY_DIM }}>
+            One-phone shared video for both players. Keep creator left and opponent right.
+          </span>
+        </label>
       )}
 
       {/* Description — always visible */}

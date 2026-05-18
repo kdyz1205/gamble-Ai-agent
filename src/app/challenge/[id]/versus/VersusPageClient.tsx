@@ -248,6 +248,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [note, setNote] = useState("");
   const [noteType, setNoteType] = useState<"error" | "success" | "info">("info");
   const [pasteUrl, setPasteUrl] = useState("");
+  const [sharedSameCamera, setSharedSameCamera] = useState(false);
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -304,6 +305,25 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const isCreator = uid && challenge?.creatorId === uid;
   const canCapture = challenge && ["open", "live"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
   const canJoin = challenge && challenge.status === "open" && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
+  const challengeTextForMode = `${challenge?.title ?? ""} ${challenge?.rules ?? ""} ${challenge?.evidenceType ?? ""} ${challenge?.proofSource ?? ""}`.toLowerCase();
+  const sameCameraHinted = /same[_ -]?camera|same phone|one phone|single phone|shared video|same video|together/.test(challengeTextForMode);
+  const sameCameraEligible = Boolean(challenge && canCapture && creator && opponent && /video|camera|record|fitness|push|plank|squat/.test(challengeTextForMode));
+
+  useEffect(() => {
+    if (sameCameraEligible && sameCameraHinted) setSharedSameCamera(true);
+  }, [challenge?.id, sameCameraEligible, sameCameraHinted]);
+
+  const sameCameraMetadata = () => sharedSameCamera
+    ? {
+        sharedSameCamera: true,
+        captureMode: "one_phone_same_camera",
+        identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
+      }
+    : undefined;
+
+  const evidenceDescription = (base: string) => sharedSameCamera
+    ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${base}`
+    : base;
 
   const uploadFile = async (file: File) => {
     if (!challenge || !uid) return;
@@ -327,7 +347,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         await api.submitEvidence(challenge.id, {
           type: file.type.startsWith("video") ? "video" : "photo",
           url: presign.publicUrl,
-          description: `Captured: ${file.name}`,
+          description: evidenceDescription(`Captured: ${file.name}`),
+          metadata: sameCameraMetadata(),
         });
       } else {
         const pathname = evidenceBlobPathname(challenge.id, file.name);
@@ -341,7 +362,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         await api.submitEvidence(challenge.id, {
           type: file.type.startsWith("video") ? "video" : "photo",
           url: blob.url,
-          description: `Captured: ${file.name}`,
+          description: evidenceDescription(`Captured: ${file.name}`),
+          metadata: sameCameraMetadata(),
         });
       }
 
@@ -363,7 +385,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
       await api.submitEvidence(challenge.id, {
         type: "video",
         url: pasteUrl.trim(),
-        description: "Video URL (manual)",
+        description: evidenceDescription("Video URL (manual)"),
+        metadata: sameCameraMetadata(),
       });
       setPasteUrl("");
       showNote("Evidence submitted!", "success");
@@ -775,6 +798,23 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     <p className="text-[10px] text-text-muted">Record live video or paste a public URL</p>
                   </div>
                 </div>
+
+                {sameCameraEligible && (
+                  <label
+                    className="flex items-start gap-3 rounded-xl px-4 py-3 cursor-pointer"
+                    style={{ background: "rgba(124,92,252,0.08)", border: "1px solid rgba(124,92,252,0.2)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sharedSameCamera}
+                      onChange={(event) => setSharedSameCamera(event.target.checked)}
+                      className="mt-1 h-4 w-4 accent-[#7c5cfc]"
+                    />
+                    <span className="text-xs text-text-secondary leading-relaxed">
+                      One-phone shared video for both players. Keep creator on the left, opponent on the right, and both full bodies visible.
+                    </span>
+                  </label>
+                )}
 
                 {/* Camera permission error */}
                 {cameraError && (

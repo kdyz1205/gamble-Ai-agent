@@ -411,6 +411,7 @@ export interface JudgeEvidencePayload {
   description: string | null;
   type: string;
   url?: string | null;
+  metadata?: Record<string, unknown> | null;
   preparedFrames?: string[] | null;
   preparedDurationSec?: number | null;
   preparedMode?: string | null;
@@ -457,7 +458,46 @@ async function getVisualsForParticipant(
 }
 
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
-  const { evidenceA, evidenceB, participantAId, participantBId, title, type, rules } = params;
+  let { evidenceA, evidenceB } = params;
+  const { participantAId, participantBId, title, type, rules } = params;
+  const hasSharedSameCameraFlag = (evidence: JudgeEvidencePayload | null | undefined) =>
+    evidence?.metadata?.sharedSameCamera === true || evidence?.metadata?.captureMode === "one_phone_same_camera";
+
+  if (evidenceA && !evidenceB && hasSharedSameCameraFlag(evidenceA)) {
+    evidenceB = {
+      ...evidenceA,
+      description: `${evidenceA.description || ""}\nThis shared same-camera media is also the opponent's evidence; compare both visible people in the same video.`,
+    };
+  }
+  if (!evidenceA && evidenceB && hasSharedSameCameraFlag(evidenceB)) {
+    evidenceA = {
+      ...evidenceB,
+      description: `${evidenceB.description || ""}\nThis shared same-camera media is also the creator's evidence; compare both visible people in the same video.`,
+    };
+  }
+  const sharedSameCamera =
+    hasSharedSameCameraFlag(evidenceA) ||
+    hasSharedSameCameraFlag(evidenceB) ||
+    Boolean(evidenceA?.url && evidenceB?.url && evidenceA.url === evidenceB.url && evidenceA.url);
+
+  if (sharedSameCamera && evidenceA?.url && evidenceB?.url && evidenceA.url === evidenceB.url) {
+    if (evidenceA.preparedFrames?.length && !evidenceB.preparedFrames?.length) {
+      evidenceB = {
+        ...evidenceB,
+        preparedFrames: evidenceA.preparedFrames,
+        preparedDurationSec: evidenceA.preparedDurationSec,
+        preparedMode: evidenceA.preparedMode,
+      };
+    }
+    if (evidenceB.preparedFrames?.length && !evidenceA.preparedFrames?.length) {
+      evidenceA = {
+        ...evidenceA,
+        preparedFrames: evidenceB.preparedFrames,
+        preparedDurationSec: evidenceB.preparedDurationSec,
+        preparedMode: evidenceB.preparedMode,
+      };
+    }
+  }
 
   // Forfeit / void cases — no LLM needed.
   if (!evidenceA && !evidenceB) {
@@ -493,6 +533,13 @@ VIDEO FRAMES (when images are attached to this message):
 - Frames are sampled via scene-change detection, labeled with the participant they belong to. Each participant typically contributes 4-22 frames spanning their clip.
 - Check that the claimed action is actually visible across the frames, not just implied by the description.
 - Note timestamps/frame labels in your reasoning when citing what you saw.
+${sharedSameCamera ? `
+SHARED SAME-CAMERA MODE:
+- Participant A and Participant B are in the same video, not two independent clips.
+- Use the role guidance from the evidence metadata/descriptions: creator/Participant A is expected on the left; opponent/Participant B is expected on the right when possible.
+- Do not award a winner unless both identities and the finish order/count are visually clear in the frames.
+- If identity, body visibility, rep validity, start time, or finish order is ambiguous, return winner: null with confidence <= 0.69.
+` : ""}
 
 CONFIDENCE SCALE (be calibrated — stakes are real):
 - 0.95-1.00: Unambiguous — one side clearly won, no reasonable doubt.
@@ -525,18 +572,26 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
     // Vision extraction is best-effort; if it fails, fall through to text-only.
   }
   const allVisuals = capJudgeVisuals(visualsA.visuals, visualsB.visuals, 24);
+  if (sharedSameCamera && allVisuals.length === 0) {
+    return {
+      winnerId: null,
+      reasoning: "Shared same-camera evidence requires visual inspection of both people in the same media, but no frames could be extracted or attached. Manual review required; no winner should be inferred from text alone.",
+      confidence: 0.4,
+    };
+  }
 
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
   const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
-description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
+description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}${evidenceA!.metadata ? `\nmetadata: ${JSON.stringify(evidenceA!.metadata)}` : ""}
 
 Participant B evidence (${evidenceB!.type}):
-description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}`;
+description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}${evidenceB!.metadata ? `\nmetadata: ${JSON.stringify(evidenceB!.metadata)}` : ""}`;
 
   const userText = `Challenge: "${title}"
 Type: ${type}
 ${params.description ? `Context: ${params.description}\n` : ""}Rules / Task: ${rules || title}
 Evidence policy: ${params.evidencePolicy || "self_report"}${params.deadlineIso ? `\nDeadline: ${params.deadlineIso}` : ""}
+${sharedSameCamera ? "Shared same-camera: yes. The same media may appear under both participants; compare the two visible people inside that media.\n" : ""}
 
 ${evidenceSummary}
 
@@ -686,7 +741,8 @@ function parseChallengeFallback(input: string): ParsedChallenge {
   }
 
   let evidenceType = "self_report";
-  if (/video|record|film|stream/i.test(input)) evidenceType = "video";
+  if (/same[_ -]?camera|same phone|one phone|single phone|shared video|same video/i.test(input)) evidenceType = "same_camera_video";
+  else if (/video|record|film|stream/i.test(input)) evidenceType = "video";
   else if (/photo|picture|screenshot|snap/i.test(input)) evidenceType = "photo";
   else if (/gps|location|track|distance|strava/i.test(input)) evidenceType = "gps";
 
