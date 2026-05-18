@@ -28,6 +28,7 @@ export type ChallengeSpec = {
 };
 
 const DEFAULT_STAKE = 0;
+const DEFAULT_PHYSICAL_STAKE = 1;
 
 function titleCaseName(value: string | null): string {
   if (!value) return "Opponent";
@@ -138,6 +139,8 @@ export function generateChallengeSpec(inputText: string): ChallengeSpec {
       ...spec,
       challenge_title: `Push-up Speed Challenge vs ${opponent}`,
       challenge_type: "physical_challenge",
+      stake_amount: spec.stake_amount > 0 ? spec.stake_amount : DEFAULT_PHYSICAL_STAKE,
+      currency_or_points: "credits",
       invite_mode: sameCamera ? "same_device" : nearby ? "nearby" : "invite_link",
       objective: "Each participant performs valid push-ups on camera under the same rules.",
       winning_condition: "Winner is the participant who completes the agreed number of valid push-ups fastest. If no target count is agreed, winner is the participant with the most valid push-ups within 60 seconds.",
@@ -159,8 +162,11 @@ export function generateChallengeSpec(inputText: string): ChallengeSpec {
         "Full body must remain visible.",
         "No cuts, speed changes, or edited clips.",
         "Repetitions with unclear form are not counted.",
+        "Video should start with the in-app challenge phrase, participant name, and visible countdown.",
       ],
-      ai_judging_method: "AI vision counts valid repetitions, checks form, compares time/count, flags invalid reps, and returns confidence.",
+      ai_judging_method: "AI vision counts valid repetitions, checks form and full-duration coverage, compares time/count, returns structured per-participant metrics, and auto-settles only when confidence is at least 0.85.",
+      fallback_manual_review: "If confidence is below 0.85, body visibility is incomplete, frame coverage is unclear, or identity/timing cannot be verified, pause settlement and require manual review.",
+      payout_rule: "Each player stakes the default internal credit amount. If AI confidence is at least 0.85 with a clear winner, winner receives the pooled credits; otherwise settlement pauses for manual review or refund.",
       safety_warning: "Warm up first and stop if there is pain. Do not attempt if injured or medically restricted.",
     };
   }

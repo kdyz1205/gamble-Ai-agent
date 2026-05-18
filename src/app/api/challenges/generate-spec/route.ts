@@ -116,7 +116,9 @@ Return ONLY valid JSON matching this TypeScript shape:
   "legal_compliance_flag": "internal_points_only" | "requires_legal_review"
 }
 
-Do not ask follow-up questions. Use 0 credits unless the user specifies money or credits. Keep real-money settlement out of scope; use internal points/credits. For physical challenges, require clear continuous video and explain AI judging and manual review.`;
+Do not ask follow-up questions. Use 0 credits unless the user specifies money or credits, except safe physical head-to-head challenges may default to 1 internal credit so stake/escrow/settlement are explicit. Keep real-money settlement out of scope; use internal points/credits.
+
+For physical video challenges, especially push-ups, the spec must include: a 60-second timebox when the user implies speed/count, valid rep definition, full-body continuous video requirement, start/end conditions, anti-cheat/liveness phrase, AI vision judging method, confidence threshold 0.85, manual-review fallback, and payout rule.`;
 
   const raw = await completeOraclePrompt({
     providerId: provider.id,

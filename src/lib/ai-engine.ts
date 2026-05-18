@@ -111,7 +111,23 @@ export interface JudgmentResult {
   confidence: number;
   evidenceQuality?: "good" | "unclear" | "invalid";
   settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
-  source?: "deterministic" | "llm" | "fallback";
+  source?: "deterministic" | "vision_llm" | "llm" | "fallback";
+  videoMetrics?: VideoJudgmentMetrics;
+}
+
+export interface VideoJudgmentParticipantMetrics {
+  validRepCount: number | null;
+  invalidRepNotes: string[];
+  fullDurationCovered: boolean | null;
+  unclearReason?: string | null;
+}
+
+export interface VideoJudgmentMetrics {
+  participantA: VideoJudgmentParticipantMetrics;
+  participantB: VideoJudgmentParticipantMetrics;
+  validRepDefinition: string;
+  framesInspected: number;
+  judgingMethod: string;
 }
 
 const MARKET_COMPILER_PROMPT = `You are the AI brain of a challenge/betting platform. The user describes a challenge in natural language (any language — English, Chinese, mixed, Spanish, etc.). You must ALWAYS respond in the user's input language for any human-facing text fields (labels, reasoning, clarifyingQuestion, recommendationSummary, redFlags).
@@ -484,6 +500,60 @@ function extractSubmittedAnswer(evidence: JudgeEvidencePayload | null): string |
   return match ? match[1].trim() : null;
 }
 
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function boolOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function repCountOrNull(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0
+    ? Math.floor(numberValue)
+    : null;
+}
+
+function coerceParticipantVideoMetrics(value: unknown): VideoJudgmentParticipantMetrics {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    validRepCount: repCountOrNull(source.validRepCount),
+    invalidRepNotes: stringArray(source.invalidRepNotes),
+    fullDurationCovered: boolOrNull(source.fullDurationCovered),
+    unclearReason: typeof source.unclearReason === "string" ? source.unclearReason : null,
+  };
+}
+
+function coerceVideoMetrics(
+  value: unknown,
+  framesInspected: number,
+  rules: string | null | undefined,
+): VideoJudgmentMetrics | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const participantA = coerceParticipantVideoMetrics(source.participantA);
+  const participantB = coerceParticipantVideoMetrics(source.participantB);
+  return {
+    participantA,
+    participantB,
+    validRepDefinition:
+      typeof source.validRepDefinition === "string" && source.validRepDefinition.trim()
+        ? source.validRepDefinition.trim()
+        : (rules || "Valid repetitions must match the challenge rules.").slice(0, 500),
+    framesInspected: Number.isFinite(Number(source.framesInspected))
+      ? Math.max(0, Math.floor(Number(source.framesInspected)))
+      : framesInspected,
+    judgingMethod:
+      typeof source.judgingMethod === "string" && source.judgingMethod.trim()
+        ? source.judgingMethod.trim()
+        : "AI vision reviewed sampled video frames, evidence descriptions, and challenge rules.",
+  };
+}
+
 function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentResult | null {
   if (!params.participantBId || !params.evidenceA || !params.evidenceB) return null;
 
@@ -624,6 +694,8 @@ VIDEO FRAMES (when images are attached to this message):
 - Frames are sampled via scene-change detection, labeled with the participant they belong to. Each participant typically contributes 4-22 frames spanning their clip.
 - Check that the claimed action is actually visible across the frames, not just implied by the description.
 - Note timestamps/frame labels in your reasoning when citing what you saw.
+- For physical rep-count challenges such as push-ups, explicitly count valid repetitions for Participant A and Participant B from the attached frames and evidence text. A push-up is valid only when the participant starts at the top with arms extended, lowers chest/body clearly, keeps a reasonably straight body line, and returns to the top.
+- If the frames are sampled rather than every frame, only give a high-confidence winner when the count or result is visually obvious from the full video evidence, frame labels, metadata, and descriptions. Otherwise return winner null or confidence below 0.85.
 ${sharedSameCamera ? `
 SHARED SAME-CAMERA MODE:
 - Participant A and Participant B are in the same video, not two independent clips.
@@ -647,7 +719,24 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   "reasoning": "<one short paragraph explaining the call in plain language for the loser to understand>",
   "confidence": 0.0-1.0,
   "evidenceQuality": "good" | "unclear" | "invalid",
-  "settlementRecommendation": "settle_winner" | "refund" | "manual_review"
+  "settlementRecommendation": "settle_winner" | "refund" | "manual_review",
+  "videoMetrics": {
+    "participantA": {
+      "validRepCount": number | null,
+      "invalidRepNotes": string[],
+      "fullDurationCovered": boolean | null,
+      "unclearReason": string | null
+    },
+    "participantB": {
+      "validRepCount": number | null,
+      "invalidRepNotes": string[],
+      "fullDurationCovered": boolean | null,
+      "unclearReason": string | null
+    },
+    "validRepDefinition": string,
+    "framesInspected": number,
+    "judgingMethod": string
+  }
 }`;
 
   // ── Try to extract real visual evidence ──
@@ -702,6 +791,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     analysis?: string;
     evidenceQuality?: "good" | "unclear" | "invalid";
     settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
+    videoMetrics?: VideoJudgmentMetrics;
   } | null> => {
     try {
       const text = allVisuals.length > 0
@@ -711,14 +801,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             system,
             userText,
             images: allVisuals,
-            maxTokens: 800,
+            maxTokens: 1200,
           })
         : await completeOraclePrompt({
             providerId: params.providerId,
             model: modelName,
             system,
             user: userText,
-            maxTokens: 800,
+            maxTokens: 1200,
           });
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;
@@ -729,6 +819,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         analysis?: unknown;
         evidenceQuality?: unknown;
         settlementRecommendation?: unknown;
+        videoMetrics?: unknown;
       };
       if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) return null;
       if (typeof parsed.reasoning !== "string" || typeof parsed.confidence !== "number") return null;
@@ -743,6 +834,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         settlementRecommendation: ["settle_winner", "refund", "manual_review"].includes(parsed.settlementRecommendation as string)
           ? parsed.settlementRecommendation as "settle_winner" | "refund" | "manual_review"
           : undefined,
+        videoMetrics: coerceVideoMetrics(parsed.videoMetrics, allVisuals.length, rules || title),
       };
     } catch {
       return null;
@@ -783,7 +875,8 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           : winnerId
             ? "manual_review"
             : "refund"),
-      source: "llm",
+      source: allVisuals.length > 0 ? "vision_llm" : "llm",
+      videoMetrics: parsedResult.videoMetrics,
     };
   }
 

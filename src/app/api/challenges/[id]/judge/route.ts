@@ -3,9 +3,10 @@ import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
-import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
-import { isAiReviewStatus } from "@/lib/challenge-state-machine";
+import { assertChallengeTransition, isAiReviewStatus } from "@/lib/challenge-state-machine";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 
 type VerdictStatus = "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
 type EvidenceQuality = "good" | "unclear" | "invalid";
@@ -41,10 +42,10 @@ function recommendationForVerdict(result: {
 
 /**
  * POST /api/challenges/[id]/judge
- * Body: { tier?: 1|2|3 }
+ * Body: { tier?: 1|2|3, autoSettle?: boolean }
  *
- * Burn 1 model token of the chosen tier, then AI writes a recommended verdict.
- * A human must confirm the recommendation before credits are settled.
+ * Burn 1 model token of the chosen tier, then AI writes a strict verdict.
+ * In auto-settle mode, a high-confidence winner settles credits on this route.
  */
 export async function POST(
   req: NextRequest,
@@ -57,11 +58,13 @@ export async function POST(
   let tierId: TierId = 1;
   let providerIdOverride: string | undefined;
   let modelOverride: string | undefined;
+  let autoSettleRequested = false;
   try {
     const body = await req.json();
     if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
     if (typeof body?.providerId === "string") providerIdOverride = body.providerId;
     if (typeof body?.model === "string") modelOverride = body.model;
+    autoSettleRequested = body?.autoSettle === true;
   } catch { /* default to haiku */ }
 
   const cost = TIER_MULTIPLIER[tierId];
@@ -121,24 +124,37 @@ export async function POST(
 
   const aiModel = getAiModel(tierId);
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
+  const bothHaveVideoUrl =
+    evidenceA?.type === "video" &&
+    evidenceB?.type === "video" &&
+    Boolean(String(evidenceA?.url ?? "").trim()) &&
+    Boolean(String(evidenceB?.url ?? "").trim());
+  const googleVisionReady =
+    Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
   const providerId =
     providerIdOverride && getProviderById(providerIdOverride)
       ? providerIdOverride
-      : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
+      : !providerIdOverride && bothHaveVideoUrl && googleVisionReady
+        ? "google"
+        : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
   const pdef = getProviderById(providerId);
   // tier model names are Claude IDs; only valid when routing to Anthropic.
   // For other providers, fall back to that provider's default model so the
   // call doesn't 404 and silently degrade to the random-winner fallback.
   const judgeModel =
     modelOverride?.trim() ||
-    (providerId === DEFAULT_LLM_PROVIDER_ID
-      ? aiModel.model
-      : (pdef?.defaultModel ?? aiModel.model));
+    (!providerIdOverride && !modelOverride && bothHaveVideoUrl && googleVisionReady
+      ? "gemini-2.0-flash"
+      : providerId === DEFAULT_LLM_PROVIDER_ID
+        ? aiModel.model
+        : (pdef?.defaultModel ?? aiModel.model));
   const aiModelLabel = `${pdef?.shortLabel ?? aiModel.displayName} · ${judgeModel}`;
 
   const result = await judgeChallenge({
     title: challenge.title,
+    description: challenge.description,
     type: challenge.type,
+    deadlineIso: challenge.deadline?.toISOString() ?? null,
     rules: challenge.rules,
     evidencePolicy: challenge.evidenceType,
     evidenceA: evidenceA
@@ -176,6 +192,16 @@ export async function POST(
       ? "Deterministic · objective-answer-v1"
       : aiModelLabel;
 
+  const shouldAutoSettle =
+    Boolean(result.winnerId) &&
+    result.confidence >= 0.85 &&
+    settlementRecommendation === "settle_winner" &&
+    (
+      autoSettleRequested ||
+      process.env.AI_VERDICT_MODE === "auto_settle" ||
+      /auto[_-]?settle/i.test(String(challenge.settlementMode ?? ""))
+    );
+
   const judgment = await prisma.judgment.create({
     data: {
       challengeId: id,
@@ -189,22 +215,7 @@ export async function POST(
     include: { winner: { select: { id: true, username: true } } },
   });
 
-  await prisma.challenge.update({
-    where: { id },
-    data: { status: verdictStatus, aiModel: effectiveAiModelLabel },
-  });
-
   const winnerName = judgment.winner?.username || "No one";
-  await prisma.activityEvent.create({
-    data: {
-      type: "challenge_verdict_recommended",
-      message: `"${challenge.title}" has an AI recommendation from ${effectiveAiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
-      userId: result.winnerId,
-      challengeId: id,
-    },
-  });
-
-  const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
   const verdict = {
     status: verdictStatus,
     winnerId: result.winnerId,
@@ -212,6 +223,8 @@ export async function POST(
     reasoning: result.reasoning,
     evidenceQuality,
     settlementRecommendation,
+    source: result.source ?? "llm",
+    videoMetrics: result.videoMetrics ?? null,
   } satisfies {
     status: VerdictStatus;
     winnerId: string | null;
@@ -219,19 +232,162 @@ export async function POST(
     reasoning: string;
     evidenceQuality: EvidenceQuality;
     settlementRecommendation: SettlementRecommendation;
+    source: string;
+    videoMetrics: unknown;
   };
+
+  if (!shouldAutoSettle) {
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: verdictStatus, aiModel: effectiveAiModelLabel },
+    });
+
+    await appendAuditLog({
+      action: AuditActions.JUDGMENT_COMPLETED,
+      actorUserId: user.userId,
+      challengeId: id,
+      payload: {
+        winnerId: result.winnerId,
+        judgmentId: judgment.id,
+        confidence: result.confidence,
+        settlementOk: false,
+        reviewRequired: verdictStatus !== ChallengeStatus.ai_verdict_ready,
+        newStatus: verdictStatus,
+        source: result.source,
+        evidenceQuality,
+        settlementRecommendation,
+        reasoning: result.reasoning?.slice(0, 500),
+      },
+    });
+
+    await prisma.activityEvent.create({
+      data: {
+        type: "challenge_verdict_recommended",
+        message: `"${challenge.title}" has an AI recommendation from ${effectiveAiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
+        userId: result.winnerId,
+        challengeId: id,
+      },
+    });
+
+    const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
+
+    return Response.json({
+      ...verdict,
+      verdict,
+      judgment,
+      settlement: { success: false, error: "Manual confirmation required" },
+      challenge: { id, status: verdictStatus },
+      model: effectiveAiModelLabel,
+      tierId,
+      creditsUsed: isFreeChallenge ? 0 : cost,
+      creditsRemaining: isFreeChallenge ? postBalance : undefined,
+      txHash: null,
+      freeMode: isFreeChallenge,
+    });
+  }
+
+  assertChallengeTransition(challenge.status, ChallengeStatus.ai_verdict_ready);
+  await prisma.challenge.update({
+    where: { id },
+    data: { status: ChallengeStatus.ai_verdict_ready, aiModel: effectiveAiModelLabel },
+  });
+  assertChallengeTransition(ChallengeStatus.ai_verdict_ready, ChallengeStatus.dispute_window_open);
+  await prisma.challenge.update({
+    where: { id },
+    data: { status: ChallengeStatus.dispute_window_open, aiModel: effectiveAiModelLabel },
+  });
+  assertChallengeTransition(ChallengeStatus.dispute_window_open, ChallengeStatus.finalized);
+  await prisma.challenge.update({
+    where: { id },
+    data: { status: ChallengeStatus.finalized, aiModel: effectiveAiModelLabel },
+  });
+
+  let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
+  if (challenge.stake > 0) {
+    settlement = await settleChallenge(
+      id,
+      result.winnerId,
+      challenge.stake,
+      challenge.participants.map((p: { userId: string }) => ({ userId: p.userId })),
+    );
+    if (!settlement.success) {
+      await appendAuditLog({
+        action: AuditActions.JUDGMENT_COMPLETED,
+        actorUserId: user.userId,
+        challengeId: id,
+        payload: {
+          winnerId: result.winnerId,
+          judgmentId: judgment.id,
+          confidence: result.confidence,
+          settlementOk: false,
+          settlementError: settlement.error,
+          source: result.source,
+          reasoning: result.reasoning?.slice(0, 500),
+        },
+      });
+      return Response.json(
+        {
+          error: settlement.error || "Settlement failed",
+          ...verdict,
+          verdict,
+          judgment,
+          settlement,
+          challenge: { id, status: ChallengeStatus.finalized },
+          model: effectiveAiModelLabel,
+          tierId,
+          creditsUsed: isFreeChallenge ? 0 : cost,
+          freeMode: isFreeChallenge,
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  assertChallengeTransition(ChallengeStatus.finalized, ChallengeStatus.settled);
+  await prisma.challenge.update({
+    where: { id },
+    data: { status: ChallengeStatus.settled, aiModel: effectiveAiModelLabel },
+  });
+
+  await appendAuditLog({
+    action: AuditActions.JUDGMENT_COMPLETED,
+    actorUserId: user.userId,
+    challengeId: id,
+    payload: {
+      winnerId: result.winnerId,
+      judgmentId: judgment.id,
+      confidence: result.confidence,
+      settlementOk: settlement.success,
+      source: result.source,
+      evidenceQuality,
+      settlementRecommendation,
+      reasoning: result.reasoning?.slice(0, 500),
+    },
+  });
+
+  await prisma.activityEvent.create({
+    data: {
+      type: "challenge_settled",
+      message: `"${challenge.title}" judged by ${effectiveAiModelLabel}; ${winnerName} wins${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}.`,
+      userId: result.winnerId,
+      challengeId: id,
+    },
+  });
+
+  const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
 
   return Response.json({
     ...verdict,
-    verdict,
+    status: ChallengeStatus.settled,
+    verdict: { ...verdict, status: ChallengeStatus.settled },
     judgment,
-    settlement: { success: false, error: "Manual confirmation required" },
-    challenge: { id, status: verdictStatus },
+    settlement,
+    challenge: { id, status: ChallengeStatus.settled },
     model: effectiveAiModelLabel,
     tierId,
     creditsUsed: isFreeChallenge ? 0 : cost,
     creditsRemaining: isFreeChallenge ? postBalance : undefined,
-    txHash: null,
+    txHash: settlement.txHash ?? null,
     freeMode: isFreeChallenge,
   });
 }

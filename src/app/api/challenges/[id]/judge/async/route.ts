@@ -107,7 +107,7 @@ export async function POST(
       pollUrl: `/api/judge-jobs/${job.id}`,
       pollUrlAbsolute: origin ? pollUrl : undefined,
       message:
-        "AI recommendation runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; creator confirmation settles credits.",
+        "AI judgment runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; auto-settle mode settles high-confidence winners, otherwise creator confirmation settles credits.",
     },
     { status: 202 },
   );

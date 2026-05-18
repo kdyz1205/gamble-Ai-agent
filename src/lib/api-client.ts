@@ -305,20 +305,25 @@ export async function submitEvidence(id: string, data: {
 export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerId?: string;
   model?: string;
+  autoSettle?: boolean;
 }): Promise<{
-  status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
+  status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
   winnerId: string | null;
   confidence: number;
   reasoning: string;
   evidenceQuality: "good" | "unclear" | "invalid";
   settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+  source?: string;
+  videoMetrics?: unknown;
   verdict: {
-    status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required";
+    status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
     winnerId: string | null;
     confidence: number;
     reasoning: string;
     evidenceQuality: "good" | "unclear" | "invalid";
     settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+    source?: string;
+    videoMetrics?: unknown;
   };
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
