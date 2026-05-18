@@ -16,6 +16,15 @@ import prisma from "@/lib/db";
 import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { ChallengeStatus } from "@/lib/enums";
+import {
+  EVIDENCE_WINDOW_STATUSES,
+  OPEN_FOR_OPPONENT_STATUSES,
+  VERDICT_READY_STATUSES,
+  assertChallengeTransition,
+  isEvidenceWindowStatus,
+  isOpenForOpponentStatus,
+  isVerdictReadyStatus,
+} from "@/lib/challenge-state-machine";
 import type { AgentToolName, DraftState } from "./types";
 
 export interface ToolContext {
@@ -130,7 +139,7 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
           : {}),
         maxParticipants: 2,
         aiReview: true,
-        status: "open",
+        status: ChallengeStatus.waiting_for_opponent,
         participants: {
           create: { userId: ctx.userId, role: "creator", status: "accepted" },
         },
@@ -215,7 +224,7 @@ async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknow
     include: { participants: true },
   });
   if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (challenge.status !== "open") return { ok: false, error: `Challenge not open (status=${challenge.status})` };
+  if (!isOpenForOpponentStatus(challenge.status)) return { ok: false, error: `Challenge not open (status=${challenge.status})` };
   if (challenge.creatorId === ctx.userId) return { ok: false, error: "You cannot accept your own challenge" };
   if (challenge.participants.some((p) => p.userId === ctx.userId)) {
     return { ok: false, error: "You are already in this challenge" };
@@ -245,7 +254,27 @@ async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknow
   const fresh = await prisma.participant.count({
     where: { challengeId, status: { in: ["pending", "accepted"] } },
   });
-  const newStatus = fresh >= challenge.maxParticipants ? "live" : "open";
+  const newStatus = fresh >= challenge.maxParticipants
+    ? ChallengeStatus.evidence_window_open
+    : ChallengeStatus.waiting_for_opponent;
+  if (newStatus === ChallengeStatus.evidence_window_open) {
+    assertChallengeTransition(challenge.status, ChallengeStatus.opponent_accepted);
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: ChallengeStatus.opponent_accepted },
+    });
+    if (challenge.stake > 0) {
+      assertChallengeTransition(ChallengeStatus.opponent_accepted, ChallengeStatus.escrow_locked);
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: { status: ChallengeStatus.escrow_locked },
+      });
+    }
+    const fromStatus = challenge.stake > 0
+      ? ChallengeStatus.escrow_locked
+      : ChallengeStatus.opponent_accepted;
+    assertChallengeTransition(fromStatus, ChallengeStatus.evidence_window_open);
+  }
   await prisma.challenge.update({ where: { id: challengeId }, data: { status: newStatus } });
 
   return { ok: true, data: { challengeId, status: newStatus } };
@@ -282,7 +311,7 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
     include: { participants: true },
   });
   if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (!["live", "matched"].includes(challenge.status)) {
+  if (!isEvidenceWindowStatus(challenge.status)) {
     return { ok: false, error: `Challenge is not active (status=${challenge.status})` };
   }
   if (!challenge.participants.some((p) => p.userId === ctx.userId)) {
@@ -310,12 +339,22 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
     select: { userId: true },
     distinct: ["userId"],
   });
-  if (evCount.length >= activeParticipants.length) {
-    await prisma.challenge.updateMany({
-      where: { id: challengeId, status: { in: ["live", "matched"] } },
-      data: { status: "judging" },
-    });
-  }
+  const submitted = new Set(evCount.map((row) => row.userId));
+  const creatorSubmitted = submitted.has(challenge.creatorId);
+  const opponentSubmitted = activeParticipants.some((participant) =>
+    participant.role === "opponent" && submitted.has(participant.userId),
+  );
+  const nextStatus = evCount.length >= activeParticipants.length
+    ? ChallengeStatus.ai_reviewing
+    : creatorSubmitted
+      ? ChallengeStatus.creator_submitted
+      : opponentSubmitted
+        ? ChallengeStatus.opponent_submitted
+        : ChallengeStatus.evidence_window_open;
+  await prisma.challenge.updateMany({
+    where: { id: challengeId, status: { in: [...EVIDENCE_WINDOW_STATUSES] } },
+    data: { status: nextStatus },
+  });
 
   return { ok: true, data: { evidenceId: evidence.id, challengeId, type, hasUrl: !!url } };
 }
@@ -362,19 +401,19 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
   if (!challenge) return { ok: false, error: "Challenge not found" };
   if (challenge.creatorId !== ctx.userId) return { ok: false, error: "Only the creator can confirm" };
   if (challenge.status === ChallengeStatus.settled) return { ok: false, error: "Already settled" };
-  const confirmableStatuses: string[] = [ChallengeStatus.disputed, ChallengeStatus.judging];
-  if (!confirmableStatuses.includes(challenge.status)) {
+  if (!isVerdictReadyStatus(challenge.status)) {
     return { ok: false, error: `Not confirmable (status=${challenge.status})` };
   }
   const j = challenge.judgments[0];
   if (!j) return { ok: false, error: "No AI recommendation to confirm yet" };
 
+  const claim = await prisma.challenge.updateMany({
+    where: { id: challengeId, status: { in: [...VERDICT_READY_STATUSES] } },
+    data: { status: ChallengeStatus.finalized },
+  });
+  if (claim.count === 0) return { ok: false, error: "Already being finalized by another request" };
+
   if (challenge.stake > 0) {
-    const claim = await prisma.challenge.updateMany({
-      where: { id: challengeId, status: { in: [ChallengeStatus.disputed, ChallengeStatus.judging] } },
-      data: { status: ChallengeStatus.pending_settlement },
-    });
-    if (claim.count === 0) return { ok: false, error: "Already being settled by another request" };
     const settlement = await settleChallenge(
       challengeId,
       j.winnerId,
@@ -383,12 +422,17 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
     );
     if (!settlement.success) return { ok: false, error: settlement.error || "Settlement failed" };
   }
+  const finalStatus = j.winnerId
+    ? ChallengeStatus.settled
+    : challenge.stake > 0
+      ? ChallengeStatus.refunded
+      : ChallengeStatus.voided;
   await prisma.challenge.updateMany({
-    where: { id: challengeId, status: { in: [ChallengeStatus.pending_settlement, ChallengeStatus.disputed, ChallengeStatus.judging] } },
-    data: { status: ChallengeStatus.settled },
+    where: { id: challengeId, status: ChallengeStatus.finalized },
+    data: { status: finalStatus },
   });
 
-  return { ok: true, data: { challengeId, winnerId: j.winnerId, status: "settled" } };
+  return { ok: true, data: { challengeId, winnerId: j.winnerId, status: finalStatus } };
 }
 
 /* ─────────────────────────────────────────────── */
@@ -404,7 +448,7 @@ async function findOpenMarketsTool(ctx: ToolContext, args: Record<string, unknow
   const typeFilter = typeof args.type === "string" ? args.type : undefined;
   const markets = await prisma.challenge.findMany({
     where: {
-      status: "open",
+      status: { in: [...OPEN_FOR_OPPONENT_STATUSES] },
       isPublic: true,
       // Don't suggest user's own markets
       creatorId: { not: ctx.userId },
@@ -453,7 +497,7 @@ async function matchMeTool(ctx: ToolContext, args: Record<string, unknown>): Pro
   // Pick one — newest-first, not user's own, not full.
   const candidate = await prisma.challenge.findFirst({
     where: {
-      status: "open",
+      status: { in: [...OPEN_FOR_OPPONENT_STATUSES] },
       isPublic: true,
       creatorId: { not: ctx.userId },
       participants: { none: { userId: ctx.userId } },

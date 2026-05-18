@@ -123,7 +123,7 @@ model Challenge {
   title         String
   description   String?
   type          String   // Fitness | Cooking | Coding | Learning | Games | Prediction | General
-  status        String   @default("draft") // draft | open | funded | live | judging | resolved | void | cancelled | disputed
+  status        String   @default("draft") // canonical lifecycle string; see src/lib/challenge-state-machine.ts
 
   // ── Market structure ──
   marketType    String   @default("challenge") // yes_no | threshold | head_to_head | challenge

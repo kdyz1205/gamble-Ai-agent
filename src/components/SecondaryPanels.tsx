@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import * as api from "@/lib/api-client";
 import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
 import PlazaSection from "@/components/PlazaSection";
+import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 /* ── Drawer shell ── */
 function Drawer({ open, onClose, title, children }: {
@@ -196,7 +197,7 @@ function DiscoverContent({
       .listChallenges({ status: "open", limit: 40 })
       .then((r) => {
         const joinable = r.challenges.filter(
-          (c) => c.status === "open" && c.participants.length < (c.maxParticipants ?? 2),
+          (c) => isOpenForOpponentStatus(c.status) && c.participants.length < (c.maxParticipants ?? 2),
         );
         setRows(joinable);
       })

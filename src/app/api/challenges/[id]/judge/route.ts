@@ -5,6 +5,7 @@ import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
+import { isAiReviewStatus } from "@/lib/challenge-state-machine";
 
 /**
  * POST /api/challenges/[id]/judge
@@ -46,7 +47,7 @@ export async function POST(
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
-  if (!["live", "judging"].includes(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
+  if (!isAiReviewStatus(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
 
   // Free Mode: when the challenge has no stake, AI judgment is free.
   // Paid challenges still charge the user's credits for the judgment inference.
@@ -149,9 +150,16 @@ export async function POST(
     include: { winner: { select: { id: true, username: true } } },
   });
 
+  const nextStatus =
+    result.confidence < 0.6 || !result.winnerId
+      ? ChallengeStatus.ai_inconclusive
+      : result.confidence < 0.85
+        ? ChallengeStatus.manual_review_required
+        : ChallengeStatus.dispute_window_open;
+
   await prisma.challenge.update({
     where: { id },
-    data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
+    data: { status: nextStatus, aiModel: aiModelLabel },
   });
 
   const winnerName = judgment.winner?.username || "No one";
@@ -168,7 +176,7 @@ export async function POST(
   return Response.json({
     judgment,
     settlement: { success: false, error: "Manual confirmation required" },
-    challenge: { id, status: ChallengeStatus.disputed },
+    challenge: { id, status: nextStatus },
     model: aiModelLabel,
     tierId,
     creditsUsed: isFreeChallenge ? 0 : cost,

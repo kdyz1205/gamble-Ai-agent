@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
+import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 
 // LuckyPlay status palette — canonical pastels
 const STATUS_COLOR: Record<string, string> = {
@@ -57,14 +58,14 @@ export default function MePage() {
   const username = user.username || user.name || user.email?.split("@")[0] || "User";
   const credits = user.credits ?? 0;
 
-  const openCount = markets.filter(m => m.status === "open" || m.status === "live").length;
+  const openCount = markets.filter(m => isOpenForOpponentStatus(m.status) || isEvidenceWindowStatus(m.status)).length;
   const settledCount = markets.filter(m => m.status === "settled").length;
   const totalStaked = markets.reduce((sum, m) => sum + (m.stake || 0), 0);
 
   const filtered = tab === "all" ? markets
-    : tab === "open" ? markets.filter(m => m.status === "open")
-    : tab === "live" ? markets.filter(m => m.status === "live" || m.status === "judging")
-    : markets.filter(m => m.status === "settled" || m.status === "cancelled");
+    : tab === "open" ? markets.filter(m => isOpenForOpponentStatus(m.status))
+    : tab === "live" ? markets.filter(m => isEvidenceWindowStatus(m.status) || isAiReviewStatus(m.status))
+    : markets.filter(m => isTerminalStatus(m.status));
 
   return (
     <div className="min-h-screen">

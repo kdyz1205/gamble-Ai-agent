@@ -5,6 +5,7 @@ import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@
 import { getCredits, TIER_MULTIPLIER } from "@/lib/credits";
 import { runJudgeJob } from "@/lib/judge-async";
 import { isEvidenceUrlAllowed } from "@/lib/media/evidence-url";
+import { isAiReviewStatus } from "@/lib/challenge-state-machine";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -55,11 +56,11 @@ export async function POST(
   if (challenge.creatorId !== user.userId) {
     return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
   }
-  if (challenge.status !== "judging") {
+  if (!isAiReviewStatus(challenge.status)) {
     return Response.json(
       {
         error:
-          "AI verdict is unlocked after every player submits evidence. When all sides are in, status becomes Judging.",
+          "AI verdict is unlocked after every player submits evidence. When all sides are in, status becomes AI reviewing.",
       },
       { status: 400 },
     );

@@ -7,6 +7,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
+import {
+  isAiReviewStatus,
+  isEvidenceWindowStatus,
+  isOpenForOpponentStatus,
+  isVerdictReadyStatus,
+} from "@/lib/challenge-state-machine";
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
 const NAVY = "#1E293B";
@@ -158,7 +164,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const participantCount = market.participants?.length || 0;
   const maxParticipants = market.maxParticipants ?? 2;
   const latestJudgment = market.judgments?.[0] ?? null;
-  const canConfirmVerdict = isCreator && market.status === "disputed" && !!latestJudgment;
+  const canConfirmVerdict = isCreator && isVerdictReadyStatus(market.status) && !!latestJudgment;
 
   return (
     <div className="relative min-h-screen">
@@ -266,7 +272,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 {latestJudgment.reasoning}
               </p>
             )}
-            {market.status === "disputed" && (
+            {isVerdictReadyStatus(market.status) && (
               <p className="mt-3 text-xs font-semibold" style={{ color: ROSE_TEXT }}>
                 This is not final yet. A human confirmation is required before credits settle.
               </p>
@@ -320,7 +326,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         </div>
 
         {/* Invite link — only relevant when market still accepts players */}
-        {market.status === "open" && (
+        {isOpenForOpponentStatus(market.status) && (
           <div className="mb-4">
             <p className="text-[11px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1" style={{ color: NAVY_DIM }}>
               <span>🔗</span><span>Invite link</span>
@@ -345,7 +351,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         )}
 
         {/* Primary action — varies by status + role */}
-        {market.status === "open" && !isCreator && (
+        {isOpenForOpponentStatus(market.status) && !isCreator && (
           <Link href={`/join/${id}`}
             className="block w-full py-4 text-center text-base font-extrabold active:scale-[0.97] transition-transform"
             style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
@@ -353,13 +359,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </Link>
         )}
 
-        {market.status === "open" && isCreator && (
+        {isOpenForOpponentStatus(market.status) && isCreator && (
           <p className="text-center text-sm font-semibold py-3" style={{ color: NAVY_DIM }}>
             Waiting for an opponent to join…
           </p>
         )}
 
-        {market.status === "live" && (
+        {isEvidenceWindowStatus(market.status) && (
           // The evidence-submission surface is the versus page. A previous
           // version linked to /challenge/[id]/evidence which doesn't exist,
           // so tapping this on a live market fell through to Next.js's
@@ -371,7 +377,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </Link>
         )}
 
-        {(market.status === "judging" || market.status === "pending_settlement") && (
+        {(isAiReviewStatus(market.status) || market.status === "finalized" || market.status === "pending_settlement") && (
           <div className="text-center py-4 px-4"
             style={{ background: "#F3E8FF", border: `1px solid ${LAVENDER}`, borderRadius: "20px" }}>
             <div className="text-3xl mb-2">⚖️</div>
@@ -391,7 +397,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
         {/* Creator-only: delete this market. Hidden once a market is live or
             past — money is moving, so destruction would orphan audit records. */}
-        {isCreator && ["draft", "open", "cancelled"].includes(market.status) && (
+        {isCreator && (["draft", "cancelled"].includes(market.status) || isOpenForOpponentStatus(market.status)) && (
           <div className="mt-8 flex flex-col items-center gap-2">
             {deleteStep === "idle" && (
               <button

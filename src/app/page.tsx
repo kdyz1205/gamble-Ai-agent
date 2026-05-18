@@ -10,6 +10,7 @@ import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import { LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
+import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
@@ -291,7 +292,7 @@ export default function Home() {
         limit: 6,
       });
       const visible = res.challenges.filter((challenge) => (
-        challenge.status === "open" &&
+        isOpenForOpponentStatus(challenge.status) &&
         challenge.participants.length < (challenge.maxParticipants ?? 2)
       ));
       setOpenChallenges(visible);

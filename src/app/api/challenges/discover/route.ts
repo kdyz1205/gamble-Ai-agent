@@ -4,7 +4,7 @@ import {
   discoveryMetaForChallenge,
   sortChallengesByDiscovery,
 } from "@/lib/challenge-discovery";
-import { ChallengeStatus } from "@/lib/enums";
+import { OPEN_FOR_OPPONENT_STATUSES } from "@/lib/challenge-state-machine";
 
 /**
  * GET /api/challenges/discover — 3-level waterfall discovery.
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   if (hasGeo) {
     // Fetch a larger pool so we can sort by distance then trim.
     const pool = await prisma.challenge.findMany({
-      where: { status: ChallengeStatus.open, isPublic: true },
+      where: { status: { in: [...OPEN_FOR_OPPONENT_STATUSES] }, isPublic: true },
       include: {
         ...CHALLENGE_SELECT,
         // Include creator geo fields for distance calc only — stripped below.
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 2: global fallback ──────────────────────────────────────────────
   const globalRows = await prisma.challenge.findMany({
-    where: { status: ChallengeStatus.open, isPublic: true },
+    where: { status: { in: [...OPEN_FOR_OPPONENT_STATUSES] }, isPublic: true },
     include: CHALLENGE_SELECT,
     orderBy: [{ stake: "desc" }, { createdAt: "desc" }],
     take: limit,

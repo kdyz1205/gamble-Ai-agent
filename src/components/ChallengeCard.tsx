@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { ChallengeData } from "@/lib/api-client";
+import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 
 export interface Challenge {
   id: string;
@@ -20,9 +21,10 @@ export interface Challenge {
 export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
   const opponent = c.participants.find((p) => p.role === "opponent");
   let status: Challenge["status"] = "open";
-  if (c.status === "settled" || c.status === "cancelled") status = "completed";
-  else if (c.status === "judging" || c.status === "pending_settlement") status = "judging";
-  else if (c.status === "live") status = "live";
+  if (isTerminalStatus(c.status)) status = "completed";
+  else if (isAiReviewStatus(c.status) || c.status === "finalized") status = "judging";
+  else if (isEvidenceWindowStatus(c.status)) status = "live";
+  else if (isOpenForOpponentStatus(c.status)) status = "open";
 
   const deadlineStr = c.deadline
     ? new Date(c.deadline).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -306,7 +308,7 @@ export function LiveChallengeCard({
 }) {
   const ch = mapChallengeDataToChallenge(apiChallenge);
   const joinable =
-    apiChallenge.status === "open" &&
+    isOpenForOpponentStatus(apiChallenge.status) &&
     apiChallenge.participants.length < (apiChallenge.maxParticipants ?? 2) &&
     apiChallenge.creatorId !== currentUserId;
   return (

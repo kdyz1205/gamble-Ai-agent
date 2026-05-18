@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
+import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
@@ -30,6 +31,18 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   cancelled: { bg: NAVY_FAINT, text: NAVY_DIM, label: "Cancelled" },
   disputed: { bg: ROSE_BG, text: ROSE_TEXT, label: "Review needed" },
   pending_settlement: { bg: LAVENDER, text: LAVENDER_TEXT, label: "Settling" },
+  waiting_for_opponent: { bg: PEACH, text: PEACH_TEXT, label: "Waiting" },
+  evidence_window_open: { bg: MINT, text: MINT_TEXT, label: "Evidence" },
+  creator_submitted: { bg: MINT, text: MINT_TEXT, label: "Creator submitted" },
+  opponent_submitted: { bg: MINT, text: MINT_TEXT, label: "Opponent submitted" },
+  ai_reviewing: { bg: LAVENDER, text: LAVENDER_TEXT, label: "AI reviewing" },
+  ai_verdict_ready: { bg: LAVENDER, text: LAVENDER_TEXT, label: "Verdict ready" },
+  dispute_window_open: { bg: ROSE_BG, text: ROSE_TEXT, label: "Dispute window" },
+  manual_review_required: { bg: ROSE_BG, text: ROSE_TEXT, label: "Manual review" },
+  ai_inconclusive: { bg: ROSE_BG, text: ROSE_TEXT, label: "AI inconclusive" },
+  finalized: { bg: LAVENDER, text: LAVENDER_TEXT, label: "Finalized" },
+  refunded: { bg: NAVY_FAINT, text: NAVY_DIM, label: "Refunded" },
+  voided: { bg: NAVY_FAINT, text: NAVY_DIM, label: "Voided" },
 };
 
 function formatDeadline(value: string | null) {
@@ -242,7 +255,7 @@ export default function MarketsPage() {
               const status = STATUS_STYLE[m.status] || STATUS_STYLE.draft;
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
-              const canClose = ["draft", "open", "cancelled"].includes(m.status) && !hasOtherParticipant(m, user.id);
+              const canClose = (["draft", "cancelled"].includes(m.status) || isOpenForOpponentStatus(m.status)) && !hasOtherParticipant(m, user.id);
               return (
                 <motion.article
                   key={m.id}

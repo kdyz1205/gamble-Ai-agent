@@ -9,6 +9,13 @@ import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
 import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import {
+  isAiReviewStatus,
+  isEvidenceWindowStatus,
+  isOpenForOpponentStatus,
+  isVerdictReadyStatus,
+  statusLabel as lifecycleStatusLabel,
+} from "@/lib/challenge-state-machine";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -17,20 +24,6 @@ const TIER_DESC: Record<1 | 2 | 3, string> = {
   2: "Balanced judgment",
   3: "Maximum intelligence",
 };
-
-function statusLabel(s: string): string {
-  const m: Record<string, string> = {
-    open: "Waiting for opponent",
-    live: "In progress",
-    judging: "Ready for AI verdict",
-    pending_settlement: "Settling on-chain\u2026",
-    disputed: "AI recommendation ready",
-    settled: "Settled",
-    cancelled: "Cancelled",
-    draft: "Draft",
-  };
-  return m[s] || s;
-}
 
 function statusColor(s: string) {
   const m: Record<string, { color: string; bg: string; border: string }> = {
@@ -129,10 +122,10 @@ export default function ChallengeVerdictPanel({
   const allSubmitted = challenge && accepted.length > 0 && accepted.every(p => evidenceByUser.has(p.user.id));
 
   const isCreator = challenge?.creatorId === userId;
-  const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
-  const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
-  const canConfirmAi = challenge && challenge.status === "disputed" && isCreator && challenge.judgments.length > 0;
-  const settled = challenge?.status === "settled";
+  const canSubmitEvidence = challenge && isEvidenceWindowStatus(challenge.status) && !!me && !myEvidence;
+  const canRunAi = challenge && isAiReviewStatus(challenge.status) && isCreator && challenge.judgments.length === 0;
+  const canConfirmAi = challenge && isVerdictReadyStatus(challenge.status) && isCreator && challenge.judgments.length > 0;
+  const settled = challenge?.status === "settled" || challenge?.status === "resolved";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
   // (src/components/EvidenceUploader.tsx) which handles record/photo/upload/URL
@@ -327,7 +320,7 @@ export default function ChallengeVerdictPanel({
   }
 
   const hasOpponent = challenge.participants.some(p => p.role === "opponent");
-  const phaseMatchDone = hasOpponent || challenge.status !== "open";
+  const phaseMatchDone = hasOpponent || !isOpenForOpponentStatus(challenge.status);
   const phases = [
     { key: "match", done: phaseMatchDone, label: "Opponent", icon: "👤" },
     { key: "ev", done: Boolean(allSubmitted || settled), label: "Evidence", icon: "📸" },
@@ -338,7 +331,7 @@ export default function ChallengeVerdictPanel({
   const sc = statusColor(challenge.status);
   const ruleCards = parseChallengeRules(challenge);
   const contractBullets = acceptanceContract(challenge);
-  const canCloseEmpty = isCreator && challenge.status === "open" && !hasOpponent;
+  const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
 
   return (
     <motion.div
@@ -367,7 +360,7 @@ export default function ChallengeVerdictPanel({
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
             >
-              {statusLabel(challenge.status)}
+              {lifecycleStatusLabel(challenge.status)}
             </motion.span>
             {challenge.stake > 0 && (
               <span className="text-xs font-bold text-amber-400">{challenge.stake} credits at stake</span>
@@ -375,7 +368,7 @@ export default function ChallengeVerdictPanel({
           </div>
         </div>
 
-        {challenge.status === "open" && isCreator && (
+        {isOpenForOpponentStatus(challenge.status) && isCreator && (
           <motion.div
             className="space-y-3 p-4"
             style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "22px" }}
@@ -445,7 +438,7 @@ export default function ChallengeVerdictPanel({
           ))}
         </div>
 
-        {challenge.status === "open" && !isCreator && !me && (
+        {isOpenForOpponentStatus(challenge.status) && !isCreator && !me && (
           <div className="p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
             <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>Before joining</p>
             <ul className="space-y-1.5">
@@ -599,7 +592,7 @@ export default function ChallengeVerdictPanel({
         </AnimatePresence>
 
         {/* AI Judge section */}
-        {challenge.status === "judging" && (
+        {isAiReviewStatus(challenge.status) && (
           <motion.div
             className="space-y-4 p-5"
             style={{
@@ -801,7 +794,7 @@ export default function ChallengeVerdictPanel({
         </AnimatePresence>
 
         {/* Verdict Receipt Card */}
-        {verdictRow && challenge.status === "settled" && (
+        {verdictRow && settled && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

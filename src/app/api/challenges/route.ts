@@ -3,6 +3,8 @@ import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits, addCredits } from "@/lib/credits";
 import { evaluateRuleSafety } from "@/lib/rule-safety";
+import { ChallengeStatus } from "@/lib/enums";
+import { expandChallengeStatusFilter } from "@/lib/challenge-state-machine";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -15,7 +17,8 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser();
 
   const where: Record<string, unknown> = { isPublic: true };
-  if (status) where.status = status;
+  const statuses = expandChallengeStatusFilter(status);
+  if (statuses) where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
   if (type)   where.type = type;
   if (mine && user) {
     delete where.isPublic;
@@ -157,7 +160,7 @@ export async function POST(req: NextRequest) {
           marketType,
           proposition,
           type,
-          status: "open",
+          status: ChallengeStatus.waiting_for_opponent,
           stake: stakeInt,
           stakeToken,
           deadline: deadlineDate,

@@ -7,6 +7,7 @@ import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 interface Challenge {
   id: string;
@@ -300,16 +301,16 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                     </Link>
                   </motion.div>
                 </motion.div>
-              ) : c.status !== "open" ? (
+              ) : !isOpenForOpponentStatus(c.status) ? (
                 <motion.div
                   key="closed"
                   className="text-center py-4"
                   style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}
                 >
                   <p className="text-sm font-bold" style={{ color: NAVY_DIM }}>
-                    {c.status === "live"
+                    {isEvidenceWindowStatus(c.status)
                       ? "Challenge is live. Go submit evidence."
-                      : c.status === "judging"
+                      : isAiReviewStatus(c.status)
                         ? "AI is reviewing."
                         : c.status === "settled"
                           ? "Already settled."

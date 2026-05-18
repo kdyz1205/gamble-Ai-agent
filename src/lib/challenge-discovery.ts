@@ -1,5 +1,5 @@
 import prisma from "@/lib/db";
-import { ChallengeStatus } from "@/lib/enums";
+import { OPEN_FOR_OPPONENT_STATUSES } from "@/lib/challenge-state-machine";
 
 const CHALLENGE_LIST_INCLUDE = {
   creator: {
@@ -72,7 +72,7 @@ export function discoveryMetaForChallenge(
 
 export async function fetchWaitingChallengesWithCreatorGeo(take: number) {
   const rows = await prisma.challenge.findMany({
-    where: { status: ChallengeStatus.open, isPublic: true },
+    where: { status: { in: [...OPEN_FOR_OPPONENT_STATUSES] }, isPublic: true },
     include: CHALLENGE_LIST_INCLUDE,
     orderBy: { createdAt: "desc" },
     take: Math.min(120, take * 4),

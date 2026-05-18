@@ -3,6 +3,8 @@ import { after } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { preExtractAndPersistFrames } from "@/lib/media/pre-extract-frames";
+import { ChallengeStatus } from "@/lib/enums";
+import { EVIDENCE_WINDOW_STATUSES, isEvidenceWindowStatus } from "@/lib/challenge-state-machine";
 
 // Vision frame extraction + Blob upload can take 5-20s for a longer video.
 // Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
@@ -37,7 +39,7 @@ export async function POST(
       return Response.json({ error: "Challenge not found" }, { status: 404 });
     }
 
-    if (!["live", "matched"].includes(challenge.status)) {
+    if (!isEvidenceWindowStatus(challenge.status)) {
       return Response.json({ error: `Challenge is not active (status=${challenge.status})` }, { status: 400 });
     }
 
@@ -127,12 +129,24 @@ export async function POST(
       select: { userId: true },
       distinct: ["userId"],
     });
-    if (allEvidenceUsers.length >= activeParticipants.length) {
-      await prisma.challenge.updateMany({
-        where: { id, status: { in: ["live", "matched"] } },
-        data: { status: "judging" },
-      });
-    }
+    const submitted = new Set(allEvidenceUsers.map((row) => row.userId));
+    const creatorSubmitted = submitted.has(challenge.creatorId);
+    const opponentSubmitted = activeParticipants.some(
+      (participant: { userId: string; role: string }) =>
+        participant.role === "opponent" && submitted.has(participant.userId),
+    );
+    const nextStatus = allEvidenceUsers.length >= activeParticipants.length
+      ? ChallengeStatus.ai_reviewing
+      : creatorSubmitted
+        ? ChallengeStatus.creator_submitted
+        : opponentSubmitted
+          ? ChallengeStatus.opponent_submitted
+          : ChallengeStatus.evidence_window_open;
+
+    await prisma.challenge.updateMany({
+      where: { id, status: { in: [...EVIDENCE_WINDOW_STATUSES] } },
+      data: { status: nextStatus },
+    });
 
     // Fire-and-forget pre-extraction of vision frames so the judge call later
     // can skip ffmpeg entirely. Runs AFTER response is sent; errors are captured

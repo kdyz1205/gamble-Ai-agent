@@ -17,7 +17,7 @@
  *   5. Opponent row: upsert User by opponentEmail (create if missing with 50
  *      bonus), spendCredits for stake, Participant.create (role="opponent")
  *   6. Evidence.upsert both sides (asymmetric so AI picks a definite winner)
- *   7. Challenge.updateMany status → judging
+ *   7. Challenge.update status -> ai_reviewing
  *   8. executeChallengeJudgment (spends ai_judge credit + runs real OpenAI
  *      vision/text call + writes Judgment row)
  *   9. For settled challenges, confirm-verdict would be a separate call; here
@@ -33,6 +33,8 @@ import { parseChallenge } from "@/lib/ai-engine";
 import { spendCredits, getCredits } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { COSTS } from "@/lib/credits";
+import { ChallengeStatus } from "@/lib/enums";
+import { VERDICT_READY_STATUSES } from "@/lib/challenge-state-machine";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
         visibility: "private",
         maxParticipants: 2,
         aiReview: true,
-        status: "open",
+        status: ChallengeStatus.waiting_for_opponent,
         participants: {
           create: { userId: creator.id, role: "creator", status: "accepted" },
         },
@@ -146,7 +148,10 @@ export async function POST(req: NextRequest) {
       data: { challengeId: challenge.id, userId: opponent.id, role: "opponent", status: "accepted" },
     }),
   );
-  await prisma.challenge.update({ where: { id: challenge.id }, data: { status: "live" } });
+  await prisma.challenge.update({
+    where: { id: challenge.id },
+    data: { status: ChallengeStatus.evidence_window_open },
+  });
 
   // 7. Both submit asymmetric evidence (creator clearly wins so the AI
   //    picks a definite winner, not a tie)
@@ -171,20 +176,22 @@ export async function POST(req: NextRequest) {
     }),
   );
 
-  // 8. Transition to judging
-  await prisma.challenge.update({ where: { id: challenge.id }, data: { status: "judging" } });
+  // 8. Transition to AI reviewing
+  await prisma.challenge.update({
+    where: { id: challenge.id },
+    data: { status: ChallengeStatus.ai_reviewing },
+  });
 
   // 9. Run the real judge — exercises parseChallenge → OpenAI vision call,
-  //    writes a Judgment row, debits ai_judge credit, flips challenge to
-  //    "disputed" (pending creator confirmation under the default manual
-  //    confirmation mode).
+  //    writes a Judgment row, debits ai_judge credit, and moves challenge to
+  //    a verdict-ready status under the default manual confirmation mode.
   const judgeResult = await mark("judge", () => executeChallengeJudgment(challenge.id, 1));
 
   // Snapshot after
   const creatorEnd = await getCredits(creator.id);
   const opponentEnd = await getCredits(opponent.id);
 
-  // If judgment succeeded + status is disputed, we STOP here. The creator
+  // If judgment succeeded + status is verdict-ready, we STOP here. The creator
   // (the user) can click Confirm in the UI — that's the final manual action
   // and lets them see the settlement complete in real time. If they want
   // auto-settle, pass ?autoConfirm=1.
@@ -199,12 +206,12 @@ export async function POST(req: NextRequest) {
           judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
         },
       });
-      if (!fresh || fresh.status !== "disputed") return;
+      if (!fresh || !(VERDICT_READY_STATUSES as readonly string[]).includes(fresh.status)) return;
       const j = fresh.judgments[0];
       if (!j) return;
       const claim = await prisma.challenge.updateMany({
-        where: { id: challenge.id, status: { in: ["disputed", "judging"] } },
-        data: { status: "pending_settlement" },
+        where: { id: challenge.id, status: { in: [...VERDICT_READY_STATUSES] } },
+        data: { status: ChallengeStatus.finalized },
       });
       if (claim.count === 0) return;
       const { settleChallenge } = await import("@/lib/credits");
@@ -214,9 +221,14 @@ export async function POST(req: NextRequest) {
         fresh.stake,
         fresh.participants.map((p) => ({ userId: p.userId })),
       );
+      const finalStatus = j.winnerId
+        ? ChallengeStatus.settled
+        : fresh.stake > 0
+          ? ChallengeStatus.refunded
+          : ChallengeStatus.voided;
       await prisma.challenge.update({
         where: { id: challenge.id },
-        data: { status: "settled" },
+        data: { status: finalStatus },
       });
     });
   }

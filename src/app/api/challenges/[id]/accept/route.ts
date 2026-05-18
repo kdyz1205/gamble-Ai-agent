@@ -4,6 +4,9 @@ import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { getCredits, spendCredits, addCredits } from "@/lib/credits";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { ChallengeStatus } from "@/lib/enums";
+import { assertChallengeTransition, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 
 /** Detect "AI出题" intent — title or proposition mentions math / quiz / trivia. */
 const QUIZ_PATTERN = /\b(math|quiz|trivia)\b|算|题/i;
@@ -67,7 +70,7 @@ export async function POST(
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
-  if (challenge.status !== "open") return Response.json({ error: "Challenge is not open for joining" }, { status: 400 });
+  if (!isOpenForOpponentStatus(challenge.status)) return Response.json({ error: "Challenge is not open for joining" }, { status: 400 });
   if (challenge.creatorId === user.userId) return Response.json({ error: "You cannot accept your own challenge" }, { status: 400 });
 
   const existing = challenge.participants.find((p: { userId: string }) => p.userId === user.userId);
@@ -133,14 +136,35 @@ export async function POST(
     where: { challengeId: challenge.id, status: { in: ["pending", "accepted"] } },
   });
 
-  const newStatus = freshCount >= challenge.maxParticipants ? "live" : "open";
+  const newStatus = freshCount >= challenge.maxParticipants
+    ? ChallengeStatus.evidence_window_open
+    : ChallengeStatus.waiting_for_opponent;
+
+  if (newStatus === ChallengeStatus.evidence_window_open) {
+    assertChallengeTransition(challenge.status, ChallengeStatus.opponent_accepted);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.opponent_accepted },
+    });
+    if (challenge.stake > 0) {
+      assertChallengeTransition(ChallengeStatus.opponent_accepted, ChallengeStatus.escrow_locked);
+      await prisma.challenge.update({
+        where: { id },
+        data: { status: ChallengeStatus.escrow_locked },
+      });
+    }
+    const fromStatus = challenge.stake > 0
+      ? ChallengeStatus.escrow_locked
+      : ChallengeStatus.opponent_accepted;
+    assertChallengeTransition(fromStatus, ChallengeStatus.evidence_window_open);
+  }
 
   // Generate a shared AI-issued task (e.g. math problem) when the challenge
   // transitions to live AND it looks like a quiz-style challenge. This lets two
   // players race the same question without any schema changes — the question is
   // written to challenge.rules and the existing UI/judge already read that field.
   if (
-    newStatus === "live" &&
+    newStatus === ChallengeStatus.evidence_window_open &&
     QUIZ_PATTERN.test(`${challenge.title} ${challenge.proposition ?? ""}`)
   ) {
     await generateSharedLiveTask({
@@ -159,6 +183,19 @@ export async function POST(
       participants: {
         include: { user: { select: { id: true, username: true, image: true } } },
       },
+    },
+  });
+
+  await appendAuditLog({
+    action: AuditActions.CHALLENGE_ACCEPTED,
+    actorUserId: user.userId,
+    challengeId: challenge.id,
+    payload: {
+      previousStatus: challenge.status,
+      acceptedStatus: ChallengeStatus.opponent_accepted,
+      escrowStatus: challenge.stake > 0 ? ChallengeStatus.escrow_locked : null,
+      newStatus,
+      stake: challenge.stake,
     },
   });
 

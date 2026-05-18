@@ -71,6 +71,11 @@ export async function runJudgeJob(jobId: string): Promise<void> {
     return;
   }
 
+  const challengeStatus = await prisma.challenge.findUnique({
+    where: { id: job.challengeId },
+    select: { status: true },
+  });
+
   const snapshot = {
     judgment: {
       id: result.judgment.id,
@@ -80,7 +85,7 @@ export async function runJudgeJob(jobId: string): Promise<void> {
       aiModel: result.judgment.aiModel,
     },
     settlement: result.settlementResult,
-    challenge: { id: job.challengeId, status: "settled" as const },
+    challenge: { id: job.challengeId, status: challengeStatus?.status ?? "unknown" },
     model: result.model,
     tierId: result.tierId,
     creditsUsed: result.creditsUsed,

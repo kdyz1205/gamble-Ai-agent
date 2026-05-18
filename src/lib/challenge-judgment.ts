@@ -9,6 +9,7 @@ import { judgeChallenge } from "./ai-engine";
 import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "./credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { isAiReviewStatus } from "./challenge-state-machine";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -79,8 +80,8 @@ export async function executeChallengeJudgment(
   if (!challenge) {
     return { ok: false, error: "Challenge not found", status: 404 };
   }
-  if (challenge.status !== "judging") {
-    return { ok: false, error: "Challenge is not in judging state", status: 400 };
+  if (!isAiReviewStatus(challenge.status)) {
+    return { ok: false, error: "Challenge is not in AI reviewing state", status: 400 };
   }
 
   const payerUserId = challenge.creatorId;
@@ -241,9 +242,15 @@ export async function executeChallengeJudgment(
   });
 
   if (process.env.AI_VERDICT_MODE !== "auto_settle") {
+    const nextStatus =
+      result.confidence < 0.6 || !result.winnerId
+        ? ChallengeStatus.ai_inconclusive
+        : result.confidence < 0.85
+          ? ChallengeStatus.manual_review_required
+          : ChallengeStatus.dispute_window_open;
     await prisma.challenge.update({
       where: { id: challengeId },
-      data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
+      data: { status: nextStatus, aiModel: aiModelLabel },
     });
 
     await appendAuditLog({
@@ -255,7 +262,8 @@ export async function executeChallengeJudgment(
         judgmentId: judgment.id,
         confidence: result.confidence,
         settlementOk: false,
-        reviewRequired: true,
+        reviewRequired: nextStatus !== ChallengeStatus.dispute_window_open,
+        newStatus: nextStatus,
         reasoning: result.reasoning?.slice(0, 500),
       },
     });
@@ -283,11 +291,14 @@ export async function executeChallengeJudgment(
     };
   }
 
-  // Low confidence — don't settle, mark as disputed
-  if (result.confidence < 0.85) {
+  // Low confidence or no clear winner: do not settle automatically.
+  if (result.confidence < 0.85 || !result.winnerId) {
+    const nextStatus = result.confidence < 0.6 || !result.winnerId
+      ? ChallengeStatus.ai_inconclusive
+      : ChallengeStatus.manual_review_required;
     await prisma.challenge.update({
       where: { id: challengeId },
-      data: { status: ChallengeStatus.disputed },
+      data: { status: nextStatus },
     });
 
     await appendAuditLog({
@@ -295,8 +306,8 @@ export async function executeChallengeJudgment(
       actorUserId: payerUserId,
       challengeId,
       payload: {
-        previousStatus: "judging",
-        newStatus: "disputed",
+        previousStatus: challenge.status,
+        newStatus: nextStatus,
         reason: "low_confidence",
         confidence: result.confidence,
         judgmentId: judgment.id,
@@ -317,43 +328,52 @@ export async function executeChallengeJudgment(
   }
 
   let settlementResult: { success: boolean; txHash?: string; error?: string } = { success: true };
+  const freshChallenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    select: { status: true },
+  });
+  if (freshChallenge?.status === ChallengeStatus.settled) {
+    await appendAuditLog({
+      action: AuditActions.CHALLENGE_STATUS,
+      actorUserId: payerUserId,
+      challengeId,
+      payload: {
+        event: "duplicate_settlement_skipped",
+        currentStatus: freshChallenge.status,
+        judgmentId: judgment.id,
+      },
+    });
+    return {
+      ok: true,
+      judgment,
+      settlementResult: { success: true },
+      challengeId,
+      model: aiModelLabel,
+      tierId,
+      creditsUsed: cost,
+      creditsRemaining: spend.balance,
+      txHash: null,
+    };
+  }
+
+  const reviewStatus = freshChallenge?.status ?? challenge.status;
+  assertChallengeTransition(reviewStatus, ChallengeStatus.ai_verdict_ready);
+  await prisma.challenge.update({
+    where: { id: challengeId },
+    data: { status: ChallengeStatus.ai_verdict_ready, aiModel: aiModelLabel },
+  });
+  assertChallengeTransition(ChallengeStatus.ai_verdict_ready, ChallengeStatus.dispute_window_open);
+  await prisma.challenge.update({
+    where: { id: challengeId },
+    data: { status: ChallengeStatus.dispute_window_open, aiModel: aiModelLabel },
+  });
+  assertChallengeTransition(ChallengeStatus.dispute_window_open, ChallengeStatus.finalized);
+  await prisma.challenge.update({
+    where: { id: challengeId },
+    data: { status: ChallengeStatus.finalized, aiModel: aiModelLabel },
+  });
+
   if (challenge.stake > 0) {
-    // Re-read challenge status to guard against concurrent settlement
-    const freshChallenge = await prisma.challenge.findUnique({
-      where: { id: challengeId },
-      select: { status: true },
-    });
-    if (freshChallenge?.status === ChallengeStatus.settled) {
-      await appendAuditLog({
-        action: AuditActions.CHALLENGE_STATUS,
-        actorUserId: payerUserId,
-        challengeId,
-        payload: {
-          event: "duplicate_settlement_skipped",
-          currentStatus: freshChallenge.status,
-          judgmentId: judgment.id,
-        },
-      });
-      return {
-        ok: true,
-        judgment,
-        settlementResult: { success: true },
-        challengeId,
-        model: aiModelLabel,
-        tierId,
-        creditsUsed: cost,
-        creditsRemaining: spend.balance,
-        txHash: null,
-      };
-    }
-
-    // Move to pending_settlement BEFORE attempting on-chain tx
-    assertChallengeTransition(freshChallenge?.status ?? challenge.status, ChallengeStatus.pending_settlement);
-    await prisma.challenge.update({
-      where: { id: challengeId },
-      data: { status: ChallengeStatus.pending_settlement, aiModel: aiModelLabel },
-    });
-
     settlementResult = await settleChallenge(
       challengeId,
       result.winnerId,
@@ -363,8 +383,8 @@ export async function executeChallengeJudgment(
     );
 
     if (!settlementResult.success) {
-      // Settlement failed (blockchain reverted, out of gas, etc.)
-      // Stay in pending_settlement — DO NOT mark as settled.
+      // Settlement failed (chain reverted, out of gas, ledger failed, etc.)
+      // Stay finalized and do not mark as settled.
       // A retry job or admin can resolve this later.
       await appendAuditLog({
         action: AuditActions.JUDGMENT_COMPLETED,
@@ -395,13 +415,18 @@ export async function executeChallengeJudgment(
   }
 
   // Only reach here if settlement succeeded (or no stake)
-  const fromStatus = challenge.stake > 0 ? ChallengeStatus.pending_settlement : challenge.status;
-  assertChallengeTransition(fromStatus, ChallengeStatus.settled);
+  const fromStatus = ChallengeStatus.finalized;
+  const finalStatus = result.winnerId
+    ? ChallengeStatus.settled
+    : challenge.stake > 0
+      ? ChallengeStatus.refunded
+      : ChallengeStatus.voided;
+  assertChallengeTransition(fromStatus, finalStatus);
 
   // Use updateMany with status guard to prevent race-condition double-settle
   const updateResult = await prisma.challenge.updateMany({
     where: { id: challengeId, status: fromStatus },
-    data: { status: ChallengeStatus.settled, aiModel: aiModelLabel },
+    data: { status: finalStatus, aiModel: aiModelLabel },
   });
 
   if (updateResult.count === 0) {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { isEvidenceWindowStatus } from "@/lib/challenge-state-machine";
 
 export const runtime = "nodejs";
 
@@ -50,7 +51,7 @@ export async function POST(
     if (!challenge) {
       return Response.json({ error: "Challenge not found" }, { status: 404 });
     }
-    if (!["open", "live"].includes(challenge.status)) {
+    if (!isEvidenceWindowStatus(challenge.status)) {
       return Response.json(
         { error: "Evidence locked — challenge is judging, settled, or closed." },
         { status: 400 },

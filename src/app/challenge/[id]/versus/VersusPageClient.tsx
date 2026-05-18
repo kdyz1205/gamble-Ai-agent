@@ -11,6 +11,7 @@ import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ParticleBackground from "@/components/ParticleBackground";
+import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 /* ── Helpers ── */
 function evidenceBlobPathname(challengeId: string, filename: string): string {
@@ -32,10 +33,22 @@ const TIER_DESC: Record<1 | 2 | 3, string> = {
 function statusConfig(s: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
     open:      { label: "Awaiting Opponent",  color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
+    waiting_for_opponent: { label: "Awaiting Opponent", color: "#a78bfa", bg: "rgba(124,92,252,0.1)", border: "rgba(124,92,252,0.25)" },
     live:      { label: "Battle in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    evidence_window_open: { label: "Evidence Window", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
+    creator_submitted: { label: "Creator Submitted", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
+    opponent_submitted: { label: "Opponent Submitted", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
     judging:   { label: "AI Analyzing...",    color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
+    ai_reviewing: { label: "AI Analyzing...", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    ai_verdict_ready: { label: "Verdict Ready", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    dispute_window_open: { label: "Dispute Window", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    manual_review_required: { label: "Manual Review", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    ai_inconclusive: { label: "AI Inconclusive", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    finalized: { label: "Finalized", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
     settled:   { label: "Battle Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     cancelled: { label: "Cancelled",          color: "#ff4757", bg: "rgba(255,71,87,0.1)",   border: "rgba(255,71,87,0.25)" },
+    refunded: { label: "Refunded", color: "#ff4757", bg: "rgba(255,71,87,0.1)", border: "rgba(255,71,87,0.25)" },
+    voided: { label: "Voided", color: "#ff4757", bg: "rgba(255,71,87,0.1)", border: "rgba(255,71,87,0.25)" },
     draft:     { label: "Draft",              color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
   };
   return map[s] ?? map.draft;
@@ -303,8 +316,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const opponent = challenge?.participants.find((p) => p.role === "opponent");
   const myEvidence = challenge?.evidence.find((e) => e.userId === uid);
   const isCreator = uid && challenge?.creatorId === uid;
-  const canCapture = challenge && ["open", "live"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
-  const canJoin = challenge && challenge.status === "open" && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
+  const canCapture = challenge && isEvidenceWindowStatus(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
+  const canJoin = challenge && isOpenForOpponentStatus(challenge.status) && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
   const challengeTextForMode = `${challenge?.title ?? ""} ${challenge?.rules ?? ""} ${challenge?.evidenceType ?? ""} ${challenge?.proofSource ?? ""}`.toLowerCase();
   const sameCameraHinted = /same[_ -]?camera|same phone|one phone|single phone|shared video|same video|together/.test(challengeTextForMode);
   const sameCameraEligible = Boolean(challenge && canCapture && creator && opponent && /video|camera|record|fitness|push|plank|squat/.test(challengeTextForMode));
@@ -623,7 +636,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
             >
-              {(challenge.status === "live" || challenge.status === "judging") && (
+              {(isEvidenceWindowStatus(challenge.status) || isAiReviewStatus(challenge.status)) && (
                 <motion.div
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ background: status.color }}
@@ -929,7 +942,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
         {/* ── AI Judge Section ── */}
         <AnimatePresence>
-          {challenge.status === "judging" && isCreator && challenge.judgments.length === 0 && (
+          {isAiReviewStatus(challenge.status) && isCreator && challenge.judgments.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1028,7 +1041,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         </AnimatePresence>
 
         {/* ── Non-creator waiting for judge ── */}
-        {challenge.status === "judging" && !isCreator && (
+        {isAiReviewStatus(challenge.status) && !isCreator && (
           <motion.div
             className="rounded-2xl p-5 text-center"
             style={{ background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.15)" }}

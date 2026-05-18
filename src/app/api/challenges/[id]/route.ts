@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 /**
  * GET /api/challenges/[id] - Get a single challenge with full details.
@@ -74,11 +75,11 @@ export async function DELETE(
     return Response.json({ error: "Only the creator can delete a market" }, { status: 403 });
   }
 
-  const deletable = ["draft", "open", "cancelled"];
-  if (!deletable.includes(challenge.status)) {
+  const deletable = ["draft", "cancelled"];
+  if (!deletable.includes(challenge.status) && !isOpenForOpponentStatus(challenge.status)) {
     return Response.json(
       {
-        error: `Can't delete a market in status "${challenge.status}". Only draft / open / cancelled markets can be deleted. Cancel it first if it's in an active state.`,
+        error: `Can't delete a market in status "${challenge.status}". Only draft / waiting-for-opponent / cancelled markets can be deleted.`,
       },
       { status: 409 },
     );

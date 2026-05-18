@@ -4,6 +4,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import { AI_REVIEW_STATUSES, EVIDENCE_WINDOW_STATUSES } from "@/lib/challenge-state-machine";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -12,8 +13,8 @@ export const maxDuration = 300;
  * GET/POST /api/cron/challenge-judgment
  *
  * Secured with Authorization: Bearer <CRON_SECRET>.
- * 1) Moves `live` challenges past `deadline` into `judging`.
- * 2) Runs AI judgment for every `judging` challenge that has no completed judgment yet.
+ * 1) Moves evidence-window challenges past `deadline` into `ai_reviewing`.
+ * 2) Runs AI judgment for every AI-review challenge that has no completed judgment yet.
  *
  * Inference cost is charged to the challenge creator (same as manual POST /judge).
  * Configure periodic hits (e.g. Vercel Cron) and set CRON_SECRET in the environment.
@@ -31,13 +32,13 @@ async function runCron() {
   // judgment is failed within ~minutes, not "forever".
   const sweepResult = await sweepStuckJudgeJobs();
 
-  // (2) Live → judging for any deadline that has passed.
+  // (2) Evidence window -> AI reviewing for any deadline that has passed.
   const transitioned = await prisma.challenge.updateMany({
     where: {
-      status: { in: [ChallengeStatus.live] },
+      status: { in: [...EVIDENCE_WINDOW_STATUSES] },
       deadline: { not: null, lte: now },
     },
-    data: { status: ChallengeStatus.judging },
+    data: { status: ChallengeStatus.ai_reviewing },
   });
 
   if (transitioned.count > 0) {
@@ -47,13 +48,13 @@ async function runCron() {
     });
   }
 
-  // (3) Judge every judging challenge that has no completed judgment.
+  // (3) Judge every AI-review challenge that has no completed judgment.
   // Cap take to 20 so one long-running judgment can't exhaust maxDuration
   // and strand the rest in limbo — whatever we don't get to this tick
   // will be picked up next tick.
   const pending = await prisma.challenge.findMany({
     where: {
-      status: ChallengeStatus.judging,
+      status: { in: [...AI_REVIEW_STATUSES] },
       judgments: { none: { status: "completed" } },
     },
     select: { id: true, title: true },
