@@ -162,7 +162,7 @@ try {
     stake: 1,
     stakeToken: "credits",
     deadline: "2 hours",
-    rules: `Objective text answer challenge. EXPECTED_ANSWER: ${expectedAnswer}. If exactly one participant submits the expected answer, that participant wins. If both or neither match, no automatic winner.`,
+    rules: `Objective text answer challenge.\nEXPECTED_ANSWER: ${expectedAnswer}\nIf exactly one participant submits the expected answer, that participant wins. If both or neither match, no automatic winner.`,
     evidenceType: "text",
     settlementMode: "ai_review_then_creator_confirm",
     aiReview: true,

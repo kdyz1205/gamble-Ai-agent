@@ -469,7 +469,7 @@ function normalizeObjectiveAnswer(value: string | null | undefined): string | nu
 
 function extractExpectedAnswer(params: Pick<JudgeChallengeParams, "title" | "rules" | "description">): string | null {
   const text = [params.rules, params.description, params.title].filter(Boolean).join("\n");
-  const match = text.match(/\b(?:expected[_ -]?answer|correct[_ -]?answer)\s*[:=]\s*([^\n\r;]+)/i);
+  const match = text.match(/\b(?:expected[_ -]?answer|correct[_ -]?answer)\s*[:=]\s*([^\n\r;.]+)/i);
   return match ? match[1].trim() : null;
 }
 
