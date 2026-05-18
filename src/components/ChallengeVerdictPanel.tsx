@@ -65,6 +65,47 @@ function TypewriterReasoning({ text }: { text: string }) {
   );
 }
 
+function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: number | null; winnerId?: string | null } | null) {
+  let metrics: Record<string, unknown> = {};
+  if (row?.metricsJson) {
+    try {
+      const parsed = JSON.parse(row.metricsJson);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) metrics = parsed as Record<string, unknown>;
+    } catch {
+      metrics = {};
+    }
+  }
+  const evidenceQuality =
+    typeof metrics.evidenceQuality === "string" ? metrics.evidenceQuality : row?.winnerId && (row.confidence ?? 0) >= 0.85 ? "good" : "unclear";
+  const recommendation =
+    typeof metrics.recommendation === "string"
+      ? metrics.recommendation
+      : typeof metrics.settlementRecommendation === "string"
+        ? metrics.settlementRecommendation
+        : row?.winnerId && (row.confidence ?? 0) >= 0.85 ? "settle_winner" : "needs_review";
+  const blockingIssues = Array.isArray(metrics.blockingIssues)
+    ? metrics.blockingIssues.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const inferredAutoSettleEligible =
+    recommendation === "settle_winner" &&
+    evidenceQuality === "good" &&
+    (row?.confidence ?? 0) >= 0.85 &&
+    Boolean(row?.winnerId) &&
+    blockingIssues.length === 0;
+  return {
+    evidenceQuality,
+    recommendation,
+    blockingIssues,
+    autoSettleEligible:
+      typeof metrics.autoSettleEligible === "boolean" ? metrics.autoSettleEligible : inferredAutoSettleEligible,
+    autoSettleBlockReason: typeof metrics.autoSettleBlockReason === "string" ? metrics.autoSettleBlockReason : null,
+  };
+}
+
+function displayEnum(value: string | null | undefined) {
+  return value ? value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : "Unknown";
+}
+
 export default function ChallengeVerdictPanel({
   challengeId,
   userId,
@@ -351,6 +392,7 @@ export default function ChallengeVerdictPanel({
   const contractBullets = acceptanceContract(challenge);
   const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
+  const verdictMetrics = parseJudgmentMetrics(verdictRow);
 
   return (
     <motion.div
@@ -846,6 +888,40 @@ export default function ChallengeVerdictPanel({
                 )}
               </div>
 
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.evidenceQuality === "good" ? "#047857" : "#9A3412" }}>
+                    {displayEnum(verdictMetrics.evidenceQuality)}
+                  </p>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Recommendation</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.recommendation === "settle_winner" ? "#047857" : "#9A3412" }}>
+                    {displayEnum(verdictMetrics.recommendation)}
+                  </p>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Settlement gate</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.autoSettleEligible ? "#047857" : "#9A3412" }}>
+                    {verdictMetrics.autoSettleEligible ? "Eligible" : "Needs Review"}
+                  </p>
+                </div>
+              </div>
+
+              {verdictMetrics.blockingIssues.length > 0 && (
+                <div className="p-4" style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "20px" }}>
+                  <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9A3412" }}>Blocking issues</p>
+                  <ul className="space-y-1.5">
+                    {verdictMetrics.blockingIssues.map((issue) => (
+                      <li key={issue} className="text-xs font-semibold" style={{ color: "#7C2D12", lineHeight: 1.5 }}>
+                        - {issue}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
                 <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>AI Reasoning</p>
@@ -922,6 +998,17 @@ export default function ChallengeVerdictPanel({
                   </div>
                 </div>
               )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.evidenceQuality)}</p>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Recommendation</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.recommendation)}</p>
+                </div>
+              </div>
 
               <motion.button
                 onClick={() => {

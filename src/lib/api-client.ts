@@ -313,8 +313,10 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   winnerId: string | null;
   confidence: number;
   reasoning: string;
-  evidenceQuality: "good" | "unclear" | "invalid";
-  settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+  evidenceQuality: "good" | "unclear" | "insufficient" | "invalid";
+  recommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+  settlementRecommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+  blockingIssues: string[];
   source?: string;
   videoMetrics?: unknown;
   verdict: {
@@ -322,8 +324,10 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
     winnerId: string | null;
     confidence: number;
     reasoning: string;
-    evidenceQuality: "good" | "unclear" | "invalid";
-    settlementRecommendation: "settle_winner" | "refund" | "manual_review";
+    evidenceQuality: "good" | "unclear" | "insufficient" | "invalid";
+    recommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+    settlementRecommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+    blockingIssues: string[];
     source?: string;
     videoMetrics?: unknown;
   };

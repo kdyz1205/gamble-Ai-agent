@@ -109,8 +109,11 @@ export interface JudgmentResult {
   winnerId: string | null;
   reasoning: string;
   confidence: number;
-  evidenceQuality?: "good" | "unclear" | "invalid";
-  settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
+  evidenceQuality?: "good" | "unclear" | "insufficient" | "invalid";
+  recommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+  /** @deprecated use recommendation. Kept so older callers/tests do not break immediately. */
+  settlementRecommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner" | "refund" | "manual_review";
+  blockingIssues?: string[];
   source?: "deterministic" | "vision_llm" | "llm" | "fallback";
   videoMetrics?: VideoJudgmentMetrics;
 }
@@ -523,6 +526,15 @@ function repCountOrNull(value: unknown): number | null {
     : null;
 }
 
+function coerceRecommendation(value: unknown): JudgmentResult["recommendation"] | undefined {
+  if (value === "settle_winner" || value === "needs_review" || value === "invalid_evidence" || value === "tie_or_no_winner") {
+    return value;
+  }
+  if (value === "manual_review") return "needs_review";
+  if (value === "refund") return "tie_or_no_winner";
+  return undefined;
+}
+
 function coerceParticipantVideoMetrics(value: unknown): VideoJudgmentParticipantMetrics {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -594,6 +606,7 @@ function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentR
       winnerId,
       confidence: 0.99,
       evidenceQuality: "good",
+      recommendation: "settle_winner",
       settlementRecommendation: "settle_winner",
       source: "deterministic",
       reasoning:
@@ -608,7 +621,9 @@ function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentR
       winnerId: null,
       confidence: 0.72,
       evidenceQuality: "unclear",
-      settlementRecommendation: "manual_review",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: ["Both participants matched the objective answer; timing or an additional tie-breaker is needed."],
       source: "deterministic",
       reasoning:
         `Both participants submitted the expected answer "${expectedRaw}". ` +
@@ -620,7 +635,9 @@ function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentR
     winnerId: null,
     confidence: 0.4,
     evidenceQuality: "invalid",
-    settlementRecommendation: "refund",
+    recommendation: "invalid_evidence",
+    settlementRecommendation: "invalid_evidence",
+    blockingIssues: ["Neither participant submitted the expected answer."],
     source: "deterministic",
     reasoning:
       `Neither participant submitted the expected answer "${expectedRaw}". ` +
@@ -672,17 +689,49 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
 
   // Forfeit / void cases — no LLM needed.
   if (!evidenceA && !evidenceB) {
-    return { winnerId: null, reasoning: "Neither participant submitted evidence. Challenge voided — credits refunded.", confidence: 0.95 };
+    return {
+      winnerId: null,
+      reasoning: "Neither participant submitted evidence. Challenge cannot be judged.",
+      confidence: 0.95,
+      evidenceQuality: "invalid",
+      recommendation: "invalid_evidence",
+      settlementRecommendation: "invalid_evidence",
+      blockingIssues: ["Neither participant submitted evidence."],
+    };
   }
   if (evidenceA && !evidenceB && participantBId) {
-    return { winnerId: participantAId, reasoning: `Only participant A submitted ${evidenceA.type} evidence. Winner by default.`, confidence: 0.85 };
+    return {
+      winnerId: participantAId,
+      reasoning: `Only participant A submitted ${evidenceA.type} evidence. Participant B did not submit evidence.`,
+      confidence: 0.85,
+      evidenceQuality: "unclear",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: ["Participant B did not submit evidence."],
+    };
   }
   if (!evidenceA && evidenceB && participantBId) {
-    return { winnerId: participantBId, reasoning: `Only participant B submitted ${evidenceB.type} evidence. Winner by default.`, confidence: 0.85 };
+    return {
+      winnerId: participantBId,
+      reasoning: `Only participant B submitted ${evidenceB.type} evidence. Participant A did not submit evidence.`,
+      confidence: 0.85,
+      evidenceQuality: "unclear",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: ["Participant A did not submit evidence."],
+    };
   }
   // Solo / no opponent — accept the single submission.
   if (!participantBId && evidenceA) {
-    return { winnerId: participantAId, reasoning: "No opponent — solo submission accepted.", confidence: 0.85 };
+    return {
+      winnerId: participantAId,
+      reasoning: "No opponent accepted this challenge. Solo submission needs manual review before any settlement.",
+      confidence: 0.85,
+      evidenceQuality: "unclear",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: ["No opponent accepted this challenge."],
+    };
   }
 
   // ── System: strict, rubric-based, honest about uncertainty ──
@@ -716,7 +765,7 @@ VIDEO FRAMES (when images are attached to this message):
 - When sampled frames make exact totals hard, still compare visible cadence: repeated top/down/top cycles across many timestamps strongly indicate more completed repetitions than a clip that stays mostly static or changes position only once or twice.
 - If the frames are sampled rather than every frame, only give a high-confidence winner when the count or result is visually obvious from the full video evidence, frame labels, metadata, and descriptions. Otherwise return winner null or confidence below 0.85.
 - Anti-cheat/liveness checks are required for video evidence: verify the liveness phrase if one is provided in metadata/rules, full body visibility, continuous attempt, required duration coverage, and whether the clip looks edited, looped, static, too dark, blurry, or cropped.
-- Never recommend auto-settlement for a video if either participant is missing liveness proof, full body visibility, continuous attempt, or required duration coverage; use settlementRecommendation="manual_review" or "refund" and explain the reasonForManualReview.
+- Never recommend auto-settlement for a video if either participant is missing liveness proof, full body visibility, continuous attempt, or required duration coverage; use recommendation="needs_review" or "invalid_evidence" and list the exact blockingIssues.
 ${sharedSameCamera ? `
 SHARED SAME-CAMERA MODE:
 - Participant A and Participant B are in the same video, not two independent clips.
@@ -733,14 +782,21 @@ CONFIDENCE SCALE (be calibrated — stakes are real):
 - Below 0.50: Do not return a winner; return null.
 (The system auto-flags confidence < 0.85 for manual review and does NOT auto-settle those.)
 
+Settlement recommendation rule:
+- Use "settle_winner" only when confidence >= 0.85, evidenceQuality is "good", winner is not null, and blockingIssues is empty.
+- Use "needs_review" when a winner may exist but any material uncertainty remains.
+- Use "invalid_evidence" when the evidence cannot prove the required action/outcome.
+- Use "tie_or_no_winner" when no winner can be separated under the rules.
+
 Return ONLY a valid JSON object, nothing before or after it. Shape:
 {
   "analysis": "<2-4 sentence step-by-step examination of both sides' evidence>",
   "winner": "A" | "B" | null,
   "reasoning": "<one short paragraph explaining the call in plain language for the loser to understand>",
   "confidence": 0.0-1.0,
-  "evidenceQuality": "good" | "unclear" | "invalid",
-  "settlementRecommendation": "settle_winner" | "refund" | "manual_review",
+  "evidenceQuality": "good" | "unclear" | "insufficient" | "invalid",
+  "recommendation": "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner",
+  "blockingIssues": string[],
   "videoMetrics": {
     "participantA": {
       "validRepCount": number | null,
@@ -795,7 +851,9 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
       reasoning: "Shared same-camera evidence requires visual inspection of both people in the same media, but no frames could be extracted or attached. Manual review required; no winner should be inferred from text alone.",
       confidence: 0.4,
       evidenceQuality: "unclear",
-      settlementRecommendation: "manual_review",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: ["Shared same-camera media has no extractable frames."],
       source: "fallback",
     };
   }
@@ -825,8 +883,9 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     reasoning: string;
     confidence: number;
     analysis?: string;
-    evidenceQuality?: "good" | "unclear" | "invalid";
-    settlementRecommendation?: "settle_winner" | "refund" | "manual_review";
+    evidenceQuality?: "good" | "unclear" | "insufficient" | "invalid";
+    recommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
+    blockingIssues?: string[];
     videoMetrics?: VideoJudgmentMetrics;
   } | null> => {
     try {
@@ -864,7 +923,9 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         confidence?: unknown;
         analysis?: unknown;
         evidenceQuality?: unknown;
+        recommendation?: unknown;
         settlementRecommendation?: unknown;
+        blockingIssues?: unknown;
         videoMetrics?: unknown;
       };
       if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) return null;
@@ -874,11 +935,12 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         reasoning: parsed.reasoning,
         confidence: parsed.confidence,
         analysis: typeof parsed.analysis === "string" ? parsed.analysis : undefined,
-        evidenceQuality: ["good", "unclear", "invalid"].includes(parsed.evidenceQuality as string)
-          ? parsed.evidenceQuality as "good" | "unclear" | "invalid"
+        evidenceQuality: ["good", "unclear", "insufficient", "invalid"].includes(parsed.evidenceQuality as string)
+          ? parsed.evidenceQuality as "good" | "unclear" | "insufficient" | "invalid"
           : undefined,
-        settlementRecommendation: ["settle_winner", "refund", "manual_review"].includes(parsed.settlementRecommendation as string)
-          ? parsed.settlementRecommendation as "settle_winner" | "refund" | "manual_review"
+        recommendation: coerceRecommendation(parsed.recommendation ?? parsed.settlementRecommendation),
+        blockingIssues: Array.isArray(parsed.blockingIssues)
+          ? parsed.blockingIssues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
           : undefined,
         videoMetrics: coerceVideoMetrics(parsed.videoMetrics, allVisuals.length, rules || title),
       };
@@ -920,13 +982,21 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       reasoning: fullReasoning,
       confidence: parsedResult.confidence,
       evidenceQuality: parsedResult.evidenceQuality ?? (winnerId && parsedResult.confidence >= 0.85 ? "good" : "unclear"),
-      settlementRecommendation:
-        parsedResult.settlementRecommendation ??
+      recommendation:
+        parsedResult.recommendation ??
         (winnerId && parsedResult.confidence >= 0.85
           ? "settle_winner"
           : winnerId
-            ? "manual_review"
-            : "refund"),
+            ? "needs_review"
+            : "tie_or_no_winner"),
+      settlementRecommendation:
+        parsedResult.recommendation ??
+        (winnerId && parsedResult.confidence >= 0.85
+          ? "settle_winner"
+          : winnerId
+            ? "needs_review"
+            : "tie_or_no_winner"),
+      blockingIssues: parsedResult.blockingIssues,
       source: allVisuals.length > 0 ? "vision_llm" : "llm",
       videoMetrics: parsedResult.videoMetrics,
     };
@@ -1069,7 +1139,9 @@ function judgeChallengeFallback(
     // — guarantees this cannot settle credits automatically.
     confidence: 0.4,
     evidenceQuality: "unclear",
-    settlementRecommendation: "manual_review",
+    recommendation: "needs_review",
+    settlementRecommendation: "needs_review",
+    blockingIssues: ["AI judge returned malformed JSON or provider call failed."],
     source: "fallback",
     reasoning:
       `AI was unable to evaluate "${challengeTitle}" (primary and escalated model calls both failed or returned malformed JSON). ` +

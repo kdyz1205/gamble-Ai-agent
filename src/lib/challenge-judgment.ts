@@ -13,6 +13,9 @@ import { isAiReviewStatus } from "./challenge-state-machine";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
+  blockingIssuesForJudgment,
+  evidenceQualityForJudgment,
+  settlementRecommendationForJudgment,
   statusForJudgmentResult,
 } from "./judgment-policy";
 
@@ -236,6 +239,9 @@ export async function executeChallengeJudgment(
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
   const autoSettlePolicy = evaluateAutoSettleEligibility(result, { requiresVision });
   const verdictStatus = statusForJudgmentResult(result, { requiresVision });
+  const evidenceQuality = evidenceQualityForJudgment(result);
+  const recommendation = settlementRecommendationForJudgment(result);
+  const blockingIssues = blockingIssuesForJudgment(result, { requiresVision });
 
   const judgment = await prisma.judgment.create({
     data: {
@@ -277,8 +283,10 @@ export async function executeChallengeJudgment(
         reviewRequired: nextStatus !== ChallengeStatus.dispute_window_open,
         newStatus: nextStatus,
         source: result.source,
-        evidenceQuality: result.evidenceQuality,
-        settlementRecommendation: result.settlementRecommendation,
+        evidenceQuality,
+        recommendation,
+        settlementRecommendation: recommendation,
+        blockingIssues,
         autoSettleBlockReason: autoSettlePolicy.reason,
         reasoning: result.reasoning?.slice(0, 500),
       },
@@ -328,8 +336,10 @@ export async function executeChallengeJudgment(
         reason: autoSettlePolicy.reason ?? "auto_settle_policy_blocked",
         confidence: result.confidence,
         source: result.source,
-        evidenceQuality: result.evidenceQuality,
-        settlementRecommendation: result.settlementRecommendation,
+        evidenceQuality,
+        recommendation,
+        settlementRecommendation: recommendation,
+        blockingIssues,
         judgmentId: judgment.id,
       },
     });
@@ -473,8 +483,10 @@ export async function executeChallengeJudgment(
       confidence: result.confidence,
       settlementOk: settlementResult.success,
       source: result.source,
-      evidenceQuality: result.evidenceQuality,
-      settlementRecommendation: result.settlementRecommendation,
+      evidenceQuality,
+      recommendation,
+      settlementRecommendation: recommendation,
+      blockingIssues,
       autoSettleEligible: autoSettlePolicy.eligible,
       reasoning: result.reasoning?.slice(0, 500),
     },

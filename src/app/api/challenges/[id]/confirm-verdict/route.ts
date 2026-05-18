@@ -11,6 +11,24 @@ import {
 
 export const runtime = "nodejs";
 
+function readMetricsJson(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
 /**
  * POST /api/challenges/[id]/confirm-verdict
  *
@@ -55,6 +73,51 @@ export async function POST(
     const judgment = challenge.judgments[0];
     if (!judgment) {
       return Response.json({ error: "No completed AI recommendation found" }, { status: 400 });
+    }
+
+    const metrics = readMetricsJson(judgment.metricsJson);
+    const evidenceQuality =
+      typeof metrics.evidenceQuality === "string"
+        ? metrics.evidenceQuality
+        : judgment.winnerId && (judgment.confidence ?? 0) >= 0.85 ? "good" : "unclear";
+    const recommendation =
+      typeof metrics.recommendation === "string"
+        ? metrics.recommendation
+        : typeof metrics.settlementRecommendation === "string"
+          ? metrics.settlementRecommendation
+          : judgment.winnerId && (judgment.confidence ?? 0) >= 0.85 ? "settle_winner" : "needs_review";
+    const blockingIssues = stringArray(metrics.blockingIssues);
+    const confidence = judgment.confidence ?? 0;
+    const persistedEligible = metrics.autoSettleEligible !== false;
+    const settlementAllowed =
+      recommendation === "settle_winner" &&
+      confidence >= 0.85 &&
+      evidenceQuality === "good" &&
+      Boolean(judgment.winnerId) &&
+      blockingIssues.length === 0 &&
+      persistedEligible;
+
+    if (!settlementAllowed) {
+      await prisma.challenge.update({
+        where: { id },
+        data: { status: ChallengeStatus.manual_review_required },
+      });
+      return Response.json(
+        {
+          error: "AI recommendation is not eligible for settlement.",
+          verdictGuardrail: {
+            recommendation,
+            confidence,
+            evidenceQuality,
+            winnerId: judgment.winnerId,
+            blockingIssues,
+            autoSettleEligible: persistedEligible,
+          },
+          challenge: { id, status: ChallengeStatus.manual_review_required },
+          judgment,
+        },
+        { status: 400 },
+      );
     }
 
     assertChallengeTransition(status, ChallengeStatus.finalized);

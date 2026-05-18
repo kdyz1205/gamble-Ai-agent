@@ -1,6 +1,13 @@
 import { ChallengeStatus } from "./enums";
 import type { JudgmentResult, VideoJudgmentParticipantMetrics } from "./ai-engine";
 
+export type EvidenceQuality = "good" | "unclear" | "insufficient" | "invalid";
+export type VerdictRecommendation =
+  | "settle_winner"
+  | "needs_review"
+  | "invalid_evidence"
+  | "tie_or_no_winner";
+
 export type VerdictStatus =
   | typeof ChallengeStatus.ai_verdict_ready
   | typeof ChallengeStatus.ai_inconclusive
@@ -13,62 +20,101 @@ export interface JudgmentPolicyOptions {
 export interface AutoSettlePolicyResult {
   eligible: boolean;
   reason: string | null;
+  blockingIssues: string[];
 }
 
-function evidenceQuality(result: JudgmentResult): "good" | "unclear" | "invalid" {
+function evidenceQuality(result: JudgmentResult): EvidenceQuality {
   if (result.evidenceQuality) return result.evidenceQuality;
   if (result.winnerId && result.confidence >= 0.85) return "good";
   if (result.confidence >= 0.6) return "unclear";
   return "invalid";
 }
 
-function settlementRecommendation(result: JudgmentResult): "settle_winner" | "refund" | "manual_review" {
-  if (result.settlementRecommendation) return result.settlementRecommendation;
+function recommendation(result: JudgmentResult): VerdictRecommendation {
+  if (result.recommendation) return result.recommendation;
+  if (result.settlementRecommendation === "settle_winner") return "settle_winner";
+  if (result.settlementRecommendation === "manual_review") return "needs_review";
+  if (result.settlementRecommendation === "refund") {
+    return evidenceQuality(result) === "invalid" ? "invalid_evidence" : "tie_or_no_winner";
+  }
   if (result.winnerId && result.confidence >= 0.85) return "settle_winner";
-  if (!result.winnerId && result.confidence < 0.6) return "refund";
-  return "manual_review";
+  if (!result.winnerId) return "tie_or_no_winner";
+  return "needs_review";
 }
 
-function participantAutoSettleBlock(
+function issueSlug(issue: string) {
+  return issue
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+}
+
+function uniqueIssues(issues: string[]) {
+  return [...new Set(issues.filter((issue) => issue.trim()).map((issue) => issue.trim()))];
+}
+
+function participantBlockingIssues(
   label: string,
   metrics: VideoJudgmentParticipantMetrics | undefined,
-): string | null {
-  if (!metrics) return `${label}_metrics_missing`;
-  if (metrics.fullDurationCovered !== true) return `${label}_duration_not_covered`;
-  if (metrics.fullBodyVisible !== true) return `${label}_full_body_not_visible`;
-  if (metrics.livenessPhraseVisible !== true) return `${label}_liveness_phrase_missing`;
-  if (metrics.continuousAttemptLikely !== true) return `${label}_continuous_attempt_unclear`;
-  if (metrics.videoTooShort === true) return `${label}_video_too_short`;
-  if (metrics.suspectedEditingOrLoop === true) return `${label}_suspected_editing_or_loop`;
-  if (metrics.reasonForManualReview) return `${label}_manual_review_reason`;
-  if (metrics.antiCheatFlags.length > 0) return `${label}_anti_cheat_flags`;
-  return null;
+): string[] {
+  const issues: string[] = [];
+  if (!metrics) return [`${label} metrics are missing.`];
+  if (metrics.fullDurationCovered !== true) issues.push(`${label} video does not cover the required duration.`);
+  if (metrics.fullBodyVisible !== true) issues.push(`${label} full body is not visible enough.`);
+  if (metrics.livenessPhraseVisible !== true) issues.push(`${label} liveness phrase is missing or not visible.`);
+  if (metrics.continuousAttemptLikely !== true) issues.push(`${label} continuous attempt is unclear.`);
+  if (metrics.videoTooShort === true) issues.push(`${label} video is too short.`);
+  if (metrics.suspectedEditingOrLoop === true) issues.push(`${label} video appears edited, static, or looped.`);
+  if (metrics.reasonForManualReview) issues.push(`${label}: ${metrics.reasonForManualReview}`);
+  if (metrics.unclearReason) issues.push(`${label}: ${metrics.unclearReason}`);
+  for (const flag of metrics.antiCheatFlags ?? []) {
+    issues.push(`${label} anti-cheat flag: ${flag}`);
+  }
+  return issues;
+}
+
+export function blockingIssuesForJudgment(
+  result: JudgmentResult,
+  options: JudgmentPolicyOptions = {},
+): string[] {
+  const quality = evidenceQuality(result);
+  const rec = recommendation(result);
+  const issues: string[] = [...(result.blockingIssues ?? [])];
+  const isVisionJudgment = options.requiresVision || result.source === "vision_llm" || Boolean(result.videoMetrics);
+
+  if (!result.winnerId) issues.push("Winner is missing or the result is tied.");
+  if (!Number.isFinite(result.confidence)) {
+    issues.push("Confidence score is missing or invalid.");
+  } else if (result.confidence < 0.85) {
+    issues.push(`Confidence ${Math.round(result.confidence * 100)}% is below the 85% settlement threshold.`);
+  }
+  if (quality !== "good") issues.push(`Evidence quality is ${quality}, not good.`);
+  if (rec !== "settle_winner") issues.push(`Recommendation is ${rec}, not settle_winner.`);
+
+  if (isVisionJudgment) {
+    if (result.source !== "vision_llm") issues.push("Vision-capable judge source was not used.");
+    if (!result.videoMetrics) {
+      issues.push("Structured video metrics are missing.");
+    } else {
+      issues.push(...participantBlockingIssues("Participant A", result.videoMetrics.participantA));
+      issues.push(...participantBlockingIssues("Participant B", result.videoMetrics.participantB));
+    }
+  }
+
+  return uniqueIssues(issues);
 }
 
 export function evaluateAutoSettleEligibility(
   result: JudgmentResult,
   options: JudgmentPolicyOptions = {},
 ): AutoSettlePolicyResult {
-  const quality = evidenceQuality(result);
-  const recommendation = settlementRecommendation(result);
-  const isVisionJudgment = options.requiresVision || result.source === "vision_llm" || Boolean(result.videoMetrics);
-
-  if (!result.winnerId) return { eligible: false, reason: "winner_missing" };
-  if (result.confidence < 0.85) return { eligible: false, reason: "confidence_below_auto_settle_threshold" };
-  if (quality !== "good") return { eligible: false, reason: "evidence_quality_not_good" };
-  if (recommendation !== "settle_winner") return { eligible: false, reason: "recommendation_not_settle_winner" };
-
-  if (!isVisionJudgment) return { eligible: true, reason: null };
-
-  if (result.source !== "vision_llm") return { eligible: false, reason: "vision_source_required" };
-  if (!result.videoMetrics) return { eligible: false, reason: "video_metrics_missing" };
-
-  const blockA = participantAutoSettleBlock("participantA", result.videoMetrics.participantA);
-  if (blockA) return { eligible: false, reason: blockA };
-  const blockB = participantAutoSettleBlock("participantB", result.videoMetrics.participantB);
-  if (blockB) return { eligible: false, reason: blockB };
-
-  return { eligible: true, reason: null };
+  const blockingIssues = blockingIssuesForJudgment(result, options);
+  return {
+    eligible: blockingIssues.length === 0,
+    reason: blockingIssues[0] ? issueSlug(blockingIssues[0]) : null,
+    blockingIssues,
+  };
 }
 
 export function statusForJudgmentResult(
@@ -76,16 +122,15 @@ export function statusForJudgmentResult(
   options: JudgmentPolicyOptions = {},
 ): VerdictStatus {
   const quality = evidenceQuality(result);
-  const recommendation = settlementRecommendation(result);
-  const isVisionJudgment = options.requiresVision || result.source === "vision_llm" || Boolean(result.videoMetrics);
+  const rec = recommendation(result);
 
-  if (!result.winnerId || result.confidence < 0.6 || quality === "invalid" || recommendation === "refund") {
+  if (!result.winnerId || result.confidence < 0.6 || quality === "invalid" || rec === "invalid_evidence" || rec === "tie_or_no_winner") {
     return ChallengeStatus.ai_inconclusive;
   }
-  if (result.confidence < 0.85 || recommendation === "manual_review") {
+  if (result.confidence < 0.85 || quality !== "good" || rec === "needs_review") {
     return ChallengeStatus.manual_review_required;
   }
-  if (isVisionJudgment && !evaluateAutoSettleEligibility(result, options).eligible) {
+  if (!evaluateAutoSettleEligibility(result, options).eligible) {
     return ChallengeStatus.manual_review_required;
   }
   return ChallengeStatus.ai_verdict_ready;
@@ -103,8 +148,10 @@ export function buildJudgmentMetricsJson(
     source: result.source ?? "llm",
     model: params.model,
     evidenceQuality: evidenceQuality(result),
-    settlementRecommendation: settlementRecommendation(result),
+    recommendation: recommendation(result),
+    settlementRecommendation: recommendation(result),
     confidence: result.confidence,
+    blockingIssues: params.autoSettlePolicy.blockingIssues,
     videoMetrics: result.videoMetrics ?? null,
     judgingMethod: result.videoMetrics?.judgingMethod ?? result.source ?? "llm",
     autoSettleEligible: params.autoSettlePolicy.eligible,
@@ -118,5 +165,9 @@ export function evidenceQualityForJudgment(result: JudgmentResult) {
 }
 
 export function settlementRecommendationForJudgment(result: JudgmentResult) {
-  return settlementRecommendation(result);
+  return recommendation(result);
+}
+
+export function recommendationForJudgment(result: JudgmentResult) {
+  return recommendation(result);
 }
