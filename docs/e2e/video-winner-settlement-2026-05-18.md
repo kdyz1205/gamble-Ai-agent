@@ -156,3 +156,98 @@ Refund rows: `0`
 - Loser ledger contains stake and loss rows.
 - No refund rows.
 - `winnerSettled=true`.
+
+---
+
+## Guardrail Re-Proof After Settlement Policy Hardening
+
+Date: 2026-05-18
+
+Code commit: `3c594ad80909880fc5128b1057b0791939281e7f`
+
+Production deployment:
+- Alias: `https://gamble-ai-agent.vercel.app`
+- Deployment URL: `https://gamble-ai-agent-7jw9rmog2-kdyz1205s-projects.vercel.app`
+- Vercel deployment ID: `dpl_ENq1PYVk1Crb3X3LkFVFieyg7sbP`
+
+Scope:
+- This re-proof verifies the stricter settlement guardrail added after production-equivalent robustness testing found a model inconsistency: a vision response selected a winner while structured rep metrics were tied at `0` and `0`.
+- Auto-settlement now requires `recommendation=settle_winner`, `confidence>=0.85`, `evidenceQuality=good`, a non-null winner, no blocking issues, vision metrics, and for rep-count challenges the winner's valid rep count must be strictly higher.
+- This still uses generated phone-style fixture videos, not arbitrary real human phone videos.
+
+### Local Verification
+
+Commands passed:
+
+```powershell
+npm run lint
+npx tsc --noEmit
+npm run build
+npx tsx -e "<policy smoke test>"
+```
+
+Policy smoke checks passed:
+- high confidence + good evidence + settle recommendation can settle
+- `confidence=0.62` blocks settlement
+- `evidenceQuality=unclear` blocks settlement
+- missing winner / tie is `ai_inconclusive`
+- required vision with non-vision source blocks settlement
+- rep-count mismatch / tied `0-0` blocks settlement with `manual_review_required`
+
+### Production Winner Settlement Re-Proof
+
+Command:
+
+```powershell
+node scripts\e2e-video-winner-settlement.mjs
+```
+
+Result:
+- Challenge ID: `cmpbmt8no000705jmyb3wavyo`
+- URL: `https://gamble-ai-agent.vercel.app/challenge/cmpbmt8no000705jmyb3wavyo`
+- Creator evidence ID: `cmpbmtjtp000004jssml8prqy`
+- Opponent evidence ID: `cmpbmtk05000204jsoz3nwwfu`
+- Judgment ID: `cmpbmu878000104l10tjipp27`
+- Judge source: `vision_llm`
+- Model: `OpenAI · gpt-4o`
+- Metrics: Participant A `15` valid reps, Participant B `13` valid reps
+- Confidence: `0.9`
+- Evidence quality: `good`
+- Recommendation: `settle_winner`
+- Final status: `settled`
+- winnerSettled: `true`
+- Refund rows: `0`
+
+Ledger proof:
+- Creator: stake `-1`, AI judge `-1`, win `+2`
+- Opponent: stake `-1`, loss `-1`
+- Creator balance: `50 -> 50`
+- Opponent balance: `50 -> 49`
+
+### Production Robustness Suite
+
+Command:
+
+```powershell
+node scripts\e2e-real-video-robustness.mjs
+```
+
+Result: `passed=true`, 10 cases.
+
+Positive cases that settled:
+- `clean_a_beats_b`
+- `no_visible_role_label`
+
+Negative cases that did not auto-settle:
+- `bad_angle`
+- `partial_body`
+- `too_dark_blurry`
+- `cropped_video`
+- `short_video`
+- `tie_video`
+- `non_pushup_video`
+- `static_loop`
+
+Important remaining limitation:
+- This proves the guardrail and robustness behavior against controlled generated phone-style fixtures.
+- It does not prove fully reliable judging for arbitrary real-world phone videos from uncontrolled humans, lighting, camera placement, clothing, occlusion, or adversarial behavior.
