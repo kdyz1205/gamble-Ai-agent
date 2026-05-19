@@ -129,8 +129,8 @@ function requireCheck(caseProof, name, passed, detail) {
 function phaseFor(repCount, durationSec, elapsedSec) {
   const cycle = durationSec / repCount;
   const within = (elapsedSec % cycle) / cycle;
-  if (within < 0.18 || within > 0.82) return "top";
-  if (within > 0.38 && within < 0.62) return "down";
+  if (within < 0.12 || within > 0.88) return "top";
+  if (within > 0.30 && within < 0.70) return "down";
   return "transition";
 }
 
@@ -147,20 +147,20 @@ function personSvg({ color, phase, variant }) {
 
   const isDown = phase === "down";
   const isTransition = phase === "transition";
-  const shoulderY = isDown ? 300 : isTransition ? 266 : 230;
-  const hipY = isDown ? 316 : isTransition ? 282 : 248;
-  const ankleY = isDown ? 336 : isTransition ? 302 : 268;
-  const elbowY = isDown ? 340 : isTransition ? 300 : 260;
-  const headY = isDown ? 278 : isTransition ? 242 : 206;
+  const shoulderY = isDown ? 348 : isTransition ? 286 : 218;
+  const hipY = isDown ? 354 : isTransition ? 300 : 244;
+  const ankleY = isDown ? 360 : isTransition ? 318 : 270;
+  const elbowY = isDown ? 370 : isTransition ? 318 : 288;
+  const headY = isDown ? 326 : isTransition ? 258 : 198;
   return `
     <line x1="120" y1="390" x2="840" y2="390" stroke="#64748b" stroke-width="8" stroke-linecap="round"/>
-    <circle cx="300" cy="${headY}" r="24" fill="${color}"/>
-    <line x1="340" y1="${shoulderY}" x2="540" y2="${hipY}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>
-    <line x1="540" y1="${hipY}" x2="720" y2="${ankleY}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>
-    <line x1="365" y1="${shoulderY + 10}" x2="360" y2="${elbowY}" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-    <line x1="360" y1="${elbowY}" x2="340" y2="390" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-    <line x1="450" y1="${shoulderY + 20}" x2="455" y2="${elbowY}" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-    <line x1="455" y1="${elbowY}" x2="440" y2="390" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="292" cy="${headY}" r="28" fill="${color}"/>
+    <line x1="340" y1="${shoulderY}" x2="540" y2="${hipY}" stroke="${color}" stroke-width="26" stroke-linecap="round"/>
+    <line x1="540" y1="${hipY}" x2="720" y2="${ankleY}" stroke="${color}" stroke-width="24" stroke-linecap="round"/>
+    <line x1="360" y1="${shoulderY + 8}" x2="330" y2="${elbowY}" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+    <line x1="330" y1="${elbowY}" x2="320" y2="390" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+    <line x1="450" y1="${shoulderY + 14}" x2="430" y2="${elbowY}" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+    <line x1="430" y1="${elbowY}" x2="420" y2="390" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
     <circle cx="724" cy="${ankleY}" r="15" fill="#0f172a"/>`;
 }
 
@@ -185,7 +185,7 @@ function frameSvg({ role, color, elapsedSec, durationSec, phase, livenessPhrase,
   </defs>
   <rect width="960" height="540" fill="${dark ? "#030712" : "#111827"}"/>
   <rect x="30" y="30" width="900" height="480" rx="28" fill="${dark ? "#111827" : "#f8fafc"}"/>
-  <text x="70" y="88" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${dark ? "#334155" : "#111827"}">Phone video proof</text>
+  <text x="70" y="88" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${dark ? "#334155" : "#111827"}">Push-up video proof</text>
   ${noVisibleRole ? "" : `<text x="70" y="130" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="${color}">${role}</text>`}
   <text x="70" y="174" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="${dark ? "#475569" : "#0f172a"}">Timer ${elapsedLabel} / 01:00</text>
   <text x="70" y="216" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="${dark ? "#475569" : "#334155"}">Challenge phrase: ${livenessPhrase}</text>

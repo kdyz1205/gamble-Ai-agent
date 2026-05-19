@@ -1,10 +1,11 @@
 /**
- * Pick frame count & download budget from measured duration (seconds).
- * Goal: short clips → fewer frames (fast); long → more coverage without exploding cost.
+ * Pick frame count and download budget from measured duration (seconds).
+ * Goal: short clips get fewer frames; long clips get enough coverage without
+ * exploding cost.
  *
  * extractionMode controls how frames are sampled:
- *  - "scene_change" (default): Use ffmpeg scene-detection for action-dense extraction.
- *  - "uniform": Legacy evenly-spaced extraction (fallback).
+ *  - "scene_change" (default): use ffmpeg scene detection for action-dense extraction.
+ *  - "uniform": legacy evenly spaced extraction (fallback).
  */
 
 export type ExtractionMode = "scene_change" | "uniform";
@@ -22,7 +23,7 @@ export function planVideoVisuals(durationSec: number | null): VideoVisualPlan {
     return {
       frameCount: 4,
       maxDownloadBytes: 40 * 1024 * 1024,
-      label: "duration unknown — using 4 scene-change frames, ≤40MB fetch cap",
+      label: "duration unknown - using 4 scene-change frames, <=40MB fetch cap",
       extractionMode: "scene_change",
     };
   }
@@ -30,15 +31,15 @@ export function planVideoVisuals(durationSec: number | null): VideoVisualPlan {
     return {
       frameCount: 6,
       maxDownloadBytes: 45 * 1024 * 1024,
-      label: `~${Math.round(durationSec)}s short clip — 6 scene-change frames, ≤45MB`,
+      label: `~${Math.round(durationSec)}s short clip - 6 scene-change frames, <=45MB`,
       extractionMode: "scene_change",
     };
   }
   if (durationSec <= 120) {
     return {
-      frameCount: 16,
+      frameCount: 24,
       maxDownloadBytes: 70 * 1024 * 1024,
-      label: `~${Math.round(durationSec)}s — 10 scene-change frames, ≤70MB`,
+      label: `~${Math.round(durationSec)}s - 24 action frames, <=70MB`,
       extractionMode: "scene_change",
     };
   }
@@ -46,7 +47,7 @@ export function planVideoVisuals(durationSec: number | null): VideoVisualPlan {
     return {
       frameCount: 14,
       maxDownloadBytes: 110 * 1024 * 1024,
-      label: `~${Math.round(durationSec / 60)}min — 14 scene-change frames, ≤110MB`,
+      label: `~${Math.round(durationSec / 60)}min - 14 scene-change frames, <=110MB`,
       extractionMode: "scene_change",
     };
   }
@@ -54,14 +55,14 @@ export function planVideoVisuals(durationSec: number | null): VideoVisualPlan {
     return {
       frameCount: 18,
       maxDownloadBytes: 160 * 1024 * 1024,
-      label: `~${Math.round(durationSec / 60)}min long — 18 scene-change frames, ≤160MB`,
+      label: `~${Math.round(durationSec / 60)}min long - 18 scene-change frames, <=160MB`,
       extractionMode: "scene_change",
     };
   }
   return {
     frameCount: 22,
     maxDownloadBytes: 200 * 1024 * 1024,
-    label: `>${Math.round(durationSec / 3600)}h very long — 22 scene-change frames (sparse), ≤200MB`,
+    label: `>${Math.round(durationSec / 3600)}h very long - 22 scene-change frames (sparse), <=200MB`,
     extractionMode: "scene_change",
   };
 }

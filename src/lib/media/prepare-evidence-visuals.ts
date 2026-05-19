@@ -24,6 +24,15 @@ export interface JudgeVisionImage {
   base64: string;
 }
 
+function pickEvenly<T>(items: T[], max: number): T[] {
+  if (items.length <= max) return items;
+  if (max <= 1) return [items[0]];
+  return Array.from({ length: max }, (_, i) => {
+    const idx = Math.round((i * (items.length - 1)) / (max - 1));
+    return items[idx];
+  });
+}
+
 async function bufferToVisionImage(buffer: Buffer, caption: string): Promise<JudgeVisionImage | null> {
   const jpeg = await sharp(buffer)
     .rotate()
@@ -41,11 +50,9 @@ async function buildFilmstripImage(
 ): Promise<JudgeVisionImage | null> {
   if (frames.length < 2) return null;
 
-  const picked = frames.length > 16
-    ? frames.filter((_, index) => index % Math.ceil(frames.length / 16) === 0).slice(0, 16)
-    : frames;
-  const tileW = 180;
-  const tileH = 128;
+  const picked = pickEvenly(frames, 16);
+  const tileW = 220;
+  const tileH = 140;
   const labelH = 26;
   const cols = Math.min(4, picked.length);
   const rows = Math.ceil(picked.length / cols);
@@ -357,9 +364,8 @@ export async function prepareParticipantVisualsFast(
     opts,
   );
   if (filmstrip) visuals.push(filmstrip);
-  const maxIndividualFrames = filmstrip ? 8 : 16;
-  const step = valid.length > maxIndividualFrames ? Math.ceil(valid.length / maxIndividualFrames) : 1;
-  for (const f of valid.filter((_, index) => index % step === 0).slice(0, maxIndividualFrames)) {
+  const maxIndividualFrames = filmstrip ? 12 : 20;
+  for (const f of pickEvenly(valid, maxIndividualFrames)) {
     visuals.push(f.image);
   }
   if (visuals.length === 0) {

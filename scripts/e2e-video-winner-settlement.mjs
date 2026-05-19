@@ -129,19 +129,19 @@ function requireCheck(proof, name, passed, detail) {
 function pushupPhaseAt({ repCount, durationSec, elapsedSec }) {
   const cycleSec = durationSec / repCount;
   const within = (elapsedSec % cycleSec) / cycleSec;
-  if (within < 0.18 || within > 0.82) return "top";
-  if (within > 0.38 && within < 0.62) return "down";
+  if (within < 0.12 || within > 0.88) return "top";
+  if (within > 0.30 && within < 0.70) return "down";
   return "transition";
 }
 
 function svgFrame({ role, color, frameNo, phase, livenessPhrase, elapsedSec, durationSec }) {
   const isDown = phase === "down";
   const isTransition = phase === "transition";
-  const shoulderY = isDown ? 300 : isTransition ? 266 : 230;
-  const hipY = isDown ? 316 : isTransition ? 282 : 248;
-  const ankleY = isDown ? 336 : isTransition ? 302 : 268;
-  const elbowY = isDown ? 340 : isTransition ? 300 : 260;
-  const headY = isDown ? 278 : isTransition ? 242 : 206;
+  const shoulderY = isDown ? 348 : isTransition ? 286 : 218;
+  const hipY = isDown ? 354 : isTransition ? 300 : 244;
+  const ankleY = isDown ? 360 : isTransition ? 318 : 270;
+  const elbowY = isDown ? 370 : isTransition ? 318 : 288;
+  const headY = isDown ? 326 : isTransition ? 258 : 198;
   const elapsedLabel = `00:${String(elapsedSec).padStart(2, "0")}`;
   return `
 <svg width="960" height="540" viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg">
@@ -155,13 +155,13 @@ function svgFrame({ role, color, frameNo, phase, livenessPhrase, elapsedSec, dur
   <rect x="70" y="270" width="280" height="10" rx="5" fill="#cbd5e1"/>
   <rect x="70" y="270" width="${Math.max(6, Math.round((elapsedSec / durationSec) * 280))}" height="10" rx="5" fill="${color}"/>
   <line x1="120" y1="390" x2="840" y2="390" stroke="#64748b" stroke-width="8" stroke-linecap="round"/>
-  <circle cx="300" cy="${headY}" r="24" fill="${color}"/>
-  <line x1="340" y1="${shoulderY}" x2="540" y2="${hipY}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>
-  <line x1="540" y1="${hipY}" x2="720" y2="${ankleY}" stroke="${color}" stroke-width="18" stroke-linecap="round"/>
-  <line x1="365" y1="${shoulderY + 10}" x2="360" y2="${elbowY}" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-  <line x1="360" y1="${elbowY}" x2="340" y2="390" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-  <line x1="450" y1="${shoulderY + 20}" x2="455" y2="${elbowY}" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
-  <line x1="455" y1="${elbowY}" x2="440" y2="390" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="292" cy="${headY}" r="28" fill="${color}"/>
+  <line x1="340" y1="${shoulderY}" x2="540" y2="${hipY}" stroke="${color}" stroke-width="26" stroke-linecap="round"/>
+  <line x1="540" y1="${hipY}" x2="720" y2="${ankleY}" stroke="${color}" stroke-width="24" stroke-linecap="round"/>
+  <line x1="360" y1="${shoulderY + 8}" x2="330" y2="${elbowY}" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+  <line x1="330" y1="${elbowY}" x2="320" y2="390" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+  <line x1="450" y1="${shoulderY + 14}" x2="430" y2="${elbowY}" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
+  <line x1="430" y1="${elbowY}" x2="420" y2="390" stroke="${color}" stroke-width="20" stroke-linecap="round"/>
   <circle cx="724" cy="${ankleY}" r="15" fill="#0f172a"/>
   <text x="650" y="456" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#111827">Frame ${frameNo}</text>
 </svg>`;
