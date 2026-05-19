@@ -207,7 +207,9 @@ async function googleCompleteVisionWithMetadata(
 ): Promise<LlmCallResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [{ text: userText }];
-  for (const img of images) {
+  for (let i = 0; i < images.length; i += 1) {
+    const img = images[i];
+    if (img.caption) parts.push({ text: `Image ${i + 1}: ${img.caption}` });
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
   const startedAt = Date.now();
@@ -263,15 +265,18 @@ async function anthropicCompleteVisionWithMetadata(
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [
     { type: "text", text: userText },
-    ...images.map(
-      (img): Anthropic.ImageBlockParam => ({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: img.mimeType,
-          data: img.base64,
+    ...images.flatMap(
+      (img, i): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> => [
+        ...(img.caption ? [{ type: "text" as const, text: `Image ${i + 1}: ${img.caption}` }] : []),
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: img.mimeType,
+            data: img.base64,
+          },
         },
-      }),
+      ],
     ),
   ];
   // Vision calls are heavier — give them a bit more headroom.
@@ -321,7 +326,11 @@ async function openAiCompatibleVisionCompleteWithMetadata(
   const userContent: Array<
     { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "auto" } }
   > = [{ type: "text", text: userText }];
-  for (const img of images) {
+  for (let i = 0; i < images.length; i += 1) {
+    const img = images[i];
+    if (img.caption) {
+      userContent.push({ type: "text", text: `Image ${i + 1}: ${img.caption}` });
+    }
     userContent.push({
       type: "image_url",
       image_url: { url: `data:${img.mimeType};base64,${img.base64}`, detail: "auto" },
