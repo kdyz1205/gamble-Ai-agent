@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { generateChallengeSpec } from "@/lib/challenge-spec";
-import { completeOraclePrompt } from "@/lib/llm-router";
+import { completeOraclePromptWithMetadata } from "@/lib/llm-router";
 import { configuredProviders, getProviderById, isPaidProvider, isProviderConfigured, resolveTierModel, resolveTierProvider } from "@/lib/llm-providers";
 import { rateLimit } from "@/lib/rate-limit";
 import { evaluateRuleSafety } from "@/lib/rule-safety";
@@ -9,15 +9,39 @@ import { evaluateRuleSafety } from "@/lib/rule-safety";
 const INVITE_MODES: ChallengeSpec["invite_mode"][] = ["nearby", "invite_link", "direct_friend", "same_device"];
 const PARTICIPATION_MODES: ChallengeSpec["participation_mode"][] = ["remote_async", "remote_live", "same_camera", "in_person"];
 
+class GenerationRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function pickProvider(requested?: string) {
   const requestedProviderFromBody = requested ? getProviderById(requested) : undefined;
-  if (requestedProviderFromBody && isProviderConfigured(requestedProviderFromBody)) return requestedProviderFromBody;
+  if (requested && !requestedProviderFromBody) {
+    throw new GenerationRequestError(`Unknown AI provider: ${requested}`, 400);
+  }
+  if (requestedProviderFromBody) {
+    if (!isProviderConfigured(requestedProviderFromBody)) {
+      throw new GenerationRequestError(
+        `Selected AI provider ${requestedProviderFromBody.shortLabel} is not configured for real generation.`,
+        503,
+      );
+    }
+    return requestedProviderFromBody;
+  }
   const requestedFromEnv = process.env.ORACLE_DEFAULT_PROVIDER;
   const requestedProvider = requestedFromEnv ? getProviderById(requestedFromEnv) : undefined;
   if (requestedProvider && configuredProviders().some((provider) => provider.id === requestedProvider.id)) {
     return requestedProvider;
   }
-  return resolveTierProvider(1) ?? configuredProviders()[0];
+  const provider = resolveTierProvider(1) ?? configuredProviders()[0];
+  if (!provider || !isProviderConfigured(provider)) {
+    throw new GenerationRequestError("No configured AI provider is available for real generation.", 503);
+  }
+  return provider;
 }
 
 function extractJson(raw: string) {
@@ -25,7 +49,11 @@ function extractJson(raw: string) {
   const text = fenced || raw;
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("LLM did not return JSON");
-  return JSON.parse(match[0]) as Partial<ChallengeSpec>;
+  const parsed = JSON.parse(match[0]) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("LLM JSON was not an object");
+  }
+  return parsed as Partial<ChallengeSpec>;
 }
 
 function asString(value: unknown, fallback: string) {
@@ -80,10 +108,51 @@ function normalizeSpec(ai: Partial<ChallengeSpec>, fallback: ChallengeSpec): Cha
   };
 }
 
-async function generateAiSpec(inputText: string, fallback: ChallengeSpec, prefs?: { providerId?: string; model?: string }) {
+function validateAiSpecShape(ai: Partial<ChallengeSpec>) {
+  const missing: string[] = [];
+  const stringFields: Array<keyof ChallengeSpec> = [
+    "challenge_title",
+    "challenge_type",
+    "objective",
+    "winning_condition",
+    "required_evidence",
+    "video_capture_instructions",
+    "start_condition",
+    "end_condition",
+    "timing_method",
+    "valid_repetition_definition",
+    "scoring_method",
+    "allowed_attempts",
+    "ai_judging_method",
+    "dispute_window",
+    "fallback_manual_review",
+    "payout_rule",
+    "safety_warning",
+  ];
+  for (const field of stringFields) {
+    if (typeof ai[field] !== "string" || !String(ai[field]).trim()) missing.push(String(field));
+  }
+  if (!Array.isArray(ai.participants) || ai.participants.length < 2) missing.push("participants");
+  if (!Array.isArray(ai.anti_cheat_rules) || ai.anti_cheat_rules.length === 0) missing.push("anti_cheat_rules");
+  if (!INVITE_MODES.includes(ai.invite_mode as ChallengeSpec["invite_mode"])) missing.push("invite_mode");
+  if (!PARTICIPATION_MODES.includes(ai.participation_mode as ChallengeSpec["participation_mode"])) missing.push("participation_mode");
+  if (ai.public_or_private !== "public" && ai.public_or_private !== "private") missing.push("public_or_private");
+  if (ai.currency_or_points !== "points" && ai.currency_or_points !== "credits") missing.push("currency_or_points");
+  if (typeof ai.stake_amount !== "number" || !Number.isFinite(ai.stake_amount)) missing.push("stake_amount");
+  if (ai.legal_compliance_flag !== "internal_points_only" && ai.legal_compliance_flag !== "requires_legal_review") {
+    missing.push("legal_compliance_flag");
+  }
+  return [...new Set(missing)];
+}
+
+async function generateAiSpec(
+  inputText: string,
+  fallback: ChallengeSpec,
+  prefs?: { providerId?: string; model?: string; language?: string; context?: Record<string, unknown> },
+) {
   const provider = pickProvider(prefs?.providerId);
-  if (!provider) throw new Error("No LLM provider key is configured");
   const model = prefs?.model?.trim() || resolveTierModel(provider, 1);
+  const startedAt = Date.now();
 
   const system = `You are GambleAI's challenge architect. Convert one natural-language user sentence into one complete executable peer-to-peer challenge wager.
 
@@ -120,19 +189,37 @@ Do not ask follow-up questions. Use 0 credits unless the user specifies money or
 
 For physical video challenges, especially push-ups, the spec must include: a 60-second timebox when the user implies speed/count, valid rep definition, full-body continuous video requirement, start/end conditions, anti-cheat/liveness phrase, AI vision judging method, confidence threshold 0.85, manual-review fallback, and payout rule.`;
 
-  const raw = await completeOraclePrompt({
+  console.log(
+    `[generate-spec] calling provider=${provider.id} model=${model} promptChars=${inputText.length} language=${prefs?.language ?? "auto"}`,
+  );
+  const completion = await completeOraclePromptWithMetadata({
     providerId: provider.id,
     model,
     system,
-    user: `User sentence: ${inputText}\n\nFallback shape to improve from:\n${JSON.stringify(fallback, null, 2)}`,
+    user: [
+      `User sentence: ${inputText}`,
+      `Language/context hint: ${prefs?.language ?? "auto"}`,
+      prefs?.context ? `UI context: ${JSON.stringify(prefs.context)}` : null,
+      "Generate the spec from the user's sentence. Do not copy a preset template. If the sentence is broad, invent one concrete, safe, publishable challenge.",
+    ].filter(Boolean).join("\n\n"),
     maxTokens: 1800,
     temperature: 0.2,
   });
+  const aiJson = extractJson(completion.text);
+  const shapeErrors = validateAiSpecShape(aiJson);
+  if (shapeErrors.length > 0) {
+    throw new Error(`AI response did not match challenge spec schema: ${shapeErrors.join(", ")}`);
+  }
+  const spec = normalizeSpec(aiJson, fallback);
+  console.log(
+    `[generate-spec] success provider=${provider.id} model=${model} responseModel=${completion.metadata.responseModel ?? "unknown"} durationMs=${Date.now() - startedAt}`,
+  );
   return {
-    spec: normalizeSpec(extractJson(raw), fallback),
+    spec,
     model: `${provider.shortLabel} - ${model}`,
     providerId: provider.id,
     externalApiCharged: isPaidProvider(provider),
+    providerCall: completion.metadata,
   };
 }
 
@@ -144,6 +231,10 @@ export async function POST(req: NextRequest) {
   const inputText = String(body.inputText || body.input || "").trim();
   const providerId = typeof body.providerId === "string" ? body.providerId.trim() : undefined;
   const model = typeof body.model === "string" ? body.model.trim() : undefined;
+  const language = typeof body.language === "string" ? body.language.trim() : undefined;
+  const context = body.context && typeof body.context === "object" && !Array.isArray(body.context)
+    ? body.context as Record<string, unknown>
+    : undefined;
 
   if (!inputText) {
     return Response.json({ error: "inputText is required" }, { status: 400 });
@@ -165,7 +256,7 @@ export async function POST(req: NextRequest) {
 
   const fallback = generateChallengeSpec(inputText);
   try {
-    const ai = await generateAiSpec(inputText, fallback, { providerId, model });
+    const ai = await generateAiSpec(inputText, fallback, { providerId, model, language, context });
     return Response.json({
       rawPrompt: inputText,
       spec: ai.spec,
@@ -173,17 +264,26 @@ export async function POST(req: NextRequest) {
       source: "llm",
       providerId: ai.providerId,
       externalApiCharged: ai.externalApiCharged,
+      providerCall: ai.providerCall,
     });
   } catch (err) {
-    console.error("ChallengeSpec LLM fallback:", err);
-    return Response.json({
-      rawPrompt: inputText,
-      spec: fallback,
-      model: "local-challenge-spec-v1",
-      source: "fallback",
-      providerId: "local_fallback",
-      externalApiCharged: false,
-      fallbackReason: err instanceof Error ? err.message : "LLM generation failed",
+    const status = err instanceof GenerationRequestError ? err.status : 502;
+    const message = err instanceof Error ? err.message : "AI generation failed";
+    console.error("[generate-spec] failed", {
+      providerId: providerId ?? null,
+      model: model ?? null,
+      status,
+      error: message,
     });
+    return Response.json(
+      {
+        error: `AI challenge generation failed: ${message}`,
+        rawPrompt: inputText,
+        source: "error",
+        providerId: providerId ?? null,
+        model: model ?? null,
+      },
+      { status },
+    );
   }
 }

@@ -57,6 +57,12 @@ function extractModelDirective(input: string): { prompt: string; prefs: OraclePr
   return { prompt: input.trim(), prefs: null };
 }
 
+function detectPromptLanguage(input: string) {
+  if (/[\u3400-\u9FFF]/.test(input)) return "zh";
+  if (/[A-Za-z]/.test(input)) return "en";
+  return "auto";
+}
+
 function rulesFromSpec(spec: api.ChallengeSpec): string {
   return [
     `Objective: ${spec.objective}`,
@@ -184,7 +190,17 @@ export default function Home() {
     setError(null);
     setAppState("generating");
     try {
-      const res = await api.generateChallengeSpec(directive.prompt, nextPrefs);
+      const res = await api.generateChallengeSpec(directive.prompt, {
+        ...nextPrefs,
+        language: detectPromptLanguage(directive.prompt),
+        context: {
+          surface: "homepage_composer",
+          flow: "draft_before_create",
+        },
+      });
+      if (res.source !== "llm") {
+        throw new Error("AI generation did not complete with the selected provider/model. No draft was created.");
+      }
       setSpec(res.spec);
       setSpecModel(res.model);
       setSpecSource(res.source || "");

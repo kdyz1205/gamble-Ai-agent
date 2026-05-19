@@ -242,13 +242,16 @@ export async function getChallenge(id: string): Promise<{ challenge: ChallengeDa
 export async function generateChallengeSpec(inputText: string, prefs?: {
   providerId?: string;
   model?: string | null;
+  language?: string;
+  context?: Record<string, unknown>;
 }): Promise<{
   rawPrompt: string;
   spec: ChallengeSpec;
   model: string;
-  source?: "llm" | "fallback";
+  source?: "llm" | "fallback" | "error";
   providerId?: string;
   externalApiCharged?: boolean;
+  providerCall?: unknown;
   fallbackReason?: string;
 }> {
   return apiFetch("/challenges/generate-spec", {
