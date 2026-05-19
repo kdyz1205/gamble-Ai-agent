@@ -193,7 +193,7 @@ export async function executeChallengeJudgment(
   const pdef = getProviderById(providerId);
   let judgeModel =
     options?.model?.trim() ||
-    (providerId === DEFAULT_LLM_PROVIDER_ID
+    (pdef?.id === "anthropic"
       ? tierMeta.model
       : (pdef?.defaultModel ?? tierMeta.model));
   if (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady) {

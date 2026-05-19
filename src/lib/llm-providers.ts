@@ -219,4 +219,4 @@ export function resolveTierModel(provider: LlmProviderDefinition | undefined, ti
   return provider.defaultModel;
 }
 
-export const DEFAULT_LLM_PROVIDER_ID = "local_ollama";
+export const DEFAULT_LLM_PROVIDER_ID = "openai";

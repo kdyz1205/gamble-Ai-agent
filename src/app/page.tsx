@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import CenteredComposer from "@/components/CenteredComposer";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
-import { LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
@@ -27,9 +27,9 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
 
 function initialOraclePrefs(): OraclePrefs {
   const prefs = readOracleLlmPrefs();
-  const provider = (prefs.providerId ? getProviderById(prefs.providerId) : undefined) ?? getProviderById("local_ollama");
+  const provider = (prefs.providerId ? getProviderById(prefs.providerId) : undefined) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
   return {
-    providerId: provider?.id ?? "local_ollama",
+    providerId: provider?.id ?? DEFAULT_LLM_PROVIDER_ID,
     model: prefs.model ?? provider?.defaultModel ?? null,
   };
 }
@@ -197,10 +197,10 @@ export default function Home() {
     }
   }, [oraclePrefs]);
 
-  const handleSelectProvider = useCallback((providerId: string) => {
+  const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
     const provider = getProviderById(providerId);
     if (!provider) return;
-    const nextPrefs = { providerId, model: provider.defaultModel };
+    const nextPrefs = { providerId, model: model?.trim() || provider.defaultModel };
     setOraclePrefs(nextPrefs);
     writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
   }, []);
@@ -453,7 +453,7 @@ export default function Home() {
               </p>
               {error && <ErrorBox message={error} />}
               <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} />
-              <ModelModeBar prefs={oraclePrefs} onSelectProvider={handleSelectProvider} />
+              <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
               <OpenChallengeStrip
                 userId={user?.id}
                 challenges={openChallenges}
@@ -660,38 +660,59 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
 
 function ModelModeBar({
   prefs,
-  onSelectProvider,
+  onChange,
 }: {
   prefs: OraclePrefs;
-  onSelectProvider: (providerId: string) => void;
+  onChange: (providerId: string, model?: string | null) => void;
 }) {
   const visible = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic"]
     .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
     .filter(Boolean) as typeof LLM_PROVIDERS;
+  const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
+  const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
+  const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
+  const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
 
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-      {visible.map((provider) => {
-        const selected = prefs.providerId === provider.id;
-        return (
-          <button
-            key={provider.id}
-            type="button"
-            onClick={() => onSelectProvider(provider.id)}
-            className="rounded-full border px-3 py-2 text-xs font-black transition"
-            style={{
-              borderColor: selected ? "#10B981" : "#DDE7F0",
-              background: selected ? "#D1FAE5" : "#FFFFFF",
-              color: selected ? "#047857" : "#526078",
-            }}
-          >
-            {provider.shortLabel}
-          </button>
-        );
-      })}
-      <span className="rounded-full border px-3 py-2 text-xs font-bold" style={{ borderColor: "#E2E8F0", color: "#64748B", background: "#F8FAFC" }}>
-        {prefs.model || getProviderById(prefs.providerId)?.defaultModel || "model"}
-      </span>
+    <div className="mt-4 flex justify-center">
+      <div
+        className="flex max-w-full items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm"
+        style={{ borderColor: "#DDE7F0" }}
+      >
+        <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>
+          Model
+        </span>
+        <select
+          value={selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID}
+          onChange={(event) => {
+            const provider = getProviderById(event.target.value);
+            onChange(event.target.value, provider?.defaultModel ?? null);
+          }}
+          className="max-w-[8.5rem] rounded-full border px-2.5 py-1.5 text-xs font-extrabold outline-none"
+          style={{ borderColor: "#DDE7F0", color: "#172033", background: "#F8FAFC" }}
+          aria-label="AI provider"
+        >
+          {visible.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.shortLabel}
+            </option>
+          ))}
+        </select>
+        <select
+          value={selectedModel}
+          onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value)}
+          className="max-w-[11rem] rounded-full border px-2.5 py-1.5 text-xs font-bold outline-none"
+          style={{ borderColor: "#DDE7F0", color: "#526078", background: "#FFFFFF" }}
+          aria-label="AI model"
+        >
+          {hasCustomSelectedModel && <option value={selectedModel}>{selectedModel}</option>}
+          {modelOptions.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

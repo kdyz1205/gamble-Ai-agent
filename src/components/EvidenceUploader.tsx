@@ -37,6 +37,17 @@ function evidenceBlobPathname(challengeId: string, filename: string): string {
   return `evidence/${challengeId}/${Date.now()}-${safe}`;
 }
 
+function supportedRecordingMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
+  return [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4;codecs=avc1",
+    "video/mp4",
+  ].find((type) => MediaRecorder.isTypeSupported(type));
+}
+
 export default function EvidenceUploader({ challengeId, evidenceType, onSubmitted }: Props) {
   const sameCameraEvidenceType = /same[_ -]?camera|one phone|single phone|shared video|same video/i.test(evidenceType);
   const [mode, setMode] = useState<Mode>(null);
@@ -52,8 +63,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
 
   // Webcam state
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -70,12 +83,38 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setError("");
   }, []);
 
+  useEffect(() => {
+    if (!recordedBlob) {
+      setRecordedPreviewUrl(p => { if (p) URL.revokeObjectURL(p); return null; });
+      return;
+    }
+    const nextUrl = URL.createObjectURL(recordedBlob);
+    setRecordedPreviewUrl(p => { if (p) URL.revokeObjectURL(p); return nextUrl; });
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [recordedBlob]);
+
   // Stop any active webcam when component unmounts or mode changes
   useEffect(() => {
     return () => {
       if (stream) stream.getTracks().forEach(t => t.stop());
     };
   }, [stream]);
+
+  useEffect(() => {
+    if (mode !== "record" || !stream || !videoRef.current) return;
+    const video = videoRef.current;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    const play = async () => {
+      try {
+        await video.play();
+      } catch {
+        setError("Camera opened, but the browser blocked autoplay. Tap the preview or Start recording.");
+      }
+    };
+    void play();
+  }, [mode, stream]);
 
   useEffect(() => {
     if (sameCameraEvidenceType) setSharedSameCamera(true);
@@ -98,14 +137,27 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
 
   const startCamera = async (withAudio: boolean) => {
     setError("");
+    setCameraReady(false);
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser does not expose camera recording.");
+      }
+      let s: MediaStream;
+      try {
+        s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: withAudio,
+        });
+      } catch (err) {
+        if (!withAudio) throw err;
+        s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        setError("Microphone was blocked, so recording will continue without audio.");
+      }
       setStream(s);
       setMode("record");
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-        await videoRef.current.play().catch(() => {});
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not access camera/mic. Grant permission and try again.");
     }
@@ -116,19 +168,27 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       stream.getTracks().forEach(t => t.stop());
       setStream(null);
     }
+    setCameraReady(false);
   };
 
   const startRecording = () => {
     if (!stream) return;
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8"
-      : "video/webm";
-    const recorder = new MediaRecorder(stream, { mimeType });
+    if (typeof MediaRecorder === "undefined") {
+      setError("This browser cannot record video directly. Upload a video file instead.");
+      return;
+    }
+    const mimeType = supportedRecordingMimeType();
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start recording in this browser.");
+      return;
+    }
     chunksRef.current = [];
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
+      const blob = new Blob(chunksRef.current, { type: mimeType || recorder.mimeType || "video/webm" });
       setRecordedBlob(blob);
       setRecordedDuration((Date.now() - recordStartRef.current) / 1000);
       chunksRef.current = [];
@@ -152,6 +212,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       // Wait a moment for focus, then snap
       const video = document.createElement("video");
       video.srcObject = s;
+      video.muted = true;
+      video.playsInline = true;
       await video.play();
       await new Promise(r => setTimeout(r, 400));
       const canvas = document.createElement("canvas");
@@ -304,9 +366,26 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       {/* Live camera preview while recording */}
       {mode === "record" && stream && !recordedBlob && (
         <div className="mb-3">
-          <video ref={videoRef} autoPlay muted playsInline
-            className="w-full rounded-2xl"
-            style={{ background: "#000", maxHeight: 300, objectFit: "cover" }} />
+          <div className="relative overflow-hidden rounded-2xl" style={{ background: "#000" }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              onLoadedMetadata={() => {
+                setCameraReady(true);
+                void videoRef.current?.play().catch(() => {});
+              }}
+              onCanPlay={() => setCameraReady(true)}
+              className="w-full"
+              style={{ background: "#000", maxHeight: 300, objectFit: "cover" }}
+            />
+            {!cameraReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-4 text-center">
+                <p className="text-xs font-bold text-white">Starting camera preview...</p>
+              </div>
+            )}
+          </div>
           <div className="flex gap-2 mt-3">
             {!recording ? (
               <motion.button onClick={startRecording} whileTap={{ scale: 0.95 }}
@@ -333,7 +412,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       {/* Recorded video preview */}
       {recordedBlob && (
         <div className="mb-3">
-          <video controls src={URL.createObjectURL(recordedBlob)}
+          <video controls src={recordedPreviewUrl ?? undefined}
             className="w-full rounded-2xl" style={{ background: "#000", maxHeight: 300 }} />
           <p className="text-xs font-semibold mt-2 px-3 py-1.5 inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}>

@@ -180,7 +180,7 @@ export async function POST(
     modelOverride?.trim() ||
     (!providerIdOverride && !modelOverride && bothHaveVideoUrl && googleVisionReady
       ? "gemini-2.0-flash"
-      : providerId === DEFAULT_LLM_PROVIDER_ID
+      : pdef?.id === "anthropic"
         ? aiModel.model
         : (pdef?.defaultModel ?? aiModel.model));
   const aiModelLabel = `${pdef?.shortLabel ?? aiModel.displayName} · ${judgeModel}`;
