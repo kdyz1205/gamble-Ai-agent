@@ -364,7 +364,7 @@ export async function prepareParticipantVisualsFast(
     opts,
   );
   if (filmstrip) visuals.push(filmstrip);
-  const maxIndividualFrames = filmstrip ? 24 : 24;
+  const maxIndividualFrames = filmstrip ? 16 : 20;
   for (const f of pickEvenly(valid, maxIndividualFrames)) {
     visuals.push(f.image);
   }
