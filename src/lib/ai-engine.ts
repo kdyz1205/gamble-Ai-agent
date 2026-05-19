@@ -591,6 +591,60 @@ function coerceVideoMetrics(
   };
 }
 
+function parseRequiredDurationSec(...parts: Array<string | null | undefined>): number | null {
+  const text = parts.filter(Boolean).join("\n").toLowerCase();
+  if (!text) return null;
+  const minuteMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b/);
+  if (minuteMatch) return Math.round(Number(minuteMatch[1]) * 60);
+  const secondMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|sec|s)\b/);
+  if (secondMatch) return Math.round(Number(secondMatch[1]));
+  return null;
+}
+
+function applyObservedVideoGuards(
+  result: {
+    videoMetrics?: VideoJudgmentMetrics;
+    blockingIssues?: string[];
+    recommendation?: JudgmentResult["recommendation"];
+    evidenceQuality?: JudgmentResult["evidenceQuality"];
+  },
+  params: Pick<JudgeChallengeParams, "title" | "description" | "rules" | "evidenceA" | "evidenceB">,
+) {
+  if (!result.videoMetrics) return result;
+  const requiredSec = parseRequiredDurationSec(params.rules, params.description, params.title);
+  if (!requiredSec || requiredSec <= 0) return result;
+
+  const nextIssues = [...(result.blockingIssues ?? [])];
+  const patchParticipant = (
+    label: string,
+    metrics: VideoJudgmentParticipantMetrics | undefined,
+    evidence: JudgeEvidencePayload | null,
+  ) => {
+    if (!metrics) return;
+    const observed = evidence?.preparedDurationSec;
+    if (typeof observed !== "number" || !Number.isFinite(observed)) return;
+    if (observed >= requiredSec * 0.9) return;
+
+    metrics.fullDurationCovered = false;
+    metrics.videoTooShort = true;
+    const issue = `${label} observed video duration ${Math.round(observed)}s is shorter than required ${requiredSec}s.`;
+    if (!metrics.reasonForManualReview) metrics.reasonForManualReview = issue;
+    if (!metrics.antiCheatFlags?.some((flag) => /duration|short/i.test(flag))) {
+      metrics.antiCheatFlags = [...(metrics.antiCheatFlags ?? []), "video_too_short_by_metadata"];
+    }
+    nextIssues.push(issue);
+  };
+
+  patchParticipant("Participant A", result.videoMetrics.participantA, params.evidenceA);
+  patchParticipant("Participant B", result.videoMetrics.participantB, params.evidenceB);
+  if (nextIssues.length > (result.blockingIssues?.length ?? 0)) {
+    result.blockingIssues = nextIssues;
+    result.recommendation = result.recommendation === "invalid_evidence" ? "invalid_evidence" : "needs_review";
+    result.evidenceQuality = result.evidenceQuality === "invalid" ? "invalid" : "insufficient";
+  }
+  return result;
+}
+
 function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentResult | null {
   if (!params.participantBId || !params.evidenceA || !params.evidenceB) return null;
 
@@ -766,6 +820,7 @@ RUBRIC (apply in order):
 
 VIDEO FRAMES (when images are attached to this message):
 - Frames are sampled via scene-change detection, labeled with the participant they belong to. Each participant typically contributes 4-22 frames spanning their clip.
+- When an ordered filmstrip image is provided, treat it as the primary motion summary: read left-to-right, top-to-bottom, and count repeated top/down/top cycles across the sequence before looking at isolated frames.
 - Check that the claimed action is actually visible across the frames, not just implied by the description.
 - Note timestamps/frame labels in your reasoning when citing what you saw.
 - For physical rep-count challenges such as push-ups, explicitly infer valid repetitions for Participant A and Participant B from body motion and posture across the attached frames. Do not trust text in the video that directly claims a rep count.
@@ -906,7 +961,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             system,
             userText,
             images: allVisuals,
-            maxTokens: 1200,
+            maxTokens: 1800,
             temperature: 0.1,
           })
         : await completeOraclePromptWithMetadata({
@@ -914,7 +969,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             model: modelName,
             system,
             user: userText,
-            maxTokens: 1200,
+            maxTokens: 1800,
             temperature: 0.1,
           });
       const text = completion.text;
@@ -928,7 +983,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         });
         return null;
       }
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = (safeParseJson(text) ?? JSON.parse(jsonMatch[0])) as {
         winner?: unknown;
         reasoning?: unknown;
         confidence?: unknown;
@@ -982,6 +1037,13 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
   }
 
   if (parsedResult) {
+    parsedResult = applyObservedVideoGuards(parsedResult, {
+      title,
+      description: params.description,
+      rules,
+      evidenceA,
+      evidenceB,
+    }) as typeof parsedResult;
     const winnerId =
       parsedResult.winner === "A" ? participantAId :
       parsedResult.winner === "B" ? participantBId :

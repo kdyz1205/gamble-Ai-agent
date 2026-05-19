@@ -34,6 +34,79 @@ async function bufferToVisionImage(buffer: Buffer, caption: string): Promise<Jud
   return { caption, mimeType: "image/jpeg", base64: jpeg.toString("base64") };
 }
 
+async function buildFilmstripImage(
+  participantLabel: string,
+  frames: Array<{ index: number; buffer: Buffer }>,
+  opts?: { durationSec?: number | null; mode?: string | null },
+): Promise<JudgeVisionImage | null> {
+  if (frames.length < 2) return null;
+
+  const picked = frames.length > 16
+    ? frames.filter((_, index) => index % Math.ceil(frames.length / 16) === 0).slice(0, 16)
+    : frames;
+  const tileW = 180;
+  const tileH = 128;
+  const labelH = 26;
+  const cols = Math.min(4, picked.length);
+  const rows = Math.ceil(picked.length / cols);
+  const headerH = 52;
+  const width = cols * tileW;
+  const height = headerH + rows * (tileH + labelH);
+
+  const composites: sharp.OverlayOptions[] = [];
+  const header = Buffer.from(`
+    <svg width="${width}" height="${headerH}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#0f172a"/>
+      <text x="12" y="22" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#f8fafc">${participantLabel} ordered video filmstrip</text>
+      <text x="12" y="42" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#cbd5e1">Read left to right, top to bottom. ${opts?.durationSec ? `~${Math.round(opts.durationSec)}s` : "duration unknown"}${opts?.mode ? `, ${opts.mode}` : ""}</text>
+    </svg>`);
+  composites.push({ input: header, left: 0, top: 0 });
+
+  for (let i = 0; i < picked.length; i += 1) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const left = col * tileW;
+    const top = headerH + row * (tileH + labelH);
+    const frame = await sharp(picked[i].buffer)
+      .rotate()
+      .resize(tileW, tileH, { fit: "cover" })
+      .jpeg({ quality: 78, mozjpeg: true })
+      .toBuffer();
+    const approxSec =
+      opts?.durationSec != null && frames.length > 0
+        ? Math.round(((picked[i].index + 1) / (frames.length + 1)) * opts.durationSec)
+        : null;
+    const label = Buffer.from(`
+      <svg width="${tileW}" height="${labelH}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#111827"/>
+        <text x="8" y="18" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#f8fafc">#${picked[i].index + 1}${approxSec != null ? ` ~${approxSec}s` : ""}</text>
+      </svg>`);
+    composites.push({ input: frame, left, top });
+    composites.push({ input: label, left, top: top + tileH });
+  }
+
+  const jpeg = await sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: "#020617",
+    },
+  })
+    .composite(composites)
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toBuffer();
+
+  if (jpeg.length > 4.5 * 1024 * 1024) return null;
+  return {
+    caption:
+      `${participantLabel} - ordered filmstrip summary (${picked.length} frame(s)` +
+      `${opts?.durationSec ? ` across ~${Math.round(opts.durationSec)}s` : ""}). Count motion by reading the strip in order.`,
+    mimeType: "image/jpeg",
+    base64: jpeg.toString("base64"),
+  };
+}
+
 function isPhotoType(e: EvidencePayload): boolean {
   const t = e.type.toLowerCase();
   return t === "photo" || t === "image" || t === "picture";
@@ -267,13 +340,28 @@ export async function prepareParticipantVisualsFast(
           approxSec != null
             ? `${participantLabel} — frame ${i + 1}/${n} (~${approxSec}s)`
             : `${participantLabel} — frame ${i + 1}/${n}`;
-        return { caption, mimeType: "image/jpeg" as const, base64: buf.toString("base64") };
+        return {
+          index: i,
+          buffer: buf,
+          image: { caption, mimeType: "image/jpeg" as const, base64: buf.toString("base64") },
+        };
       } catch {
         return null;
       }
     }),
   );
-  for (const f of fetched) if (f) visuals.push(f);
+  const valid = fetched.filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const filmstrip = await buildFilmstripImage(
+    participantLabel,
+    valid.map((item) => ({ index: item.index, buffer: item.buffer })),
+    opts,
+  );
+  if (filmstrip) visuals.push(filmstrip);
+  const maxIndividualFrames = filmstrip ? 8 : 16;
+  const step = valid.length > maxIndividualFrames ? Math.ceil(valid.length / maxIndividualFrames) : 1;
+  for (const f of valid.filter((_, index) => index % step === 0).slice(0, maxIndividualFrames)) {
+    visuals.push(f.image);
+  }
   if (visuals.length === 0) {
     preambleLines.push(`  → All pre-extracted frame fetches failed; falling back to slow path.`);
     return null;

@@ -366,6 +366,7 @@ const cases = [
     id: "non_pushup_video",
     title: "One user submits non-push-up video should not auto-settle",
     expect: "not_settled",
+    metricExpectation: "creator_reps_higher",
     creator: { repCount: 10, durationSec: 60, variant: "clean" },
     opponent: { repCount: 1, durationSec: 60, variant: "non_pushup" },
   },
@@ -380,6 +381,7 @@ const cases = [
     id: "static_loop",
     title: "Fake static or looped frames should not auto-settle",
     expect: "not_settled",
+    metricExpectation: "loop_or_no_valid_reps",
     creator: { repCount: 12, durationSec: 60, variant: "static_loop" },
     opponent: { repCount: 6, durationSec: 60, variant: "static_loop" },
   },
@@ -530,7 +532,31 @@ try {
       requireCheck(caseProof, "auto_settle_eligible", judged.autoSettleEligible === true, caseProof.judgment);
       requireCheck(caseProof, "rep_count_a_higher", Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? 0), judged.videoMetrics);
     } else {
-      requireCheck(caseProof, "judge_source_safe_for_negative", judged.source === "vision_llm" || judged.source === "fallback", caseProof.judgment);
+      requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
+      requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
+      if (caseDef.metricExpectation === "creator_reps_higher") {
+        requireCheck(
+          caseProof,
+          "creator_reps_higher_than_non_pushup",
+          Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? -1),
+          judged.videoMetrics,
+        );
+      }
+      if (caseDef.metricExpectation === "loop_or_no_valid_reps") {
+        const flags = [
+          ...(judged.videoMetrics?.participantA?.antiCheatFlags ?? []),
+          ...(judged.videoMetrics?.participantB?.antiCheatFlags ?? []),
+          judged.videoMetrics?.participantA?.reasonForManualReview,
+          judged.videoMetrics?.participantB?.reasonForManualReview,
+          judged.videoMetrics?.participantA?.unclearReason,
+          judged.videoMetrics?.participantB?.unclearReason,
+        ].filter(Boolean).join(" ").toLowerCase();
+        const loopFlagged = /loop|static|edit|motion|repeated/.test(flags);
+        const bothZero =
+          Number(judged.videoMetrics?.participantA?.validRepCount ?? -1) === 0 &&
+          Number(judged.videoMetrics?.participantB?.validRepCount ?? -1) === 0;
+        requireCheck(caseProof, "loop_or_static_detected", loopFlagged || bothZero, judged.videoMetrics);
+      }
       requireCheck(caseProof, "not_auto_settled", finalChallenge.challenge.status !== "settled", finalChallenge.challenge.status);
       requireCheck(caseProof, "auto_settle_blocked", judged.autoSettleEligible !== true, caseProof.judgment);
     }
