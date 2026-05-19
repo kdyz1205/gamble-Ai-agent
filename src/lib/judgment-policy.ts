@@ -71,6 +71,12 @@ function participantBlockingIssues(
 ): string[] {
   const issues: string[] = [];
   if (!metrics) return [`${label} metrics are missing.`];
+  const invalidActionNote = (metrics.invalidRepNotes ?? []).some((note) =>
+    /\b(no|not|non)\b.*\b(push[-\s]?up|motion|attempt)\b|\b(static|standing|unrelated)\b/i.test(note),
+  );
+  if (invalidActionNote && metrics.validRepCount === 0) {
+    issues.push(`${label} evidence does not show the required action.`);
+  }
   if (metrics.fullDurationCovered !== true) issues.push(`${label} video does not cover the required duration.`);
   if (metrics.fullBodyVisible !== true) issues.push(`${label} full body is not visible enough.`);
   if (metrics.livenessPhraseVisible !== true) issues.push(`${label} liveness phrase is missing or not visible.`);

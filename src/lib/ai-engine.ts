@@ -853,6 +853,7 @@ CONFIDENCE SCALE (be calibrated — stakes are real):
 
 Settlement recommendation rule:
 - Use "settle_winner" only when confidence >= 0.85, evidenceQuality is "good", winner is not null, and blockingIssues is empty.
+- Do not use "settle_winner" when either participant's submitted video is not the required action at all (for example standing, static, unrelated, or no push-up motion in a push-up challenge). In that case use "invalid_evidence" or "needs_review" and explain which participant failed the evidence requirement.
 - Use "needs_review" when a winner may exist but any material uncertainty remains.
 - Use "invalid_evidence" when the evidence cannot prove the required action/outcome.
 - Use "tie_or_no_winner" when no winner can be separated under the rules.
