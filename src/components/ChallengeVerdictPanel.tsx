@@ -92,10 +92,15 @@ function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: n
     (row?.confidence ?? 0) >= 0.85 &&
     Boolean(row?.winnerId) &&
     blockingIssues.length === 0;
+  const providerCall =
+    metrics.providerCall && typeof metrics.providerCall === "object" && !Array.isArray(metrics.providerCall)
+      ? metrics.providerCall as Record<string, unknown>
+      : null;
   return {
     evidenceQuality,
     recommendation,
     source: typeof metrics.source === "string" ? metrics.source : null,
+    providerCall,
     blockingIssues,
     autoSettleEligible:
       typeof metrics.autoSettleEligible === "boolean" ? metrics.autoSettleEligible : inferredAutoSettleEligible,
@@ -105,6 +110,24 @@ function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: n
 
 function displayEnum(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : "Unknown";
+}
+
+function providerCallSummary(providerCall: Record<string, unknown> | null) {
+  if (!providerCall) return "Not recorded";
+  const provider = typeof providerCall.providerLabel === "string"
+    ? providerCall.providerLabel
+    : typeof providerCall.providerId === "string" ? providerCall.providerId : "Provider";
+  const model = typeof providerCall.model === "string" ? providerCall.model : "";
+  const status = typeof providerCall.httpStatus === "number" ? `HTTP ${providerCall.httpStatus}` : "SDK";
+  const kind = typeof providerCall.requestKind === "string" ? providerCall.requestKind : "call";
+  const duration = typeof providerCall.durationMs === "number" ? `${providerCall.durationMs}ms` : "";
+  return [provider, model, status, kind, duration].filter(Boolean).join(" · ");
+}
+
+function providerResponseId(providerCall: Record<string, unknown> | null) {
+  if (!providerCall || typeof providerCall.responseId !== "string" || !providerCall.responseId.trim()) return "";
+  const id = providerCall.responseId.trim();
+  return id.length > 28 ? `${id.slice(0, 18)}...${id.slice(-6)}` : id;
 }
 
 function isRejudgeableStatus(status: string) {
@@ -970,7 +993,7 @@ export default function ChallengeVerdictPanel({
                 )}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-5">
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
                   <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.evidenceQuality === "good" ? "#047857" : "#9A3412" }}>
@@ -994,6 +1017,17 @@ export default function ChallengeVerdictPanel({
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.source === "fallback" ? "#9A3412" : "#047857" }}>
                     {displayEnum(verdictMetrics.source)}
                   </p>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Provider call</p>
+                  <p className="text-[11px] font-extrabold mt-1 leading-snug" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
+                    {providerCallSummary(verdictMetrics.providerCall)}
+                  </p>
+                  {providerResponseId(verdictMetrics.providerCall) && (
+                    <p className="text-[10px] font-bold mt-1 truncate" style={{ color: "#64748B" }}>
+                      {providerResponseId(verdictMetrics.providerCall)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1095,6 +1129,12 @@ export default function ChallengeVerdictPanel({
                 <div className="px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
                   <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Recommendation</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.recommendation)}</p>
+                </div>
+                <div className="col-span-2 px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Provider call</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
+                    {providerCallSummary(verdictMetrics.providerCall)}
+                  </p>
                 </div>
               </div>
 

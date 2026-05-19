@@ -503,6 +503,7 @@ try {
       model: judged.model,
       autoSettleEligible: judged.autoSettleEligible,
       autoSettleBlockReason: judged.autoSettleBlockReason,
+      providerCall: judged.providerCall ?? judged.verdict?.providerCall ?? null,
       videoMetrics: judged.videoMetrics,
     };
     caseProof.finalStatus = finalChallenge.challenge.status;
@@ -514,6 +515,14 @@ try {
 
     if (caseDef.expect === "settled") {
       requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
+      const providerCall = judged.providerCall ?? judged.verdict?.providerCall ?? null;
+      requireCheck(caseProof, "provider_call_recorded", Boolean(providerCall), providerCall);
+      requireCheck(caseProof, "provider_call_used_api", providerCall?.usedApi === true, providerCall);
+      requireCheck(caseProof, "provider_call_kind_vision", providerCall?.requestKind === "vision", providerCall);
+      requireCheck(caseProof, "provider_call_http_200", providerCall?.httpStatus === 200 || providerCall?.httpStatus == null, providerCall);
+      if (judgeProvider === "openai") {
+        requireCheck(caseProof, "provider_response_id_present", typeof providerCall?.responseId === "string" && providerCall.responseId.length > 0, providerCall);
+      }
       requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
       requireCheck(caseProof, "settled_expected", finalChallenge.challenge.status === "settled", finalChallenge.challenge.status);
       requireCheck(caseProof, "winner_present", Boolean(judged.winnerId), caseProof.judgment);

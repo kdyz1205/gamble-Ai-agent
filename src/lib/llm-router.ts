@@ -12,6 +12,26 @@ export interface LlmCompleteParams {
   temperature?: number;
 }
 
+export interface LlmCallMetadata {
+  providerId: string;
+  providerLabel: string;
+  model: string;
+  requestKind: "text" | "vision";
+  usedApi: boolean;
+  baseUrlHost?: string | null;
+  httpStatus?: number | null;
+  responseId?: string | null;
+  responseModel?: string | null;
+  durationMs: number;
+  imageCount?: number;
+  responseFormat?: string | null;
+}
+
+export interface LlmCallResult {
+  text: string;
+  metadata: LlmCallMetadata;
+}
+
 const ANTHROPIC_TIMEOUT_MS = 45_000;
 
 /** Wrap a promise with a hard timeout so a hung upstream never holds a serverless slot forever. */
@@ -22,9 +42,29 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number, temperature?: number) {
+function hostFromBaseUrl(baseUrl: string) {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return null;
+  }
+}
+
+function elapsedMs(startedAt: number) {
+  return Math.max(0, Date.now() - startedAt);
+}
+
+async function anthropicCompleteWithMetadata(
+  def: LlmProviderDefinition,
+  model: string,
+  system: string,
+  user: string,
+  maxTokens: number,
+  temperature?: number,
+): Promise<LlmCallResult> {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
+  const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const response = await withTimeout(
     client.messages.create({
@@ -38,10 +78,25 @@ async function anthropicComplete(def: LlmProviderDefinition, model: string, syst
     "anthropic.messages.create",
   );
   const block = response.content[0];
-  return block?.type === "text" ? block.text : "";
+  return {
+    text: block?.type === "text" ? block.text : "",
+    metadata: {
+      providerId: def.id,
+      providerLabel: def.shortLabel,
+      model,
+      requestKind: "text",
+      usedApi: true,
+      httpStatus: null,
+      responseId: response.id ?? null,
+      responseModel: response.model ?? null,
+      durationMs: elapsedMs(startedAt),
+    },
+  };
 }
 
-async function openAiCompatibleComplete(
+async function openAiCompatibleCompleteWithMetadata(
+  providerId: string,
+  providerLabel: string,
   baseUrl: string,
   apiKey: string | null,
   model: string,
@@ -50,8 +105,9 @@ async function openAiCompatibleComplete(
   maxTokens: number,
   querySuffix = "",
   temperature?: number,
-) {
+): Promise<LlmCallResult> {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
+  const startedAt = Date.now();
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -73,13 +129,37 @@ async function openAiCompatibleComplete(
     throw new Error(`LLM HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
+    id?: string;
+    model?: string;
     choices?: Array<{ message?: { content?: string | null } }>;
   };
-  return data.choices?.[0]?.message?.content ?? "";
+  return {
+    text: data.choices?.[0]?.message?.content ?? "",
+    metadata: {
+      providerId,
+      providerLabel,
+      model,
+      requestKind: "text",
+      usedApi: true,
+      baseUrlHost: hostFromBaseUrl(baseUrl),
+      httpStatus: res.status,
+      responseId: data.id ?? null,
+      responseModel: data.model ?? null,
+      durationMs: elapsedMs(startedAt),
+    },
+  };
 }
 
-async function googleComplete(model: string, system: string, user: string, maxTokens: number, apiKey: string, temperature?: number) {
+async function googleCompleteWithMetadata(
+  model: string,
+  system: string,
+  user: string,
+  maxTokens: number,
+  apiKey: string,
+  temperature?: number,
+): Promise<LlmCallResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const startedAt = Date.now();
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -94,13 +174,29 @@ async function googleComplete(model: string, system: string, user: string, maxTo
     throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
+    responseId?: string;
+    modelVersion?: string;
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const parts = data.candidates?.[0]?.content?.parts;
-  return parts?.map((p) => p.text ?? "").join("") ?? "";
+  return {
+    text: parts?.map((p) => p.text ?? "").join("") ?? "",
+    metadata: {
+      providerId: "google",
+      providerLabel: "Google",
+      model,
+      requestKind: "text",
+      usedApi: true,
+      baseUrlHost: "generativelanguage.googleapis.com",
+      httpStatus: res.status,
+      responseId: data.responseId ?? null,
+      responseModel: data.modelVersion ?? null,
+      durationMs: elapsedMs(startedAt),
+    },
+  };
 }
 
-async function googleCompleteVision(
+async function googleCompleteVisionWithMetadata(
   model: string,
   system: string,
   userText: string,
@@ -108,12 +204,13 @@ async function googleCompleteVision(
   maxTokens: number,
   apiKey: string,
   temperature?: number,
-) {
+): Promise<LlmCallResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [{ text: userText }];
   for (const img of images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
+  const startedAt = Date.now();
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -128,13 +225,30 @@ async function googleCompleteVision(
     throw new Error(`Gemini vision HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
+    responseId?: string;
+    modelVersion?: string;
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const out = data.candidates?.[0]?.content?.parts;
-  return out?.map((p) => p.text ?? "").join("") ?? "";
+  return {
+    text: out?.map((p) => p.text ?? "").join("") ?? "",
+    metadata: {
+      providerId: "google",
+      providerLabel: "Google",
+      model,
+      requestKind: "vision",
+      usedApi: true,
+      baseUrlHost: "generativelanguage.googleapis.com",
+      httpStatus: res.status,
+      responseId: data.responseId ?? null,
+      responseModel: data.modelVersion ?? null,
+      durationMs: elapsedMs(startedAt),
+      imageCount: images.length,
+    },
+  };
 }
 
-async function anthropicCompleteVision(
+async function anthropicCompleteVisionWithMetadata(
   def: LlmProviderDefinition,
   model: string,
   system: string,
@@ -142,9 +256,10 @@ async function anthropicCompleteVision(
   images: JudgeVisionImage[],
   maxTokens: number,
   temperature?: number,
-) {
+): Promise<LlmCallResult> {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
+  const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [
     { type: "text", text: userText },
@@ -172,10 +287,26 @@ async function anthropicCompleteVision(
     "anthropic.messages.create (vision)",
   );
   const block = response.content[0];
-  return block?.type === "text" ? block.text : "";
+  return {
+    text: block?.type === "text" ? block.text : "",
+    metadata: {
+      providerId: def.id,
+      providerLabel: def.shortLabel,
+      model,
+      requestKind: "vision",
+      usedApi: true,
+      httpStatus: null,
+      responseId: response.id ?? null,
+      responseModel: response.model ?? null,
+      durationMs: elapsedMs(startedAt),
+      imageCount: images.length,
+    },
+  };
 }
 
-async function openAiCompatibleVisionComplete(
+async function openAiCompatibleVisionCompleteWithMetadata(
+  providerId: string,
+  providerLabel: string,
   baseUrl: string,
   apiKey: string | null,
   model: string,
@@ -185,7 +316,7 @@ async function openAiCompatibleVisionComplete(
   maxTokens: number,
   querySuffix = "",
   temperature?: number,
-) {
+): Promise<LlmCallResult> {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const userContent: Array<
     { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "auto" } }
@@ -196,6 +327,8 @@ async function openAiCompatibleVisionComplete(
       image_url: { url: `data:${img.mimeType};base64,${img.base64}`, detail: "auto" },
     });
   }
+  const responseFormat = baseUrl.includes("api.openai.com") ? "json_object" : null;
+  const startedAt = Date.now();
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -205,7 +338,7 @@ async function openAiCompatibleVisionComplete(
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      ...(baseUrl.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {}),
+      ...(responseFormat ? { response_format: { type: responseFormat } } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: userContent },
@@ -218,15 +351,33 @@ async function openAiCompatibleVisionComplete(
     throw new Error(`LLM vision HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
+    id?: string;
+    model?: string;
     choices?: Array<{ message?: { content?: string | null } }>;
   };
-  return data.choices?.[0]?.message?.content ?? "";
+  return {
+    text: data.choices?.[0]?.message?.content ?? "",
+    metadata: {
+      providerId,
+      providerLabel,
+      model,
+      requestKind: "vision",
+      usedApi: true,
+      baseUrlHost: hostFromBaseUrl(baseUrl),
+      httpStatus: res.status,
+      responseId: data.id ?? null,
+      responseModel: data.model ?? null,
+      durationMs: elapsedMs(startedAt),
+      imageCount: images.length,
+      responseFormat,
+    },
+  };
 }
 
 /**
  * Single entry for oracle prompts — returns raw assistant text (expect JSON inside).
  */
-export async function completeOraclePrompt(params: LlmCompleteParams): Promise<string> {
+export async function completeOraclePromptWithMetadata(params: LlmCompleteParams): Promise<LlmCallResult> {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
@@ -236,7 +387,7 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
 
   switch (def.kind) {
     case "anthropic":
-      return anthropicComplete(def, params.model, params.system, params.user, maxTokens, temperature);
+      return anthropicCompleteWithMetadata(def, params.model, params.system, params.user, maxTokens, temperature);
     case "openai_compat": {
       if (!def.apiKeyOptional && !key) throw new Error(`${def.envVar} is not set`);
       if (!isProviderConfigured(def)) throw new Error(`Provider ${def.id} is not configured`);
@@ -249,7 +400,9 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
         querySuffix = `?api-version=${encodeURIComponent(ver)}`;
       }
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
-      return openAiCompatibleComplete(
+      return openAiCompatibleCompleteWithMetadata(
+        def.id,
+        def.shortLabel,
         baseUrl,
         key || null,
         params.model,
@@ -262,11 +415,15 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
     }
     case "google": {
       if (!key) throw new Error(`${def.envVar} is not set`);
-      return googleComplete(params.model, params.system, params.user, maxTokens, key, temperature);
+      return googleCompleteWithMetadata(params.model, params.system, params.user, maxTokens, key, temperature);
     }
     default:
       throw new Error(`Unsupported backend: ${def.kind}`);
   }
+}
+
+export async function completeOraclePrompt(params: LlmCompleteParams): Promise<string> {
+  return (await completeOraclePromptWithMetadata(params)).text;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -449,6 +606,18 @@ export async function completeOracleJudgeVision(params: {
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
+  return (await completeOracleJudgeVisionWithMetadata(params)).text;
+}
+
+export async function completeOracleJudgeVisionWithMetadata(params: {
+  providerId: string;
+  model: string;
+  system: string;
+  userText: string;
+  images: JudgeVisionImage[];
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<LlmCallResult> {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
@@ -457,7 +626,7 @@ export async function completeOracleJudgeVision(params: {
   const key = process.env[def.envVar];
 
   if (params.images.length === 0) {
-    return completeOraclePrompt({
+    return completeOraclePromptWithMetadata({
       providerId: params.providerId,
       model: params.model,
       system: params.system,
@@ -469,7 +638,7 @@ export async function completeOracleJudgeVision(params: {
 
   switch (def.kind) {
     case "anthropic":
-      return anthropicCompleteVision(def, params.model, params.system, params.userText, params.images, maxTokens, temperature);
+      return anthropicCompleteVisionWithMetadata(def, params.model, params.system, params.userText, params.images, maxTokens, temperature);
     case "openai_compat": {
       if (!def.apiKeyOptional && !key) throw new Error(`${def.envVar} is not set`);
       if (!isProviderConfigured(def)) throw new Error(`Provider ${def.id} is not configured`);
@@ -482,7 +651,9 @@ export async function completeOracleJudgeVision(params: {
         querySuffix = `?api-version=${encodeURIComponent(ver)}`;
       }
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
-      return openAiCompatibleVisionComplete(
+      return openAiCompatibleVisionCompleteWithMetadata(
+        def.id,
+        def.shortLabel,
         baseUrl,
         key || null,
         params.model,
@@ -496,7 +667,7 @@ export async function completeOracleJudgeVision(params: {
     }
     case "google": {
       if (!key) throw new Error(`${def.envVar} is not set`);
-      return googleCompleteVision(
+      return googleCompleteVisionWithMetadata(
         params.model,
         params.system,
         params.userText,

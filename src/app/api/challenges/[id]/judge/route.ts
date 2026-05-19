@@ -243,6 +243,7 @@ export async function POST(
       : result.source === "fallback"
         ? "Fallback - no-settlement-v1"
         : aiModelLabel;
+  const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
 
   let inferenceRefunded = false;
   if (result.source === "fallback" && inferenceSpendCharged) {
@@ -292,6 +293,7 @@ export async function POST(
     recommendation,
     settlementRecommendation: recommendation,
     source: result.source ?? "llm",
+    providerCall: providerCallAudit,
     videoMetrics: result.videoMetrics ?? null,
     autoSettleEligible: autoSettlePolicy.eligible,
     autoSettleBlockReason: autoSettlePolicy.reason,
@@ -305,6 +307,7 @@ export async function POST(
     recommendation: VerdictRecommendation;
     settlementRecommendation: VerdictRecommendation;
     source: string;
+    providerCall: unknown;
     videoMetrics: unknown;
     autoSettleEligible: boolean;
     autoSettleBlockReason: string | null;
@@ -329,6 +332,7 @@ export async function POST(
         reviewRequired: verdictStatus !== ChallengeStatus.ai_verdict_ready,
         newStatus: verdictStatus,
         source: result.source,
+        providerCall: providerCallAudit,
         evidenceQuality,
         recommendation,
         settlementRecommendation: recommendation,
@@ -404,6 +408,7 @@ export async function POST(
           settlementOk: false,
           settlementError: settlement.error,
           source: result.source,
+          providerCall: providerCallAudit,
           reasoning: result.reasoning?.slice(0, 500),
         },
       });
@@ -442,6 +447,7 @@ export async function POST(
       confidence: result.confidence,
       settlementOk: settlement.success,
       source: result.source,
+      providerCall: providerCallAudit,
       evidenceQuality,
       recommendation,
       settlementRecommendation: recommendation,

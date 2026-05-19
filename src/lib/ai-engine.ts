@@ -1,4 +1,11 @@
-import { completeOraclePrompt, completeOraclePromptWithTools, completeOracleJudgeVision, type ToolInvocation } from "./llm-router";
+import {
+  completeOraclePrompt,
+  completeOraclePromptWithMetadata,
+  completeOraclePromptWithTools,
+  completeOracleJudgeVisionWithMetadata,
+  type LlmCallMetadata,
+  type ToolInvocation,
+} from "./llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured } from "./llm-providers";
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import {
@@ -115,6 +122,7 @@ export interface JudgmentResult {
   settlementRecommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner" | "refund" | "manual_review";
   blockingIssues?: string[];
   source?: "deterministic" | "vision_llm" | "llm" | "fallback";
+  providerCall?: LlmCallMetadata;
   videoMetrics?: VideoJudgmentMetrics;
 }
 
@@ -888,10 +896,11 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     recommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
     blockingIssues?: string[];
     videoMetrics?: VideoJudgmentMetrics;
+    providerCall?: LlmCallMetadata;
   } | null> => {
     try {
-      const text = allVisuals.length > 0
-        ? await completeOracleJudgeVision({
+      const completion = allVisuals.length > 0
+        ? await completeOracleJudgeVisionWithMetadata({
             providerId: params.providerId,
             model: modelName,
             system,
@@ -900,7 +909,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             maxTokens: 1200,
             temperature: 0.1,
           })
-        : await completeOraclePrompt({
+        : await completeOraclePromptWithMetadata({
             providerId: params.providerId,
             model: modelName,
             system,
@@ -908,6 +917,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             maxTokens: 1200,
             temperature: 0.1,
           });
+      const text = completion.text;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         console.warn("[judgeChallenge] LLM judge returned no JSON object", {
@@ -944,6 +954,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           ? parsed.blockingIssues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
           : undefined,
         videoMetrics: coerceVideoMetrics(parsed.videoMetrics, allVisuals.length, rules || title),
+        providerCall: completion.metadata,
       };
     } catch (err) {
       console.warn("[judgeChallenge] LLM judge call failed", {
@@ -999,6 +1010,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             : "tie_or_no_winner"),
       blockingIssues: parsedResult.blockingIssues,
       source: allVisuals.length > 0 ? "vision_llm" : "llm",
+      providerCall: parsedResult.providerCall,
       videoMetrics: parsedResult.videoMetrics,
     };
   }

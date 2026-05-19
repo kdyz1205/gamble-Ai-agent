@@ -320,6 +320,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   settlementRecommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
   blockingIssues: string[];
   source?: string;
+  providerCall?: unknown;
   videoMetrics?: unknown;
   verdict: {
     status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
@@ -331,6 +332,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
     settlementRecommendation: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
     blockingIssues: string[];
     source?: string;
+    providerCall?: unknown;
     videoMetrics?: unknown;
   };
   judgment: unknown;

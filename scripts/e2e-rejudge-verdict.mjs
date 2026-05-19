@@ -205,6 +205,7 @@ try {
     status: first.status,
     creditsUsed: first.creditsUsed,
     creditsRefunded: first.creditsRefunded ?? 0,
+    providerCall: first.providerCall ?? first.verdict?.providerCall ?? null,
   };
   proof.secondJudgment = {
     id: second.judgment.id,
@@ -213,6 +214,7 @@ try {
     status: second.status,
     creditsUsed: second.creditsUsed,
     creditsRefunded: second.creditsRefunded ?? 0,
+    providerCall: second.providerCall ?? second.verdict?.providerCall ?? null,
   };
   proof.finalChallengeStatus = afterSecond.challenge.status;
   proof.creditTx = creatorTxs.map(txView);
@@ -220,6 +222,16 @@ try {
   requireCheck(proof, "second_judgment_created", afterSecond.challenge.judgments.length === 2, afterSecond.challenge.judgments.map((j) => j.id));
   requireCheck(proof, "second_is_new_judgment", first.judgment.id !== second.judgment.id, { first: first.judgment.id, second: second.judgment.id });
   requireCheck(proof, "second_not_fallback", second.source !== "fallback", second);
+  const firstProviderCall = first.providerCall ?? first.verdict?.providerCall ?? null;
+  const secondProviderCall = second.providerCall ?? second.verdict?.providerCall ?? null;
+  requireCheck(proof, "first_provider_call_recorded", Boolean(firstProviderCall), firstProviderCall);
+  requireCheck(proof, "first_provider_call_used_api", firstProviderCall?.usedApi === true, firstProviderCall);
+  requireCheck(proof, "first_provider_call_http_200", firstProviderCall?.httpStatus === 200 || firstProviderCall?.httpStatus == null, firstProviderCall);
+  requireCheck(proof, "first_provider_response_id_present", typeof firstProviderCall?.responseId === "string" && firstProviderCall.responseId.length > 0, firstProviderCall);
+  requireCheck(proof, "second_provider_call_recorded", Boolean(secondProviderCall), secondProviderCall);
+  requireCheck(proof, "second_provider_call_used_api", secondProviderCall?.usedApi === true, secondProviderCall);
+  requireCheck(proof, "second_provider_call_http_200", secondProviderCall?.httpStatus === 200 || secondProviderCall?.httpStatus == null, secondProviderCall);
+  requireCheck(proof, "second_provider_response_id_present", typeof secondProviderCall?.responseId === "string" && secondProviderCall.responseId.length > 0, secondProviderCall);
   requireCheck(proof, "still_not_settled_without_confirm", afterSecond.challenge.status !== "settled", afterSecond.challenge.status);
   requireCheck(proof, "two_ai_judge_rows", judgeRows.length === 2, judgeRows.map(txView));
   requireCheck(proof, "first_cost_spent", judgeRows.some((tx) => tx.amount === -1), judgeRows.map(txView));

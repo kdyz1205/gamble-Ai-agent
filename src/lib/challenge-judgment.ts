@@ -254,6 +254,7 @@ export async function executeChallengeJudgment(
   const evidenceQuality = evidenceQualityForJudgment(result);
   const recommendation = settlementRecommendationForJudgment(result);
   const blockingIssues = blockingIssuesForJudgment(result, judgmentPolicyOptions);
+  const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
 
   const judgment = await prisma.judgment.create({
     data: {
@@ -295,6 +296,7 @@ export async function executeChallengeJudgment(
         reviewRequired: nextStatus !== ChallengeStatus.dispute_window_open,
         newStatus: nextStatus,
         source: result.source,
+        providerCall: providerCallAudit,
         evidenceQuality,
         recommendation,
         settlementRecommendation: recommendation,
@@ -348,6 +350,7 @@ export async function executeChallengeJudgment(
         reason: autoSettlePolicy.reason ?? "auto_settle_policy_blocked",
         confidence: result.confidence,
         source: result.source,
+        providerCall: providerCallAudit,
         evidenceQuality,
         recommendation,
         settlementRecommendation: recommendation,
@@ -495,6 +498,7 @@ export async function executeChallengeJudgment(
       confidence: result.confidence,
       settlementOk: settlementResult.success,
       source: result.source,
+      providerCall: providerCallAudit,
       evidenceQuality,
       recommendation,
       settlementRecommendation: recommendation,

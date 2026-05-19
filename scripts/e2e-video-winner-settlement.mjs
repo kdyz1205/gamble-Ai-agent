@@ -445,6 +445,7 @@ try {
     settlementRecommendation: judged.settlementRecommendation,
     source: judged.source,
     model: judged.model,
+    providerCall: judged.providerCall ?? judged.verdict?.providerCall ?? null,
     reasoning: judged.reasoning,
     videoMetrics: judged.videoMetrics,
   };
@@ -483,6 +484,14 @@ try {
 
   requireCheck(proof, "judge_source_is_vision", judged.source === "vision_llm", judged.source);
   requireCheck(proof, "judge_model_is_real_vision_provider", !/Deterministic/i.test(judged.model) && /OpenAI|Google|Anthropic|gpt|gemini|claude/i.test(judged.model), judged.model);
+  const providerCall = judged.providerCall ?? judged.verdict?.providerCall ?? null;
+  requireCheck(proof, "provider_call_recorded", Boolean(providerCall), providerCall);
+  requireCheck(proof, "provider_call_used_api", providerCall?.usedApi === true, providerCall);
+  requireCheck(proof, "provider_call_kind_vision", providerCall?.requestKind === "vision", providerCall);
+  requireCheck(proof, "provider_call_http_200", providerCall?.httpStatus === 200 || providerCall?.httpStatus == null, providerCall);
+  if (judgeProvider === "openai") {
+    requireCheck(proof, "provider_response_id_present", typeof providerCall?.responseId === "string" && providerCall.responseId.length > 0, providerCall);
+  }
   requireCheck(proof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
   requireCheck(proof, "fixture_has_no_direct_rep_count_labels", proof.fixture.directRepCountLabelsRemoved === true, proof.fixture);
   requireCheck(proof, "creator_liveness_visible", judged.videoMetrics?.participantA?.livenessPhraseVisible === true, judged.videoMetrics?.participantA);
