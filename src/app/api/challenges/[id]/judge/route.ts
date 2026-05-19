@@ -3,9 +3,14 @@ import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
-import { getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { addCredits, getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
-import { assertChallengeTransition, isAiReviewStatus } from "@/lib/challenge-state-machine";
+import {
+  assertChallengeTransition,
+  isAiReviewStatus,
+  isTerminalStatus,
+  isVerdictReadyStatus,
+} from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import {
   buildJudgmentMetricsJson,
@@ -39,12 +44,16 @@ export async function POST(
   let providerIdOverride: string | undefined;
   let modelOverride: string | undefined;
   let autoSettleRequested = false;
+  let rejudgeRequested = false;
+  let rejudgeReason = "";
   try {
     const body = await req.json();
     if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
     if (typeof body?.providerId === "string") providerIdOverride = body.providerId;
     if (typeof body?.model === "string") modelOverride = body.model;
     autoSettleRequested = body?.autoSettle === true;
+    rejudgeRequested = body?.rejudge === true;
+    if (typeof body?.reason === "string") rejudgeReason = body.reason.trim().slice(0, 500);
   } catch { /* default to haiku */ }
 
   const cost = TIER_MULTIPLIER[tierId];
@@ -57,22 +66,68 @@ export async function POST(
         include: { user: { select: { id: true, username: true } } },
       },
       evidence: true,
+      _count: { select: { judgments: true } },
     },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
-  if (!isAiReviewStatus(challenge.status)) return Response.json({ error: "Not ready for judgment" }, { status: 400 });
+  if (isTerminalStatus(challenge.status)) {
+    return Response.json({ error: "Terminal challenges cannot be rejudged after settlement/refund/void." }, { status: 409 });
+  }
+  const isRejudge = rejudgeRequested && isVerdictReadyStatus(challenge.status) && challenge._count.judgments > 0;
+  if (!isAiReviewStatus(challenge.status) && !isRejudge) {
+    return Response.json(
+      { error: rejudgeRequested ? "No previous AI verdict is available to rejudge." : "Not ready for judgment" },
+      { status: 400 },
+    );
+  }
 
   // Free Mode: when the challenge has no stake, AI judgment is free.
   // Paid challenges still charge the user's credits for the judgment inference.
   const isFreeChallenge = (challenge.stake ?? 0) === 0;
 
+  let inferenceSpendCharged = false;
   if (!isFreeChallenge) {
     const balance = await getCredits(user.userId);
     if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
-    const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
+    const spend = await spendForInference(
+      user.userId,
+      tierId,
+      "judge",
+      `${isRejudge ? "Rejudge" : "Judge"}: "${challenge.title.slice(0, 40)}"`,
+      id,
+    );
     if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+    inferenceSpendCharged = true;
+  }
+
+  const judgeStartStatus = isRejudge ? ChallengeStatus.judging : challenge.status;
+  if (isRejudge) {
+    if (challenge.status !== ChallengeStatus.disputed) {
+      assertChallengeTransition(challenge.status, ChallengeStatus.disputed);
+      await prisma.challenge.update({
+        where: { id },
+        data: { status: ChallengeStatus.disputed },
+      });
+    }
+    assertChallengeTransition(ChallengeStatus.disputed, ChallengeStatus.judging);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.judging },
+    });
+    await appendAuditLog({
+      action: "judgment.rejudge_requested",
+      actorUserId: user.userId,
+      challengeId: id,
+      payload: {
+        previousStatus: challenge.status,
+        reason: rejudgeReason || "Creator requested another AI judgment.",
+        tierId,
+        providerId: providerIdOverride ?? null,
+        model: modelOverride ?? null,
+      },
+    });
   }
 
   const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
@@ -185,7 +240,21 @@ export async function POST(
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
-      : aiModelLabel;
+      : result.source === "fallback"
+        ? "Fallback - no-settlement-v1"
+        : aiModelLabel;
+
+  let inferenceRefunded = false;
+  if (result.source === "fallback" && inferenceSpendCharged) {
+    await addCredits(
+      user.userId,
+      cost,
+      "refund",
+      `AI judge refunded - no usable model verdict for "${challenge.title.slice(0, 40)}"`,
+      id,
+    );
+    inferenceRefunded = true;
+  }
 
   const shouldAutoSettle =
     autoSettlePolicy.eligible &&
@@ -265,6 +334,9 @@ export async function POST(
         settlementRecommendation: recommendation,
         blockingIssues,
         autoSettleBlockReason: autoSettlePolicy.reason,
+        rejudge: isRejudge,
+        rejudgeReason: rejudgeReason || null,
+        inferenceRefunded,
         reasoning: result.reasoning?.slice(0, 500),
       },
     });
@@ -278,7 +350,7 @@ export async function POST(
       },
     });
 
-    const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
+    const postBalance = isFreeChallenge || inferenceRefunded ? await getCredits(user.userId) : undefined;
 
     return Response.json({
       ...verdict,
@@ -289,13 +361,14 @@ export async function POST(
       model: effectiveAiModelLabel,
       tierId,
       creditsUsed: isFreeChallenge ? 0 : cost,
-      creditsRemaining: isFreeChallenge ? postBalance : undefined,
+      creditsRefunded: inferenceRefunded ? cost : 0,
+      creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
       txHash: null,
       freeMode: isFreeChallenge,
     });
   }
 
-  assertChallengeTransition(challenge.status, ChallengeStatus.ai_verdict_ready);
+  assertChallengeTransition(judgeStartStatus, ChallengeStatus.ai_verdict_ready);
   await prisma.challenge.update({
     where: { id },
     data: { status: ChallengeStatus.ai_verdict_ready, aiModel: effectiveAiModelLabel },
@@ -345,6 +418,7 @@ export async function POST(
           model: effectiveAiModelLabel,
           tierId,
           creditsUsed: isFreeChallenge ? 0 : cost,
+          creditsRefunded: inferenceRefunded ? cost : 0,
           freeMode: isFreeChallenge,
         },
         { status: 502 },
@@ -372,6 +446,9 @@ export async function POST(
       recommendation,
       settlementRecommendation: recommendation,
       blockingIssues,
+      rejudge: isRejudge,
+      rejudgeReason: rejudgeReason || null,
+      inferenceRefunded,
       reasoning: result.reasoning?.slice(0, 500),
     },
   });
@@ -385,7 +462,7 @@ export async function POST(
     },
   });
 
-  const postBalance = isFreeChallenge ? await getCredits(user.userId) : undefined;
+  const postBalance = isFreeChallenge || inferenceRefunded ? await getCredits(user.userId) : undefined;
 
   return Response.json({
     ...verdict,
@@ -397,7 +474,8 @@ export async function POST(
     model: effectiveAiModelLabel,
     tierId,
     creditsUsed: isFreeChallenge ? 0 : cost,
-    creditsRemaining: isFreeChallenge ? postBalance : undefined,
+    creditsRefunded: inferenceRefunded ? cost : 0,
+    creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
     txHash: settlement.txHash ?? null,
     freeMode: isFreeChallenge,
   });

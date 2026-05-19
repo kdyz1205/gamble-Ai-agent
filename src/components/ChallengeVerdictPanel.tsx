@@ -95,6 +95,7 @@ function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: n
   return {
     evidenceQuality,
     recommendation,
+    source: typeof metrics.source === "string" ? metrics.source : null,
     blockingIssues,
     autoSettleEligible:
       typeof metrics.autoSettleEligible === "boolean" ? metrics.autoSettleEligible : inferredAutoSettleEligible,
@@ -104,6 +105,16 @@ function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: n
 
 function displayEnum(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : "Unknown";
+}
+
+function isRejudgeableStatus(status: string) {
+  return [
+    "ai_verdict_ready",
+    "dispute_window_open",
+    "manual_review_required",
+    "ai_inconclusive",
+    "disputed",
+  ].includes(status);
 }
 
 export default function ChallengeVerdictPanel({
@@ -172,6 +183,7 @@ export default function ChallengeVerdictPanel({
   const canSubmitEvidence = challenge && isEvidenceWindowStatus(challenge.status) && !!me && !myEvidence;
   const canRunAi = challenge && isAiReviewStatus(challenge.status) && isCreator && challenge.judgments.length === 0;
   const canConfirmAi = challenge && isVerdictReadyStatus(challenge.status) && isCreator && challenge.judgments.length > 0;
+  const canRejudge = challenge && isCreator && challenge.judgments.length > 0 && isRejudgeableStatus(challenge.status);
   const settled = challenge?.status === "settled" || challenge?.status === "resolved";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
@@ -305,6 +317,33 @@ export default function ChallengeVerdictPanel({
     navigator.clipboard.writeText(url)
       .then(() => showCopied("Join link copied."))
       .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
+  };
+
+  const runRejudge = async () => {
+    if (!challenge) return;
+    const cost = TIER_COST[tier];
+    if (credits < cost) {
+      setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
+      return;
+    }
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      const prefs = readOracleLlmPrefs();
+      await api.judgeChallenge(challenge.id, tier, {
+        providerId: prefs.providerId,
+        ...(prefs.model ? { model: prefs.model } : {}),
+        rejudge: true,
+        reason: "Creator disputed the previous AI verdict and requested another model pass.",
+      });
+      setVerdictRevealed(false);
+      await refresh();
+      onCreditsMayChange();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not rejudge this challenge");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const shareInvite = async () => {
@@ -811,20 +850,63 @@ export default function ChallengeVerdictPanel({
             <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
               Not final yet. Confirm to settle credits, or leave for manual review.
             </p>
-            <motion.button
-              type="button"
-              disabled={busy}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => void confirmAiRecommendation()}
-              className="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40"
-              style={{
-                background: "linear-gradient(135deg, #f5a623, #7c5cfc)",
-                boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
-              }}
-            >
-              {busy ? "Settling..." : "Confirm AI Recommendation & Settle"}
-            </motion.button>
+            {verdictMetrics.autoSettleEligible ? (
+              <motion.button
+                type="button"
+                disabled={busy}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => void confirmAiRecommendation()}
+                className="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(135deg, #f5a623, #7c5cfc)",
+                  boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
+                }}
+              >
+                {busy ? "Settling..." : "Confirm AI Recommendation & Settle"}
+              </motion.button>
+            ) : (
+              <div className="p-3 text-xs font-semibold" style={{ color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "14px" }}>
+                This verdict is not eligible for settlement. Run another AI pass or keep it in manual review.
+              </div>
+            )}
+
+            {canRejudge && (
+              <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #E2E8F0" }}>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>Try another judge model</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([1, 2, 3] as const).map((t) => {
+                    const selected = tier === t;
+                    return (
+                      <button
+                        key={`rejudge-${t}`}
+                        type="button"
+                        onClick={() => setTier(t)}
+                        className="p-2 text-center"
+                        style={{
+                          background: selected ? "#DBEAFE" : "#FFFFFF",
+                          border: selected ? "1.5px solid #60A5FA" : "1px solid #E2E8F0",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        <p className="text-[11px] font-extrabold" style={{ color: selected ? "#1D4ED8" : "#334155" }}>{TIER_LABEL[t]}</p>
+                        <p className="text-[10px] font-bold mt-0.5" style={{ color: selected ? "#1E40AF" : "#94A3B8" }}>{TIER_COST[t]} cr</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <motion.button
+                  type="button"
+                  disabled={busy}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => void runRejudge()}
+                  className="w-full py-3 rounded-xl text-sm font-black disabled:opacity-40"
+                  style={{ color: "#1D4ED8", background: "#EFF6FF", border: "1px solid #BFDBFE" }}
+                >
+                  {busy ? "Rejudging..." : `Rejudge with selected model · ${TIER_COST[tier]} cr`}
+                </motion.button>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -888,7 +970,7 @@ export default function ChallengeVerdictPanel({
                 )}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-4">
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
                   <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.evidenceQuality === "good" ? "#047857" : "#9A3412" }}>
@@ -905,6 +987,12 @@ export default function ChallengeVerdictPanel({
                   <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Settlement gate</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.autoSettleEligible ? "#047857" : "#9A3412" }}>
                     {verdictMetrics.autoSettleEligible ? "Eligible" : "Needs Review"}
+                  </p>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Judge source</p>
+                  <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.source === "fallback" ? "#9A3412" : "#047857" }}>
+                    {displayEnum(verdictMetrics.source)}
                   </p>
                 </div>
               </div>

@@ -308,6 +308,8 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerId?: string;
   model?: string;
   autoSettle?: boolean;
+  rejudge?: boolean;
+  reason?: string;
 }): Promise<{
   status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
   winnerId: string | null;
@@ -336,6 +338,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   model: string;
   tierId: number;
   creditsUsed: number;
+  creditsRefunded?: number;
   creditsRemaining: number;
   txHash: string | null;
 }> {
