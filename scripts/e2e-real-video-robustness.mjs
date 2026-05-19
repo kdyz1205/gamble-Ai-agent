@@ -458,13 +458,13 @@ try {
     const evCreator = await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
       type: "video",
       url: creatorBlob.url,
-      description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}.`,
+      description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
       metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: creatorVideo.source },
     });
     const evOpponent = await postJson(opponent.jar, `/api/challenges/${challengeId}/evidence`, {
       type: "video",
       url: opponentBlob.url,
-      description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}.`,
+      description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
       metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: opponentVideo.source },
     });
     caseProof.evidence = {

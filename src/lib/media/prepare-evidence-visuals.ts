@@ -69,7 +69,7 @@ async function buildFilmstripImage(
     const top = headerH + row * (tileH + labelH);
     const frame = await sharp(picked[i].buffer)
       .rotate()
-      .resize(tileW, tileH, { fit: "cover" })
+      .resize(tileW, tileH, { fit: "contain", background: "#f8fafc" })
       .jpeg({ quality: 78, mozjpeg: true })
       .toBuffer();
     const approxSec =
