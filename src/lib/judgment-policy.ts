@@ -130,7 +130,7 @@ export function blockingIssuesForJudgment(
   const quality = evidenceQuality(result);
   const rec = recommendation(result);
   const issues: string[] = [...(result.blockingIssues ?? [])];
-  const isVisionJudgment = options.requiresVision || result.source === "vision_llm" || Boolean(result.videoMetrics);
+  const isVisionJudgment = options.requiresVision || result.source === "vision_llm";
 
   if (!result.winnerId) issues.push("Winner is missing or the result is tied.");
   if (!Number.isFinite(result.confidence)) {
