@@ -594,11 +594,27 @@ function coerceVideoMetrics(
 function parseRequiredDurationSec(...parts: Array<string | null | undefined>): number | null {
   const text = parts.filter(Boolean).join("\n").toLowerCase();
   if (!text) return null;
-  const minuteMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\b/);
-  if (minuteMatch) return Math.round(Number(minuteMatch[1]) * 60);
-  const secondMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|sec|s)\b/);
-  if (secondMatch) return Math.round(Number(secondMatch[1]));
-  return null;
+
+  const candidates: Array<{ seconds: number; score: number; index: number }> = [];
+  const re = /\b(\d+(?:\.\d+)?)\s*-?\s*(seconds?|secs?|sec|minutes?|mins?)\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const unit = match[2];
+    const seconds = /min/.test(unit) ? Math.round(value * 60) : Math.round(value);
+    const start = Math.max(0, match.index - 90);
+    const end = Math.min(text.length, match.index + match[0].length + 90);
+    const context = text.slice(start, end);
+    let score = 0;
+    if (/\b(push[-\s]?ups?|reps?|attempt|timer|cap|within|duration|time limit|scoring|valid|perform|plank|run|sprint)\b/.test(context)) score += 3;
+    if (/\b(dispute|verdict|review|deadline|upload|join|window|after|refund|settlement)\b/.test(context)) score -= 4;
+    candidates.push({ seconds, score, index: match.index });
+  }
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => b.score - a.score || a.seconds - b.seconds || a.index - b.index);
+  return candidates[0].score > 0 ? candidates[0].seconds : null;
 }
 
 function applyObservedVideoGuards(
