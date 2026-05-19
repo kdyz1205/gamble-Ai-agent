@@ -367,7 +367,7 @@ const cases = [
     title: "One user submits non-push-up video should not auto-settle",
     expect: "not_settled",
     metricExpectation: "creator_reps_higher",
-    creator: { repCount: 10, durationSec: 60, variant: "clean" },
+    creator: { repCount: 4, durationSec: 60, variant: "clean" },
     opponent: { repCount: 1, durationSec: 60, variant: "non_pushup" },
   },
   {
