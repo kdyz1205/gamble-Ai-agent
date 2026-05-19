@@ -140,6 +140,15 @@ function isRejudgeableStatus(status: string) {
   ].includes(status);
 }
 
+function isManualResolutionStatus(status: string) {
+  return [
+    "manual_review_required",
+    "disputed",
+    "ai_inconclusive",
+    "dispute_window_open",
+  ].includes(status);
+}
+
 export default function ChallengeVerdictPanel({
   challengeId,
   userId,
@@ -165,6 +174,8 @@ export default function ChallengeVerdictPanel({
   const [origin, setOrigin] = useState("");
   const [acceptingChallenge, setAcceptingChallenge] = useState(false);
   const [acceptContractChecked, setAcceptContractChecked] = useState(false);
+  const [manualReason, setManualReason] = useState("");
+  const [manualWinnerId, setManualWinnerId] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -207,6 +218,12 @@ export default function ChallengeVerdictPanel({
   const canRunAi = challenge && isAiReviewStatus(challenge.status) && isCreator && challenge.judgments.length === 0;
   const canConfirmAi = challenge && isVerdictReadyStatus(challenge.status) && isCreator && challenge.judgments.length > 0;
   const canRejudge = challenge && isCreator && challenge.judgments.length > 0 && isRejudgeableStatus(challenge.status);
+  const canRequestManualReview =
+    challenge &&
+    Boolean(me) &&
+    isRejudgeableStatus(challenge.status) &&
+    !["manual_review_required", "disputed"].includes(challenge.status);
+  const canManualResolve = challenge && isCreator && isManualResolutionStatus(challenge.status);
   const settled = challenge?.status === "settled" || challenge?.status === "resolved";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
@@ -319,6 +336,48 @@ export default function ChallengeVerdictPanel({
       onCreditsMayChange();
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "Could not confirm AI recommendation");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestManualReview = async () => {
+    if (!challenge) return;
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      await api.disputeChallenge(challenge.id, {
+        reason: manualReason || "Participant requested manual review of the AI verdict.",
+      });
+      await refresh();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not request manual review");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resolveManualReview = async (outcome: "winner" | "refund" | "void") => {
+    if (!challenge) return;
+    const winnerId = outcome === "winner"
+      ? (manualWinnerId || accepted[0]?.user.id || null)
+      : null;
+    if (outcome === "winner" && !winnerId) {
+      setVerdictErr("Pick a winner before resolving manual review.");
+      return;
+    }
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      await api.manualResolveChallenge(challenge.id, {
+        outcome,
+        winnerId,
+        reason: manualReason || "Creator resolved the manual review based on the submitted evidence.",
+      });
+      await refresh();
+      onCreditsMayChange();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not resolve manual review");
     } finally {
       setBusy(false);
     }
@@ -455,6 +514,7 @@ export default function ChallengeVerdictPanel({
   const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
   const verdictMetrics = parseJudgmentMetrics(verdictRow);
+  const selectedManualWinnerId = manualWinnerId || accepted[0]?.user.id || "";
 
   return (
     <motion.div
@@ -933,7 +993,85 @@ export default function ChallengeVerdictPanel({
           </motion.div>
         )}
 
-        {/* ══ VERDICT REVEAL ══ */}
+        {(canRequestManualReview || canManualResolve) && (
+          <motion.div
+            className="space-y-3 p-5"
+            style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "24px" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          >
+            <div>
+              <p className="text-sm font-bold" style={{ color: "#1E293B" }}>Manual review</p>
+              <p className="text-xs font-medium mt-1" style={{ color: "#64748B", lineHeight: 1.5 }}>
+                Use this when the AI verdict is unclear or wrong. The review action is audited before credits move.
+              </p>
+            </div>
+            <textarea
+              value={manualReason}
+              onChange={(event) => setManualReason(event.target.value)}
+              rows={3}
+              placeholder="What is wrong or unclear about this verdict?"
+              className="w-full resize-none rounded-2xl border px-3 py-2 text-xs font-semibold focus:outline-none"
+              style={{ borderColor: "#E2E8F0", color: "#334155", background: "#F8FAFC" }}
+            />
+            {canRequestManualReview && (
+              <motion.button
+                type="button"
+                disabled={busy}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => void requestManualReview()}
+                className="w-full py-3 rounded-xl text-sm font-black disabled:opacity-40"
+                style={{ color: "#92400E", background: "#FEF3C7", border: "1px solid #FDE68A" }}
+              >
+                {busy ? "Requesting review..." : "Request manual review"}
+              </motion.button>
+            )}
+            {canManualResolve && (
+              <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #E2E8F0" }}>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>
+                  Creator resolution
+                </p>
+                <select
+                  value={selectedManualWinnerId}
+                  onChange={(event) => setManualWinnerId(event.target.value)}
+                  className="w-full rounded-xl border px-3 py-2 text-xs font-bold focus:outline-none"
+                  style={{ borderColor: "#E2E8F0", color: "#334155", background: "#FFFFFF" }}
+                >
+                  {accepted.map((participant) => (
+                    <option key={participant.user.id} value={participant.user.id}>
+                      {participant.user.username} ({participant.role})
+                    </option>
+                  ))}
+                </select>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <motion.button
+                    type="button"
+                    disabled={busy || !selectedManualWinnerId}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => void resolveManualReview("winner")}
+                    className="py-3 rounded-xl text-sm font-black disabled:opacity-40"
+                    style={{ color: "#065F46", background: "#D1FAE5", border: "1px solid #A7F3D0" }}
+                  >
+                    {busy ? "Resolving..." : "Award selected winner"}
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    disabled={busy}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => void resolveManualReview(challenge.stake > 0 ? "refund" : "void")}
+                    className="py-3 rounded-xl text-sm font-black disabled:opacity-40"
+                    style={{ color: "#334155", background: "#F8FAFC", border: "1px solid #E2E8F0" }}
+                  >
+                    {challenge.stake > 0 ? "Refund locked credits" : "Void challenge"}
+                  </motion.button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* VERDICT REVEAL */}
         <AnimatePresence>
           {verdictRow && verdictRevealed && (
             <motion.div

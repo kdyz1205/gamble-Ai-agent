@@ -7,6 +7,8 @@ export const AuditActions = {
   CHALLENGE_CREATED: "challenge.created",
   CHALLENGE_STATUS: "challenge.status_changed",
   CHALLENGE_ACCEPTED: "challenge.accepted",
+  CHALLENGE_DISPUTED: "challenge.disputed",
+  MANUAL_REVIEW_RESOLVED: "challenge.manual_review_resolved",
   EVIDENCE_SUBMITTED: "evidence.submitted",
   JUDGMENT_COMPLETED: "judgment.completed",
   CRON_TRANSITION: "cron.deadline_to_judging",

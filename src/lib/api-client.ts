@@ -358,6 +358,32 @@ export async function confirmVerdict(id: string): Promise<{
   return apiFetch(`/challenges/${id}/confirm-verdict`, { method: "POST" });
 }
 
+export async function disputeChallenge(id: string, data?: { reason?: string }): Promise<{
+  challenge: ChallengeData;
+  review: { status: string; reason: string | null; latestJudgmentId: string | null };
+}> {
+  return apiFetch(`/challenges/${id}/dispute`, {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
+}
+
+export async function manualResolveChallenge(id: string, data: {
+  outcome: "winner" | "refund" | "void";
+  winnerId?: string | null;
+  reason?: string;
+}): Promise<{
+  challenge: ChallengeData;
+  judgment: unknown;
+  settlement: { success: boolean; error?: string; txHash?: string };
+  manualReview: { outcome: string; finalStatus: string; winnerId: string | null; reason: string };
+}> {
+  return apiFetch(`/challenges/${id}/manual-resolve`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 /* ── AI Parse & Tweak ── */
 
 export interface StakeOption {
