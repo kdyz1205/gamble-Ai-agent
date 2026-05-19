@@ -13,6 +13,7 @@ const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
 const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const fixtureDir = process.env.REAL_VIDEO_FIXTURE_DIR || "";
+const caseDelayMs = Number(process.env.E2E_ROBUSTNESS_CASE_DELAY_MS || (judgeProvider === "openai" ? 45_000 : 5_000));
 const selectedCaseIds = (process.env.RUN_ROBUSTNESS_CASES || "")
   .split(",")
   .map((value) => value.trim())
@@ -559,6 +560,9 @@ try {
       }
       requireCheck(caseProof, "not_auto_settled", finalChallenge.challenge.status !== "settled", finalChallenge.challenge.status);
       requireCheck(caseProof, "auto_settle_blocked", judged.autoSettleEligible !== true, caseProof.judgment);
+    }
+    if (cases.indexOf(caseDef) < cases.length - 1 && caseDelayMs > 0) {
+      await sleep(caseDelayMs);
     }
   }
 } catch (error) {
