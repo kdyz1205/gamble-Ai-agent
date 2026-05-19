@@ -326,13 +326,16 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     if (sameCameraEligible && sameCameraHinted) setSharedSameCamera(true);
   }, [challenge?.id, sameCameraEligible, sameCameraHinted]);
 
-  const sameCameraMetadata = () => sharedSameCamera
-    ? {
-        sharedSameCamera: true,
-        captureMode: "one_phone_same_camera",
-        identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
-      }
-    : undefined;
+  const sameCameraMetadata = (file?: File) => ({
+    ...(file ? { fileName: file.name, fileSizeBytes: file.size, contentType: file.type || null } : {}),
+    ...(sharedSameCamera
+      ? {
+          sharedSameCamera: true,
+          captureMode: "one_phone_same_camera",
+          identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
+        }
+      : {}),
+  });
 
   const evidenceDescription = (base: string) => sharedSameCamera
     ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${base}`
@@ -361,7 +364,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           type: file.type.startsWith("video") ? "video" : "photo",
           url: presign.publicUrl,
           description: evidenceDescription(`Captured: ${file.name}`),
-          metadata: sameCameraMetadata(),
+          metadata: sameCameraMetadata(file),
         });
       } else {
         const pathname = evidenceBlobPathname(challenge.id, file.name);
@@ -371,12 +374,13 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           handleUploadUrl,
           contentType: file.type || undefined,
           multipart: file.size > 4 * 1024 * 1024,
+          clientPayload: JSON.stringify({ fileName: file.name, fileSizeBytes: file.size, contentType: file.type || null }),
         });
         await api.submitEvidence(challenge.id, {
           type: file.type.startsWith("video") ? "video" : "photo",
           url: blob.url,
           description: evidenceDescription(`Captured: ${file.name}`),
-          metadata: sameCameraMetadata(),
+          metadata: sameCameraMetadata(file),
         });
       }
 

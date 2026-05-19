@@ -270,6 +270,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             handleUploadUrl,
             contentType: f.type || undefined,
             multipart: f.size > 4 * 1024 * 1024,
+            clientPayload: JSON.stringify({ fileName: f.name, fileSizeBytes: f.size, contentType: f.type || null }),
             onUploadProgress: (p) => setUploadProgress(Math.round((p.loaded / p.total) * 100)),
           });
           finalUrl = uploaded.url;
@@ -308,13 +309,16 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
         description: sharedSameCamera
           ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted")}`
           : trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted"),
-        metadata: sharedSameCamera
-          ? {
-              sharedSameCamera: true,
-              captureMode: "one_phone_same_camera",
-              identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
-            }
-          : undefined,
+        metadata: {
+          ...(f ? { fileName: f.name, fileSizeBytes: f.size, contentType: f.type || null } : {}),
+          ...(sharedSameCamera
+            ? {
+                sharedSameCamera: true,
+                captureMode: "one_phone_same_camera",
+                identityGuidance: "Creator/Participant A should be on the left; opponent/Participant B should be on the right when possible.",
+              }
+            : {}),
+        },
       });
       resetAll();
       setMode(null);

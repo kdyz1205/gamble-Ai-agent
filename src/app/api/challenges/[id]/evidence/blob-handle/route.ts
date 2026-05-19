@@ -12,6 +12,18 @@ function blobConfigured() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
+function safeClientPayload(raw: string | null) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/challenges/[id]/evidence/blob-handle
  * Vercel Blob client-upload handshake (token generation). Bytes go to Blob storage, not through this route.
@@ -72,16 +84,27 @@ export async function POST(
     const jsonResponse = await handleUpload({
       request: req,
       body,
-      onBeforeGenerateToken: async (pathname) => {
+      onBeforeGenerateToken: async (pathname, clientPayload, multipart) => {
         const prefix = `evidence/${id}/`;
         if (!pathname.startsWith(prefix)) {
           throw new Error("Invalid pathname");
         }
+        const payload = safeClientPayload(clientPayload);
+        console.log(
+          `[blob-upload] token challenge=${id} pathname=${pathname} sizeBytes=${payload?.fileSizeBytes ?? "unknown"} multipart=${multipart}`,
+        );
         return {
           allowedContentTypes: ["video/*", "image/*"],
           maximumSizeInBytes: MAX_BYTES,
           addRandomSuffix: true,
+          tokenPayload: clientPayload,
         };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const payload = safeClientPayload(tokenPayload ?? null);
+        console.log(
+          `[blob-upload] completed challenge=${id} pathname=${blob.pathname} contentType=${blob.contentType} sizeBytes=${payload?.fileSizeBytes ?? "unknown"}`,
+        );
       },
     });
     return Response.json(jsonResponse);

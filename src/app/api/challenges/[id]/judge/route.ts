@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
@@ -12,6 +12,7 @@ import {
   isVerdictReadyStatus,
 } from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
@@ -435,6 +436,9 @@ export async function POST(
   await prisma.challenge.update({
     where: { id },
     data: { status: ChallengeStatus.settled, aiModel: effectiveAiModelLabel },
+  });
+  after(async () => {
+    await cleanupChallengeFrameBlobs(id);
   });
 
   await appendAuditLog({

@@ -15,6 +15,7 @@
 import prisma from "@/lib/db";
 import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
+import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
 import {
   EVIDENCE_WINDOW_STATUSES,
@@ -445,10 +446,13 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
     : challenge.stake > 0
       ? ChallengeStatus.refunded
       : ChallengeStatus.voided;
-  await prisma.challenge.updateMany({
+  const terminalUpdate = await prisma.challenge.updateMany({
     where: { id: challengeId, status: ChallengeStatus.finalized },
     data: { status: finalStatus },
   });
+  if (terminalUpdate.count > 0) {
+    await cleanupChallengeFrameBlobs(challengeId);
+  }
 
   return { ok: true, data: { challengeId, winnerId: j.winnerId, status: finalStatus } };
 }

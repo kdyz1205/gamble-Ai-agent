@@ -333,7 +333,7 @@ export async function prepareParticipantVisualsFast(
   const fetched = await Promise.all(
     preparedFrames.map(async (url, i) => {
       try {
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url, { cache: "force-cache" });
         if (!res.ok) return null;
         const ab = await res.arrayBuffer();
         const buf = Buffer.from(ab);

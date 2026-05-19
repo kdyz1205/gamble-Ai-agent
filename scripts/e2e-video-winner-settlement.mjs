@@ -12,6 +12,7 @@ const execFile = promisify(execFileCallback);
 const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
 const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
+const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 
 class Jar {
   constructor(name) {
@@ -206,6 +207,7 @@ async function uploadVideo(jar, challengeId, filePath, filename) {
     handleUploadUrl: `${base}/api/challenges/${challengeId}/evidence/blob-handle`,
     contentType: "video/mp4",
     multipart: false,
+    clientPayload: JSON.stringify({ fileName: filename, fileSizeBytes: buffer.length, contentType: "video/mp4" }),
     headers: { cookie: jar.header() },
   });
 }
@@ -226,7 +228,8 @@ function sleep(ms) {
 
 async function waitForPreparedFrames(jar, challengeId, creatorEvidenceId, opponentEvidenceId) {
   let last = null;
-  for (let i = 0; i < 45; i += 1) {
+  const attempts = expectPreextract ? 45 : 1;
+  for (let i = 0; i < attempts; i += 1) {
     const snapshot = await getJson(jar, `/api/challenges/${challengeId}`);
     last = snapshot.challenge;
     const evidenceById = new Map((last.evidence || []).map((row) => [row.id, row]));
@@ -386,6 +389,8 @@ try {
     repCount: 1,
     livenessPhrase,
   });
+  const creatorVideoSize = (await readFile(creatorVideo)).length;
+  const opponentVideoSize = (await readFile(opponentVideo)).length;
 
   const creatorBlob = await uploadVideo(creator.jar, challengeId, creatorVideo, `creator-pushups-${stamp}.mp4`);
   const opponentBlob = await uploadVideo(opponent.jar, challengeId, opponentVideo, `opponent-pushups-${stamp}.mp4`);
@@ -394,13 +399,13 @@ try {
     type: "video",
     url: creatorBlob.url,
     description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}.`,
-    metadata: { fixtureKind: "pushup_video_visual_fixture_v1", livenessPhrase },
+    metadata: { fixtureKind: "pushup_video_visual_fixture_v1", livenessPhrase, fileSizeBytes: creatorVideoSize },
   });
   const evOpponent = await postJson(opponent.jar, `/api/challenges/${challengeId}/evidence`, {
     type: "video",
     url: opponentBlob.url,
     description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}.`,
-    metadata: { fixtureKind: "pushup_video_visual_fixture_v1", livenessPhrase },
+    metadata: { fixtureKind: "pushup_video_visual_fixture_v1", livenessPhrase, fileSizeBytes: opponentVideoSize },
   });
   proof.evidence = {
     creatorEvidenceId: evCreator.evidence.id,
@@ -421,14 +426,17 @@ try {
     creatorMode: prepared.creatorPrepareMode,
     opponentMode: prepared.opponentPrepareMode,
     statusBeforeJudge: prepared.challenge?.status ?? null,
+    preextractExpected: expectPreextract,
   };
 
   requireCheck(proof, "created_waiting_for_opponent", created.challenge.status === "waiting_for_opponent", created.challenge.status);
   requireCheck(proof, "opponent_accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);
   requireCheck(proof, "challenge_video_evidence_type", created.challenge.evidenceType === "video", created.challenge.evidenceType);
   requireCheck(proof, "both_video_evidence_submitted", prepared.challenge?.evidence?.length === 2, prepared.challenge?.evidence?.length);
-  requireCheck(proof, "prepared_frames_creator", prepared.creatorFrames.length > 0, proof.preparedFrames);
-  requireCheck(proof, "prepared_frames_opponent", prepared.opponentFrames.length > 0, proof.preparedFrames);
+  if (expectPreextract) {
+    requireCheck(proof, "prepared_frames_creator", prepared.creatorFrames.length > 0, proof.preparedFrames);
+    requireCheck(proof, "prepared_frames_opponent", prepared.opponentFrames.length > 0, proof.preparedFrames);
+  }
 
   const judged = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, {
     tier: 1,

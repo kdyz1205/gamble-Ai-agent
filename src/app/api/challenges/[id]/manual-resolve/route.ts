@@ -1,10 +1,11 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { settleChallenge } from "@/lib/credits";
 import { ChallengeStatus, type ChallengeStatus as ChallengeStatusValue } from "@/lib/enums";
 import { assertChallengeTransition, isTerminalStatus } from "@/lib/challenge-state-machine";
+import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 
 export const runtime = "nodejs";
 
@@ -208,6 +209,9 @@ export async function POST(
       where: { id },
       data: { status: finalStatus, aiModel: "manual-review-v1" },
       include: challengeDetailInclude(),
+    });
+    after(async () => {
+      await cleanupChallengeFrameBlobs(id);
     });
 
     await appendAuditLog({

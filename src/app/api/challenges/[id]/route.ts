@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
+import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 
 /**
  * GET /api/challenges/[id] - Get a single challenge with full details.
@@ -130,6 +132,9 @@ export async function DELETE(
       { status: 500 },
     );
   }
+  after(async () => {
+    await cleanupChallengeFrameBlobs(id);
+  });
 
   return Response.json({
     ok: true,

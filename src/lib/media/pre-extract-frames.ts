@@ -40,6 +40,7 @@ interface PrepareInput {
 
 interface PrepareOutput {
   frames: string[];       // public URLs to normalized JPEGs
+  capturedFrameCount: number;
   durationSec: number | null;
   mode: "scene_change" | "uniform_fallback" | "photo" | "none";
   error: string | null;
@@ -97,10 +98,10 @@ async function preparePhoto(
   const { buffer } = await fetchBinaryCapped(url, 12 * 1024 * 1024);
   const jpeg = await normalizeJpegBuffer(buffer);
   if (!jpeg) {
-    return { frames: [], durationSec: null, mode: "photo", error: "Image normalization failed (too large?)." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "photo", error: "Image normalization failed (too large?)." };
   }
   const frameUrl = await uploadFrame(input.challengeId, input.evidenceId, 0, jpeg);
-  return { frames: [frameUrl], durationSec: null, mode: "photo", error: null };
+  return { frames: [frameUrl], capturedFrameCount: 1, durationSec: null, mode: "photo", error: null };
 }
 
 /** Video path: ffmpeg extract + sharp normalize + blob upload. */
@@ -109,7 +110,7 @@ async function prepareVideo(
   url: string,
 ): Promise<PrepareOutput> {
   if (!ffmpegAvailable()) {
-    return { frames: [], durationSec: null, mode: "none", error: "ffmpeg unavailable on host." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: "ffmpeg unavailable on host." };
   }
 
   const duration = await ffprobeDurationFromUrl(url);
@@ -146,6 +147,7 @@ async function prepareVideo(
       } catch (secondErr) {
         return {
           frames: [],
+          capturedFrameCount: 0,
           durationSec: duration,
           mode: "none",
           error: secondErr instanceof Error ? secondErr.message.slice(0, 200) : String(secondErr),
@@ -154,7 +156,7 @@ async function prepareVideo(
     }
 
     if (paths.length === 0) {
-      return { frames: [], durationSec: duration, mode, error: "No frames captured." };
+      return { frames: [], capturedFrameCount: 0, durationSec: duration, mode, error: "No frames captured." };
     }
 
     const urls: string[] = [];
@@ -172,10 +174,10 @@ async function prepareVideo(
     }
 
     if (urls.length === 0) {
-      return { frames: [], durationSec: duration, mode, error: "All frame uploads failed." };
+      return { frames: [], capturedFrameCount: paths.length, durationSec: duration, mode, error: "All frame uploads failed." };
     }
 
-    return { frames: urls, durationSec: duration, mode, error: null };
+    return { frames: urls, capturedFrameCount: paths.length, durationSec: duration, mode, error: null };
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -183,16 +185,16 @@ async function prepareVideo(
 
 async function prepareFrames(input: PrepareInput): Promise<PrepareOutput> {
   if (!input.url?.trim()) {
-    return { frames: [], durationSec: null, mode: "none", error: null };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: null };
   }
   if (!blobConfigured()) {
-    return { frames: [], durationSec: null, mode: "none", error: "BLOB_READ_WRITE_TOKEN not set — frames can't be cached." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: "BLOB_READ_WRITE_TOKEN not set - frames cannot be cached." };
   }
   if (!isEvidenceUrlAllowed(input.url)) {
-    return { frames: [], durationSec: null, mode: "none", error: "URL rejected (public https only)." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: "URL rejected (public https only)." };
   }
   if (isYouTubeUrl(input.url)) {
-    return { frames: [], durationSec: null, mode: "none", error: "YouTube pages can't be pre-extracted." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: "YouTube pages can't be pre-extracted." };
   }
 
   const kind = normalizeType(input.type);
@@ -207,17 +209,18 @@ async function prepareFrames(input: PrepareInput): Promise<PrepareOutput> {
     const { buffer, contentType } = await fetchBinaryCapped(input.url, 12 * 1024 * 1024);
     if (looksLikeImageMime(contentType, input.url)) {
       const jpeg = await normalizeJpegBuffer(buffer);
-      if (!jpeg) return { frames: [], durationSec: null, mode: "photo", error: "Image normalize failed." };
+      if (!jpeg) return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "photo", error: "Image normalize failed." };
       const url = await uploadFrame(input.challengeId, input.evidenceId, 0, jpeg);
-      return { frames: [url], durationSec: null, mode: "photo", error: null };
+      return { frames: [url], capturedFrameCount: 1, durationSec: null, mode: "photo", error: null };
     }
     if (looksLikeVideoMime(contentType, input.url)) {
       return await prepareVideo(input, input.url);
     }
-    return { frames: [], durationSec: null, mode: "none", error: "Unrecognized media type." };
+    return { frames: [], capturedFrameCount: 0, durationSec: null, mode: "none", error: "Unrecognized media type." };
   } catch (e) {
     return {
       frames: [],
+      capturedFrameCount: 0,
       durationSec: null,
       mode: "none",
       error: e instanceof Error ? e.message : String(e),
@@ -231,7 +234,7 @@ async function prepareFrames(input: PrepareInput): Promise<PrepareOutput> {
  * in Evidence.prepareError so the judge can fall back to the slow path
  * with full observability.
  */
-export async function preExtractAndPersistFrames(input: PrepareInput): Promise<void> {
+export async function preExtractAndPersistFrames(input: PrepareInput): Promise<PrepareOutput | null> {
   const started = Date.now();
   try {
     const out = await prepareFrames(input);
@@ -247,8 +250,9 @@ export async function preExtractAndPersistFrames(input: PrepareInput): Promise<v
     });
     const ms = Date.now() - started;
     console.log(
-      `[pre-extract] evidence=${input.evidenceId} frames=${out.frames.length} mode=${out.mode} dur=${out.durationSec ?? "?"}s in ${ms}ms${out.error ? ` error="${out.error}"` : ""}`,
+      `[pre-extract] evidence=${input.evidenceId} extracted=${out.capturedFrameCount} uploaded=${out.frames.length} mode=${out.mode} dur=${out.durationSec ?? "?"}s in ${ms}ms${out.error ? ` error="${out.error}"` : ""}`,
     );
+    return out;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     try {
@@ -265,5 +269,6 @@ export async function preExtractAndPersistFrames(input: PrepareInput): Promise<v
       /* db update best-effort */
     }
     console.error(`[pre-extract] evidence=${input.evidenceId} failed:`, msg);
+    return null;
   }
 }

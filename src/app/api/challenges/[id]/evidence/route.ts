@@ -3,12 +3,35 @@ import { after } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { preExtractAndPersistFrames } from "@/lib/media/pre-extract-frames";
+import { cleanupReplacedEvidenceBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
 import { EVIDENCE_WINDOW_STATUSES, isEvidenceWindowStatus } from "@/lib/challenge-state-machine";
 
 // Vision frame extraction + Blob upload can take 5-20s for a longer video.
 // Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
 export const maxDuration = 300;
+
+function evidencePreextractEnabled() {
+  return process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
+}
+
+function isPreextractableMedia(type: string, url: unknown) {
+  return Boolean(url && (type === "video" || type === "photo" || type === "image"));
+}
+
+function numberFromMetadata(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function preparedFrameCount(raw: string | null | undefined) {
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * POST /api/challenges/[id]/evidence — Submit evidence for a challenge
@@ -66,6 +89,19 @@ export async function POST(
       }
       return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
     };
+    const targetUserIds = sharedSameCamera
+      ? [
+          user.userId,
+          ...activeParticipants
+            .map((participant: { userId: string }) => participant.userId)
+            .filter((participantUserId: string) => participantUserId !== user.userId),
+        ]
+      : [user.userId];
+    const previousEvidenceRows = await prisma.evidence.findMany({
+      where: { challengeId: id, userId: { in: targetUserIds } },
+      select: { id: true, userId: true, url: true, preparedFrames: true },
+    });
+
     const upsertEvidenceFor = (targetUserId: string) =>
       prisma.evidence.upsert({
         where: {
@@ -100,12 +136,9 @@ export async function POST(
     // replace the old evidence instead of stacking N rows and confusing the
     // judge's `.find(e => e.userId === creator)` which picks the first match.
     // Also clears prepared frames so the background pre-extract starts fresh.
-    const evidenceRows = [await upsertEvidenceFor(user.userId)];
-    if (sharedSameCamera) {
-      for (const participant of activeParticipants) {
-        if (participant.userId === user.userId) continue;
-        evidenceRows.push(await upsertEvidenceFor(participant.userId));
-      }
+    const evidenceRows: Array<Awaited<ReturnType<typeof upsertEvidenceFor>>> = [];
+    for (const targetUserId of targetUserIds) {
+      evidenceRows.push(await upsertEvidenceFor(targetUserId));
     }
     const evidence = evidenceRows[0];
 
@@ -148,22 +181,82 @@ export async function POST(
       data: { status: nextStatus },
     });
 
-    // Fire-and-forget pre-extraction of vision frames so the judge call later
-    // can skip ffmpeg entirely. Runs AFTER response is sent; errors are captured
-    // into Evidence.prepareError (never crashes the request).
-    if (url && (type === "video" || type === "photo" || type === "image")) {
-      for (const row of evidenceRows) {
-        after(async () => {
-          await preExtractAndPersistFrames({
-            evidenceId: row.id,
-            challengeId: id,
-            userId: row.userId,
-            type,
-            url,
+    const uploadedSizeBytes =
+      numberFromMetadata(metadataRecord.fileSizeBytes) ??
+      numberFromMetadata(metadataRecord.uploadedFileSizeBytes) ??
+      numberFromMetadata(metadataRecord.sizeBytes);
+    const preextractEnabled = evidencePreextractEnabled();
+    const shouldPreextract = preextractEnabled && isPreextractableMedia(type, url);
+    console.log(
+      `[evidence] challenge=${id} rows=${evidenceRows.length} type=${type} hasUrl=${Boolean(url)} sizeBytes=${uploadedSizeBytes ?? "unknown"} sharedSameCamera=${sharedSameCamera} preextractEnabled=${preextractEnabled}`,
+    );
+
+    after(async () => {
+      await cleanupReplacedEvidenceBlobs(
+        id,
+        previousEvidenceRows.map((row) => ({
+          evidenceId: row.id,
+          url: row.url,
+          preparedFrames: row.preparedFrames,
+          currentUrl: url ?? null,
+        })),
+      );
+
+      if (!shouldPreextract) {
+        console.log(
+          `[pre-extract] skipped challenge=${id} rows=${evidenceRows.length} enabled=${preextractEnabled} media=${isPreextractableMedia(type, url)}`,
+        );
+        return;
+      }
+
+      if (sharedSameCamera) {
+        const sourceRow = evidenceRows[0];
+        await preExtractAndPersistFrames({
+          evidenceId: sourceRow.id,
+          challengeId: id,
+          userId: sourceRow.userId,
+          type,
+          url,
+        });
+        const preparedSource = await prisma.evidence.findUnique({
+          where: { id: sourceRow.id },
+          select: {
+            preparedFrames: true,
+            preparedAt: true,
+            preparedDurationSec: true,
+            preparedMode: true,
+            prepareError: true,
+          },
+        });
+        const duplicateIds = evidenceRows.slice(1).map((row) => row.id);
+        if (preparedSource && duplicateIds.length > 0) {
+          await prisma.evidence.updateMany({
+            where: { id: { in: duplicateIds } },
+            data: {
+              preparedFrames: preparedSource.preparedFrames,
+              preparedAt: preparedSource.preparedAt,
+              preparedDurationSec: preparedSource.preparedDurationSec,
+              preparedMode: preparedSource.preparedMode,
+              prepareError: preparedSource.prepareError,
+            },
           });
+        }
+        console.log(
+          `[pre-extract] sharedSameCamera reused challenge=${id} sourceEvidence=${sourceRow.id} reusedRows=${duplicateIds.length} frameBlobs=${preparedFrameCount(preparedSource?.preparedFrames)}`,
+        );
+        return;
+      }
+
+      for (const row of evidenceRows) {
+        await preExtractAndPersistFrames({
+          evidenceId: row.id,
+          challengeId: id,
+          userId: row.userId,
+          type,
+          url,
         });
       }
-    }
+    });
 
     return Response.json({ evidence, sharedEvidenceCount: evidenceRows.length }, { status: 201 });
   } catch (err) {

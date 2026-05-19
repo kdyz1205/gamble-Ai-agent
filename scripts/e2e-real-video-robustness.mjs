@@ -14,6 +14,7 @@ const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const fixtureDir = process.env.REAL_VIDEO_FIXTURE_DIR || "";
 const caseDelayMs = Number(process.env.E2E_ROBUSTNESS_CASE_DELAY_MS || (judgeProvider === "openai" ? 45_000 : 5_000));
+const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 const selectedCaseIds = (process.env.RUN_ROBUSTNESS_CASES || "")
   .split(",")
   .map((value) => value.trim())
@@ -265,6 +266,7 @@ async function uploadVideo(jar, challengeId, filePath, filename) {
     handleUploadUrl: `${base}/api/challenges/${challengeId}/evidence/blob-handle`,
     contentType: "video/mp4",
     multipart: false,
+    clientPayload: JSON.stringify({ fileName: filename, fileSizeBytes: buffer.length, contentType: "video/mp4" }),
     headers: { cookie: jar.header() },
   });
 }
@@ -285,7 +287,8 @@ function sleep(ms) {
 
 async function waitForPreparedFrames(jar, challengeId, creatorEvidenceId, opponentEvidenceId) {
   let last = null;
-  for (let i = 0; i < 45; i += 1) {
+  const attempts = expectPreextract ? 45 : 1;
+  for (let i = 0; i < attempts; i += 1) {
     const snapshot = await getJson(jar, `/api/challenges/${challengeId}`);
     last = snapshot.challenge;
     const evidenceById = new Map((last.evidence || []).map((row) => [row.id, row]));
@@ -451,6 +454,8 @@ try {
 
     const creatorVideo = await videoForCase(tempDir, caseDef, "creator", livenessPhrase);
     const opponentVideo = await videoForCase(tempDir, caseDef, "opponent", livenessPhrase);
+    const creatorVideoSize = (await readFile(creatorVideo.path)).length;
+    const opponentVideoSize = (await readFile(opponentVideo.path)).length;
     caseProof.videoSources = { creator: creatorVideo.source, opponent: opponentVideo.source };
 
     const creatorBlob = await uploadVideo(creator.jar, challengeId, creatorVideo.path, `${caseDef.id}-creator-${stamp}.mp4`);
@@ -460,13 +465,13 @@ try {
       type: "video",
       url: creatorBlob.url,
       description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
-      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: creatorVideo.source },
+      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: creatorVideo.source, fileSizeBytes: creatorVideoSize },
     });
     const evOpponent = await postJson(opponent.jar, `/api/challenges/${challengeId}/evidence`, {
       type: "video",
       url: opponentBlob.url,
       description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
-      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: opponentVideo.source },
+      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: opponentVideo.source, fileSizeBytes: opponentVideoSize },
     });
     caseProof.evidence = {
       creatorEvidenceId: evCreator.evidence.id,
@@ -478,9 +483,12 @@ try {
       creatorCount: prepared.creatorFrames.length,
       opponentCount: prepared.opponentFrames.length,
       statusBeforeJudge: prepared.challenge?.status ?? null,
+      preextractExpected: expectPreextract,
     };
-    requireCheck(caseProof, "prepared_frames_creator", prepared.creatorFrames.length > 0, caseProof.preparedFrames);
-    requireCheck(caseProof, "prepared_frames_opponent", prepared.opponentFrames.length > 0, caseProof.preparedFrames);
+    if (expectPreextract) {
+      requireCheck(caseProof, "prepared_frames_creator", prepared.creatorFrames.length > 0, caseProof.preparedFrames);
+      requireCheck(caseProof, "prepared_frames_opponent", prepared.opponentFrames.length > 0, caseProof.preparedFrames);
+    }
 
     const judged = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, {
       tier: 1,

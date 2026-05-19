@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { settleChallenge } from "@/lib/credits";
@@ -14,6 +14,7 @@ import {
   type EvidenceQuality,
   type VerdictRecommendation,
 } from "@/lib/judgment-policy";
+import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 
 export const runtime = "nodejs";
 
@@ -199,6 +200,9 @@ export async function POST(
         judgments: { include: { winner: { select: { id: true, username: true } } }, orderBy: { createdAt: "desc" } },
         _count: { select: { evidence: true, participants: true } },
       },
+    });
+    after(async () => {
+      await cleanupChallengeFrameBlobs(id);
     });
 
     const winnerName = judgment.winner?.username || "No winner";

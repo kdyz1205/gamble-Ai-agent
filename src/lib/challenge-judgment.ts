@@ -10,6 +10,7 @@ import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "./credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
 import { isAiReviewStatus } from "./challenge-state-machine";
+import { cleanupChallengeFrameBlobs } from "./media/blob-cleanup";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
@@ -486,6 +487,9 @@ export async function executeChallengeJudgment(
         judgmentId: judgment.id,
       },
     });
+  }
+  if (updateResult.count > 0) {
+    await cleanupChallengeFrameBlobs(challengeId);
   }
 
   await appendAuditLog({
