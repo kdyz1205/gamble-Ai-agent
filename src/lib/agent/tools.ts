@@ -15,7 +15,10 @@
 import prisma from "@/lib/db";
 import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
-import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
+import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import { cleanupChallengeFrameBlobs, cleanupReplacedEvidenceBlobs } from "@/lib/media/blob-cleanup";
+import { evaluateLocationEligibility, parseStoredProtocol, validLatLng } from "@/lib/location-eligibility";
+import { verifyEvidenceAgainstProtocol } from "@/lib/protocol-evidence-verification";
 import { ChallengeStatus } from "@/lib/enums";
 import { evaluateAutoSettleEligibility, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
@@ -66,6 +69,21 @@ function stringArray(value: unknown): string[] {
 
 function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
   return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+}
+
+function recordingSessionRequired(protocol: ProtocolSpecV2 | null) {
+  return protocol?.evidenceProtocol.mode === "same_camera_video" ||
+    protocol?.evidenceProtocol.mode === "live_host_video";
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function jsonOrNull(value: Record<string, unknown>) {
+  return Object.keys(value).length > 0 ? JSON.stringify(value) : null;
 }
 
 function buildProtocolFromAgentDraft(input: {
@@ -379,16 +397,41 @@ function inferTypeFromTitle(title: string): string {
 async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
-  // Delegate to the existing atomic accept logic via direct prisma transaction.
+  const hasLocationFields = "lat" in args || "lng" in args || "discoveryLat" in args || "discoveryLng" in args;
+  const locationSnapshot = readLocationSnapshot(args, ctx.locationSnapshot);
+  if (hasLocationFields && !validLatLng(args.lat ?? args.discoveryLat, args.lng ?? args.discoveryLng)) {
+    return { ok: false, error: "lat must be in [-90,90] and lng in [-180,180]" };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { username: true },
+  });
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
-    include: { participants: true },
+    include: {
+      participants: true,
+      protocol: true,
+      creator: { select: { latitude: true, longitude: true } },
+    },
   });
   if (!challenge) return { ok: false, error: "Challenge not found" };
   if (!isOpenForOpponentStatus(challenge.status)) return { ok: false, error: `Challenge not open (status=${challenge.status})` };
   if (challenge.creatorId === ctx.userId) return { ok: false, error: "You cannot accept your own challenge" };
   if (challenge.participants.some((p) => p.userId === ctx.userId)) {
     return { ok: false, error: "You are already in this challenge" };
+  }
+  if (challenge.participants.length >= challenge.maxParticipants) {
+    return { ok: false, error: "Challenge is full" };
+  }
+
+  const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+  const locationGate = evaluateLocationEligibility(challenge, locationSnapshot, protocol);
+  if (!locationGate.eligible) {
+    return {
+      ok: false,
+      error: locationGate.reason,
+      data: { locationEligibility: locationGate },
+    };
   }
 
   if (challenge.stake > 0) {
@@ -401,9 +444,35 @@ async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknow
         where: { challengeId, status: { in: ["pending", "accepted"] } },
       });
       if (count >= challenge.maxParticipants) throw new Error("FULL");
-      await tx.participant.create({
+      const participant = await tx.participant.create({
         data: { challengeId, userId: ctx.userId, role: "opponent", status: "accepted" },
       });
+      if (protocol) {
+        await tx.participantBinding.upsert({
+          where: { challengeId_userId: { challengeId, userId: ctx.userId } },
+          create: {
+            challengeId,
+            userId: ctx.userId,
+            participantId: participant.id,
+            role: "opponent",
+            displayName: user?.username ?? null,
+            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
+            bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+          },
+          update: {
+            participantId: participant.id,
+            role: "opponent",
+            displayName: user?.username ?? null,
+            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
+            bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+            identityConfidence: null,
+            identityCheckJson: null,
+            verifiedAt: null,
+          },
+        });
+      }
     });
   } catch (e) {
     if (challenge.stake > 0) {
@@ -438,6 +507,35 @@ async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknow
   }
   await prisma.challenge.update({ where: { id: challengeId }, data: { status: newStatus } });
 
+  await appendAuditLog({
+    action: AuditActions.CHALLENGE_ACCEPTED,
+    actorUserId: ctx.userId,
+    challengeId,
+    payload: {
+      source: "agent_tool",
+      previousStatus: challenge.status,
+      newStatus,
+      stake: challenge.stake,
+      locationGate: {
+        required: locationGate.required,
+        eligible: locationGate.eligible,
+        mode: locationGate.mode,
+        distanceMeters: locationGate.distanceMeters,
+        requiredRadiusMeters: locationGate.requiredRadiusMeters,
+      },
+      protocolBound: Boolean(protocol),
+    },
+  });
+
+  await prisma.activityEvent.create({
+    data: {
+      type: "challenge_accepted",
+      message: `${user?.username ?? "Someone"} accepted "${challenge.title}"${challenge.stake > 0 ? ` — ${challenge.stake} credits on the line` : ""}`,
+      userId: ctx.userId,
+      challengeId,
+    },
+  });
+
   return { ok: true, data: { challengeId, status: newStatus } };
 }
 
@@ -463,14 +561,19 @@ async function generateShareLinkTool(ctx: ToolContext, args: Record<string, unkn
 
 async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
-  const type = String(args.type ?? "text");
+  const type = String(args.type ?? "text").trim().toLowerCase() || "text";
   const description = args.description ? String(args.description) : null;
   const url = args.url ? String(args.url) : null;
+  const metadataRecord = recordFromUnknown(args.metadata);
+  const recordingSessionId =
+    typeof args.recordingSessionId === "string" && args.recordingSessionId.trim()
+      ? args.recordingSessionId.trim()
+      : null;
   if (!challengeId) return { ok: false, error: "challengeId required" };
 
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
-    include: { participants: true },
+    include: { participants: true, protocol: true },
   });
   if (!challenge) return { ok: false, error: "Challenge not found" };
   if (!isEvidenceWindowStatus(challenge.status)) {
@@ -480,22 +583,142 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
     return { ok: false, error: "You are not a participant" };
   }
 
-  const evidence = await prisma.evidence.upsert({
-    where: { challengeId_userId: { challengeId, userId: ctx.userId } },
-    create: { challengeId, userId: ctx.userId, type, url, description },
-    update: {
-      type,
-      url,
-      description,
-      preparedFrames: null,
-      preparedAt: null,
-      preparedDurationSec: null,
-      preparedMode: null,
-      prepareError: null,
+  const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+  const activeParticipants = challenge.participants.filter((p) => p.status === "accepted");
+  if (recordingSessionRequired(protocol)) {
+    if (!recordingSessionId) {
+      return { ok: false, error: "This challenge requires a recording session before evidence upload." };
+    }
+    const recordingSession = await prisma.recordingSession.findFirst({
+      where: { id: recordingSessionId, challengeId },
+      select: { id: true, createdByUserId: true, status: true },
+    });
+    if (!recordingSession) {
+      return { ok: false, error: "Recording session not found for this challenge." };
+    }
+    if (!activeParticipants.some((participant) => participant.userId === recordingSession.createdByUserId)) {
+      return { ok: false, error: "Recording session owner is not a challenge participant." };
+    }
+    if (recordingSession.status === "cancelled") {
+      return { ok: false, error: "Recording session was cancelled." };
+    }
+  }
+
+  const sharedSameCamera = metadataRecord.sharedSameCamera === true;
+  const evidenceDescription = sharedSameCamera
+    ? [
+        description,
+        "Shared same-camera evidence for both accepted participants. Judge must identify both people in the same media and compare the visible result; unclear identity or finish order requires no winner.",
+      ].filter(Boolean).join("\n")
+    : description;
+  const targetUserIds = sharedSameCamera
+    ? [
+        ctx.userId,
+        ...activeParticipants
+          .map((participant) => participant.userId)
+          .filter((participantUserId) => participantUserId !== ctx.userId),
+      ]
+    : [ctx.userId];
+  const previousEvidenceRows = await prisma.evidence.findMany({
+    where: { challengeId, userId: { in: targetUserIds } },
+    select: { id: true, userId: true, url: true, preparedFrames: true },
+  });
+  const metadataFor = (targetUserId: string) => {
+    const next: Record<string, unknown> = { ...metadataRecord };
+    if (sharedSameCamera) {
+      next.sharedSameCamera = true;
+      next.sharedUploadedBy = ctx.userId;
+      next.sharedEvidenceFor = targetUserId;
+      next.identityGuidance = "Creator/Participant A should be on the left and opponent/Participant B on the right when possible.";
+    }
+    if (recordingSessionId) next.recordingSessionId = recordingSessionId;
+    return jsonOrNull(next);
+  };
+
+  const evidenceRows = [];
+  for (const targetUserId of targetUserIds) {
+    const row = await prisma.evidence.upsert({
+      where: { challengeId_userId: { challengeId, userId: targetUserId } },
+      create: {
+        challengeId,
+        userId: targetUserId,
+        type,
+        url,
+        description: evidenceDescription,
+        metadata: metadataFor(targetUserId),
+      },
+      update: {
+        type,
+        url,
+        description: evidenceDescription,
+        metadata: metadataFor(targetUserId),
+        preparedFrames: null,
+        preparedAt: null,
+        preparedDurationSec: null,
+        preparedMode: null,
+        prepareError: null,
+      },
+    });
+    evidenceRows.push(row);
+    await prisma.evidenceCheck.upsert({
+      where: { evidenceId: row.id },
+      create: {
+        evidenceId: row.id,
+        challengeId,
+        userId: row.userId,
+        protocolVersion: challenge.protocolVersion ?? "2.0",
+        decision: "pending",
+      },
+      update: {
+        protocolVersion: challenge.protocolVersion ?? "2.0",
+        identityCheckJson: null,
+        evidenceCheckJson: null,
+        outcomeCheckJson: null,
+        identityConfidence: null,
+        evidenceConfidence: null,
+        outcomeConfidence: null,
+        decision: "pending",
+        blockingIssues: null,
+      },
+    });
+  }
+
+  const verification = [];
+  for (const row of evidenceRows) {
+    try {
+      verification.push(await verifyEvidenceAgainstProtocol(row.id));
+    } catch (verifyErr) {
+      console.error("[agent.uploadEvidence] protocol verification failed", {
+        challengeId,
+        evidenceId: row.id,
+        userId: row.userId,
+        verifyErr,
+      });
+    }
+  }
+
+  if (recordingSessionId) {
+    await prisma.recordingSession.update({
+      where: { id: recordingSessionId },
+      data: { status: "evidence_submitted", endedAt: new Date() },
+    }).catch((sessionErr) => {
+      console.error("[agent.uploadEvidence] recording session close failed", {
+        challengeId,
+        recordingSessionId,
+        sessionErr,
+      });
+    });
+  }
+
+  await prisma.activityEvent.create({
+    data: {
+      type: "evidence_submitted",
+      message: `Evidence submitted for "${challenge.title}" via agent`,
+      userId: ctx.userId,
+      challengeId,
     },
   });
 
-  const activeParticipants = challenge.participants.filter((p) => p.status === "accepted");
   const evCount = await prisma.evidence.findMany({
     where: { challengeId },
     select: { userId: true },
@@ -518,7 +741,35 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
     data: { status: nextStatus },
   });
 
-  return { ok: true, data: { evidenceId: evidence.id, challengeId, type, hasUrl: !!url } };
+  await cleanupReplacedEvidenceBlobs(
+    challengeId,
+    previousEvidenceRows.map((row) => ({
+      evidenceId: row.id,
+      url: row.url,
+      preparedFrames: row.preparedFrames,
+      currentUrl: url,
+    })),
+  ).catch((cleanupErr) => {
+    console.error("[agent.uploadEvidence] replaced evidence cleanup failed", { challengeId, cleanupErr });
+  });
+
+  return {
+    ok: true,
+    data: {
+      evidenceId: evidenceRows[0]?.id,
+      evidenceIds: evidenceRows.map((row) => row.id),
+      challengeId,
+      type,
+      hasUrl: !!url,
+      sharedEvidenceCount: evidenceRows.length,
+      verification: verification.map((row) => ({
+        evidenceId: row.evidenceId,
+        userId: row.userId,
+        decision: row.decision,
+        blockingIssues: row.blockingIssues,
+      })),
+    },
+  };
 }
 
 /* ─────────────────────────────────────────────── */
