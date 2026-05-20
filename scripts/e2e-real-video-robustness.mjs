@@ -263,10 +263,66 @@ async function videoForCase(dir, caseDef, side, livenessPhrase) {
 
 function publicFixtureUrlsForCase(caseId) {
   if (caseId === "clean_a_beats_b" || caseId === "no_visible_role_label") {
+    if (caseId === "no_visible_role_label") {
+      return {
+        creator: `${base}/e2e-fixtures/pushups-no-label-a-static-phrase.mp4`,
+        opponent: `${base}/e2e-fixtures/pushups-no-label-b-static-phrase.mp4`,
+        source: "public_app_no_label_fixture",
+      };
+    }
     return {
       creator: `${base}/e2e-fixtures/pushups-a-static-phrase.mp4`,
       opponent: `${base}/e2e-fixtures/pushups-b-static-phrase.mp4`,
       source: "public_app_fixture",
+    };
+  }
+  if (caseId === "bad_angle") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-bad-angle-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-bad-angle-b-static-phrase.mp4`,
+      source: "public_app_bad_angle_fixture",
+    };
+  }
+  if (caseId === "partial_body") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-partial-body-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-partial-body-b-static-phrase.mp4`,
+      source: "public_app_partial_body_fixture",
+    };
+  }
+  if (caseId === "too_dark_blurry") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-dark-blurry-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-dark-blurry-b-static-phrase.mp4`,
+      source: "public_app_dark_blurry_fixture",
+    };
+  }
+  if (caseId === "cropped_video") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-cropped-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-cropped-b-static-phrase.mp4`,
+      source: "public_app_cropped_fixture",
+    };
+  }
+  if (caseId === "short_video") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-short-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-short-b-static-phrase.mp4`,
+      source: "public_app_short_fixture",
+    };
+  }
+  if (caseId === "tie_video") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-tie-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-tie-b-static-phrase.mp4`,
+      source: "public_app_tie_fixture",
+    };
+  }
+  if (caseId === "non_pushup_video") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-non-pushup-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-non-pushup-b-static-phrase.mp4`,
+      source: "public_app_non_pushup_fixture",
     };
   }
   if (caseId === "static_loop") {
