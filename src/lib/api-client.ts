@@ -388,6 +388,47 @@ export async function acceptChallenge(id: string): Promise<{ challenge: Challeng
   return apiFetch(`/challenges/${id}/accept`, { method: "POST" });
 }
 
+export async function issueParticipantBinding(id: string, data?: {
+  userId?: string;
+  participantId?: string;
+}): Promise<{
+  bindingId: string;
+  expectedPosition?: string | null;
+  livenessCode: string | null;
+  qrToken: string;
+  instructions: string[];
+}> {
+  return apiFetch(`/challenges/${id}/bindings/issue`, {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
+}
+
+export async function startRecordingSession(id: string, data: {
+  mode: "same_camera_video" | "separate_video" | "live_host_video";
+}): Promise<{
+  recordingSessionId: string;
+  mode: string;
+  preRollInstructions: string[];
+  startCountdown: number;
+  startCondition: string;
+  endCondition: string;
+  participantBindings: Array<{
+    userId: string;
+    displayName: string;
+    expectedPosition?: string | null;
+    livenessCode?: string | null;
+    qrToken?: string | null;
+    role: string;
+    bindingStatus: string;
+  }>;
+}> {
+  return apiFetch(`/challenges/${id}/recording-session/start`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId: string; refundedStake: number }> {
   return apiFetch(`/challenges/${id}`, { method: "DELETE" });
 }

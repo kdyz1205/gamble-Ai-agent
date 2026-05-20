@@ -7,6 +7,8 @@ import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { ChallengeStatus } from "@/lib/enums";
 import { assertChallengeTransition, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import { generateLivenessPhrase } from "@/lib/liveness";
+import { parseProtocolSpecV2, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 /** Detect "AI出题" intent — title or proposition mentions math / quiz / trivia. */
 const QUIZ_PATTERN = /\b(math|quiz|trivia)\b|算|题/i;
@@ -55,6 +57,19 @@ Generate ONE shared task both players will race to answer correctly. Example: "W
   }
 }
 
+function parseStoredProtocol(raw: string | null | undefined): ProtocolSpecV2 | null {
+  if (!raw) return null;
+  try {
+    return parseProtocolSpecV2(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
+  return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -66,7 +81,7 @@ export async function POST(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    include: { participants: true },
+    include: { participants: true, protocol: true },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -76,6 +91,7 @@ export async function POST(
   const existing = challenge.participants.find((p: { userId: string }) => p.userId === user.userId);
   if (existing) return Response.json({ error: "You are already in this challenge" }, { status: 400 });
   if (challenge.participants.length >= challenge.maxParticipants) return Response.json({ error: "Challenge is full" }, { status: 400 });
+  const protocol = parseStoredProtocol(challenge.protocol?.specJson);
 
   // Escrow: deduct staked credits upfront (atomic — see spendCredits in credits.ts).
   if (challenge.stake > 0) {
@@ -113,6 +129,32 @@ export async function POST(
         },
       });
       participantId = p.id;
+      if (protocol) {
+        await tx.participantBinding.upsert({
+          where: { challengeId_userId: { challengeId: challenge.id, userId: user.userId } },
+          create: {
+            challengeId: challenge.id,
+            userId: user.userId,
+            participantId: p.id,
+            role: "opponent",
+            displayName: user.username,
+            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
+            bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+          },
+          update: {
+            participantId: p.id,
+            role: "opponent",
+            displayName: user.username,
+            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
+            bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+            identityConfidence: null,
+            identityCheckJson: null,
+            verifiedAt: null,
+          },
+        });
+      }
     });
   } catch (e) {
     // Refund the stake we just escrowed since we can't actually seat them.
