@@ -22,6 +22,17 @@ function evidenceBlobPathname(challengeId: string, filename: string): string {
   return `evidence/${challengeId}/${base}`;
 }
 
+function supportedRecordingMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
+  return [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4;codecs=avc1",
+    "video/mp4",
+  ].find((type) => MediaRecorder.isTypeSupported(type));
+}
+
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
@@ -269,6 +280,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   // Camera recording state
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [cameraError, setCameraError] = useState("");
@@ -325,6 +337,33 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   useEffect(() => {
     if (sameCameraEligible && sameCameraHinted) setSharedSameCamera(true);
   }, [challenge?.id, sameCameraEligible, sameCameraHinted]);
+
+  useEffect(() => {
+    if (!cameraStream || !videoPreviewRef.current) return;
+    const video = videoPreviewRef.current;
+    if (video.srcObject !== cameraStream) video.srcObject = cameraStream;
+    video.muted = true;
+    video.playsInline = true;
+    const play = async () => {
+      try {
+        await video.play();
+        setCameraReady(true);
+      } catch {
+        setCameraReady(false);
+        setCameraError("Camera opened, but preview autoplay was blocked. Tap the preview once, then start recording.");
+      }
+    };
+    void play();
+    return () => {
+      if (video.srcObject === cameraStream) video.srcObject = null;
+    };
+  }, [cameraStream]);
+
+  useEffect(() => {
+    return () => {
+      if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
+    };
+  }, [cameraStream]);
 
   const sameCameraMetadata = (file?: File) => ({
     ...(file ? { fileName: file.name, fileSizeBytes: file.size, contentType: file.type || null } : {}),
@@ -494,15 +533,22 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const startCamera = async () => {
     setCameraError("");
+    setCameraReady(false);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: true,
-      });
-      setCameraStream(stream);
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: true,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+        setCameraError("Microphone was blocked, so recording will continue without audio.");
       }
+      setCameraStream(stream);
     } catch {
       setCameraError("Camera access required for fair play. Please allow camera access to submit evidence.");
     }
@@ -510,21 +556,31 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const startRecording = () => {
     if (!cameraStream) return;
+    if (typeof MediaRecorder === "undefined") {
+      setCameraError("This browser cannot record video directly. Upload a video file instead.");
+      return;
+    }
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm";
-    const recorder = new MediaRecorder(cameraStream, { mimeType });
+    const mimeType = supportedRecordingMimeType();
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(cameraStream, { mimeType }) : new MediaRecorder(cameraStream);
+    } catch {
+      setCameraError("Could not start recording in this browser. Upload a video file instead.");
+      return;
+    }
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      const blob = new Blob(chunksRef.current, { type: mimeType || recorder.mimeType || "video/webm" });
       setRecordedBlob(blob);
       cameraStream.getTracks().forEach((t) => t.stop());
       setCameraStream(null);
+      setCameraReady(false);
     };
     mediaRecorderRef.current = recorder;
+    void videoPreviewRef.current?.play().catch(() => {});
     recorder.start(1000);
     setIsRecording(true);
   };
@@ -849,14 +905,31 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
                   {cameraStream && (
                     <div className="space-y-3">
-                      <video
-                        ref={videoPreviewRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="w-full rounded-xl"
-                        style={{ maxHeight: 300, background: "#000" }}
-                      />
+                      <div className="relative overflow-hidden rounded-xl" style={{ background: "#000" }}>
+                        <video
+                          ref={videoPreviewRef}
+                          autoPlay
+                          muted
+                          playsInline
+                          onLoadedMetadata={() => {
+                            setCameraReady(true);
+                            void videoPreviewRef.current?.play().catch(() => {});
+                          }}
+                          onCanPlay={() => setCameraReady(true)}
+                          onPlaying={() => setCameraReady(true)}
+                          className="w-full"
+                          style={{ maxHeight: 300, background: "#000", objectFit: "cover" }}
+                        />
+                        {!cameraReady && (
+                          <button
+                            type="button"
+                            onClick={() => { void videoPreviewRef.current?.play().then(() => setCameraReady(true)).catch(() => {}); }}
+                            className="absolute inset-0 flex items-center justify-center bg-black/70 px-4 text-center"
+                          >
+                            <span className="text-xs font-bold text-white">Starting camera preview... tap here if it stays black.</span>
+                          </button>
+                        )}
+                      </div>
                       {!isRecording ? (
                         <motion.button
                           onClick={startRecording}
