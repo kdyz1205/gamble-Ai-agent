@@ -14,10 +14,9 @@ import { cleanupChallengeFrameBlobs } from "./media/blob-cleanup";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
+  effectiveJudgmentVerdictFields,
   blockingIssuesForJudgment,
-  evidenceQualityForJudgment,
   requiresRepCountWinnerFromText,
-  settlementRecommendationForJudgment,
   statusForJudgmentResult,
 } from "./judgment-policy";
 import { parseProtocolSpecV2 } from "./protocol-spec-v2";
@@ -282,11 +281,10 @@ export async function executeChallengeJudgment(
     aiOnlyVerdictStatus === ChallengeStatus.ai_verdict_ready && !protocolGates.settlementEligibility.eligible
       ? ChallengeStatus.manual_review_required
       : aiOnlyVerdictStatus;
-  const evidenceQuality = evidenceQualityForJudgment(result);
-  const recommendation = settlementRecommendationForJudgment(result);
   const blockingIssues = autoSettlePolicy.blockingIssues.length
     ? autoSettlePolicy.blockingIssues
     : blockingIssuesForJudgment(result, judgmentPolicyOptions);
+  const { evidenceQuality, recommendation } = effectiveJudgmentVerdictFields(result, autoSettlePolicy);
   const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
 
   const judgment = await prisma.judgment.create({

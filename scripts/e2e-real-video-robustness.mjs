@@ -173,7 +173,7 @@ function frameSvg({ role, color, elapsedSec, durationSec, phase, livenessPhrase,
   const dark = variant === "dark_blurry";
   const cropped = variant === "cropped" || variant === "partial_body";
   const badAngle = variant === "bad_angle";
-  const noVisibleRole = variant === "no_text_label";
+  const noVisibleRole = variant === "no_text_label" || variant === "no_text_static";
   const body = personSvg({ color: dark ? "#1f2937" : color, phase, variant });
   const elapsedLabel = `00:${String(elapsedSec).padStart(2, "0")}`;
   const transform = badAngle ? `transform="translate(200 60) rotate(18 480 270) scale(0.72 0.92)"` : "";
@@ -204,8 +204,8 @@ async function makeSyntheticVideo(dir, { filename, role, color, repCount, durati
   const framePaths = [];
   const totalFrames = Math.max(4, durationSec);
   for (let i = 0; i < totalFrames; i += 1) {
-    const elapsedSec = variant === "static_loop" ? 0 : i;
-    const phase = variant === "static_loop" ? "top" : phaseFor(repCount, durationSec, elapsedSec);
+    const elapsedSec = variant === "static_loop" || variant === "no_text_static" ? 0 : i;
+    const phase = variant === "static_loop" || variant === "no_text_static" ? "top" : phaseFor(repCount, durationSec, elapsedSec);
     const svg = frameSvg({ role, color, elapsedSec, durationSec, phase, livenessPhrase, variant });
     const framePath = path.join(dir, `${filename}-${String(i).padStart(2, "0")}.png`);
     await sharp(Buffer.from(svg)).png().toFile(framePath);
@@ -456,7 +456,7 @@ const cases = [
     title: "Visible role label removed, motion/body position only",
     expect: "settled",
     creator: { repCount: 12, durationSec: 60, variant: "no_text_label" },
-    opponent: { repCount: 1, durationSec: 60, variant: "no_text_label" },
+    opponent: { repCount: 1, durationSec: 60, variant: "no_text_static" },
   },
   {
     id: "static_loop",

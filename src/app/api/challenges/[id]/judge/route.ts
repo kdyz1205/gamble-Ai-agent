@@ -23,10 +23,9 @@ import {
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
+  effectiveJudgmentVerdictFields,
   blockingIssuesForJudgment,
-  evidenceQualityForJudgment,
   requiresRepCountWinnerFromText,
-  settlementRecommendationForJudgment,
   statusForJudgmentResult,
   type EvidenceQuality,
   type VerdictRecommendation,
@@ -287,11 +286,10 @@ export async function POST(
     aiOnlyVerdictStatus === ChallengeStatus.ai_verdict_ready && !protocolGates.settlementEligibility.eligible
       ? ChallengeStatus.manual_review_required
       : aiOnlyVerdictStatus;
-  const evidenceQuality = evidenceQualityForJudgment(result) as EvidenceQuality;
-  const recommendation = settlementRecommendationForJudgment(result) as VerdictRecommendation;
   const blockingIssues = autoSettlePolicy.blockingIssues.length
     ? autoSettlePolicy.blockingIssues
     : blockingIssuesForJudgment(result, judgmentPolicyOptions);
+  const { evidenceQuality, recommendation } = effectiveJudgmentVerdictFields(result, autoSettlePolicy);
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"

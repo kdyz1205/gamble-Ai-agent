@@ -52,7 +52,7 @@ function svgFrame({ role, color, phase, elapsedSec, durationSec, variant = "clea
   const dark = variant === "dark_blurry";
   const cropped = variant === "cropped" || variant === "partial_body";
   const badAngle = variant === "bad_angle";
-  const noVisibleRole = variant === "no_text_label";
+  const noVisibleRole = variant === "no_text_label" || variant === "no_text_static";
   const body = personSvg({ color: dark ? "#1f2937" : color, phase, variant });
   const elapsedLabel = `00:${String(elapsedSec).padStart(2, "0")}`;
   const transform = badAngle ? `transform="translate(200 60) rotate(18 480 270) scale(0.72 0.92)"` : "";
@@ -86,8 +86,8 @@ async function makeVideo({ filename, role, color, repCount, durationSec = 60, va
   try {
     const framePaths = [];
     for (let i = 0; i < durationSec; i += 1) {
-      const elapsedSec = variant === "static_loop" ? 0 : i;
-      const phase = variant === "static_loop" ? "top" : pushupPhaseAt(repCount, durationSec, elapsedSec);
+      const elapsedSec = variant === "static_loop" || variant === "no_text_static" ? 0 : i;
+      const phase = variant === "static_loop" || variant === "no_text_static" ? "top" : pushupPhaseAt(repCount, durationSec, elapsedSec);
       const svg = svgFrame({ role, color, phase, elapsedSec, durationSec, variant });
       const framePath = path.join(tmp, `${String(i).padStart(2, "0")}.png`);
       await sharp(Buffer.from(svg)).png().toFile(framePath);
@@ -162,7 +162,7 @@ const outputs = [
   await makeVideo({ filename: "pushups-non-pushup-a-static-phrase.mp4", role: "PARTICIPANT A", color: "#047857", repCount: 4 }),
   await makeVideo({ filename: "pushups-non-pushup-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 1, variant: "non_pushup" }),
   await makeVideo({ filename: "pushups-no-label-a-static-phrase.mp4", role: "PARTICIPANT A", color: "#047857", repCount: 12, variant: "no_text_label" }),
-  await makeVideo({ filename: "pushups-no-label-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 1, variant: "no_text_label" }),
+  await makeVideo({ filename: "pushups-no-label-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 1, variant: "no_text_static" }),
 ];
 
 console.log(JSON.stringify({ phrase, outputs }, null, 2));

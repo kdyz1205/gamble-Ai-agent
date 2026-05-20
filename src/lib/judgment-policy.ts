@@ -46,6 +46,34 @@ function recommendation(result: JudgmentResult): VerdictRecommendation {
   return "needs_review";
 }
 
+function recommendationFromBlockingIssues(
+  base: VerdictRecommendation,
+  blockingIssues: string[],
+): VerdictRecommendation {
+  if (base !== "settle_winner") return base;
+  const text = blockingIssues.join("\n").toLowerCase();
+  if (/\btied?\b|tie_or_no_winner|no winner|winner is missing/.test(text)) return "tie_or_no_winner";
+  if (
+    /does not show the required action|not show the required action|invalid evidence|video is too short|too short|missing or not visible|full body is not visible|edited, static, or looped/.test(text)
+  ) {
+    return "invalid_evidence";
+  }
+  return "needs_review";
+}
+
+function evidenceQualityFromBlockingIssues(
+  base: EvidenceQuality,
+  effectiveRecommendation: VerdictRecommendation,
+  blockingIssues: string[],
+): EvidenceQuality {
+  if (effectiveRecommendation === "invalid_evidence") return "invalid";
+  if (base !== "good") return base;
+  if (blockingIssues.length === 0) return base;
+  const text = blockingIssues.join("\n").toLowerCase();
+  if (/confidence .* below|recommendation is/.test(text)) return "unclear";
+  return "insufficient";
+}
+
 function issueSlug(issue: string) {
   return issue
     .toLowerCase()
@@ -202,12 +230,21 @@ export function buildJudgmentMetricsJson(
     protocolGates?: ProtocolJudgmentGateResult;
   },
 ): string {
+  const effectiveRecommendation = recommendationFromBlockingIssues(
+    recommendation(result),
+    params.autoSettlePolicy.blockingIssues,
+  );
+  const effectiveEvidenceQuality = evidenceQualityFromBlockingIssues(
+    evidenceQuality(result),
+    effectiveRecommendation,
+    params.autoSettlePolicy.blockingIssues,
+  );
   return JSON.stringify({
     source: result.source ?? "llm",
     model: params.model,
-    evidenceQuality: evidenceQuality(result),
-    recommendation: recommendation(result),
-    settlementRecommendation: recommendation(result),
+    evidenceQuality: effectiveEvidenceQuality,
+    recommendation: effectiveRecommendation,
+    settlementRecommendation: effectiveRecommendation,
     confidence: result.confidence,
     blockingIssues: params.autoSettlePolicy.blockingIssues,
     videoMetrics: result.videoMetrics ?? null,
@@ -233,4 +270,22 @@ export function settlementRecommendationForJudgment(result: JudgmentResult) {
 
 export function recommendationForJudgment(result: JudgmentResult) {
   return recommendation(result);
+}
+
+export function effectiveJudgmentVerdictFields(
+  result: JudgmentResult,
+  autoSettlePolicy: AutoSettlePolicyResult,
+): { evidenceQuality: EvidenceQuality; recommendation: VerdictRecommendation } {
+  const effectiveRecommendation = recommendationFromBlockingIssues(
+    recommendation(result),
+    autoSettlePolicy.blockingIssues,
+  );
+  return {
+    evidenceQuality: evidenceQualityFromBlockingIssues(
+      evidenceQuality(result),
+      effectiveRecommendation,
+      autoSettlePolicy.blockingIssues,
+    ),
+    recommendation: effectiveRecommendation,
+  };
 }
