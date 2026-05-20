@@ -346,26 +346,44 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     setRecordingSession(null);
   }, [challenge?.id]);
 
+  const playCameraPreview = useCallback(async () => {
+    if (!cameraStream || !videoPreviewRef.current) return false;
+    const video = videoPreviewRef.current;
+    if (video.srcObject !== cameraStream) video.srcObject = cameraStream;
+    video.muted = true;
+    video.playsInline = true;
+    try {
+      await video.play();
+      setCameraReady(true);
+      return true;
+    } catch {
+      const hasLiveTrack = cameraStream.getVideoTracks().some((track) => track.readyState === "live");
+      if (video.readyState >= 2 || video.videoWidth > 0 || hasLiveTrack) {
+        setCameraReady(true);
+        return true;
+      }
+      setCameraReady(false);
+      setCameraError("Camera opened, but preview autoplay was blocked. Tap the preview once, then start recording.");
+      return false;
+    }
+  }, [cameraStream]);
+
   useEffect(() => {
     if (!cameraStream || !videoPreviewRef.current) return;
     const video = videoPreviewRef.current;
     if (video.srcObject !== cameraStream) video.srcObject = cameraStream;
     video.muted = true;
     video.playsInline = true;
-    const play = async () => {
-      try {
-        await video.play();
-        setCameraReady(true);
-      } catch {
-        setCameraReady(false);
-        setCameraError("Camera opened, but preview autoplay was blocked. Tap the preview once, then start recording.");
-      }
-    };
-    void play();
+    void playCameraPreview();
+    const readyFallback = window.setTimeout(() => {
+      const hasLiveTrack = cameraStream.getVideoTracks().some((track) => track.readyState === "live");
+      if (video.readyState >= 2 || video.videoWidth > 0 || hasLiveTrack) setCameraReady(true);
+    }, 700);
     return () => {
+      window.clearTimeout(readyFallback);
       if (video.srcObject === cameraStream) video.srcObject = null;
     };
-  }, [cameraStream]);
+  }, [cameraStream, playCameraPreview]);
 
   useEffect(() => {
     return () => {
@@ -602,7 +620,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
       setCameraReady(false);
     };
     mediaRecorderRef.current = recorder;
-    void videoPreviewRef.current?.play().catch(() => {});
+    void playCameraPreview();
     recorder.start(1000);
     setIsRecording(true);
   };
@@ -957,6 +975,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                           autoPlay
                           muted
                           playsInline
+                          onClick={() => { void playCameraPreview(); }}
                           onLoadedMetadata={() => {
                             setCameraReady(true);
                             void videoPreviewRef.current?.play().catch(() => {});
@@ -969,7 +988,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                         {!cameraReady && (
                           <button
                             type="button"
-                            onClick={() => { void videoPreviewRef.current?.play().then(() => setCameraReady(true)).catch(() => {}); }}
+                            onClick={() => { void playCameraPreview(); }}
                             className="absolute inset-0 flex items-center justify-center bg-black/70 px-4 text-center"
                           >
                             <span className="text-xs font-bold text-white">Starting camera preview... tap here if it stays black.</span>

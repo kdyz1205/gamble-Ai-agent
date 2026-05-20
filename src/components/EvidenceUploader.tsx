@@ -111,21 +111,44 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     };
   }, [stream]);
 
+  const playCameraPreview = useCallback(async () => {
+    if (!stream || !videoRef.current) return false;
+    const video = videoRef.current;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    try {
+      await video.play();
+      setCameraReady(true);
+      return true;
+    } catch {
+      const hasLiveTrack = stream.getVideoTracks().some((track) => track.readyState === "live");
+      if (video.readyState >= 2 || video.videoWidth > 0 || hasLiveTrack) {
+        setCameraReady(true);
+        return true;
+      }
+      setCameraReady(false);
+      setError("Camera opened, but the browser blocked autoplay. Tap the preview, then Start recording.");
+      return false;
+    }
+  }, [stream]);
+
   useEffect(() => {
     if (mode !== "record" || !stream || !videoRef.current) return;
     const video = videoRef.current;
     if (video.srcObject !== stream) video.srcObject = stream;
     video.muted = true;
     video.playsInline = true;
-    const play = async () => {
-      try {
-        await video.play();
-      } catch {
-        setError("Camera opened, but the browser blocked autoplay. Tap the preview or Start recording.");
-      }
+    void playCameraPreview();
+    const readyFallback = window.setTimeout(() => {
+      const hasLiveTrack = stream.getVideoTracks().some((track) => track.readyState === "live");
+      if (video.readyState >= 2 || video.videoWidth > 0 || hasLiveTrack) setCameraReady(true);
+    }, 700);
+    return () => {
+      window.clearTimeout(readyFallback);
+      if (video.srcObject === stream) video.srcObject = null;
     };
-    void play();
-  }, [mode, stream]);
+  }, [mode, playCameraPreview, stream]);
 
   useEffect(() => {
     if (sameCameraEvidenceType) setSharedSameCamera(true);
@@ -210,6 +233,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       return;
     }
     chunksRef.current = [];
+    void playCameraPreview();
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType || recorder.mimeType || "video/webm" });
@@ -432,18 +456,24 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
               autoPlay
               muted
               playsInline
+              onClick={() => { void playCameraPreview(); }}
               onLoadedMetadata={() => {
                 setCameraReady(true);
                 void videoRef.current?.play().catch(() => {});
               }}
               onCanPlay={() => setCameraReady(true)}
+              onPlaying={() => setCameraReady(true)}
               className="w-full"
               style={{ background: "#000", maxHeight: 300, objectFit: "cover" }}
             />
             {!cameraReady && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-4 text-center">
-                <p className="text-xs font-bold text-white">Starting camera preview...</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => { void playCameraPreview(); }}
+                className="absolute inset-0 flex items-center justify-center bg-black/70 px-4 text-center"
+              >
+                <span className="text-xs font-bold text-white">Starting camera preview... tap here if it stays black.</span>
+              </button>
             )}
           </div>
           <div className="flex gap-2 mt-3">
