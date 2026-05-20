@@ -33,6 +33,30 @@ function pickEvenly<T>(items: T[], max: number): T[] {
   });
 }
 
+function pickMotionDiverse<T>(items: T[], max: number): T[] {
+  if (items.length <= max) return items;
+  if (max <= 1) return [items[Math.floor(items.length / 2)]];
+
+  const picked: T[] = [];
+  const used = new Set<number>();
+  const fractions = [0.2, 0.55, 0.85, 0.35, 0.7];
+
+  for (let i = 0; i < max; i += 1) {
+    const start = (i * items.length) / max;
+    const end = ((i + 1) * items.length) / max;
+    const raw = Math.floor(start + Math.max(0.01, end - start) * fractions[i % fractions.length]);
+    let idx = Math.min(items.length - 1, Math.max(0, raw));
+    while (used.has(idx) && idx < items.length - 1) idx += 1;
+    while (used.has(idx) && idx > 0) idx -= 1;
+    if (!used.has(idx)) {
+      used.add(idx);
+      picked.push(items[idx]);
+    }
+  }
+
+  return picked.sort((left, right) => items.indexOf(left) - items.indexOf(right));
+}
+
 async function bufferToVisionImage(buffer: Buffer, caption: string): Promise<JudgeVisionImage | null> {
   const jpeg = await sharp(buffer)
     .rotate()
@@ -189,6 +213,15 @@ async function runVideoPipeline(
     }
     preambleLines.push(`  → Extraction mode: ${extractionLabel}, ${paths.length} frames captured.`);
 
+    const frameBuffers = await Promise.all(
+      paths.map(async (framePath, index) => ({ index, buffer: await readFile(framePath) })),
+    );
+    const filmstrip = await buildFilmstripImage(participantLabel, frameBuffers, {
+      durationSec: duration,
+      mode: extractionLabel,
+    });
+    if (filmstrip) visuals.push(filmstrip);
+
     const n = paths.length;
     for (let i = 0; i < n; i++) {
       const buf = await readFile(paths[i]);
@@ -294,17 +327,43 @@ export function capJudgeVisuals(
   maxTotal = 24,
   maxTotalBytes = 12 * 1024 * 1024,
 ): JudgeVisionImage[] {
-  const all = [...a, ...b];
-  let picked = all;
-  if (picked.length > maxTotal) {
-    const step = Math.ceil(picked.length / maxTotal);
-    picked = picked.filter((_, i) => i % step === 0).slice(0, maxTotal);
-  }
+  const participantBudget = (leftCount: number, rightCount: number) => {
+    const leftBase = Math.min(leftCount, Math.floor(maxTotal / 2));
+    const rightBase = Math.min(rightCount, maxTotal - leftBase);
+    let left = leftBase;
+    let right = rightBase;
+    let spare = maxTotal - left - right;
+    while (spare > 0 && (left < leftCount || right < rightCount)) {
+      if (left < leftCount) {
+        left += 1;
+        spare -= 1;
+      }
+      if (spare > 0 && right < rightCount) {
+        right += 1;
+        spare -= 1;
+      }
+    }
+    return { left, right };
+  };
+
+  const isFilmstrip = (item: JudgeVisionImage) => /filmstrip/i.test(item.caption);
+  const capParticipant = (items: JudgeVisionImage[], budget: number) => {
+    if (items.length <= budget) return items;
+    if (budget <= 0) return [];
+    const filmstrip = items.find(isFilmstrip);
+    const frames = items.filter((item) => item !== filmstrip);
+    const frameBudget = Math.max(0, budget - (filmstrip ? 1 : 0));
+    return [...(filmstrip ? [filmstrip] : []), ...pickMotionDiverse(frames, frameBudget)];
+  };
+
+  const budget = participantBudget(a.length, b.length);
+  let picked = [...capParticipant(a, budget.left), ...capParticipant(b, budget.right)];
   // Estimate payload by base64 length (each char = 1 byte).
   const size = (arr: JudgeVisionImage[]) => arr.reduce((acc, im) => acc + im.base64.length, 0);
   while (size(picked) > maxTotalBytes && picked.length > 2) {
-    // Drop every other frame until we fit. Preserves first/last context.
-    picked = picked.filter((_, i) => i % 2 === 0);
+    const reduced = picked.filter((item, i) => isFilmstrip(item) || i % 2 === 0);
+    if (reduced.length === picked.length) break;
+    picked = reduced;
   }
   return picked;
 }
