@@ -48,7 +48,7 @@ async function request(jar, path, options = {}) {
     return request(jar, new URL(res.headers.get("location"), url).href, { method: "GET" });
   }
 
-  if (!res.ok) {
+  if (!res.ok && !options.allowError) {
     const err = new Error(`${options.method || "GET"} ${path} -> ${res.status}: ${typeof data === "string" ? data.slice(0, 300) : JSON.stringify(data)}`);
     err.status = res.status;
     err.data = data;
@@ -64,6 +64,15 @@ function postJson(jar, path, body) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   }).then((out) => out.data);
+}
+
+function postJsonRaw(jar, path, body, options = {}) {
+  return request(jar, path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    ...options,
+  });
 }
 
 function getJson(jar, path) {
@@ -105,6 +114,28 @@ const inputText = `I bet Alex I can do 20 pushups in one minute. Proof should be
 
 try {
   const user = await register(`codex.compile.${stamp}@example.com`, `compile_${stamp.slice(-6)}`);
+  const invalid = await postJsonRaw(user.jar, "/api/challenges/compile", {
+    inputText,
+    providerId: "not_a_provider",
+    model,
+    language: "en",
+    context: { surface: "e2e_compile_invalid_provider_quota_refund" },
+  }, { allowError: true });
+  const quotaAfterInvalid = await getJson(user.jar, "/api/credits");
+  proof.invalidProvider = {
+    status: invalid.res.status,
+    body: invalid.data,
+    dailyQuota: quotaAfterInvalid.dailyQuota,
+  };
+  requireCheck(
+    proof,
+    "invalid_compile_provider_does_not_consume_quota",
+    invalid.res.status === 400 &&
+      String(invalid.data?.error || "").includes("Unknown AI provider") &&
+      quotaAfterInvalid.dailyQuota?.spec?.used === 0,
+    proof.invalidProvider,
+  );
+
   const compiled = await postJson(user.jar, "/api/challenges/compile", {
     inputText,
     providerId,
@@ -131,6 +162,7 @@ try {
     settlementMode: compiled.protocol?.settlementProtocol?.mode,
     identityRequired: compiled.protocol?.identityProtocol?.required,
     maxVisionFrames: compiled.protocol?.aiBudgetPolicy?.maxVisionFrames,
+    dailyQuota: compiled.dailyQuota,
   };
   requireCheck(
     proof,
@@ -159,6 +191,13 @@ try {
         compiled.protocol?.aiBudgetPolicy?.maxVisionFrames <= 18
       ),
     proof.compile,
+  );
+  requireCheck(
+    proof,
+    "successful_compile_consumes_one_spec_quota",
+    compiled.dailyQuota?.spec?.used === 1 &&
+      compiled.dailyQuota?.spec?.remaining === compiled.dailyQuota.spec.limit - 1,
+    compiled.dailyQuota,
   );
 
   const created = await postJson(user.jar, "/api/challenges", {

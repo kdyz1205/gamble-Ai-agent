@@ -341,10 +341,7 @@ export async function compileProtocolForUser(input: {
       dailyQuota: quota.status,
     };
   } catch (error) {
-    const status = error instanceof CompileRequestError ? error.status : 502;
-    if (status === 400 || status === 503) {
-      await refundDailyAiQuota(input.userId, "spec").catch(() => null);
-    }
+    await refundDailyAiQuota(input.userId, "spec").catch(() => null);
     throw error;
   }
 }
