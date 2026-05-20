@@ -139,9 +139,9 @@ try {
   requireCheck(
     proof,
     "protocol_v2_in_hidden_state",
-    out.draftState?.protocol?.version === "2.0" &&
+    Boolean(out.draftState?.protocol?.version === "2.0" &&
       out.draftState?.protocol?.evidenceProtocol?.mode &&
-      out.draftState?.protocol?.settlementProtocol?.mode,
+      out.draftState?.protocol?.settlementProtocol?.mode),
     out.draftState?.protocol,
   );
   requireCheck(
