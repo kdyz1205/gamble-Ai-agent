@@ -993,11 +993,26 @@ export async function getNearbyUsers(lat: number, lng: number, radius = 10): Pro
 /* ── Type aliases for backwards compat ── */
 export type ChallengeDetail = ChallengeData;
 
-/* ── Stubs for features not yet wired ── */
-export async function presignEvidenceUpload(_challengeId: string, _filename: string): Promise<{ url: string; pathname: string }> {
+/* ── Evidence upload presign ── */
+export async function presignEvidenceUpload(input: {
+  challengeId: string;
+  contentType: string;
+  filename?: string;
+} | string, filename?: string, contentType?: string): Promise<{
+  configured?: boolean;
+  uploadUrl?: string;
+  publicUrl?: string;
+  key?: string;
+  expiresIn?: number;
+  method?: string;
+  headers?: Record<string, string>;
+}> {
+  const body = typeof input === "string"
+    ? { challengeId: input, filename, contentType: contentType || "application/octet-stream" }
+    : input;
   return apiFetch(`/uploads/evidence-presign`, {
     method: "POST",
-    body: JSON.stringify({ challengeId: _challengeId, filename: _filename }),
+    body: JSON.stringify(body),
   });
 }
 

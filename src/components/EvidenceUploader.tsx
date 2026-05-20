@@ -283,10 +283,36 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       let finalUrl: string | undefined = trimmedUrl || undefined;
       let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : evidenceType || "text";
 
-      // Upload file via Vercel Blob if present
+      // Try S3/R2-style direct upload first, then fall back to Vercel Blob.
       if (f) {
         setUploading(true);
         setUploadProgress(0);
+        try {
+          const presigned = await api.presignEvidenceUpload({
+            challengeId,
+            contentType: f.type || "application/octet-stream",
+            filename: f.name,
+          }).catch(() => null);
+          if (presigned?.configured && presigned.uploadUrl && presigned.publicUrl) {
+            setUploadProgress(10);
+            const put = await fetch(presigned.uploadUrl, {
+              method: presigned.method ?? "PUT",
+              body: f,
+              headers: presigned.headers ?? { "Content-Type": f.type || "application/octet-stream" },
+            });
+            if (!put.ok) throw new Error(`Direct upload failed (${put.status})`);
+            finalUrl = presigned.publicUrl;
+            setUploadProgress(100);
+          }
+        } catch (e) {
+          setUploading(false);
+          throw new Error(
+            e instanceof Error
+              ? `Upload failed: ${e.message}. Tip: paste a public HTTPS URL instead.`
+              : "Upload failed. Paste a public HTTPS URL instead.",
+          );
+        }
+        if (!finalUrl) {
         const pathname = evidenceBlobPathname(challengeId, f.name);
         const handleUploadUrl = `/api/challenges/${challengeId}/evidence/blob-handle`;
         try {
@@ -326,6 +352,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
         } finally {
           setUploading(false);
         }
+        }
+        if (f.type.startsWith("video")) finalType = "video";
+        else if (f.type.startsWith("image")) finalType = "photo";
+        setUploading(false);
       }
 
       await api.submitEvidence(challengeId, {
