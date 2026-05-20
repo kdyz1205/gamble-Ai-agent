@@ -123,7 +123,8 @@ function shouldDirectCompile(message: string, draftState: DraftState) {
   if (draftState.protocol) return false;
   const text = message.trim().toLowerCase();
   if (!text) return false;
-  if (/\b(do not call|don't call|ask one|follow-up|follow up|join|accept|upload|submit|evidence|judge|verdict|match me)\b/i.test(text)) return false;
+  if (/\b(do not call|don't call|ask one|follow-up|follow up|join|accept|upload|submit|judge|verdict|match me)\b/i.test(text)) return false;
+  if (/\b(evidence is ready|ready evidence|submitted evidence|upload evidence|submit evidence)\b/i.test(text)) return false;
   if (/(加入|接受|提交|证据|判定|匹配|有什么可以玩|找一个挑战)/.test(message)) return false;
   return /\b(challenge|bet|wager|compete|competition|contest|generate|random|give me)\b/i.test(text) ||
     /(挑战|赌|比赛|生成|随便|来一个|给我来|给我生成)/.test(message);
