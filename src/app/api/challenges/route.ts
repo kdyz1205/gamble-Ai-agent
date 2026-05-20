@@ -181,7 +181,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const stakeInt = Math.max(0, Math.floor(stake));
+    const stakeNumber = Number(stake);
+    const stakeInt = Number.isFinite(stakeNumber) ? Math.max(0, Math.floor(stakeNumber)) : 0;
     let creatorStakeTxId: string | undefined;
 
     // ── ATOMIC ESCROW + CREATE ──

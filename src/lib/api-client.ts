@@ -348,13 +348,14 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
 }
 
 export async function createChallenge(data: {
-  title: string;
+  title?: string;
   description?: string;
   rawPrompt?: string;
   challengeSpecJson?: string;
   protocol?: ProtocolSpecV2;
   compilerProviderId?: string;
   compilerModel?: string;
+  providerCall?: unknown;
   inviteCode?: string;
   currencyType?: string;
   participationMode?: string;

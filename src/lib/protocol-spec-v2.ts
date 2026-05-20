@@ -294,7 +294,7 @@ export function protocolToLegacyChallengeFields(protocol: ProtocolSpecV2) {
     settlementMode: protocol.settlementProtocol.mode,
     fallbackRule: protocol.settlementProtocol.manualReviewTriggers.join(" "),
     disputeWindow: protocol.timingProtocol.deadline,
-    isPublic: protocol.locationProtocol.mode !== "none" || protocol.participantMode === "mass_crowd",
-    visibility: protocol.locationProtocol.mode !== "none" ? "public" : "invite_only",
+    isPublic: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) || protocol.participantMode === "mass_crowd",
+    visibility: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) ? "public" : "invite_only",
   };
 }

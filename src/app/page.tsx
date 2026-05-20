@@ -63,26 +63,6 @@ function detectPromptLanguage(input: string) {
   return "auto";
 }
 
-function rulesFromSpec(spec: api.ChallengeSpec): string {
-  return [
-    `Objective: ${spec.objective}`,
-    `Winning condition: ${spec.winning_condition}`,
-    `Evidence: ${spec.required_evidence}`,
-    `Recording: ${spec.video_capture_instructions}`,
-    `Start: ${spec.start_condition}`,
-    `End: ${spec.end_condition}`,
-    `Timing: ${spec.timing_method}`,
-    `Valid rep: ${spec.valid_repetition_definition}`,
-    `Scoring: ${spec.scoring_method}`,
-    `Attempts: ${spec.allowed_attempts}`,
-    `Anti-cheat: ${spec.anti_cheat_rules.join(" ")}`,
-    `AI judging: ${spec.ai_judging_method}`,
-    `Dispute: ${spec.dispute_window}. ${spec.fallback_manual_review}`,
-    `Settlement: ${spec.payout_rule}`,
-    `Safety: ${spec.safety_warning}`,
-  ].join("\n");
-}
-
 function requestBrowserLocation(timeoutMs = 3500): Promise<{
   snapshot: api.LocationSnapshot | null;
   status: BrowserLocationStatus;
@@ -144,10 +124,11 @@ export default function Home() {
 
   const [appState, setAppState] = useState<AppState>("idle");
   const [prompt, setPrompt] = useState("");
-  const [spec, setSpec] = useState<api.ChallengeSpec | null>(null);
+  const [protocol, setProtocol] = useState<api.ProtocolSpecV2 | null>(null);
   const [specModel, setSpecModel] = useState("");
   const [specSource, setSpecSource] = useState<"llm" | "fallback" | "">("");
   const [specProviderId, setSpecProviderId] = useState("");
+  const [providerCall, setProviderCall] = useState<unknown>(null);
   const [externalApiCharged, setExternalApiCharged] = useState(false);
   const [oraclePrefs, setOraclePrefs] = useState<OraclePrefs>(() => initialOraclePrefs());
   const [shareLink, setShareLink] = useState<string | null>(null);
@@ -168,10 +149,11 @@ export default function Home() {
   const reset = useCallback(() => {
     setAppState("idle");
     setPrompt("");
-    setSpec(null);
+    setProtocol(null);
     setSpecModel("");
     setSpecSource("");
     setSpecProviderId("");
+    setProviderCall(null);
     setExternalApiCharged(false);
     setShareLink(null);
     setPublishedId(null);
@@ -212,7 +194,7 @@ export default function Home() {
     setError(null);
     setAppState("generating");
     try {
-      const res = await api.generateChallengeSpec(directive.prompt, {
+      const res = await api.compileChallengeProtocol(directive.prompt, {
         ...nextPrefs,
         language: detectPromptLanguage(directive.prompt),
         context: {
@@ -221,12 +203,13 @@ export default function Home() {
         },
       });
       if (res.source !== "llm") {
-        throw new Error("AI generation did not complete with the selected provider/model. No draft was created.");
+        throw new Error("AI protocol compilation did not complete with the selected provider/model. No draft was created.");
       }
-      setSpec(res.spec);
+      setProtocol(res.protocol);
       setSpecModel(res.model);
-      setSpecSource(res.source || "");
+      setSpecSource("llm");
       setSpecProviderId(res.providerId || nextPrefs.providerId);
+      setProviderCall(res.providerCall ?? null);
       setExternalApiCharged(Boolean(res.externalApiCharged));
       if (res.dailyQuota) setDailyQuota(res.dailyQuota);
       setAppState("preview");
@@ -245,7 +228,7 @@ export default function Home() {
   }, []);
 
   const handleConfirm = useCallback(async () => {
-    if (!spec) return;
+    if (!protocol) return;
     if (!user) {
       setShowAuth(true);
       return;
@@ -254,32 +237,21 @@ export default function Home() {
     setError(null);
     setAppState("confirming");
     try {
-      const isPublic = spec.public_or_private === "public" || spec.invite_mode === "nearby";
-      const locationSnapshot = isPublic ? await getBrowserLocationSnapshot() : null;
+      const usesLocation = protocol.locationProtocol.mode !== "none";
+      const isDiscoverable = ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode);
+      const isPublic = isDiscoverable || protocol.participantMode === "mass_crowd" || protocol.participantMode === "public_market";
+      const locationSnapshot = usesLocation ? await getBrowserLocationSnapshot() : null;
       const res = await api.createChallenge({
-        title: spec.challenge_title,
-        description: spec.objective,
-        type: spec.challenge_type,
-        rawPrompt: prompt,
-        challengeSpecJson: JSON.stringify(spec),
+        protocol,
+        rawPrompt: protocol.rawPrompt || prompt,
         compilerProviderId: specProviderId,
         compilerModel: specModel,
+        providerCall,
         marketType: "ai_peer_challenge",
-        proposition: spec.objective,
-        stake: spec.stake_amount,
+        stake: 0,
         stakeToken: "credits",
-        currencyType: spec.currency_or_points,
-        participationMode: spec.participation_mode,
-        deadline: undefined,
-        joinWindow: spec.invite_mode,
-        proofWindow: "until all participants submit evidence",
-        rules: rulesFromSpec(spec),
-        evidenceType: spec.participation_mode === "same_camera" ? "same_camera_video" : "video",
-        settlementMode: "oracle",
-        proofSource: spec.participation_mode === "same_camera" ? "shared_same_camera" : "both_participants",
+        proofSource: protocol.evidenceProtocol.mode === "same_camera_video" ? "shared_same_camera" : "both_participants",
         arbiter: "ai_then_manual_review",
-        fallbackRule: spec.fallback_manual_review,
-        disputeWindow: spec.dispute_window,
         aiReview: true,
         isPublic,
         visibility: isPublic ? "public" : "invite_only",
@@ -296,26 +268,77 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "Could not confirm challenge");
       setAppState("preview");
     }
-  }, [prompt, spec, specModel, specProviderId, updateSession, user]);
+  }, [prompt, protocol, providerCall, specModel, specProviderId, updateSession, user]);
 
-  const handleSelectInvite = useCallback((value: api.ChallengeSpec["invite_mode"]) => {
-    setSpec((current) => {
+  const handleSelectInvite = useCallback((value: "invite_link" | "nearby" | "same_device") => {
+    setProtocol((current) => {
       if (!current) return current;
+      const locationProtocol: api.ProtocolSpecV2["locationProtocol"] = value === "nearby"
+        ? {
+            ...current.locationProtocol,
+            mode: "nearby_discovery",
+            joinRadiusMeters: current.locationProtocol.joinRadiusMeters ?? 500,
+            challengeRadiusMeters: current.locationProtocol.challengeRadiusMeters ?? 500,
+            requiresLiveLocation: true,
+            locationPrivacy: "approximate",
+          }
+        : {
+            ...current.locationProtocol,
+            mode: value === "same_device" ? "same_place_required" : "none",
+            requiresLiveLocation: value === "same_device",
+            requiresCoPresence: value === "same_device",
+            locationPrivacy: value === "same_device" ? "precise_live_only" : "hidden",
+          };
       return {
         ...current,
-        invite_mode: value,
-        public_or_private: value === "nearby" ? "public" : current.public_or_private,
-        participation_mode: value === "same_device" ? "same_camera" : current.participation_mode,
+        evidenceProtocol: value === "same_device"
+          ? { ...current.evidenceProtocol, mode: "same_camera_video" }
+          : current.evidenceProtocol,
+        identityProtocol: value === "same_device"
+          ? {
+              ...current.identityProtocol,
+              mode: "left_right_assignment",
+              required: true,
+              participantBindings: current.identityProtocol.participantBindings.map((binding) => ({
+                ...binding,
+                expectedPosition: binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any",
+                requiredQrOrCode: true,
+              })),
+            }
+          : current.identityProtocol,
+        locationProtocol,
       };
     });
   }, []);
 
-  const handleSelectParticipation = useCallback((value: api.ChallengeSpec["participation_mode"]) => {
-    setSpec((current) => {
+  const handleSelectParticipation = useCallback((value: "remote_async" | "remote_live" | "same_camera" | "in_person") => {
+    setProtocol((current) => {
       if (!current) return current;
+      const videoMode = value === "same_camera" || value === "in_person" ? "same_camera_video" : "separate_video";
       return {
         ...current,
-        participation_mode: value,
+        evidenceProtocol: { ...current.evidenceProtocol, mode: videoMode },
+        identityProtocol: {
+          ...current.identityProtocol,
+          mode: value === "same_camera" || value === "in_person" ? "left_right_assignment" : "liveness_phrase",
+          required: true,
+          participantBindings: current.identityProtocol.participantBindings.map((binding) => ({
+            ...binding,
+            expectedPosition: value === "same_camera" || value === "in_person"
+              ? binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any"
+              : "any",
+            requiredQrOrCode: true,
+          })),
+        },
+        locationProtocol: value === "in_person"
+          ? {
+              ...current.locationProtocol,
+              mode: "same_place_required",
+              requiresCoPresence: true,
+              requiresLiveLocation: true,
+              locationPrivacy: "precise_live_only",
+            }
+          : current.locationProtocol,
       };
     });
   }, []);
@@ -387,13 +410,29 @@ export default function Home() {
     router.push(`/join/${challenge.id}`);
   }, [router, user]);
 
-  const handleSelectVisibility = useCallback((value: api.ChallengeSpec["public_or_private"]) => {
-    setSpec((current) => {
+  const handleSelectVisibility = useCallback((value: "public" | "private") => {
+    setProtocol((current) => {
       if (!current) return current;
       return {
         ...current,
-        public_or_private: value,
-        invite_mode: value === "public" && current.invite_mode === "invite_link" ? "nearby" : current.invite_mode,
+        locationProtocol: value === "public"
+          ? {
+              ...current.locationProtocol,
+              mode: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(current.locationProtocol.mode)
+                ? current.locationProtocol.mode
+                : "nearby_discovery",
+              joinRadiusMeters: current.locationProtocol.joinRadiusMeters ?? 500,
+              challengeRadiusMeters: current.locationProtocol.challengeRadiusMeters ?? 500,
+              requiresLiveLocation: true,
+              locationPrivacy: "approximate",
+            }
+          : {
+              ...current.locationProtocol,
+              mode: "none",
+              requiresLiveLocation: false,
+              requiresCoPresence: false,
+              locationPrivacy: "hidden",
+            },
       };
     });
   }, []);
@@ -532,7 +571,7 @@ export default function Home() {
             <LoadingCard title="Generating executable challenge..." body={prompt} />
           )}
 
-          {appState === "preview" && spec && (
+          {appState === "preview" && protocol && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <button onClick={reset} className="px-3 py-2 text-xs font-bold rounded-full bg-white border" style={{ color: "#526078", borderColor: "#E2E8F0" }}>
@@ -544,7 +583,7 @@ export default function Home() {
               </div>
               {error && <ErrorBox message={error} />}
               <ChallengeSpecPreview
-                spec={spec}
+                protocol={protocol}
                 prompt={prompt}
                 model={specModel}
                 source={specSource}
@@ -566,14 +605,14 @@ export default function Home() {
           )}
 
           {appState === "confirming" && (
-            <LoadingCard title="Creating invite, escrow, and challenge room..." body={spec?.challenge_title || prompt} />
+            <LoadingCard title="Creating invite, escrow, and challenge room..." body={protocol?.title || prompt} />
           )}
 
-          {appState === "published" && spec && shareLink && (
+          {appState === "published" && protocol && shareLink && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
               <div className="text-center">
                 <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>Challenge is ready</h2>
-                <p className="text-sm font-semibold" style={{ color: "#526078" }}>{spec.challenge_title}</p>
+                <p className="text-sm font-semibold" style={{ color: "#526078" }}>{protocol.title}</p>
               </div>
               <div className="flex items-center gap-2 p-2 bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "18px" }}>
                 <input readOnly value={shareLink} className="flex-1 bg-transparent px-3 py-2 text-sm font-semibold focus:outline-none truncate" style={{ color: "#172033" }} />
@@ -777,7 +816,7 @@ function ModelModeBar({
 }
 
 function ChallengeSpecPreview({
-  spec,
+  protocol,
   prompt,
   model,
   source,
@@ -787,32 +826,38 @@ function ChallengeSpecPreview({
   onSelectParticipation,
   onSelectVisibility,
 }: {
-  spec: api.ChallengeSpec;
+  protocol: api.ProtocolSpecV2;
   prompt: string;
   model: string;
   source: "llm" | "fallback" | "";
   providerId: string;
   externalApiCharged: boolean;
-  onSelectInvite: (value: api.ChallengeSpec["invite_mode"]) => void;
-  onSelectParticipation: (value: api.ChallengeSpec["participation_mode"]) => void;
-  onSelectVisibility: (value: api.ChallengeSpec["public_or_private"]) => void;
+  onSelectInvite: (value: "invite_link" | "nearby" | "same_device") => void;
+  onSelectParticipation: (value: "remote_async" | "remote_live" | "same_camera" | "in_person") => void;
+  onSelectVisibility: (value: "public" | "private") => void;
 }) {
-  const opponent = spec.participants.find((p) => p.role === "opponent")?.label || "Opponent";
+  const opponent = protocol.identityProtocol.participantBindings.find((p) => p.role === "opponent")?.label || "Opponent";
+  const inviteValue =
+    protocol.locationProtocol.mode === "nearby_discovery" || protocol.locationProtocol.mode === "walk_to_join" ? "nearby" :
+      protocol.locationProtocol.mode === "same_place_required" ? "same_device" : "invite_link";
+  const participationValue =
+    protocol.evidenceProtocol.mode === "same_camera_video" ? "same_camera" :
+      protocol.locationProtocol.requiresCoPresence ? "in_person" : "remote_async";
+  const visibilityValue = ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) ? "public" : "private";
   const challengePathText = [
-    spec.invite_mode.replace(/_/g, " "),
-    spec.participation_mode.replace(/_/g, " "),
-    "evidence upload",
-    "AI judging",
-    spec.fallback_manual_review.includes("0.85") ? "manual review if low confidence" : "review gate",
-    "point settlement",
+    protocol.locationProtocol.mode.replace(/_/g, " "),
+    protocol.evidenceProtocol.mode.replace(/_/g, " "),
+    protocol.identityProtocol.required ? "identity binding" : "account identity",
+    protocol.settlementProtocol.mode.replace(/_/g, " "),
+    `confidence ${Math.round(protocol.settlementProtocol.autoSettleConfidenceThreshold * 100)}%`,
+    protocol.riskPolicy.allowed ? "settlement eligible if gates pass" : "blocked",
   ].join(" -> ");
-  const inviteOptions: Array<{ value: api.ChallengeSpec["invite_mode"]; label: string; description: string }> = [
+  const inviteOptions: Array<{ value: "invite_link" | "nearby" | "same_device"; label: string; description: string }> = [
     { value: "invite_link", label: "Invite link", description: "Send Jerry or another opponent a private join link." },
     { value: "nearby", label: "Nearby discovery", description: "Make it public so nearby users can discover and join." },
-    { value: "direct_friend", label: "Direct friend", description: "Reserve this for a named friend invite." },
     { value: "same_device", label: "Same device invite", description: "Both people are together and one phone starts the flow." },
   ];
-  const participationOptions: Array<{ value: api.ChallengeSpec["participation_mode"]; label: string; description: string }> = [
+  const participationOptions: Array<{ value: "remote_async" | "remote_live" | "same_camera" | "in_person"; label: string; description: string }> = [
     { value: "remote_async", label: "Remote async", description: "Each participant records and uploads separately." },
     { value: "remote_live", label: "Remote live", description: "Both participants start around the same time." },
     { value: "same_camera", label: "Same camera", description: "One phone records both participants in a single clip." },
@@ -822,53 +867,54 @@ function ChallengeSpecPreview({
     <section className="bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "22px" }}>
       <div className="p-5 border-b" style={{ borderColor: "#EEF2F7" }}>
         <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "#047857" }}>Generated from: {prompt}</p>
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: "#172033" }}>{spec.challenge_title}</h2>
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: "#172033" }}>{protocol.title}</h2>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Pill>{spec.challenge_type.replace(/_/g, " ")}</Pill>
-          <Pill>{spec.stake_amount} credits</Pill>
-          <Pill>{spec.public_or_private}</Pill>
-          <Pill>{spec.participation_mode.replace(/_/g, " ")}</Pill>
+          <Pill>{protocol.participantMode.replace(/_/g, " ")}</Pill>
+          <Pill>{protocol.outcomeType.replace(/_/g, " ")}</Pill>
+          <Pill>{protocol.evidenceProtocol.mode.replace(/_/g, " ")}</Pill>
+          <Pill>{protocol.identityProtocol.mode.replace(/_/g, " ")}</Pill>
+          <Pill>{protocol.locationProtocol.locationPrivacy.replace(/_/g, " ")}</Pill>
           <Pill>vs {opponent}</Pill>
           {model && <Pill>{source === "llm" ? "AI model" : "fallback"}: {model}</Pill>}
           {providerId && <Pill>{externalApiCharged ? "paid API enabled" : "no paid API"}: {providerId}</Pill>}
         </div>
       </div>
       <div className="grid gap-4 p-5 md:grid-cols-2">
-        <SpecBlock title="Objective" body={spec.objective} />
-        <SpecBlock title="Winner logic" body={spec.winning_condition} />
-        <SpecBlock title="Evidence" body={spec.required_evidence} />
-        <SpecBlock title="Recording instructions" body={spec.video_capture_instructions} />
-        <SpecBlock title="Start / end" body={`${spec.start_condition} ${spec.end_condition}`} />
-        <SpecBlock title="Valid rep definition" body={spec.valid_repetition_definition} />
-        <SpecBlock title="Scoring method" body={spec.scoring_method} />
-        <SpecBlock title="AI judging" body={spec.ai_judging_method} />
-        <SpecBlock title="Dispute and review" body={`${spec.dispute_window}. ${spec.fallback_manual_review}`} />
-        <SpecBlock title="Settlement" body={spec.payout_rule} />
+        <SpecBlock title="What you are playing" body={protocol.userFacingSummary} />
+        <SpecBlock title="Who can join" body={`${protocol.participantMode.replace(/_/g, " ")}. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.`} />
+        <SpecBlock title="Identity verification" body={`${protocol.identityProtocol.required ? "Required" : "Optional"} via ${protocol.identityProtocol.mode.replace(/_/g, " ")}. Auto-settle requires ${Math.round(protocol.identityProtocol.autoSettlementRequiresIdentityConfidence * 100)}% identity confidence.`} />
+        <SpecBlock title="Evidence required" body={protocol.evidenceProtocol.requiredEvidence.join(" ")} />
+        <SpecBlock title="Capture instructions" body={protocol.evidenceProtocol.captureInstructions.join(" ")} />
+        <SpecBlock title="Winner logic" body={protocol.settlementProtocol.winCondition} />
+        <SpecBlock title="AI judging" body={protocol.settlementProtocol.judgeInstructions.join(" ")} />
+        <SpecBlock title="Manual review triggers" body={protocol.settlementProtocol.manualReviewTriggers.join(" ")} />
+        <SpecBlock title="Safety / risk" body={`${protocol.riskPolicy.riskLevel}. ${protocol.riskPolicy.warnings.join(" ") || "No extra warning."}`} />
+        <SpecBlock title="AI cost tier" body={`${protocol.aiBudgetPolicy.estimatedCostTier}. Max vision frames: ${protocol.aiBudgetPolicy.maxVisionFrames}. Escalation: ${protocol.aiBudgetPolicy.allowEscalation ? "allowed" : "off"}.`} />
       </div>
       <div className="grid gap-5 px-5 pb-5">
         <OptionSection
           title="Invite mode"
           subtitle="How the opponent finds or enters this challenge."
-          value={spec.invite_mode}
+          value={inviteValue}
           options={inviteOptions}
-          onSelect={(value) => onSelectInvite(value as api.ChallengeSpec["invite_mode"])}
+          onSelect={(value) => onSelectInvite(value as "invite_link" | "nearby" | "same_device")}
         />
         <OptionSection
           title="Participation mode"
           subtitle="How evidence is captured once the challenge is live."
-          value={spec.participation_mode}
+          value={participationValue}
           options={participationOptions}
-          onSelect={(value) => onSelectParticipation(value as api.ChallengeSpec["participation_mode"])}
+          onSelect={(value) => onSelectParticipation(value as "remote_async" | "remote_live" | "same_camera" | "in_person")}
         />
         <OptionSection
           title="Visibility"
           subtitle="Whether this is private by link or discoverable."
-          value={spec.public_or_private}
+          value={visibilityValue}
           options={[
             { value: "private", label: "Private", description: "Only people with the invite can join." },
             { value: "public", label: "Public / nearby", description: "Open to nearby discovery and public browsing." },
           ]}
-          onSelect={(value) => onSelectVisibility(value as api.ChallengeSpec["public_or_private"])}
+          onSelect={(value) => onSelectVisibility(value as "public" | "private")}
         />
         <div className="grid gap-2 rounded-2xl border p-4" style={{ borderColor: "#D1FAE5", background: "#F8FAFC" }}>
           <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#047857" }}>Selected challenge path</p>
