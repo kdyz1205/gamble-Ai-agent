@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+
 const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
 
 class Jar {
@@ -117,11 +119,88 @@ function requireCheck(proof, name, passed, detail) {
   }
 }
 
+function currentCommitSha() {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function objectiveAnswerProtocol(stamp, expectedAnswer) {
+  return {
+    version: "2.0",
+    title: `Winner settlement objective answer ${stamp}`,
+    userFacingSummary: "Two participants submit text answers. The only participant matching the expected answer wins.",
+    rawPrompt: `Objective text answer challenge ${stamp}`,
+    language: "en",
+    participantMode: "head_to_head",
+    outcomeType: "completion",
+    evidenceProtocol: {
+      mode: "platform_metric",
+      requiredEvidence: [
+        `Each participant submits a text evidence row containing ANSWER: <value>. EXPECTED_ANSWER: ${expectedAnswer}`,
+      ],
+      captureInstructions: ["Submit one text answer before judging."],
+      invalidEvidenceRules: ["Missing answer text is invalid.", "Multiple conflicting answers require manual review."],
+      requiredMetadata: ["answer"],
+    },
+    identityProtocol: {
+      mode: "account_only",
+      required: false,
+      participantBindings: [
+        { role: "creator", label: "Creator", expectedPosition: "any", requiredQrOrCode: false },
+        { role: "opponent", label: "Opponent", expectedPosition: "any", requiredQrOrCode: false },
+      ],
+      autoSettlementRequiresIdentityConfidence: 1,
+    },
+    locationProtocol: {
+      mode: "none",
+      requiresLiveLocation: false,
+      requiresCoPresence: false,
+      locationPrivacy: "hidden",
+    },
+    timingProtocol: {
+      startCondition: "Challenge starts after opponent accepts.",
+      endCondition: "Both participants submit a text answer.",
+      deadline: "2 hours",
+      tieBreaker: "If both or neither match, no automatic winner.",
+      allowedAttempts: "1",
+    },
+    settlementProtocol: {
+      mode: "auto_ai_text",
+      winCondition: `EXPECTED_ANSWER: ${expectedAnswer}. If exactly one participant submits the expected answer, that participant wins.`,
+      judgeInstructions: [
+        "Read each participant answer from evidence metadata or text.",
+        `Correct answer: ${expectedAnswer}`,
+        "Return settle_winner only when exactly one participant matches the expected answer.",
+      ],
+      autoSettleConfidenceThreshold: 0.85,
+      manualReviewTriggers: ["Both participants match.", "Neither participant matches.", "Answer text is missing."],
+    },
+    riskPolicy: {
+      riskLevel: "safe",
+      allowed: true,
+      warnings: ["Internal credits only."],
+      restrictions: ["No real-money gambling."],
+    },
+    aiBudgetPolicy: {
+      compileMaxTokens: 0,
+      judgeMaxTokens: 200,
+      maxVisionFrames: 0,
+      allowEscalation: false,
+      estimatedCostTier: "low",
+      requireHumanReviewAboveStake: 20,
+    },
+  };
+}
+
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const expectedAnswer = `WINNER-${stamp}`;
 const wrongAnswer = `WRONG-${stamp}`;
 const proof = {
   base,
+  commitSha: currentCommitSha(),
   stamp,
   expectedAnswer,
   checks: {},
@@ -153,18 +232,11 @@ try {
     opponent: beforeOpponent.credits,
   };
 
+  const protocol = objectiveAnswerProtocol(stamp, expectedAnswer);
   const created = await postJson(creator.jar, "/api/challenges", {
-    title: `Winner settlement objective answer ${stamp}`,
-    description: "Production-equivalent deterministic winner settlement E2E.",
-    marketType: "challenge",
-    proposition: "Participant whose answer exactly matches the expected answer wins.",
-    type: "Learning",
+    protocol,
     stake: 1,
     stakeToken: "credits",
-    deadline: "2 hours",
-    rules: `Objective text answer challenge.\nEXPECTED_ANSWER: ${expectedAnswer}\nIf exactly one participant submits the expected answer, that participant wins. If both or neither match, no automatic winner.`,
-    evidenceType: "text",
-    settlementMode: "ai_review_then_creator_confirm",
     aiReview: true,
     isPublic: true,
     visibility: "public",
@@ -174,6 +246,8 @@ try {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,
     createdStatus: created.challenge.status,
+    protocolVersion: created.challenge.protocolVersion,
+    settlementProtocolMode: created.challenge.settlementProtocolMode,
   };
 
   const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
@@ -202,6 +276,8 @@ try {
     status: beforeJudge.challenge.status,
     evidenceCount: beforeJudge.challenge.evidence.length,
     participantCount: beforeJudge.challenge.participants.length,
+    protocolVersion: beforeJudge.challenge.protocolVersion,
+    settlementProtocolMode: beforeJudge.challenge.settlementProtocolMode,
   };
 
   const judged = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, { tier: 1 });
@@ -251,6 +327,12 @@ try {
   };
 
   requireCheck(proof, "created_waiting_for_opponent", created.challenge.status === "waiting_for_opponent", created.challenge.status);
+  requireCheck(
+    proof,
+    "created_with_protocol_v2",
+    created.challenge.protocolVersion === "2.0" && created.challenge.settlementProtocolMode === "auto_ai_text",
+    proof.challenge,
+  );
   requireCheck(proof, "opponent_accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);
   requireCheck(proof, "both_evidence_submitted", finalChallenge.challenge.evidence.length === 2, finalChallenge.challenge.evidence.length);
   requireCheck(proof, "judge_valid_winner", Boolean(judged.winnerId), proof.judgment);
