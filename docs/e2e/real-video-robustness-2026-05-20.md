@@ -2,9 +2,9 @@
 
 Production-equivalent target: `https://gamble-ai-agent.vercel.app`
 
-Commit under test: `3afedf168e896b3ed3def99a5e9caca5befb2699`
+Commit under test: `0bbbab82a06e079ecc3a7dedb0bbc21197c22a03`
 
-Deployment URL: `https://gamble-ai-agent-ky5ggbm1i-kdyz1205s-projects.vercel.app`
+Deployment URL: `https://gamble-ai-agent-oo7tik3ye-kdyz1205s-projects.vercel.app`
 
 Command:
 
@@ -15,7 +15,7 @@ node scripts\e2e-real-video-robustness.mjs
 Proof artifact:
 
 ```text
-tmp/e2e-real-video-robustness-latest.json
+tmp/e2e-real-video-robustness-final.json
 ```
 
 Result: all 10 cases passed.
@@ -26,31 +26,31 @@ Important limitation: this proof uses controlled generated/public fixture videos
 
 | Case | Challenge | Judgment | Final status | Source | Model | Confidence | Recommendation | Auto-settle | Winner |
 | --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- |
-| clean_a_beats_b | `cmpehmxgr000t04jrzx43cjpj` | `cmpehnc23001604jrtvv3shre` | `settled` | `vision_llm` | OpenAI gpt-4o | 0.95 | `settle_winner` | true | `cmpehmwov000m04jrrswsn65n` |
-| bad_angle | `cmpehoce9001i04jrcsyw47lx` | `cmpehooux001t04jri934ibfe` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.60 | `needs_review` | false | null |
-| partial_body | `cmpehpp7k002304jrlw32y62f` | `cmpehq4uk002e04jrd2ds1pqt` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.60 | `invalid_evidence` | false | null |
-| too_dark_blurry | `cmpehr593002o04jrkgw78b8s` | `cmpehrgiy002z04jrdxorfz6s` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.60 | `invalid_evidence` | false | null |
-| cropped_video | `cmpehsgv3003904jreis68r8c` | `cmpehssrh003k04jrxwf8an20` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.70 | `invalid_evidence` | false | null |
-| short_video | `cmpehtt4d003u04jr8qzqx8gx` | `cmpehu3do004504jrc91ges6y` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.90 | `invalid_evidence` | false | null |
-| tie_video | `cmpehv3p4004f04jrao94fp7g` | `cmpehvhlw004q04jrggix07ey` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.90 | `tie_or_no_winner` | false | null |
-| non_pushup_video | `cmpehwhzy005004jr2emjdvpl` | `cmpehwvgd005b04jrwjgw0k0l` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.90 | `invalid_evidence` | false | null |
-| no_visible_role_label | `cmpehxwjl000604ju01lkpfle` | `cmpehy8y6000h04juws75jz80` | `settled` | `vision_llm` | OpenAI gpt-4o | 0.90 | `settle_winner` | true | `cmpehxvq2000004juykj9uxnc` |
-| static_loop | `cmpehz9hd000r04juar3w4uf0` | `cmpehzmi0001204juqdtwzbmv` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 1.00 | `invalid_evidence` | false | null |
+| clean_a_beats_b | `cmpekrwb2000s04jrr9m3t1sd` | `cmpeksi4s000304icxbtmeqsd` | `settled` | `vision_llm` | OpenAI gpt-4o | 0.95 | `settle_winner` | true | `cmpekrviu000l04jrh554q01w` |
+| bad_angle | `cmpektik2000f04icciwrt31g` | `cmpeku3qp000q04icguuqpcs8` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.60 | `needs_review` | false | null |
+| partial_body | `cmpekv41o001004icddfw1wzz` | `cmpekvliy001b04icml0qbj74` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.70 | `needs_review` | false | null |
+| too_dark_blurry | `cmpekwlt1001l04ic8u585h71` | `cmpekwxya001w04ictba8zxkg` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.50 | `invalid_evidence` | false | null |
+| cropped_video | `cmpekxyaq002604ica6jhwgyx` | `cmpekygg8002h04ic3803nx2t` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.70 | `invalid_evidence` | false | null |
+| short_video | `cmpekzh2r002r04ict50tlfx5` | `cmpekzqfh003204ico4abqtqn` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.90 | `needs_review` | false | null |
+| tie_video | `cmpel0qps003c04ic4bh8abeg` | `cmpel14qv003n04ice1lz8o02` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 0.90 | `tie_or_no_winner` | false | null |
+| non_pushup_video | `cmpel24zx003x04icfurth4jh` | `cmpel2mac004804icjn66jwll` | `manual_review_required` | `vision_llm` | OpenAI gpt-4o | 0.95 | `invalid_evidence` | false | `cmpel24a0003r04icl5ci5y9r` |
+| no_visible_role_label | `cmpel3mju004i04ic32py6wf7` | `cmpel3yxp004t04ic8p2kvnjj` | `settled` | `vision_llm` | OpenAI gpt-4o | 0.95 | `settle_winner` | true | `cmpel3ltt004c04ic6bxq9amv` |
+| static_loop | `cmpel4z91005304icuqt5cn5l` | `cmpel5mzx005e04ic411hx3at` | `ai_inconclusive` | `vision_llm` | OpenAI gpt-4o | 1.00 | `invalid_evidence` | false | null |
 
 ## Evidence IDs
 
 | Case | Creator evidence | Opponent evidence |
 | --- | --- | --- |
-| clean_a_beats_b | `cmpehmy30000804lc588lfluo` | `cmpehmy98000c04lcyrg2y4ib` |
-| bad_angle | `cmpehocyd000g04lc428mg2sg` | `cmpehod7l000k04lcwgbsv6f9` |
-| partial_body | `cmpehppof000o04lcc8apsrot` | `cmpehppur000s04lc9hnroll8` |
-| too_dark_blurry | `cmpehr5pr000w04lc9uaueauo` | `cmpehr5ws001004lcax3qn2a8` |
-| cropped_video | `cmpehshd2001404lcxnosmtuj` | `cmpehshii001804lc37it50jo` |
-| short_video | `cmpehtto6001c04lcyght4sks` | `cmpehtttk001g04lcoucn3kai` |
-| tie_video | `cmpehv471001k04lcqk8dslej` | `cmpehv4c9001o04lcmsqkmwpa` |
-| non_pushup_video | `cmpehwice001s04lc1nlayswk` | `cmpehwiim001w04lcx1kdria6` |
-| no_visible_role_label | `cmpehxx4g002004lckh7500e8` | `cmpehxxai002404lc18rur4ql` |
-| static_loop | `cmpehz9ux002804lcpwuk5a78` | `cmpehza11002c04lcjr1ahloy` |
+| clean_a_beats_b | `cmpekrwva000804ih4qkyy944` | `cmpekrx15000c04ih7iyxrdip` |
+| bad_angle | `cmpektjuc000004leaofm6y9j` | `cmpektk2q000404le16mmp44g` |
+| partial_body | `cmpekv4nz000804ledk6x16pk` | `cmpekv4ug000c04leax9l3xlw` |
+| too_dark_blurry | `cmpekwmbg000g04le4gz0qmzm` | `cmpekwmh9000k04le87r5bufd` |
+| cropped_video | `cmpekxysy000o04le4v3ailo0` | `cmpekxyym000s04leypviipyc` |
+| short_video | `cmpekzhk9000w04le0cbtgeos` | `cmpekzhqc001004lepxk63g24` |
+| tie_video | `cmpel0r6d001404le3h1fz9rq` | `cmpel0rbl001804lei8gexrnn` |
+| non_pushup_video | `cmpel25gz001c04leugpj6vwr` | `cmpel25mr001g04lelmz0xbsa` |
+| no_visible_role_label | `cmpel3mx4001k04leh9go2fjs` | `cmpel3n2o001o04le2zs4owjg` |
+| static_loop | `cmpel4zoy001s04lekmdfbcio` | `cmpel4zum001w04letzultju4` |
 
 ## What This Proves
 
@@ -59,4 +59,3 @@ Important limitation: this proof uses controlled generated/public fixture videos
 - The two valid winner cases settled automatically.
 - The eight unsafe/unclear/invalid/tie cases did not auto-settle.
 - The negative cases preserved credit safety: no winner settlement when evidence was insufficient, invalid, tied, cropped, too short, too dark, bad angle, non-push-up, or static/looped.
-
