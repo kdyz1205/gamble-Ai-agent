@@ -210,6 +210,16 @@ try {
     await dialog.accept();
   });
 
+  await page.goto(`${base}/challenge/${challengeId}`, { waitUntil: "networkidle" });
+  await page.getByText("Manage challenge", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByRole("button", { name: "Close empty challenge" }).waitFor({ state: "visible", timeout: 20_000 });
+  requireCheck(
+    proof,
+    "detail_manage_panel_close_visible",
+    true,
+    { challengeId },
+  );
+
   await page.goto(`${base}/markets`, { waitUntil: "networkidle" });
   await page.getByText(title, { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
   const card = page.locator("article").filter({ hasText: title }).first();
@@ -305,6 +315,16 @@ try {
       status: joinedDetail.challenge?.status,
       participants: joinedDetail.challenge?.participants?.length ?? 0,
     },
+  );
+  await page.goto(`${base}/challenge/${joinedCreated.challenge.id}`, { waitUntil: "networkidle" });
+  await page.getByText("Manage challenge", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByText("Locked", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByText("An opponent has joined", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+  requireCheck(
+    proof,
+    "detail_manage_panel_joined_locked_visible",
+    true,
+    { challengeId: joinedCreated.challenge.id },
   );
 
   console.log(JSON.stringify(proof, null, 2));
