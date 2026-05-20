@@ -20,6 +20,11 @@ import {
   settlementRecommendationForJudgment,
   statusForJudgmentResult,
 } from "./judgment-policy";
+import { parseProtocolSpecV2 } from "./protocol-spec-v2";
+import {
+  combineAutoSettlePolicyWithProtocolGates,
+  evaluateProtocolJudgmentGates,
+} from "./protocol-judgment-policy";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -84,6 +89,9 @@ export async function executeChallengeJudgment(
         include: { user: { select: { id: true, username: true } } },
       },
       evidence: true,
+      evidenceChecks: true,
+      participantBindings: true,
+      protocol: true,
     },
   });
 
@@ -250,11 +258,35 @@ export async function executeChallengeJudgment(
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
   };
-  const autoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
-  const verdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const protocolGates = evaluateProtocolJudgmentGates({
+    protocol,
+    participants: challenge.participants,
+    participantBindings: challenge.participantBindings,
+    evidence: challenge.evidence,
+    evidenceChecks: challenge.evidenceChecks,
+    result,
+  });
+  const aiOnlyAutoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
+  const autoSettlePolicy = combineAutoSettlePolicyWithProtocolGates(aiOnlyAutoSettlePolicy, protocolGates);
+  const aiOnlyVerdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
+  const verdictStatus =
+    aiOnlyVerdictStatus === ChallengeStatus.ai_verdict_ready && !protocolGates.settlementEligibility.eligible
+      ? ChallengeStatus.manual_review_required
+      : aiOnlyVerdictStatus;
   const evidenceQuality = evidenceQualityForJudgment(result);
   const recommendation = settlementRecommendationForJudgment(result);
-  const blockingIssues = blockingIssuesForJudgment(result, judgmentPolicyOptions);
+  const blockingIssues = autoSettlePolicy.blockingIssues.length
+    ? autoSettlePolicy.blockingIssues
+    : blockingIssuesForJudgment(result, judgmentPolicyOptions);
   const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
 
   const judgment = await prisma.judgment.create({
@@ -270,6 +302,7 @@ export async function executeChallengeJudgment(
         model: aiModelLabel,
         autoSettlePolicy,
         status: verdictStatus,
+        protocolGates,
       }),
     },
     include: { winner: { select: { id: true, username: true } } },
@@ -302,6 +335,10 @@ export async function executeChallengeJudgment(
         recommendation,
         settlementRecommendation: recommendation,
         blockingIssues,
+        protocolCompliance: protocolGates.protocolCompliance,
+        identityResult: protocolGates.identityResult,
+        evidenceResult: protocolGates.evidenceResult,
+        settlementEligibility: protocolGates.settlementEligibility,
         autoSettleBlockReason: autoSettlePolicy.reason,
         reasoning: result.reasoning?.slice(0, 500),
       },
@@ -356,6 +393,10 @@ export async function executeChallengeJudgment(
         recommendation,
         settlementRecommendation: recommendation,
         blockingIssues,
+        protocolCompliance: protocolGates.protocolCompliance,
+        identityResult: protocolGates.identityResult,
+        evidenceResult: protocolGates.evidenceResult,
+        settlementEligibility: protocolGates.settlementEligibility,
         judgmentId: judgment.id,
       },
     });
@@ -507,6 +548,10 @@ export async function executeChallengeJudgment(
       recommendation,
       settlementRecommendation: recommendation,
       blockingIssues,
+      protocolCompliance: protocolGates.protocolCompliance,
+      identityResult: protocolGates.identityResult,
+      evidenceResult: protocolGates.evidenceResult,
+      settlementEligibility: protocolGates.settlementEligibility,
       autoSettleEligible: autoSettlePolicy.eligible,
       reasoning: result.reasoning?.slice(0, 500),
     },

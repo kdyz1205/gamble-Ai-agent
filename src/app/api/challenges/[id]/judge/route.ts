@@ -15,6 +15,11 @@ import {
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { logAiUsage } from "@/lib/ai-usage-log";
+import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import {
+  combineAutoSettlePolicyWithProtocolGates,
+  evaluateProtocolJudgmentGates,
+} from "@/lib/protocol-judgment-policy";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
@@ -69,6 +74,9 @@ export async function POST(
         include: { user: { select: { id: true, username: true } } },
       },
       evidence: true,
+      evidenceChecks: true,
+      participantBindings: true,
+      protocol: true,
       _count: { select: { judgments: true } },
     },
   });
@@ -255,11 +263,35 @@ export async function POST(
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
   };
-  const autoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
-  const verdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const protocolGates = evaluateProtocolJudgmentGates({
+    protocol,
+    participants: challenge.participants,
+    participantBindings: challenge.participantBindings,
+    evidence: challenge.evidence,
+    evidenceChecks: challenge.evidenceChecks,
+    result,
+  });
+  const aiOnlyAutoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
+  const autoSettlePolicy = combineAutoSettlePolicyWithProtocolGates(aiOnlyAutoSettlePolicy, protocolGates);
+  const aiOnlyVerdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
+  const verdictStatus =
+    aiOnlyVerdictStatus === ChallengeStatus.ai_verdict_ready && !protocolGates.settlementEligibility.eligible
+      ? ChallengeStatus.manual_review_required
+      : aiOnlyVerdictStatus;
   const evidenceQuality = evidenceQualityForJudgment(result) as EvidenceQuality;
   const recommendation = settlementRecommendationForJudgment(result) as VerdictRecommendation;
-  const blockingIssues = blockingIssuesForJudgment(result, judgmentPolicyOptions);
+  const blockingIssues = autoSettlePolicy.blockingIssues.length
+    ? autoSettlePolicy.blockingIssues
+    : blockingIssuesForJudgment(result, judgmentPolicyOptions);
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
@@ -308,6 +340,7 @@ export async function POST(
         model: effectiveAiModelLabel,
         autoSettlePolicy,
         status: verdictStatus,
+        protocolGates,
       }),
     },
     include: { winner: { select: { id: true, username: true } } },
@@ -328,6 +361,10 @@ export async function POST(
     autoSettleEligible: autoSettlePolicy.eligible,
     autoSettleBlockReason: autoSettlePolicy.reason,
     blockingIssues,
+    protocolCompliance: protocolGates.protocolCompliance,
+    identityResult: protocolGates.identityResult,
+    evidenceResult: protocolGates.evidenceResult,
+    settlementEligibility: protocolGates.settlementEligibility,
   } satisfies {
     status: VerdictStatus;
     winnerId: string | null;
@@ -342,6 +379,10 @@ export async function POST(
     autoSettleEligible: boolean;
     autoSettleBlockReason: string | null;
     blockingIssues: string[];
+    protocolCompliance: unknown;
+    identityResult: unknown;
+    evidenceResult: unknown;
+    settlementEligibility: unknown;
   };
 
   if (!shouldAutoSettle) {
@@ -367,6 +408,10 @@ export async function POST(
         recommendation,
         settlementRecommendation: recommendation,
         blockingIssues,
+        protocolCompliance: protocolGates.protocolCompliance,
+        identityResult: protocolGates.identityResult,
+        evidenceResult: protocolGates.evidenceResult,
+        settlementEligibility: protocolGates.settlementEligibility,
         autoSettleBlockReason: autoSettlePolicy.reason,
         rejudge: isRejudge,
         rejudgeReason: rejudgeReason || null,
@@ -487,6 +532,10 @@ export async function POST(
       recommendation,
       settlementRecommendation: recommendation,
       blockingIssues,
+      protocolCompliance: protocolGates.protocolCompliance,
+      identityResult: protocolGates.identityResult,
+      evidenceResult: protocolGates.evidenceResult,
+      settlementEligibility: protocolGates.settlementEligibility,
       rejudge: isRejudge,
       rejudgeReason: rejudgeReason || null,
       inferenceRefunded,

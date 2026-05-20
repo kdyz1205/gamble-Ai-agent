@@ -1,5 +1,6 @@
 import { ChallengeStatus } from "./enums";
 import type { JudgmentResult, VideoJudgmentParticipantMetrics } from "./ai-engine";
+import type { ProtocolJudgmentGateResult } from "./protocol-judgment-policy";
 
 export type EvidenceQuality = "good" | "unclear" | "insufficient" | "invalid";
 export type VerdictRecommendation =
@@ -198,6 +199,7 @@ export function buildJudgmentMetricsJson(
     model: string;
     autoSettlePolicy: AutoSettlePolicyResult;
     status: VerdictStatus;
+    protocolGates?: ProtocolJudgmentGateResult;
   },
 ): string {
   return JSON.stringify({
@@ -214,6 +216,10 @@ export function buildJudgmentMetricsJson(
     autoSettleEligible: params.autoSettlePolicy.eligible,
     autoSettleBlockReason: params.autoSettlePolicy.reason,
     status: params.status,
+    protocolCompliance: params.protocolGates?.protocolCompliance ?? null,
+    identityResult: params.protocolGates?.identityResult ?? null,
+    evidenceResult: params.protocolGates?.evidenceResult ?? null,
+    settlementEligibility: params.protocolGates?.settlementEligibility ?? null,
   });
 }
 

@@ -14,6 +14,11 @@ import {
   type EvidenceQuality,
   type VerdictRecommendation,
 } from "@/lib/judgment-policy";
+import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import {
+  combineAutoSettlePolicyWithProtocolGates,
+  evaluateProtocolJudgmentGates,
+} from "@/lib/protocol-judgment-policy";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 
 export const runtime = "nodejs";
@@ -55,6 +60,10 @@ export async function POST(
       where: { id },
       include: {
         participants: { where: { status: "accepted" } },
+        evidence: true,
+        evidenceChecks: true,
+        participantBindings: true,
+        protocol: true,
         judgments: {
           where: { method: "ai", status: "completed" },
           orderBy: { createdAt: "desc" },
@@ -96,17 +105,18 @@ export async function POST(
     const persistedBlockingIssues = stringArray(metrics.blockingIssues);
     const confidence = judgment.confidence ?? 0;
     const opponent = challenge.participants.find((p) => p.role === "opponent");
-    const policy = evaluateAutoSettleEligibility(
-      {
-        winnerId: judgment.winnerId,
-        reasoning: judgment.reasoning ?? "",
-        confidence,
-        evidenceQuality: evidenceQuality as EvidenceQuality,
-        recommendation: recommendation as VerdictRecommendation,
-        blockingIssues: persistedBlockingIssues,
-        source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "fallback" : undefined,
-        videoMetrics: metrics.videoMetrics as never,
-      },
+    const reconstructedResult = {
+      winnerId: judgment.winnerId,
+      reasoning: judgment.reasoning ?? "",
+      confidence,
+      evidenceQuality: evidenceQuality as EvidenceQuality,
+      recommendation: recommendation as VerdictRecommendation,
+      blockingIssues: persistedBlockingIssues,
+      source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "fallback" : undefined,
+      videoMetrics: metrics.videoMetrics as never,
+    };
+    const aiOnlyPolicy = evaluateAutoSettleEligibility(
+      reconstructedResult,
       {
         requiresVision: challenge.evidenceType === "video",
         requiresRepCountWinner: requiresRepCountWinnerFromText(
@@ -119,9 +129,32 @@ export async function POST(
         participantBId: opponent?.userId ?? null,
       },
     );
+    const protocol = challenge.protocol?.specJson
+      ? (() => {
+          try {
+            return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const protocolGates = evaluateProtocolJudgmentGates({
+      protocol,
+      participants: challenge.participants,
+      participantBindings: challenge.participantBindings,
+      evidence: challenge.evidence,
+      evidenceChecks: challenge.evidenceChecks,
+      result: reconstructedResult,
+    });
+    const policy = combineAutoSettlePolicyWithProtocolGates(aiOnlyPolicy, protocolGates);
     const blockingIssues = policy.blockingIssues;
     const persistedEligible = metrics.autoSettleEligible !== false;
-    const settlementAllowed = policy.eligible && persistedEligible;
+    const persistedProtocolEligible =
+      !metrics.settlementEligibility ||
+      (typeof metrics.settlementEligibility === "object" &&
+        metrics.settlementEligibility !== null &&
+        (metrics.settlementEligibility as { eligible?: unknown }).eligible !== false);
+    const settlementAllowed = policy.eligible && persistedEligible && persistedProtocolEligible;
 
     if (!settlementAllowed) {
       await prisma.challenge.update({
@@ -138,6 +171,10 @@ export async function POST(
             winnerId: judgment.winnerId,
             blockingIssues,
             autoSettleEligible: persistedEligible,
+            protocolCompliance: protocolGates.protocolCompliance,
+            identityResult: protocolGates.identityResult,
+            evidenceResult: protocolGates.evidenceResult,
+            settlementEligibility: protocolGates.settlementEligibility,
           },
           challenge: { id, status: ChallengeStatus.manual_review_required },
           judgment,
