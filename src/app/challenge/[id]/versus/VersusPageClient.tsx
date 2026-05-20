@@ -564,10 +564,25 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   };
 
   const copyLink = () => {
-    const url = `${window.location.origin}/challenge/${challengeId}/versus`;
-    void navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const url = `${window.location.origin}/join/${challengeId}`;
+    const markCopied = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+    if (!navigator.clipboard?.writeText) {
+      showNote(`Invite link: ${url}`, "info");
+      markCopied();
+      return;
+    }
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        showNote("Invite link copied. Opponent must accept the rules before joining.", "success");
+        markCopied();
+      })
+      .catch(() => {
+        showNote(`Copy blocked by browser. Invite link: ${url}`, "info");
+        markCopied();
+      });
   };
 
   const startCamera = async () => {
@@ -1311,7 +1326,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            {copied ? "Copied!" : "Share Battle Link"}
+            {copied ? "Copied!" : "Copy Invite Link"}
           </motion.button>
 
           <motion.button
