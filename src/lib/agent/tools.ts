@@ -496,6 +496,21 @@ function inferTypeFromTitle(title: string): string {
 async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
+  const acceptedRuleContract =
+    args.acceptedRuleContract === true ||
+    args.ruleContractAccepted === true ||
+    args.contractAccepted === true;
+  if (!acceptedRuleContract) {
+    return {
+      ok: false,
+      error: "Open the join link and accept the rule contract before joining this challenge.",
+      data: {
+        challengeId,
+        joinUrl: `${ctx.baseUrl}/join/${challengeId}`,
+        required: "acceptedRuleContract",
+      },
+    };
+  }
   const hasLocationFields = "lat" in args || "lng" in args || "discoveryLat" in args || "discoveryLng" in args;
   const locationSnapshot = readLocationSnapshot(args, ctx.locationSnapshot);
   if (hasLocationFields && !validLatLng(args.lat ?? args.discoveryLat, args.lng ?? args.discoveryLng)) {

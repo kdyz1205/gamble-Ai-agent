@@ -177,6 +177,14 @@ async function callAgentTool(jar, message, expectedTool) {
   return out;
 }
 
+async function callAgent(jar, message) {
+  return postJson(jar, "/api/agent/respond", {
+    message,
+    conversationHistory: [],
+    draftState: {},
+  });
+}
+
 function bindingCode(bindings, role) {
   const binding = bindings.find((item) => item.role === role);
   if (!binding?.livenessCode) throw new Error(`Missing ${role} livenessCode`);
@@ -202,13 +210,41 @@ try {
   };
   requireCheck(proof, "challenge_created_with_protocol", Boolean(challengeId) && created.challenge.evidenceMode === "same_camera_video", proof.create);
 
-  const accepted = await callAgentTool(
+  const acceptWithoutContract = await callAgent(
     opponent.jar,
     `I want to join challenge ${challengeId}. Please accept it for me.`,
-    "acceptChallenge",
   );
-  proof.accept = accepted.toolResult;
-  requireCheck(proof, "agent_accept_opened_evidence_window", accepted.toolResult.status === "evidence_window_open", proof.accept);
+  const afterNoContract = await getJson(creator.jar, `/api/challenges/${challengeId}`);
+  proof.acceptWithoutContract = {
+    agentAction: acceptWithoutContract.agentAction,
+    toolName: acceptWithoutContract.toolName,
+    toolError: acceptWithoutContract.toolError,
+    toolResult: acceptWithoutContract.toolResult,
+    reply: acceptWithoutContract.userVisibleReply,
+    statusAfter: afterNoContract.challenge?.status,
+  };
+  requireCheck(
+    proof,
+    "agent_accept_requires_rule_contract",
+    afterNoContract.challenge?.status === "waiting_for_opponent" &&
+      (
+        !acceptWithoutContract.toolName ||
+        (
+          acceptWithoutContract.toolName === "acceptChallenge" &&
+          String(acceptWithoutContract.toolError || "").includes("accept the rule contract")
+        )
+      ),
+    proof.acceptWithoutContract,
+  );
+
+  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {
+    acceptedRuleContract: true,
+  });
+  proof.accept = {
+    challengeId,
+    status: accepted.challenge?.status,
+  };
+  requireCheck(proof, "contract_accept_opened_evidence_window", accepted.challenge?.status === "evidence_window_open", proof.accept);
 
   try {
     await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
