@@ -125,6 +125,19 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (
+      protocolSpec &&
+      (protocolSpec.participantMode === "mass_crowd" || protocolSpec.settlementProtocol.mode === "leaderboard")
+    ) {
+      return Response.json(
+        {
+          error: "Mass-crowd and leaderboard protocols require the event flow and cannot be created as a 1v1 challenge.",
+          requiresEventFlow: true,
+          protocol: protocolSpec,
+        },
+        { status: 409 },
+      );
+    }
     const protocolLegacy = protocolSpec ? protocolToLegacyChallengeFields(protocolSpec) : null;
     const resolvedTitle = title || protocolLegacy?.title;
     const resolvedDescription = description || protocolLegacy?.description;
