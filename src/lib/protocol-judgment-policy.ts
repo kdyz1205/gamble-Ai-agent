@@ -201,6 +201,18 @@ function identityResult(
     }
 
     const metrics = metricsForRole(result, required.role);
+    const requiresObservedPosition =
+      protocol.evidenceProtocol.mode === "same_camera_video" ||
+      protocol.identityProtocol.mode === "left_right_assignment";
+    const expectedPosition = required.expectedPosition ?? binding?.expectedPosition ?? null;
+    if (requiresObservedPosition && expectedPosition && expectedPosition !== "any") {
+      const observedPosition = metrics?.observedPosition ?? null;
+      if (!observedPosition || observedPosition === "unclear") {
+        rowIssues.push(`${required.role} observed position is unclear; expected ${expectedPosition}.`);
+      } else if (observedPosition !== expectedPosition) {
+        rowIssues.push(`${required.role} observed position is ${observedPosition}, expected ${expectedPosition}.`);
+      }
+    }
     const verifiedByBinding =
       binding?.bindingStatus === "verified" ||
       (numericConfidence(binding?.identityConfidence) ?? 0) >= threshold;
@@ -350,4 +362,3 @@ export function combineAutoSettlePolicyWithProtocolGates(
     blockingIssues,
   };
 }
-

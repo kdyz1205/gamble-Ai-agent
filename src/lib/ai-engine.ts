@@ -129,6 +129,7 @@ export interface JudgmentResult {
 export interface VideoJudgmentParticipantMetrics {
   validRepCount: number | null;
   invalidRepNotes: string[];
+  observedPosition?: "left" | "right" | "center" | "unclear" | null;
   fullDurationCovered: boolean | null;
   livenessPhraseVisible: boolean | null;
   fullBodyVisible: boolean | null;
@@ -543,6 +544,12 @@ function coerceRecommendation(value: unknown): JudgmentResult["recommendation"] 
   return undefined;
 }
 
+function coerceObservedPosition(value: unknown): VideoJudgmentParticipantMetrics["observedPosition"] {
+  return value === "left" || value === "right" || value === "center" || value === "unclear"
+    ? value
+    : null;
+}
+
 function coerceParticipantVideoMetrics(value: unknown): VideoJudgmentParticipantMetrics {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -550,6 +557,7 @@ function coerceParticipantVideoMetrics(value: unknown): VideoJudgmentParticipant
   return {
     validRepCount: repCountOrNull(source.validRepCount),
     invalidRepNotes: stringArray(source.invalidRepNotes),
+    observedPosition: coerceObservedPosition(source.observedPosition),
     fullDurationCovered: boolOrNull(source.fullDurationCovered),
     livenessPhraseVisible: boolOrNull(source.livenessPhraseVisible),
     fullBodyVisible: boolOrNull(source.fullBodyVisible),
@@ -855,6 +863,7 @@ ${sharedSameCamera ? `
 SHARED SAME-CAMERA MODE:
 - Participant A and Participant B are in the same video, not two independent clips.
 - Use the role guidance from the evidence metadata/descriptions: creator/Participant A is expected on the left; opponent/Participant B is expected on the right when possible.
+- Fill videoMetrics.participantA.observedPosition and participantB.observedPosition from the visible layout. Use "unclear" if you cannot tell. Do not auto-settle when either expected left/right identity is unclear or swapped.
 - Do not award a winner unless both identities and the finish order/count are visually clear in the frames.
 - If identity, body visibility, rep validity, start time, or finish order is ambiguous, return winner: null with confidence <= 0.69.
 ` : ""}
@@ -887,6 +896,7 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
     "participantA": {
       "validRepCount": number | null,
       "invalidRepNotes": string[],
+      "observedPosition": "left" | "right" | "center" | "unclear" | null,
       "fullDurationCovered": boolean | null,
       "livenessPhraseVisible": boolean | null,
       "fullBodyVisible": boolean | null,
@@ -900,6 +910,7 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
     "participantB": {
       "validRepCount": number | null,
       "invalidRepNotes": string[],
+      "observedPosition": "left" | "right" | "center" | "unclear" | null,
       "fullDurationCovered": boolean | null,
       "livenessPhraseVisible": boolean | null,
       "fullBodyVisible": boolean | null,
