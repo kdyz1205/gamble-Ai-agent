@@ -376,7 +376,7 @@ try {
     videoStorage,
   };
 
-  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
+  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, { acceptedRuleContract: true });
   proof.accept = {
     status: accepted.challenge.status,
     participants: accepted.challenge.participants.length,

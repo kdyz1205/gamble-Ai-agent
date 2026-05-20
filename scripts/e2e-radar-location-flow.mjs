@@ -223,7 +223,7 @@ try {
   const noLocationAccept = await requestAllowError(opponent.jar, `/api/challenges/${challengeId}/accept`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ acceptedRuleContract: true }),
   });
   proof.noLocationAccept = { status: noLocationAccept.status, data: noLocationAccept.data };
   requireCheck(proof, "accept_requires_location", noLocationAccept.status === 428, proof.noLocationAccept);
@@ -231,12 +231,15 @@ try {
   const farAccept = await requestAllowError(opponent.jar, `/api/challenges/${challengeId}/accept`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(far),
+    body: JSON.stringify({ ...far, acceptedRuleContract: true }),
   });
   proof.farAccept = { status: farAccept.status, data: farAccept.data };
   requireCheck(proof, "far_location_cannot_accept", farAccept.status === 403, proof.farAccept);
 
-  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, nearOpponent);
+  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {
+    ...nearOpponent,
+    acceptedRuleContract: true,
+  });
   proof.accept = {
     challengeId: accepted.challenge.id,
     status: accepted.challenge.status,

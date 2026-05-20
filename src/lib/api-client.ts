@@ -556,10 +556,18 @@ export async function finalizeEvent(id: string): Promise<{
   return apiFetch(`/events/${id}/finalize`, { method: "POST" });
 }
 
-export async function acceptChallenge(id: string, snapshot?: LocationSnapshot): Promise<{ challenge: ChallengeData }> {
+export async function acceptChallenge(
+  id: string,
+  snapshot?: LocationSnapshot | null,
+  options?: { acceptedRuleContract?: boolean },
+): Promise<{ challenge: ChallengeData }> {
+  const body = {
+    ...(snapshot ?? {}),
+    acceptedRuleContract: options?.acceptedRuleContract === true,
+  };
   return apiFetch(`/challenges/${id}/accept`, {
     method: "POST",
-    body: snapshot ? JSON.stringify(snapshot) : undefined,
+    body: JSON.stringify(body),
   });
 }
 

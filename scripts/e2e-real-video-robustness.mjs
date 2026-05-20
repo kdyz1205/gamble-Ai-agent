@@ -490,7 +490,7 @@ try {
       });
     }
 
-    const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
+    const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, { acceptedRuleContract: true });
     requireCheck(caseProof, "accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);
 
     let creatorVideoUrl = "";

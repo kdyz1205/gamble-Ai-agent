@@ -178,7 +178,10 @@ async function createChallenge(user: UserCtx, jar: Map<string, string>, parsed: 
 }
 
 async function acceptChallenge(user: UserCtx, jar: Map<string, string>, id: string) {
-  return apiJson(user, jar, `/api/challenges/${id}/accept`, { method: "POST" });
+  return apiJson(user, jar, `/api/challenges/${id}/accept`, {
+    method: "POST",
+    body: JSON.stringify({ acceptedRuleContract: true }),
+  });
 }
 
 async function submitEvidence(user: UserCtx, jar: Map<string, string>, id: string, descr: string) {

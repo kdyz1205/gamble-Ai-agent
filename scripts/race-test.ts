@@ -133,8 +133,14 @@ async function scenarioA_acceptRace() {
 
     // Both race to accept the same challenge simultaneously
     const [rA, rB] = await Promise.all([
-      apiJson(aJar, `/api/challenges/${challengeId}/accept`, { method: "POST" }),
-      apiJson(bJar, `/api/challenges/${challengeId}/accept`, { method: "POST" }),
+      apiJson(aJar, `/api/challenges/${challengeId}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ acceptedRuleContract: true }),
+      }),
+      apiJson(bJar, `/api/challenges/${challengeId}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ acceptedRuleContract: true }),
+      }),
     ]);
 
     const endA = await getCredits(aJar);
@@ -198,7 +204,10 @@ async function scenarioB_doubleConfirm() {
     if (created.status >= 400) continue;
     const challengeId = created.body.challenge.id;
 
-    await apiJson(oJar, `/api/challenges/${challengeId}/accept`, { method: "POST" });
+    await apiJson(oJar, `/api/challenges/${challengeId}/accept`, {
+      method: "POST",
+      body: JSON.stringify({ acceptedRuleContract: true }),
+    });
     await apiJson(cJar, `/api/challenges/${challengeId}/evidence`, {
       method: "POST",
       body: JSON.stringify({ type: "text", description: `Creator clearly won challenge ${i}, unambiguous success.` }),

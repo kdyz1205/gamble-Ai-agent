@@ -37,7 +37,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
     }
     setAccepting(true);
     try {
-      await api.acceptChallenge(challenge.id);
+      await api.acceptChallenge(challenge.id, null, { acceptedRuleContract: true });
       onConfirmed(challenge.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to accept";

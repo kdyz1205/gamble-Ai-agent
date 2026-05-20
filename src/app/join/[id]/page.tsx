@@ -160,7 +160,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
       const joinSnapshot = challenge && needsLocationGate(challenge)
         ? await verifyLocationForJoin()
         : locationSnapshot;
-      await api.acceptChallenge(id, joinSnapshot ?? undefined);
+      await api.acceptChallenge(id, joinSnapshot ?? null, { acceptedRuleContract: true });
       setAccepted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to accept challenge.");

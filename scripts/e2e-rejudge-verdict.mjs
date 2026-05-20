@@ -160,7 +160,7 @@ try {
   const challengeId = created.challenge.id;
   proof.challengeId = challengeId;
 
-  await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
+  await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, { acceptedRuleContract: true });
   await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
     type: "self_report",
     description: "Creator evidence contains the required phrase BLUE-CROWN-91.",

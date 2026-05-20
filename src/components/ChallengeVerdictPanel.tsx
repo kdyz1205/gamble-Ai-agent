@@ -493,7 +493,7 @@ export default function ChallengeVerdictPanel({
     setAcceptingChallenge(true);
     setVerdictErr("");
     try {
-      await api.acceptChallenge(challenge.id);
+      await api.acceptChallenge(challenge.id, null, { acceptedRuleContract: true });
       await refresh();
       onCreditsMayChange();
     } catch (e) {

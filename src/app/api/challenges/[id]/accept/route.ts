@@ -79,6 +79,15 @@ export async function POST(
   const source = body && typeof body === "object" && !Array.isArray(body)
     ? body as Record<string, unknown>
     : {};
+  const acceptedRuleContract =
+    source.acceptedRuleContract === true ||
+    source.ruleContractAccepted === true ||
+    source.contractAccepted === true;
+  if (!acceptedRuleContract) {
+    return Response.json({
+      error: "You must accept the rule contract before joining this challenge.",
+    }, { status: 400 });
+  }
   const hasLocationFields = "lat" in source || "lng" in source;
   const locationSnapshot = validLatLng(source.lat, source.lng)
     ? { lat: source.lat as number, lng: source.lng as number }

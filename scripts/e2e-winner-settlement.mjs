@@ -245,12 +245,29 @@ try {
   proof.challenge = {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,
+    joinUrl: `${base}/join/${challengeId}`,
     createdStatus: created.challenge.status,
     protocolVersion: created.challenge.protocolVersion,
     settlementProtocolMode: created.challenge.settlementProtocolMode,
   };
 
-  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
+  try {
+    await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
+    proof.missingContractAccept = { status: 200, data: "unexpected_accept" };
+  } catch (err) {
+    proof.missingContractAccept = {
+      status: err.status ?? null,
+      data: err.data ?? err.message,
+    };
+  }
+  requireCheck(
+    proof,
+    "accept_requires_rule_contract",
+    proof.missingContractAccept.status === 400,
+    proof.missingContractAccept,
+  );
+
+  const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, { acceptedRuleContract: true });
   proof.accept = {
     status: accepted.challenge.status,
     participants: accepted.challenge.participants.length,
