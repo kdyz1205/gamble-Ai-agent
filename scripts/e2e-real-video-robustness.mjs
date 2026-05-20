@@ -668,6 +668,8 @@ try {
       requireCheck(caseProof, "settled_expected", finalChallenge.challenge.status === "settled", finalChallenge.challenge.status);
       requireCheck(caseProof, "winner_present", Boolean(judged.winnerId), caseProof.judgment);
       requireCheck(caseProof, "confidence_high", judged.confidence >= 0.85, judged.confidence);
+      requireCheck(caseProof, "settlement_recommendation_is_winner", judged.settlementRecommendation === "settle_winner", caseProof.judgment);
+      requireCheck(caseProof, "evidence_quality_good", judged.evidenceQuality === "good", caseProof.judgment);
       requireCheck(caseProof, "auto_settle_eligible", judged.autoSettleEligible === true, caseProof.judgment);
       requireCheck(caseProof, "rep_count_a_higher", Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? 0), judged.videoMetrics);
     } else {

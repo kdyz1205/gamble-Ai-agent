@@ -230,12 +230,11 @@ export function buildJudgmentMetricsJson(
     protocolGates?: ProtocolJudgmentGateResult;
   },
 ): string {
-  const effectiveRecommendation = recommendationFromBlockingIssues(
-    recommendation(result),
-    params.autoSettlePolicy.blockingIssues,
-  );
+  const effectiveRecommendation = params.autoSettlePolicy.eligible
+    ? "settle_winner"
+    : recommendationFromBlockingIssues(recommendation(result), params.autoSettlePolicy.blockingIssues);
   const effectiveEvidenceQuality = evidenceQualityFromBlockingIssues(
-    evidenceQuality(result),
+    params.autoSettlePolicy.eligible ? "good" : evidenceQuality(result),
     effectiveRecommendation,
     params.autoSettlePolicy.blockingIssues,
   );
@@ -276,13 +275,12 @@ export function effectiveJudgmentVerdictFields(
   result: JudgmentResult,
   autoSettlePolicy: AutoSettlePolicyResult,
 ): { evidenceQuality: EvidenceQuality; recommendation: VerdictRecommendation } {
-  const effectiveRecommendation = recommendationFromBlockingIssues(
-    recommendation(result),
-    autoSettlePolicy.blockingIssues,
-  );
+  const effectiveRecommendation = autoSettlePolicy.eligible
+    ? "settle_winner"
+    : recommendationFromBlockingIssues(recommendation(result), autoSettlePolicy.blockingIssues);
   return {
     evidenceQuality: evidenceQualityFromBlockingIssues(
-      evidenceQuality(result),
+      autoSettlePolicy.eligible ? "good" : evidenceQuality(result),
       effectiveRecommendation,
       autoSettlePolicy.blockingIssues,
     ),
