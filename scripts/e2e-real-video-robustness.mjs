@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
+import { pushupVisionProtocol } from "./e2e-protocol-fixtures.mjs";
 
 const execFile = promisify(execFileCallback);
 const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
@@ -421,15 +422,15 @@ try {
     };
     proof.cases.push(caseProof);
 
-    const created = await postJson(creator.jar, "/api/challenges", {
+    const protocol = pushupVisionProtocol({
+      stamp,
       title: `Robustness: ${caseDef.title} ${stamp}`,
-      description: "Production-equivalent robustness E2E for video push-up judging. No direct rep-count labels are present in fixture videos.",
-      marketType: "challenge",
-      proposition: "Who completes more valid push-ups in a 60-second continuous video attempt?",
-      type: "Fitness",
+      rawPrompt: `Robustness case ${caseDef.id}: who completes more valid push-ups in a 60-second continuous video attempt?`,
+    });
+    const created = await postJson(creator.jar, "/api/challenges", {
+      protocol,
       stake: caseDef.stake ?? 0,
       stakeToken: "credits",
-      deadline: "2 hours",
       rules: [
         "Objective: determine who completes more valid push-ups in a 60-second continuous video attempt.",
         "Valid rep: starts at top with arms extended, chest/body clearly lowers, body line stays reasonably straight, returns to top.",
@@ -438,8 +439,6 @@ try {
         "AI judging: use vision frames only; do not rely on direct text labels for rep counts.",
         "Auto settlement: only if source=vision_llm, confidence>=0.85, quality=good, both videos cover the required duration, both bodies are visible, liveness is visible, and no anti-cheat flag is present.",
       ].join("\n"),
-      evidenceType: "video",
-      settlementMode: "auto_settle_ai_high_confidence",
       aiReview: true,
       isPublic: true,
       visibility: "public",
@@ -448,6 +447,21 @@ try {
     const livenessPhrase = created.challenge.livenessPrompt || `GambleAI ${stamp}`;
     caseProof.challengeId = challengeId;
     caseProof.livenessPrompt = livenessPhrase;
+    caseProof.protocol = {
+      version: created.challenge.protocolVersion,
+      evidenceMode: created.challenge.evidenceMode,
+      identityMode: created.challenge.identityMode,
+      settlementProtocolMode: created.challenge.settlementProtocolMode,
+    };
+    requireCheck(
+      caseProof,
+      "created_with_protocol_v2",
+      created.challenge.protocolVersion === "2.0" &&
+        created.challenge.evidenceMode === "separate_video" &&
+        created.challenge.identityMode === "liveness_phrase" &&
+        created.challenge.settlementProtocolMode === "auto_ai_vision",
+      caseProof.protocol,
+    );
 
     const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
     requireCheck(caseProof, "accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);

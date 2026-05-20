@@ -81,6 +81,14 @@ function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | 
   return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
 }
 
+function livenessPhraseFor(protocol: ProtocolSpecV2 | null) {
+  const phrases = (protocol?.identityProtocol.participantBindings ?? [])
+    .map((binding) => binding.requiredPhrase?.trim())
+    .filter((phrase): phrase is string => Boolean(phrase));
+  if (phrases.length === 0) return null;
+  return phrases[0];
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -252,7 +260,7 @@ export async function POST(req: NextRequest) {
       evidenceDescriptor.includes("camera") ||
       evidenceDescriptor.includes("photo") ||
       Boolean(protocolSpec?.identityProtocol.required);
-    const livenessPrompt = needsLiveness ? generateLivenessPhrase() : null;
+    const livenessPrompt = needsLiveness ? livenessPhraseFor(protocolSpec) ?? generateLivenessPhrase() : null;
     try {
       challenge = await prisma.$transaction(async (tx) => {
         const created = await tx.challenge.create({
