@@ -160,6 +160,7 @@ export default function Home() {
   const [openChallenges, setOpenChallenges] = useState<api.ChallengeData[]>([]);
   const [discoveryMessage, setDiscoveryMessage] = useState("");
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
+  const [dailyQuota, setDailyQuota] = useState<api.DailyAiQuotaStatus | null>(null);
   const joiningId: string | null = null;
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
@@ -179,7 +180,28 @@ export default function Home() {
     setCopyNotice("");
   }, []);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setDailyQuota(null);
+      return;
+    }
+    let cancelled = false;
+    api.getCredits()
+      .then((res) => {
+        if (!cancelled) setDailyQuota(res.dailyQuota);
+      })
+      .catch(() => {
+        if (!cancelled) setDailyQuota(null);
+      });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   const handleGenerate = useCallback(async (input: string) => {
+    if (!user) {
+      setError("Sign in to use your daily beta AI draft credits.");
+      setShowAuth(true);
+      return;
+    }
     const directive = extractModelDirective(input);
     const nextPrefs = directive.prefs ?? oraclePrefs;
     if (directive.prefs) {
@@ -206,12 +228,13 @@ export default function Home() {
       setSpecSource(res.source || "");
       setSpecProviderId(res.providerId || nextPrefs.providerId);
       setExternalApiCharged(Boolean(res.externalApiCharged));
+      if (res.dailyQuota) setDailyQuota(res.dailyQuota);
       setAppState("preview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not generate challenge spec");
       setAppState("idle");
     }
-  }, [oraclePrefs]);
+  }, [oraclePrefs, user]);
 
   const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
     const provider = getProviderById(providerId);
@@ -418,6 +441,11 @@ export default function Home() {
                 </span>
                 <span className="text-xs font-semibold" style={{ color: "#172033" }}>{user.username}</span>
                 <span className="text-[11px] font-bold px-1.5 py-0.5" style={{ background: "#FFEDD5", color: "#9A3412", borderRadius: "999px" }}>{user.credits ?? 0} pts</span>
+                {dailyQuota && (
+                  <span className="text-[11px] font-bold px-1.5 py-0.5" style={{ background: "#DBEAFE", color: "#1D4ED8", borderRadius: "999px" }}>
+                    AI {dailyQuota.judge.remaining}/{dailyQuota.judge.limit}
+                  </span>
+                )}
               </button>
               <AnimatePresence>
                 {showProfile && (
@@ -432,6 +460,19 @@ export default function Home() {
                     <div className="p-3 border-b" style={{ borderColor: "#F1F5F9" }}>
                       <p className="text-sm font-bold" style={{ color: "#172033" }}>{user.username}</p>
                       <p className="text-xs truncate" style={{ color: "#64748B" }}>{user.email || ""}</p>
+                      {dailyQuota && (
+                        <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] font-bold" style={{ color: "#334155" }}>
+                          <div className="px-2 py-1 rounded-lg" style={{ background: "#F8FAFC" }}>
+                            Drafts {dailyQuota.spec.remaining}/{dailyQuota.spec.limit}
+                          </div>
+                          <div className="px-2 py-1 rounded-lg" style={{ background: "#F8FAFC" }}>
+                            Verdicts {dailyQuota.judge.remaining}/{dailyQuota.judge.limit}
+                          </div>
+                          <div className="col-span-2 px-2 py-1 rounded-lg" style={{ background: "#F8FAFC" }}>
+                            Video verdicts {dailyQuota.videoJudge.remaining}/{dailyQuota.videoJudge.limit}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="p-2 space-y-0.5">
                       <button onClick={() => { setShowProfile(false); router.push("/me"); }} className="w-full text-left px-3 py-2 text-sm font-semibold rounded-xl hover:bg-[#ECFDF5]" style={{ color: "#172033" }}>Wallet / profile</button>

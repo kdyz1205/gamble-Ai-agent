@@ -5,6 +5,8 @@ import { completeOraclePromptWithMetadata } from "@/lib/llm-router";
 import { configuredProviders, getProviderById, isPaidProvider, isProviderConfigured, resolveTierModel, resolveTierProvider } from "@/lib/llm-providers";
 import { rateLimit } from "@/lib/rate-limit";
 import { evaluateRuleSafety } from "@/lib/rule-safety";
+import { getAuthUser, unauthorized } from "@/lib/auth";
+import { refundDailyAiQuota, spendDailyAiQuota } from "@/lib/daily-ai-quota";
 
 const INVITE_MODES: ChallengeSpec["invite_mode"][] = ["nearby", "invite_link", "direct_friend", "same_device"];
 const PARTICIPATION_MODES: ChallengeSpec["participation_mode"][] = ["remote_async", "remote_live", "same_camera", "in_person"];
@@ -224,6 +226,9 @@ For physical video challenges, especially push-ups, the spec must include: a 60-
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
+
   const limited = await rateLimit(req, { scope: "generate-spec", limit: 20, windowMs: 60_000 });
   if (limited) return limited;
 
@@ -255,6 +260,14 @@ export async function POST(req: NextRequest) {
   }
 
   const fallback = generateChallengeSpec(inputText);
+  const quota = await spendDailyAiQuota(user.userId, "spec");
+  if (!quota.ok) {
+    return Response.json(
+      { error: quota.error, dailyQuota: quota.status, retryAt: quota.retryAt },
+      { status: 429 },
+    );
+  }
+
   try {
     const ai = await generateAiSpec(inputText, fallback, { providerId, model, language, context });
     return Response.json({
@@ -265,10 +278,14 @@ export async function POST(req: NextRequest) {
       providerId: ai.providerId,
       externalApiCharged: ai.externalApiCharged,
       providerCall: ai.providerCall,
+      dailyQuota: quota.status,
     });
   } catch (err) {
     const status = err instanceof GenerationRequestError ? err.status : 502;
     const message = err instanceof Error ? err.message : "AI generation failed";
+    const refundedQuota = status === 400 || status === 503
+      ? await refundDailyAiQuota(user.userId, "spec").catch(() => null)
+      : null;
     console.error("[generate-spec] failed", {
       providerId: providerId ?? null,
       model: model ?? null,
@@ -282,6 +299,7 @@ export async function POST(req: NextRequest) {
         source: "error",
         providerId: providerId ?? null,
         model: model ?? null,
+        dailyQuota: refundedQuota ?? quota.status,
       },
       { status },
     );

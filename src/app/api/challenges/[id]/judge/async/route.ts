@@ -6,6 +6,7 @@ import { getCredits, TIER_MULTIPLIER } from "@/lib/credits";
 import { runJudgeJob } from "@/lib/judge-async";
 import { isEvidenceUrlAllowed } from "@/lib/media/evidence-url";
 import { isAiReviewStatus } from "@/lib/challenge-state-machine";
+import { spendDailyAiQuota } from "@/lib/daily-ai-quota";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,7 +50,13 @@ export async function POST(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    select: { creatorId: true, status: true, title: true },
+    select: {
+      creatorId: true,
+      status: true,
+      title: true,
+      evidenceType: true,
+      evidence: { select: { type: true } },
+    },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -81,6 +88,18 @@ export async function POST(
     );
   }
 
+  const evidenceType = String(challenge.evidenceType ?? "").toLowerCase();
+  const isVideoJudgment =
+    evidenceType.includes("video") ||
+    challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video");
+  const quota = await spendDailyAiQuota(user.userId, isVideoJudgment ? "video_judge" : "judge");
+  if (!quota.ok) {
+    return Response.json(
+      { error: quota.error, dailyQuota: quota.status, retryAt: quota.retryAt },
+      { status: 429 },
+    );
+  }
+
   const job = await prisma.judgeJob.create({
     data: {
       challengeId: id,
@@ -106,6 +125,7 @@ export async function POST(
       jobId: job.id,
       pollUrl: `/api/judge-jobs/${job.id}`,
       pollUrlAbsolute: origin ? pollUrl : undefined,
+      dailyQuota: quota.status,
       message:
         "AI judgment runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; auto-settle mode settles high-confidence winners, otherwise creator confirmation settles credits.",
     },

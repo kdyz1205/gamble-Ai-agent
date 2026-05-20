@@ -81,10 +81,27 @@ model User {
   judgmentsGiven     Judgment[]     @relation("JudgeUser")
   judgmentsWon       Judgment[]     @relation("WinnerUser")
   transactions       CreditTx[]
+  dailyQuotas        UserDailyQuota[]
   activityEvents     ActivityEvent[]
   judgeJobsRequested JudgeJob[]     @relation("JudgeJobRequester")
   auditLogsActor     AuditLog[]     @relation("AuditLogActor")
   auditLogsTarget    AuditLog[]     @relation("AuditLogTarget")
+}
+
+model UserDailyQuota {
+  id             String   @id @default(cuid())
+  userId         String
+  dateKey        String   // UTC YYYY-MM-DD beta allowance bucket
+  specUsed       Int      @default(0)
+  judgeUsed      Int      @default(0)
+  videoJudgeUsed Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateKey])
+  @@index([dateKey])
 }
 
 // ═══════════════════════════════════════

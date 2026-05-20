@@ -4,6 +4,7 @@ import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@
 import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { addCredits, getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { spendDailyAiQuota, refundDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { ChallengeStatus } from "@/lib/enums";
 import {
   assertChallengeTransition,
@@ -87,11 +88,28 @@ export async function POST(
   // Free Mode: when the challenge has no stake, AI judgment is free.
   // Paid challenges still charge the user's credits for the judgment inference.
   const isFreeChallenge = (challenge.stake ?? 0) === 0;
+  const evidenceType = String(challenge.evidenceType ?? "").toLowerCase();
+  const isVideoJudgment =
+    evidenceType.includes("video") ||
+    challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video");
+  const quotaKind = isVideoJudgment ? "video_judge" : "judge";
 
   let inferenceSpendCharged = false;
   if (!isFreeChallenge) {
     const balance = await getCredits(user.userId);
     if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
+  }
+
+  const quota = await spendDailyAiQuota(user.userId, quotaKind);
+  if (!quota.ok) {
+    return Response.json(
+      { error: quota.error, dailyQuota: quota.status, retryAt: quota.retryAt },
+      { status: 429 },
+    );
+  }
+  let dailyQuotaStatus: DailyAiQuotaStatus = quota.status;
+
+  if (!isFreeChallenge) {
     const spend = await spendForInference(
       user.userId,
       tierId,
@@ -99,7 +117,10 @@ export async function POST(
       `${isRejudge ? "Rejudge" : "Judge"}: "${challenge.title.slice(0, 40)}"`,
       id,
     );
-    if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+    if (!spend.success) {
+      dailyQuotaStatus = await refundDailyAiQuota(user.userId, quotaKind);
+      return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+    }
     inferenceSpendCharged = true;
   }
 
@@ -368,6 +389,7 @@ export async function POST(
       creditsUsed: isFreeChallenge ? 0 : cost,
       creditsRefunded: inferenceRefunded ? cost : 0,
       creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
+      dailyQuota: dailyQuotaStatus,
       txHash: null,
       freeMode: isFreeChallenge,
     });
@@ -425,6 +447,7 @@ export async function POST(
           tierId,
           creditsUsed: isFreeChallenge ? 0 : cost,
           creditsRefunded: inferenceRefunded ? cost : 0,
+          dailyQuota: dailyQuotaStatus,
           freeMode: isFreeChallenge,
         },
         { status: 502 },
@@ -486,6 +509,7 @@ export async function POST(
     creditsUsed: isFreeChallenge ? 0 : cost,
     creditsRefunded: inferenceRefunded ? cost : 0,
     creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
+    dailyQuota: dailyQuotaStatus,
     txHash: settlement.txHash ?? null,
     freeMode: isFreeChallenge,
   });

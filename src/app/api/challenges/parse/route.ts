@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, type TierId } from "@/lib/auth";
 import { parseChallenge, generateClarifications, type ParsedChallenge } from "@/lib/ai-engine";
 import { getCredits } from "@/lib/credits";
+import { spendDailyAiQuota } from "@/lib/daily-ai-quota";
 
 /**
  * Per-user rate limit. Parse is free so anyone with a free signup bonus could
@@ -66,6 +67,13 @@ export async function POST(req: NextRequest) {
 
     const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
     const balance = await getCredits(user.userId);
+    const quota = await spendDailyAiQuota(user.userId, "spec");
+    if (!quota.ok) {
+      return Response.json(
+        { error: quota.error, dailyQuota: quota.status, retryAt: quota.retryAt },
+        { status: 429 },
+      );
+    }
 
     // Light validation on the optional priorDraft — ensure it's an object with
     // at least a title. We send only a small subset to the LLM so context
@@ -90,6 +98,7 @@ export async function POST(req: NextRequest) {
       tierId,
       creditsUsed: 0,
       creditsRemaining: balance,
+      dailyQuota: quota.status,
       txHash: null,
       freeMode: true,
     });

@@ -79,8 +79,33 @@ export interface TokenData {
   };
 }
 
+export interface DailyAiQuotaStatus {
+  dateKey: string;
+  resetsAt: string;
+  spec: { used: number; limit: number; remaining: number };
+  judge: { used: number; limit: number; remaining: number };
+  videoJudge: { used: number; limit: number; remaining: number };
+}
+
 export async function getTokenStatus(): Promise<TokenData> {
   return apiFetch("/tokens");
+}
+
+export async function getCredits(): Promise<{
+  credits: number;
+  stats: { won: number; lost: number; bought: number };
+  dailyQuota: DailyAiQuotaStatus;
+  transactions: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    balanceAfter: number;
+    description: string | null;
+    createdAt: string;
+    challengeId: string | null;
+  }>;
+}> {
+  return apiFetch("/credits");
 }
 
 export async function linkWallet(address: string): Promise<{ success: boolean }> {
@@ -253,6 +278,7 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   externalApiCharged?: boolean;
   providerCall?: unknown;
   fallbackReason?: string;
+  dailyQuota?: DailyAiQuotaStatus;
 }> {
   return apiFetch("/challenges/generate-spec", {
     method: "POST",
@@ -345,6 +371,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   creditsUsed: number;
   creditsRefunded?: number;
   creditsRemaining: number;
+  dailyQuota?: DailyAiQuotaStatus;
   txHash: string | null;
 }> {
   return apiFetch(`/challenges/${id}/judge`, {
@@ -536,6 +563,7 @@ export async function parseChallenge(
   tierId: number;
   creditsUsed: number;
   creditsRemaining: number;
+  dailyQuota?: DailyAiQuotaStatus;
   txHash: string | null;
 }> {
   return apiFetch("/challenges/parse", {
@@ -642,7 +670,7 @@ export async function presignEvidenceUpload(_challengeId: string, _filename: str
   });
 }
 
-export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{ jobId: string }> {
+export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{ jobId: string; dailyQuota?: DailyAiQuotaStatus }> {
   return apiFetch(`/challenges/${id}/judge/async`, {
     method: "POST",
     body: JSON.stringify({ tier, ...prefs }),
