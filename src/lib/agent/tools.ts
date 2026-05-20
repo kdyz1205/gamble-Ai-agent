@@ -19,7 +19,9 @@ import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
 import { evaluateAutoSettleEligibility, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
-import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import type { ChallengeSpec } from "@/lib/challenge-spec";
+import { generateLivenessPhrase } from "@/lib/liveness";
 import {
   EVIDENCE_WINDOW_STATUSES,
   OPEN_FOR_OPPONENT_STATUSES,
@@ -60,6 +62,64 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
+}
+
+function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
+  return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+}
+
+function buildProtocolFromAgentDraft(input: {
+  title: string;
+  proposition: string;
+  stake: number;
+  evidenceType: string;
+  judgeRule: string;
+  timeWindow: string;
+  isPublic: boolean;
+  hasDiscoveryLocation: boolean;
+}): ProtocolSpecV2 {
+  const videoLike = /video|camera|photo/i.test(input.evidenceType);
+  const challengeSpec: ChallengeSpec = {
+    challenge_title: input.title,
+    challenge_type: inferTypeFromTitle(input.title),
+    participants: [
+      { role: "creator", label: "Creator" },
+      { role: "opponent", label: "Opponent" },
+    ],
+    stake_amount: input.stake,
+    currency_or_points: "credits",
+    public_or_private: input.isPublic ? "public" : "private",
+    invite_mode: input.hasDiscoveryLocation ? "nearby" : "invite_link",
+    participation_mode: "remote_async",
+    objective: input.proposition,
+    winning_condition: input.judgeRule || input.proposition,
+    required_evidence: videoLike ? "Continuous video evidence from each participant." : `Text evidence: ${input.evidenceType}`,
+    video_capture_instructions: videoLike
+      ? "Record one continuous attempt. Keep the participant visible and do not edit the clip."
+      : "Submit one clear text answer or proof note.",
+    start_condition: "Challenge starts after the opponent accepts.",
+    end_condition: input.timeWindow || "When the evidence window closes.",
+    timing_method: "Use app timestamps and submitted evidence metadata.",
+    valid_repetition_definition: input.judgeRule || input.proposition,
+    scoring_method: input.judgeRule || input.proposition,
+    allowed_attempts: "One official submission per participant.",
+    anti_cheat_rules: [
+      "Evidence must be original to this challenge.",
+      "No edited, coerced, unsafe, or unclear evidence.",
+    ],
+    ai_judging_method: input.judgeRule || "AI compares submitted evidence against the win condition.",
+    dispute_window: "24 hours",
+    fallback_manual_review: "If confidence is below 0.85 or evidence is unclear, require manual review.",
+    payout_rule: "Winner receives internal credits after the verdict is eligible and confirmed.",
+    safety_warning: "Only attempt safe, legal, voluntary challenges.",
+    legal_compliance_flag: "internal_points_only",
+    mode_options: [
+      { label: "Invite link", value: "invite_link", description: "Send a private join link." },
+      { label: "Nearby", value: "nearby", description: "Let nearby users discover and join." },
+      { label: "Remote", value: "remote_async", description: "Each participant submits separately." },
+    ],
+  };
+  return protocolSpecFromChallengeSpec(challengeSpec, `${input.title}\n${input.proposition}`);
 }
 
 function readLocationSnapshot(
@@ -127,6 +187,28 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
 
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
   const deadline = parseTimeWindowToDate(timeWindow);
+  const protocolSpec = buildProtocolFromAgentDraft({
+    title,
+    proposition,
+    stake,
+    evidenceType,
+    judgeRule,
+    timeWindow,
+    isPublic,
+    hasDiscoveryLocation: Boolean(locationSnapshot),
+  });
+  const protocolLegacy = protocolToLegacyChallengeFields(protocolSpec);
+  const evidenceDescriptor = [
+    evidenceType,
+    protocolSpec.evidenceProtocol.mode,
+    protocolSpec.identityProtocol.mode,
+  ].join(" ").toLowerCase();
+  const needsLiveness =
+    evidenceDescriptor.includes("video") ||
+    evidenceDescriptor.includes("camera") ||
+    evidenceDescriptor.includes("photo") ||
+    protocolSpec.identityProtocol.required;
+  const livenessPrompt = needsLiveness ? generateLivenessPhrase() : null;
 
   // Atomic escrow then create; refund on throw — same pattern POST /api/challenges uses.
   let creatorStakeTxId: string | undefined;
@@ -138,36 +220,76 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
 
   let challenge: { id: string; title: string; status: string; stake: number; evidenceType: string } | null = null;
   try {
-    challenge = await prisma.challenge.create({
-      data: {
-        creatorId: ctx.userId,
-        title,
-        description: proposition,
-        marketType: "challenge",
-        proposition,
-        type: inferTypeFromTitle(title),
-        stake,
-        stakeToken: "credits",
-        deadline,
-        rules: judgeRule || proposition || title,
-        evidenceType,
-        settlementMode: "mutual_confirmation",
-        isPublic,
-        visibility: isPublic ? "public" : "private",
-        ...(locationSnapshot
-          ? {
-              discoveryLat: locationSnapshot.lat,
-              discoveryLng: locationSnapshot.lng,
-              discoveryCapturedAt: new Date(),
-            }
-          : {}),
-        maxParticipants: 2,
-        aiReview: true,
-        status: ChallengeStatus.waiting_for_opponent,
-        participants: {
-          create: { userId: ctx.userId, role: "creator", status: "accepted" },
+    challenge = await prisma.$transaction(async (tx) => {
+      const created = await tx.challenge.create({
+        data: {
+          creatorId: ctx.userId,
+          title: protocolLegacy.title,
+          description: protocolLegacy.description,
+          marketType: "challenge",
+          proposition: protocolLegacy.proposition,
+          type: protocolLegacy.type,
+          stake,
+          stakeToken: "credits",
+          deadline,
+          rules: protocolLegacy.rules,
+          evidenceType: protocolLegacy.evidenceType,
+          livenessPrompt,
+          settlementMode: protocolLegacy.settlementMode,
+          fallbackRule: protocolLegacy.fallbackRule,
+          disputeWindow: protocolLegacy.disputeWindow,
+          isPublic,
+          visibility: isPublic ? "public" : "private",
+          protocolVersion: protocolSpec.version,
+          participantMode: protocolSpec.participantMode,
+          outcomeType: protocolSpec.outcomeType,
+          evidenceMode: protocolSpec.evidenceProtocol.mode,
+          identityMode: protocolSpec.identityProtocol.mode,
+          locationMode: protocolSpec.locationProtocol.mode,
+          settlementProtocolMode: protocolSpec.settlementProtocol.mode,
+          riskLevel: protocolSpec.riskPolicy.riskLevel,
+          compilerProviderId: "agent",
+          compilerModel: "agent-draft-to-protocol-v2",
+          ...(locationSnapshot
+            ? {
+                discoveryLat: locationSnapshot.lat,
+                discoveryLng: locationSnapshot.lng,
+                discoveryCapturedAt: new Date(),
+              }
+            : {}),
+          maxParticipants: 2,
+          aiReview: true,
+          status: ChallengeStatus.waiting_for_opponent,
+          participants: {
+            create: { userId: ctx.userId, role: "creator", status: "accepted" },
+          },
         },
-      },
+        include: { participants: true },
+      });
+      const creatorParticipant = created.participants.find((participant) => participant.userId === ctx.userId);
+      await tx.challengeProtocol.create({
+        data: {
+          challengeId: created.id,
+          version: protocolSpec.version,
+          rawPrompt: protocolSpec.rawPrompt,
+          specJson: JSON.stringify(protocolSpec),
+          compilerProviderId: "agent",
+          compilerModel: "agent-draft-to-protocol-v2",
+          compilerCallJson: JSON.stringify({ source: "agent_draft_bridge" }),
+        },
+      });
+      await tx.participantBinding.create({
+        data: {
+          challengeId: created.id,
+          userId: ctx.userId,
+          participantId: creatorParticipant?.id ?? null,
+          role: "creator",
+          expectedPosition: expectedPositionFor(protocolSpec, "creator"),
+          livenessCode: livenessPrompt,
+          bindingStatus: protocolSpec.identityProtocol.required ? "pending" : "verified",
+        },
+      });
+      return created;
     });
     if (creatorStakeTxId) {
       const createdChallengeId = challenge.id;
