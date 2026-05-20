@@ -942,7 +942,7 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   } catch {
     // Vision extraction is best-effort; if it fails, fall through to text-only.
   }
-  const allVisuals = capJudgeVisuals(visualsA.visuals, visualsB.visuals, 36);
+  const allVisuals = capJudgeVisuals(visualsA.visuals, visualsB.visuals, 24);
   if (sharedSameCamera && allVisuals.length === 0) {
     return {
       winnerId: null,
