@@ -486,15 +486,25 @@ try {
   if (cases.length === 0) throw new Error("No robustness cases selected");
 
   tempDir = await mkdtemp(path.join(tmpdir(), "gamble-video-robustness-"));
-  const creator = await register(`codex.robust.creator.${stamp}@example.com`, `rob_creator_${stamp.slice(-6)}`);
-  const opponent = await register(`codex.robust.opponent.${stamp}@example.com`, `rob_opp_${stamp.slice(-6)}`);
-
   for (const caseDef of cases) {
+    const caseSlug = caseDef.id.replace(/[^a-z0-9]/gi, "").slice(0, 18);
+    const creator = await register(
+      `codex.robust.${caseDef.id}.creator.${stamp}@example.com`,
+      `rob_${caseSlug}_c_${stamp.slice(-6)}`,
+    );
+    const opponent = await register(
+      `codex.robust.${caseDef.id}.opponent.${stamp}@example.com`,
+      `rob_${caseSlug}_o_${stamp.slice(-6)}`,
+    );
     const caseProof = {
       id: caseDef.id,
       title: caseDef.title,
       expectedOutcome: caseDef.expect,
       checks: {},
+      accounts: {
+        creator: { id: creator.session.user.id, email: "[redacted]" },
+        opponent: { id: opponent.session.user.id, email: "[redacted]" },
+      },
     };
     proof.cases.push(caseProof);
 

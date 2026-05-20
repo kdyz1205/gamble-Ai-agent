@@ -37,6 +37,7 @@ export interface LlmCallResult {
 }
 
 const ANTHROPIC_TIMEOUT_MS = 45_000;
+const RETRYABLE_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 /** Wrap a promise with a hard timeout so a hung upstream never holds a serverless slot forever. */
 async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -56,6 +57,53 @@ function hostFromBaseUrl(baseUrl: string) {
 
 function elapsedMs(startedAt: number) {
   return Math.max(0, Date.now() - startedAt);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(res: Response, errorText: string, attempt: number) {
+  const retryAfter = res.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(15_000, Math.max(250, seconds * 1000));
+
+    const retryDate = Date.parse(retryAfter);
+    if (Number.isFinite(retryDate)) return Math.min(15_000, Math.max(250, retryDate - Date.now()));
+  }
+
+  const msMatch = errorText.match(/try again in\s+(\d+(?:\.\d+)?)\s*ms/i);
+  if (msMatch) return Math.min(15_000, Math.max(250, Number(msMatch[1])));
+
+  const secMatch = errorText.match(/try again in\s+(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?/i);
+  if (secMatch) return Math.min(15_000, Math.max(250, Number(secMatch[1]) * 1000));
+
+  return Math.min(15_000, 600 * 2 ** Math.max(0, attempt - 1));
+}
+
+async function fetchWithLlmRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+  maxAttempts = 3,
+): Promise<{ res: Response; errorText?: string }> {
+  let lastErrorText: string | undefined;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const res = await fetch(url, init);
+    if (res.ok || !RETRYABLE_HTTP_STATUSES.has(res.status) || attempt >= maxAttempts) {
+      return { res, errorText: res.ok ? undefined : lastErrorText ?? (await res.text()) };
+    }
+
+    const errorText = await res.text();
+    lastErrorText = errorText;
+    const waitMs = retryDelayMs(res, errorText, attempt);
+    console.warn(`[llm-router] ${label} HTTP ${res.status}; retrying in ${waitMs}ms (${attempt}/${maxAttempts})`);
+    await sleep(waitMs);
+  }
+
+  throw new Error(`[llm-router] ${label} retry loop exited unexpectedly`);
 }
 
 async function anthropicCompleteWithMetadata(
@@ -115,24 +163,28 @@ async function openAiCompatibleCompleteWithMetadata(
 ): Promise<LlmCallResult> {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const startedAt = Date.now();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+  const { res, errorText } = await fetchWithLlmRetry(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        ...(temperature !== undefined ? { temperature } : {}),
+      }),
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      ...(temperature !== undefined ? { temperature } : {}),
-    }),
-  });
+    `${providerId}.chat`,
+  );
   if (!res.ok) {
-    const err = await res.text();
+    const err = errorText ?? (await res.text());
     throw new Error(`LLM HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
@@ -372,25 +424,30 @@ async function openAiCompatibleVisionCompleteWithMetadata(
   }
   const responseFormat = baseUrl.includes("api.openai.com") ? "json_object" : null;
   const startedAt = Date.now();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+  const { res, errorText } = await fetchWithLlmRetry(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        ...(responseFormat ? { response_format: { type: responseFormat } } : {}),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userContent },
+        ],
+        ...(temperature !== undefined ? { temperature } : {}),
+      }),
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      ...(responseFormat ? { response_format: { type: responseFormat } } : {}),
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userContent },
-      ],
-      ...(temperature !== undefined ? { temperature } : {}),
-    }),
-  });
+    `${providerId}.vision`,
+    4,
+  );
   if (!res.ok) {
-    const err = await res.text();
+    const err = errorText ?? (await res.text());
     throw new Error(`LLM vision HTTP ${res.status}: ${err.slice(0, 400)}`);
   }
   const data = (await res.json()) as {
@@ -529,22 +586,26 @@ async function openAiCompatibleWithTools(
 
   for (let iter = 0; iter < maxIterations; iter++) {
     const useTools = iter < maxIterations - 1; // on the last pass force a final text answer
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    const { res, errorText } = await fetchWithLlmRetry(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          messages,
+          ...(useTools ? { tools, tool_choice: "auto" } : {}),
+          ...(temperature !== undefined ? { temperature } : {}),
+        }),
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        messages,
-        ...(useTools ? { tools, tool_choice: "auto" } : {}),
-        ...(temperature !== undefined ? { temperature } : {}),
-      }),
-    });
+      "openai.tool",
+    );
     if (!res.ok) {
-      const err = await res.text();
+      const err = errorText ?? (await res.text());
       throw new Error(`LLM tool HTTP ${res.status}: ${err.slice(0, 400)}`);
     }
     const data = (await res.json()) as {
