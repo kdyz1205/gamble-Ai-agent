@@ -101,7 +101,7 @@ function participantBlockingIssues(
   const issues: string[] = [];
   if (!metrics) return [`${label} metrics are missing.`];
   const invalidActionNote = (metrics.invalidRepNotes ?? []).some((note) =>
-    /\b(no|not|non)\b.*\b(push[-\s]?up|motion|attempt)\b|\b(static|standing|unrelated)\b/i.test(note),
+    /\b(no|not|non)\b.*\b(push[-\s]?up|attempt)\b|\bstanding\b|\bunrelated\b|\bstatic (?:image|photo|frame)\b|\bloop(?:ed|ing)?\b/i.test(note),
   );
   if (invalidActionNote && metrics.validRepCount === 0) {
     issues.push(`${label} evidence does not show the required action.`);
