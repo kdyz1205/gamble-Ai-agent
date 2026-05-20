@@ -7,6 +7,7 @@ import { cleanupReplacedEvidenceBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
 import { EVIDENCE_WINDOW_STATUSES, isEvidenceWindowStatus } from "@/lib/challenge-state-machine";
 import { verifyEvidenceAgainstProtocol } from "@/lib/protocol-evidence-verification";
+import { parseProtocolSpecV2, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 // Vision frame extraction + Blob upload can take 5-20s for a longer video.
 // Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
@@ -34,6 +35,20 @@ function preparedFrameCount(raw: string | null | undefined) {
   }
 }
 
+function parseStoredProtocol(raw: string | null | undefined): ProtocolSpecV2 | null {
+  if (!raw) return null;
+  try {
+    return parseProtocolSpecV2(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function recordingSessionRequired(protocol: ProtocolSpecV2 | null) {
+  return protocol?.evidenceProtocol.mode === "same_camera_video" ||
+    protocol?.evidenceProtocol.mode === "live_host_video";
+}
+
 /**
  * POST /api/challenges/[id]/evidence — Submit evidence for a challenge
  */
@@ -47,7 +62,11 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await req.json();
-    const { type = "text", url, description, metadata } = body;
+    const { type = "text", url, description, metadata, recordingSessionId } = body;
+    const submittedRecordingSessionId =
+      typeof recordingSessionId === "string" && recordingSessionId.trim()
+        ? recordingSessionId.trim()
+        : null;
     const metadataRecord =
       metadata && typeof metadata === "object" && !Array.isArray(metadata)
         ? (metadata as Record<string, unknown>)
@@ -56,7 +75,7 @@ export async function POST(
     // Verify challenge exists and user is participant
     const challenge = await prisma.challenge.findUnique({
       where: { id },
-      include: { participants: true },
+      include: { participants: true, protocol: true },
     });
 
     if (!challenge) {
@@ -70,6 +89,34 @@ export async function POST(
     const isParticipant = challenge.participants.some((p: { userId: string }) => p.userId === user.userId);
     if (!isParticipant) {
       return Response.json({ error: "You are not a participant in this challenge" }, { status: 403 });
+    }
+
+    const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+    let recordingSessionToClose: { id: string } | null = null;
+    if (recordingSessionRequired(protocol)) {
+      if (!submittedRecordingSessionId) {
+        return Response.json(
+          { error: "This challenge requires a recording session before evidence upload." },
+          { status: 400 },
+        );
+      }
+      const recordingSession = await prisma.recordingSession.findFirst({
+        where: { id: submittedRecordingSessionId, challengeId: id },
+        select: { id: true, createdByUserId: true, status: true },
+      });
+      if (!recordingSession) {
+        return Response.json({ error: "Recording session not found for this challenge." }, { status: 404 });
+      }
+      const sessionOwnerIsParticipant = challenge.participants.some(
+        (participant: { userId: string }) => participant.userId === recordingSession.createdByUserId,
+      );
+      if (!sessionOwnerIsParticipant) {
+        return Response.json({ error: "Recording session owner is not a challenge participant." }, { status: 403 });
+      }
+      if (recordingSession.status === "cancelled") {
+        return Response.json({ error: "Recording session was cancelled." }, { status: 409 });
+      }
+      recordingSessionToClose = { id: recordingSession.id };
     }
 
     const activeParticipants = challenge.participants.filter((p: { status: string }) => p.status === "accepted");
@@ -87,6 +134,9 @@ export async function POST(
         next.sharedUploadedBy = user.userId;
         next.sharedEvidenceFor = targetUserId;
         next.identityGuidance = "Creator/Participant A should be on the left and opponent/Participant B on the right when possible.";
+      }
+      if (submittedRecordingSessionId) {
+        next.recordingSessionId = submittedRecordingSessionId;
       }
       return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
     };
@@ -172,6 +222,19 @@ export async function POST(
           evidenceId: row.id,
           userId: row.userId,
           verifyErr,
+        });
+      });
+    }
+
+    if (recordingSessionToClose) {
+      await prisma.recordingSession.update({
+        where: { id: recordingSessionToClose.id },
+        data: { status: "evidence_submitted", endedAt: new Date() },
+      }).catch((sessionErr) => {
+        console.error("[evidence] recording session close failed", {
+          challengeId: id,
+          recordingSessionId: recordingSessionToClose?.id,
+          sessionErr,
         });
       });
     }

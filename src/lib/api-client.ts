@@ -515,7 +515,7 @@ export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId
 }
 
 export async function submitEvidence(id: string, data: {
-  type?: string; url?: string; description?: string; metadata?: Record<string, unknown>;
+  type?: string; url?: string; description?: string; metadata?: Record<string, unknown>; recordingSessionId?: string;
 }): Promise<{ evidence: unknown; sharedEvidenceCount?: number }> {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
