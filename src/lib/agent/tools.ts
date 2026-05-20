@@ -17,6 +17,9 @@ import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
+import { evaluateAutoSettleEligibility, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
+import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
+import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import {
   EVIDENCE_WINDOW_STATUSES,
   OPEN_FOR_OPPONENT_STATUSES,
@@ -39,6 +42,24 @@ export interface ToolResult {
   ok: boolean;
   data?: unknown;
   error?: string;
+}
+
+function readMetricsJson(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
 }
 
 function readLocationSnapshot(
@@ -414,6 +435,10 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
     where: { id: challengeId },
     include: {
       participants: { where: { status: "accepted" } },
+      evidence: true,
+      evidenceChecks: true,
+      participantBindings: true,
+      protocol: true,
       judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
@@ -425,6 +450,96 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
   }
   const j = challenge.judgments[0];
   if (!j) return { ok: false, error: "No AI recommendation to confirm yet" };
+
+  const metrics = readMetricsJson(j.metricsJson);
+  const evidenceQuality =
+    typeof metrics.evidenceQuality === "string"
+      ? metrics.evidenceQuality
+      : j.winnerId && (j.confidence ?? 0) >= 0.85 ? "good" : "unclear";
+  const recommendation =
+    typeof metrics.recommendation === "string"
+      ? metrics.recommendation
+      : typeof metrics.settlementRecommendation === "string"
+        ? metrics.settlementRecommendation
+        : j.winnerId && (j.confidence ?? 0) >= 0.85 ? "settle_winner" : "needs_review";
+  const confidence = j.confidence ?? 0;
+  const persistedBlockingIssues = stringArray(metrics.blockingIssues);
+  const opponent = challenge.participants.find((p) => p.role === "opponent");
+  const reconstructedResult = {
+    winnerId: j.winnerId,
+    reasoning: j.reasoning ?? "",
+    confidence,
+    evidenceQuality: evidenceQuality as EvidenceQuality,
+    recommendation: recommendation as VerdictRecommendation,
+    blockingIssues: persistedBlockingIssues,
+    source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "fallback" : undefined,
+    videoMetrics: metrics.videoMetrics as never,
+  };
+  const aiOnlyPolicy = evaluateAutoSettleEligibility(
+    reconstructedResult,
+    {
+      requiresVision:
+        challenge.evidenceType === "video" ||
+        challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video"),
+      requiresRepCountWinner: requiresRepCountWinnerFromText(
+        challenge.title,
+        challenge.description,
+        challenge.proposition,
+        challenge.rules,
+      ),
+      participantAId: challenge.creatorId,
+      participantBId: opponent?.userId ?? null,
+    },
+  );
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const protocolGates = evaluateProtocolJudgmentGates({
+    protocol,
+    participants: challenge.participants,
+    participantBindings: challenge.participantBindings,
+    evidence: challenge.evidence,
+    evidenceChecks: challenge.evidenceChecks,
+    result: reconstructedResult,
+  });
+  const policy = combineAutoSettlePolicyWithProtocolGates(aiOnlyPolicy, protocolGates);
+  const persistedEligible = metrics.autoSettleEligible !== false;
+  const persistedProtocolEligible =
+    !metrics.settlementEligibility ||
+    (typeof metrics.settlementEligibility === "object" &&
+      metrics.settlementEligibility !== null &&
+      (metrics.settlementEligibility as { eligible?: unknown }).eligible !== false);
+  if (!policy.eligible || !persistedEligible || !persistedProtocolEligible) {
+    await prisma.challenge.update({
+      where: { id: challengeId },
+      data: { status: ChallengeStatus.manual_review_required },
+    });
+    return {
+      ok: false,
+      error: "AI recommendation is not eligible for settlement.",
+      data: {
+        challengeId,
+        status: ChallengeStatus.manual_review_required,
+        verdictGuardrail: {
+          recommendation,
+          confidence,
+          evidenceQuality,
+          winnerId: j.winnerId,
+          blockingIssues: policy.blockingIssues,
+          protocolCompliance: protocolGates.protocolCompliance,
+          identityResult: protocolGates.identityResult,
+          evidenceResult: protocolGates.evidenceResult,
+          settlementEligibility: protocolGates.settlementEligibility,
+        },
+      },
+    };
+  }
 
   const claim = await prisma.challenge.updateMany({
     where: { id: challengeId, status: { in: [...VERDICT_READY_STATUSES] } },
