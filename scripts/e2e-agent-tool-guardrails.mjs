@@ -204,7 +204,7 @@ try {
 
   const accepted = await callAgentTool(
     opponent.jar,
-    `For this E2E proof, call the backend acceptChallenge tool with exactly {"challengeId":"${challengeId}"}. Do not call any other tool.`,
+    `I want to join challenge ${challengeId}. Please accept it for me.`,
     "acceptChallenge",
   );
   proof.accept = accepted.toolResult;
@@ -235,16 +235,11 @@ try {
   requireCheck(proof, "recording_session_started", Boolean(recording.recordingSessionId) && recording.mode === "same_camera_video", proof.recording);
 
   const uploadMessage = [
-    "For this E2E proof, call the backend uploadEvidence tool with exactly this JSON:",
-    JSON.stringify({
-      challengeId,
-      type: "video",
-      url: `https://example.com/agent-same-camera-${stamp}.mp4`,
-      description: `Shared same-camera proof. Creator code: ${creatorCode}. Opponent code: ${opponentCode}. Both participants are visible.`,
-      metadata: { sharedSameCamera: true, fileSizeBytes: 12345 },
-      recordingSessionId: recording.recordingSessionId,
-    }),
-    "Do not call any other tool.",
+    `Submit my same-camera video evidence for challenge ${challengeId}.`,
+    `recordingSessionId is ${recording.recordingSessionId}.`,
+    `video URL is https://example.com/agent-same-camera-${stamp}.mp4.`,
+    `Description: Shared same-camera proof. Creator code: ${creatorCode}. Opponent code: ${opponentCode}. Both participants are visible.`,
+    "metadata sharedSameCamera true and fileSizeBytes 12345.",
   ].join("\n");
   const uploaded = await callAgentTool(creator.jar, uploadMessage, "uploadEvidence");
   proof.upload = uploaded.toolResult;
