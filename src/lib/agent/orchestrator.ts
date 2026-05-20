@@ -16,7 +16,8 @@
  * This module is SERVER-ONLY. The frontend talks to /api/agent/respond, which
  * delegates here.
  */
-import { completeOraclePrompt } from "@/lib/llm-router";
+import { logAiUsage } from "@/lib/ai-usage-log";
+import { completeOraclePromptWithMetadata, type LlmCallMetadata } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
 import { executeAgentTool } from "./tools";
@@ -46,7 +47,20 @@ export interface AgentTurnInput {
   history: AgentMessage[];
   draftState?: DraftState;
   locationSnapshot?: { lat: number; lng: number } | null;
+  providerId?: string | null;
+  model?: string | null;
   maxToolRounds?: number; // safety cap; default 1
+}
+
+function summarizeLlmCall(metadata: LlmCallMetadata) {
+  return {
+    providerId: metadata.providerId,
+    model: metadata.model,
+    responseModel: metadata.responseModel ?? null,
+    usedApi: metadata.usedApi,
+    totalTokens: metadata.totalTokens ?? null,
+    durationMs: metadata.durationMs ?? null,
+  };
 }
 
 /**
@@ -56,11 +70,15 @@ export interface AgentTurnInput {
 export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse> {
   const draftState: DraftState = input.draftState ?? emptyDraftState();
 
-  // Resolve provider/model
+  // Resolve provider/model. A selected provider/model from the UI or caller
+  // takes precedence; otherwise use the environment default.
+  const requestedProviderId = input.providerId?.trim();
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
-  const providerId = envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
+  const providerId = requestedProviderId && getProviderById(requestedProviderId)
+    ? requestedProviderId
+    : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
-  const model = def?.defaultModel ?? "gpt-4o-mini";
+  const model = input.model?.trim() || def?.defaultModel || "gpt-4o-mini";
 
   // Build the user-turn payload. We give the LLM:
   //   (a) the hidden draft state as JSON,
@@ -83,7 +101,8 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     `Respond with the JSON object only. No markdown, no preamble, no explanation.`,
   ].join("\n");
 
-  const rawText = await completeOraclePrompt({
+  console.log(`[agent/respond] calling provider=${providerId} model=${model} user=${input.userId}`);
+  const completion = await completeOraclePromptWithMetadata({
     providerId,
     model,
     system: AGENT_SYSTEM_PROMPT,
@@ -91,6 +110,14 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     maxTokens: 900,
     temperature: 0.4,
   });
+  await logAiUsage({
+    userId: input.userId,
+    route: "/api/agent/respond",
+    metadata: completion.metadata,
+    extra: { phase: "agent_turn", toolRequested: false },
+  });
+  const llmCall = summarizeLlmCall(completion.metadata);
+  const rawText = completion.text;
 
   const parsed = safeParseAgentJson(rawText);
   if (!parsed) {
@@ -103,6 +130,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
       toolName: null,
       toolArgs: null,
       draftState,
+      llmCall,
     };
   }
 
@@ -132,6 +160,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   let finalAction = validated.agentAction;
   let finalPatch = validated.draftPatch;
   let finalDraftState = newDraftState;
+  let groundedLlmCall: ReturnType<typeof summarizeLlmCall> | undefined;
 
   if (validated.toolName) {
     const result = await executeAgentTool(
@@ -163,6 +192,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
       const grounded = await groundedReplyTurn({
         providerId,
         model,
+        userId: input.userId,
         historyText,
         userMessage: input.message,
         draftStateBeforeTool: newDraftState,
@@ -179,6 +209,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
           ...grounded.draftPatch,
           safetyNotes: mergeSafetyNotes(newDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
         };
+        groundedLlmCall = grounded.llmCall;
       }
     }
   }
@@ -192,6 +223,8 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     draftState: finalDraftState,
     toolResult,
     toolError,
+    llmCall,
+    groundedLlmCall,
   };
 }
 
@@ -204,6 +237,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
 async function groundedReplyTurn(args: {
   providerId: string;
   model: string;
+  userId: string;
   historyText: string;
   userMessage: string;
   draftStateBeforeTool: DraftState;
@@ -211,7 +245,7 @@ async function groundedReplyTurn(args: {
   toolArgs: Record<string, unknown>;
   toolResult: unknown;
   toolError: string | undefined;
-}): Promise<RawAgentResponse | null> {
+}): Promise<(RawAgentResponse & { llmCall?: ReturnType<typeof summarizeLlmCall> }) | null> {
   const toolPayload = args.toolError
     ? { error: args.toolError }
     : { data: args.toolResult };
@@ -240,7 +274,7 @@ async function groundedReplyTurn(args: {
   ].join("\n");
 
   try {
-    const rawText = await completeOraclePrompt({
+    const completion = await completeOraclePromptWithMetadata({
       providerId: args.providerId,
       model: args.model,
       system: AGENT_SYSTEM_PROMPT,
@@ -248,13 +282,20 @@ async function groundedReplyTurn(args: {
       maxTokens: 400,
       temperature: 0.3,
     });
+    await logAiUsage({
+      userId: args.userId,
+      route: "/api/agent/respond",
+      metadata: completion.metadata,
+      extra: { phase: "grounded_tool_reply", toolName: args.toolName, toolError: Boolean(args.toolError) },
+    });
+    const rawText = completion.text;
     const parsed = safeParseAgentJson(rawText);
     if (!parsed) return null;
     const validated = validateAgentResponse(parsed);
     // Defensive: strip any tool re-request so we don't infinite-loop.
     validated.toolName = null;
     validated.toolArgs = null;
-    return validated;
+    return { ...validated, llmCall: summarizeLlmCall(completion.metadata) };
   } catch {
     return null;
   }

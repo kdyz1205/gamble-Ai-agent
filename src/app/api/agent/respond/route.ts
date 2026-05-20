@@ -21,6 +21,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { runAgentTurn } from "@/lib/agent/orchestrator";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
+import { getProviderById } from "@/lib/llm-providers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -116,6 +117,11 @@ export async function POST(req: NextRequest) {
   const history = sanitizeHistory(body.conversationHistory);
   const draftState = sanitizeDraftState(body.draftState);
   const locationSnapshot = sanitizeLocationSnapshot(body.locationSnapshot);
+  const providerId = typeof body.providerId === "string" && body.providerId.trim() ? body.providerId.trim() : null;
+  const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : null;
+  if (providerId && !getProviderById(providerId)) {
+    return Response.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
+  }
 
   // Base URL for share links is taken from the incoming request so dev/staging
   // point at the right host.
@@ -131,6 +137,8 @@ export async function POST(req: NextRequest) {
       history,
       draftState,
       locationSnapshot,
+      providerId,
+      model,
     });
     return Response.json(result);
   } catch (err) {

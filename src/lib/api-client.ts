@@ -831,6 +831,22 @@ export interface AgentResponse {
     [key: string]: unknown;
   } | unknown;
   toolError?: string;
+  llmCall?: {
+    providerId: string;
+    model: string;
+    responseModel?: string | null;
+    usedApi: boolean;
+    totalTokens?: number | null;
+    durationMs?: number | null;
+  };
+  groundedLlmCall?: {
+    providerId: string;
+    model: string;
+    responseModel?: string | null;
+    usedApi: boolean;
+    totalTokens?: number | null;
+    durationMs?: number | null;
+  };
 }
 
 export function emptyAgentDraftState(): AgentDraftState {
@@ -851,10 +867,18 @@ export async function agentRespond(
   conversationHistory: AgentTurn[],
   draftState: AgentDraftState,
   locationSnapshot?: LocationSnapshot | null,
+  prefs?: { providerId?: string | null; model?: string | null },
 ): Promise<AgentResponse> {
   return apiFetch("/agent/respond", {
     method: "POST",
-    body: JSON.stringify({ message, conversationHistory, draftState, locationSnapshot }),
+    body: JSON.stringify({
+      message,
+      conversationHistory,
+      draftState,
+      locationSnapshot,
+      providerId: prefs?.providerId ?? undefined,
+      model: prefs?.model ?? undefined,
+    }),
   });
 }
 

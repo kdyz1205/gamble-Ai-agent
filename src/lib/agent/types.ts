@@ -86,3 +86,16 @@ export interface AgentResponse extends RawAgentResponse {
   toolResult?: unknown;           // result of executing toolName (if any). Shape varies per tool.
   toolError?: string;             // present when the tool call failed — orchestrator can surface this.
 }
+export interface AgentLlmCallSummary {
+  providerId: string;
+  model: string;
+  responseModel?: string | null;
+  usedApi: boolean;
+  totalTokens?: number | null;
+  durationMs?: number | null;
+}
+
+export interface AgentResponse {
+  llmCall?: AgentLlmCallSummary;
+  groundedLlmCall?: AgentLlmCallSummary;
+}
