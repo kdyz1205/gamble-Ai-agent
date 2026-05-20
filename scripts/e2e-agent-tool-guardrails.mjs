@@ -210,6 +210,27 @@ try {
   proof.accept = accepted.toolResult;
   requireCheck(proof, "agent_accept_opened_evidence_window", accepted.toolResult.status === "evidence_window_open", proof.accept);
 
+  try {
+    await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
+      type: "video",
+      url: `https://example.com/missing-recording-session-${stamp}.mp4`,
+      description: "This same-camera proof intentionally omits recordingSessionId.",
+      metadata: { sharedSameCamera: true, fileSizeBytes: 12345 },
+    });
+    requireCheck(proof, "same_camera_requires_recording_session", false, { acceptedWithoutRecordingSession: true });
+  } catch (error) {
+    proof.missingRecordingSessionRejection = {
+      status: error.status,
+      data: error.data,
+    };
+    requireCheck(
+      proof,
+      "same_camera_requires_recording_session",
+      error.status === 400 && String(error.data?.error || "").includes("requires a recording session"),
+      proof.missingRecordingSessionRejection,
+    );
+  }
+
   const protocolAfterAccept = await getJson(opponent.jar, `/api/challenges/${challengeId}/protocol`);
   proof.bindings = {
     count: protocolAfterAccept.participantBindings.length,

@@ -60,6 +60,17 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [sharedSameCamera, setSharedSameCamera] = useState(sameCameraEvidenceType);
+  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
+
+  const normalizedEvidenceType = evidenceType.toLowerCase();
+  const recordingSessionRequired =
+    normalizedEvidenceType === "same_camera_video" ||
+    normalizedEvidenceType === "live_host_video";
+  const recordingMode = normalizedEvidenceType === "live_host_video"
+    ? "live_host_video"
+    : normalizedEvidenceType === "same_camera_video"
+      ? "same_camera_video"
+      : "separate_video";
 
   // Webcam state
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -120,6 +131,18 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     if (sameCameraEvidenceType) setSharedSameCamera(true);
   }, [sameCameraEvidenceType]);
 
+  useEffect(() => {
+    setRecordingSessionId(null);
+  }, [challengeId]);
+
+  const ensureRecordingSession = async () => {
+    if (!recordingSessionRequired) return null;
+    if (recordingSessionId) return recordingSessionId;
+    const session = await api.startRecordingSession(challengeId, { mode: recordingMode });
+    setRecordingSessionId(session.recordingSessionId);
+    return session.recordingSessionId;
+  };
+
   const pickFile = (kind: "video" | "photo") => {
     const input = document.createElement("input");
     input.type = "file";
@@ -139,6 +162,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setError("");
     setCameraReady(false);
     try {
+      await ensureRecordingSession();
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("This browser does not expose camera recording.");
       }
@@ -255,6 +279,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setSubmitting(true);
     setError("");
     try {
+      const nextRecordingSessionId = await ensureRecordingSession();
       let finalUrl: string | undefined = trimmedUrl || undefined;
       let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : evidenceType || "text";
 
@@ -306,6 +331,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       await api.submitEvidence(challengeId, {
         type: finalType,
         url: finalUrl,
+        recordingSessionId: nextRecordingSessionId ?? undefined,
         description: sharedSameCamera
           ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted")}`
           : trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted"),

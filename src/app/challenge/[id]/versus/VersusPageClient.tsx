@@ -273,6 +273,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [noteType, setNoteType] = useState<"error" | "success" | "info">("info");
   const [pasteUrl, setPasteUrl] = useState("");
   const [sharedSameCamera, setSharedSameCamera] = useState(false);
+  const [recordingSession, setRecordingSession] = useState<Awaited<ReturnType<typeof api.startRecordingSession>> | null>(null);
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -330,13 +331,20 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const isCreator = uid && challenge?.creatorId === uid;
   const canCapture = challenge && isEvidenceWindowStatus(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
   const canJoin = challenge && isOpenForOpponentStatus(challenge.status) && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
-  const challengeTextForMode = `${challenge?.title ?? ""} ${challenge?.rules ?? ""} ${challenge?.evidenceType ?? ""} ${challenge?.proofSource ?? ""}`.toLowerCase();
+  const challengeTextForMode = `${challenge?.title ?? ""} ${challenge?.rules ?? ""} ${challenge?.evidenceMode ?? ""} ${challenge?.evidenceType ?? ""} ${challenge?.proofSource ?? ""}`.toLowerCase();
   const sameCameraHinted = /same[_ -]?camera|same phone|one phone|single phone|shared video|same video|together/.test(challengeTextForMode);
   const sameCameraEligible = Boolean(challenge && canCapture && creator && opponent && /video|camera|record|fitness|push|plank|squat/.test(challengeTextForMode));
+  const rawEvidenceMode = String(challenge?.evidenceMode || challenge?.evidenceType || "").toLowerCase();
+  const recordingSessionRequired = rawEvidenceMode === "same_camera_video" || rawEvidenceMode === "live_host_video";
+  const recordingMode = rawEvidenceMode === "live_host_video" ? "live_host_video" : recordingSessionRequired ? "same_camera_video" : "separate_video";
 
   useEffect(() => {
     if (sameCameraEligible && sameCameraHinted) setSharedSameCamera(true);
   }, [challenge?.id, sameCameraEligible, sameCameraHinted]);
+
+  useEffect(() => {
+    setRecordingSession(null);
+  }, [challenge?.id]);
 
   useEffect(() => {
     if (!cameraStream || !videoPreviewRef.current) return;
@@ -380,12 +388,21 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     ? `Shared same-camera video for both players. Creator/Participant A should be left; opponent/Participant B should be right. ${base}`
     : base;
 
+  const ensureRecordingSession = async () => {
+    if (!challenge || !recordingSessionRequired) return null;
+    if (recordingSession?.recordingSessionId) return recordingSession.recordingSessionId;
+    const sessionInfo = await api.startRecordingSession(challenge.id, { mode: recordingMode });
+    setRecordingSession(sessionInfo);
+    return sessionInfo.recordingSessionId;
+  };
+
   const uploadFile = async (file: File) => {
     if (!challenge || !uid) return;
     setBusy(true);
     setNote("");
     const hint = "Configure S3 or Vercel Blob, or paste a public https URL.";
     try {
+      const recordingSessionId = await ensureRecordingSession();
       let presign: Awaited<ReturnType<typeof api.presignEvidenceUpload>> | null = null;
       try {
         presign = await api.presignEvidenceUpload({
@@ -402,6 +419,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         await api.submitEvidence(challenge.id, {
           type: file.type.startsWith("video") ? "video" : "photo",
           url: presign.publicUrl,
+          recordingSessionId: recordingSessionId ?? undefined,
           description: evidenceDescription(`Captured: ${file.name}`),
           metadata: sameCameraMetadata(file),
         });
@@ -418,6 +436,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         await api.submitEvidence(challenge.id, {
           type: file.type.startsWith("video") ? "video" : "photo",
           url: blob.url,
+          recordingSessionId: recordingSessionId ?? undefined,
           description: evidenceDescription(`Captured: ${file.name}`),
           metadata: sameCameraMetadata(file),
         });
@@ -438,9 +457,11 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     setBusy(true);
     setNote("");
     try {
+      const recordingSessionId = await ensureRecordingSession();
       await api.submitEvidence(challenge.id, {
         type: "video",
         url: pasteUrl.trim(),
+        recordingSessionId: recordingSessionId ?? undefined,
         description: evidenceDescription("Video URL (manual)"),
         metadata: sameCameraMetadata(),
       });
@@ -535,6 +556,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     setCameraError("");
     setCameraReady(false);
     try {
+      await ensureRecordingSession();
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -878,6 +900,30 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       One-phone shared video for both players. Keep creator on the left, opponent on the right, and both full bodies visible.
                     </span>
                   </label>
+                )}
+
+                {recordingSessionRequired && (
+                  <div
+                    className="rounded-xl px-4 py-3 space-y-2"
+                    style={{ background: "rgba(0,212,200,0.06)", border: "1px solid rgba(0,212,200,0.18)" }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-teal">
+                      Recording protocol
+                    </p>
+                    {recordingSession ? (
+                      <ul className="space-y-1">
+                        {recordingSession.preRollInstructions?.slice(0, 4).map((item: string, index: number) => (
+                          <li key={`${index}-${item}`} className="text-[11px] text-text-secondary leading-relaxed">
+                            {index + 1}. {item}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-text-secondary leading-relaxed">
+                        The app will start a recording session before you record, upload, or paste evidence.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Camera permission error */}
