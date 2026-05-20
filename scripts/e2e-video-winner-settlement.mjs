@@ -426,13 +426,13 @@ try {
   const evCreator = await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
     type: "video",
     url: creatorVideoUrl,
-    description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}.`,
+    description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}. Public fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
     metadata: { fixtureKind, livenessPhrase, fileSizeBytes: creatorVideoSize },
   });
   const evOpponent = await postJson(opponent.jar, `/api/challenges/${challengeId}/evidence`, {
     type: "video",
     url: opponentVideoUrl,
-    description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}.`,
+    description: `Official continuous push-up attempt video. Liveness phrase visible: ${livenessPhrase}. Public fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
     metadata: { fixtureKind, livenessPhrase, fileSizeBytes: opponentVideoSize },
   });
   proof.evidence = {
