@@ -1,3 +1,5 @@
+import type { DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
+
 /**
  * Agent Orchestrator — shared types.
  *
@@ -98,4 +100,5 @@ export interface AgentLlmCallSummary {
 export interface AgentResponse {
   llmCall?: AgentLlmCallSummary;
   groundedLlmCall?: AgentLlmCallSummary;
+  dailyQuota?: DailyAiQuotaStatus;
 }

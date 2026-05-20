@@ -148,6 +148,7 @@ try {
     replyPreview: typeof out.userVisibleReply === "string" ? out.userVisibleReply.slice(0, 160) : null,
     llmCall: out.llmCall,
     groundedLlmCall: out.groundedLlmCall ?? null,
+    dailyQuota: out.dailyQuota,
   };
 
   requireCheck(
@@ -173,6 +174,17 @@ try {
       out.userVisibleReply.trim().length > 0 &&
       !String(out.userVisibleReply).includes("template"),
     proof.agent,
+  );
+
+  const credits = await getJson(user.jar, "/api/credits");
+  proof.persistedDailyQuota = credits.dailyQuota;
+  requireCheck(
+    proof,
+    "agent_turn_consumed_spec_quota",
+    out.dailyQuota?.spec?.used === 1 &&
+      out.dailyQuota?.spec?.remaining === out.dailyQuota.spec.limit - 1 &&
+      credits.dailyQuota?.spec?.used === 1,
+    { responseQuota: out.dailyQuota, persistedQuota: credits.dailyQuota },
   );
 
   proof.agentProviderRoutingReady = true;

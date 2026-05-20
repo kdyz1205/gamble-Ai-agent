@@ -21,6 +21,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { runAgentTurn } from "@/lib/agent/orchestrator";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
+import { refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { getProviderById } from "@/lib/llm-providers";
 
 export const runtime = "nodejs";
@@ -123,6 +124,15 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
   }
 
+  const quota = await spendDailyAiQuota(user.userId, "spec");
+  if (!quota.ok) {
+    return Response.json(
+      { error: quota.error, dailyQuota: quota.status, retryAt: quota.retryAt },
+      { status: 429 },
+    );
+  }
+  let dailyQuotaStatus: DailyAiQuotaStatus = quota.status;
+
   // Base URL for share links is taken from the incoming request so dev/staging
   // point at the right host.
   const proto = req.headers.get("x-forwarded-proto") || "https";
@@ -140,11 +150,12 @@ export async function POST(req: NextRequest) {
       providerId,
       model,
     });
-    return Response.json(result);
+    return Response.json({ ...result, dailyQuota: dailyQuotaStatus });
   } catch (err) {
+    dailyQuotaStatus = await refundDailyAiQuota(user.userId, "spec").catch(() => dailyQuotaStatus);
     console.error("[agent/respond] error:", err);
     return Response.json(
-      { error: err instanceof Error ? err.message : "Agent turn failed" },
+      { error: err instanceof Error ? err.message : "Agent turn failed", dailyQuota: dailyQuotaStatus },
       { status: 500 },
     );
   }

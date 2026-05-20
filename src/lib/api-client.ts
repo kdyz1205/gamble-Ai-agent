@@ -847,6 +847,7 @@ export interface AgentResponse {
     totalTokens?: number | null;
     durationMs?: number | null;
   };
+  dailyQuota?: DailyAiQuotaStatus;
 }
 
 export function emptyAgentDraftState(): AgentDraftState {
