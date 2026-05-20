@@ -382,8 +382,8 @@ try {
     participants: accepted.challenge.participants.length,
   };
 
-  let creatorVideoUrl = `${base}/e2e-fixtures/pushups-a-12-static-phrase.mp4`;
-  let opponentVideoUrl = `${base}/e2e-fixtures/pushups-b-1-static-phrase.mp4`;
+  let creatorVideoUrl = `${base}/e2e-fixtures/pushups-a-static-phrase.mp4`;
+  let opponentVideoUrl = `${base}/e2e-fixtures/pushups-b-static-phrase.mp4`;
   let creatorVideoSize = null;
   let opponentVideoSize = null;
   let fixtureKind = "public_static_pushup_video_fixture_v1";
@@ -468,7 +468,12 @@ try {
     proof.challenge,
   );
   requireCheck(proof, "opponent_accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);
-  requireCheck(proof, "challenge_video_evidence_type", created.challenge.evidenceType === "video", created.challenge.evidenceType);
+  requireCheck(
+    proof,
+    "challenge_video_evidence_type",
+    String(created.challenge.evidenceType).includes("video") && created.challenge.evidenceMode === "separate_video",
+    { evidenceType: created.challenge.evidenceType, evidenceMode: created.challenge.evidenceMode },
+  );
   requireCheck(proof, "both_video_evidence_submitted", prepared.challenge?.evidence?.length === 2, prepared.challenge?.evidence?.length);
   if (expectPreextract) {
     requireCheck(proof, "prepared_frames_creator", prepared.creatorFrames.length > 0, proof.preparedFrames);

@@ -89,13 +89,13 @@ async function makeVideo({ filename, role, color, repCount }) {
 
 const outputs = [
   await makeVideo({
-    filename: "pushups-a-12-static-phrase.mp4",
+    filename: "pushups-a-static-phrase.mp4",
     role: "PARTICIPANT A",
     color: "#047857",
-    repCount: 12,
+    repCount: 4,
   }),
   await makeVideo({
-    filename: "pushups-b-1-static-phrase.mp4",
+    filename: "pushups-b-static-phrase.mp4",
     role: "PARTICIPANT B",
     color: "#b91c1c",
     repCount: 1,
