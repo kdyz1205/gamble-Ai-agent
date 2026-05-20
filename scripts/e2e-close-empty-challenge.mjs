@@ -289,7 +289,9 @@ try {
   );
 
   const opponent = await register(`codex.close.opponent.${stamp}@example.com`, `close_opp_${stamp.slice(-6)}`);
-  const joinedCreated = await createCloseableChallenge(creator.jar, stamp, 0, "joined", {
+  const joinedBeforeCreator = await getJson(creator.jar, "/api/credits");
+  const joinedBeforeOpponent = await getJson(opponent.jar, "/api/credits");
+  const joinedCreated = await createCloseableChallenge(creator.jar, stamp, 1, "joined", {
     isPublic: false,
     visibility: "invite_only",
   });
@@ -316,15 +318,66 @@ try {
       participants: joinedDetail.challenge?.participants?.length ?? 0,
     },
   );
-  await page.goto(`${base}/challenge/${joinedCreated.challenge.id}`, { waitUntil: "networkidle" });
-  await page.getByText("Manage challenge", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-  await page.getByText("Locked", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-  await page.getByText("An opponent has joined", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+  const joinedAfterAcceptCreator = await getJson(creator.jar, "/api/credits");
+  const joinedAfterAcceptOpponent = await getJson(opponent.jar, "/api/credits");
   requireCheck(
     proof,
-    "detail_manage_panel_joined_locked_visible",
+    "joined_stakes_locked_before_cancel",
+    joinedAfterAcceptCreator.credits === joinedBeforeCreator.credits - 1 &&
+      joinedAfterAcceptOpponent.credits === joinedBeforeOpponent.credits - 1,
+    {
+      creatorBefore: joinedBeforeCreator.credits,
+      creatorAfterAccept: joinedAfterAcceptCreator.credits,
+      opponentBefore: joinedBeforeOpponent.credits,
+      opponentAfterAccept: joinedAfterAcceptOpponent.credits,
+    },
+  );
+  await page.goto(`${base}/challenge/${joinedCreated.challenge.id}`, { waitUntil: "networkidle" });
+  await page.getByText("Manage challenge", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByRole("button", { name: "Cancel and refund" }).waitFor({ state: "visible", timeout: 20_000 });
+  requireCheck(
+    proof,
+    "detail_manage_panel_joined_cancel_visible",
     true,
     { challengeId: joinedCreated.challenge.id },
+  );
+  await page.getByRole("button", { name: "Cancel and refund" }).click();
+  await page.getByText("Refunded", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+  const joinedAfterCancel = await getJson(creator.jar, `/api/challenges/${joinedCreated.challenge.id}`);
+  const joinedAfterCancelCreator = await getJson(creator.jar, "/api/credits");
+  const joinedAfterCancelOpponent = await getJson(opponent.jar, "/api/credits");
+  const creatorRefundTx = Array.isArray(joinedAfterCancelCreator.transactions)
+    ? joinedAfterCancelCreator.transactions.find((tx) => tx.challengeId === joinedCreated.challenge.id && tx.type === "refund" && tx.amount === 1)
+    : null;
+  const opponentRefundTx = Array.isArray(joinedAfterCancelOpponent.transactions)
+    ? joinedAfterCancelOpponent.transactions.find((tx) => tx.challengeId === joinedCreated.challenge.id && tx.type === "refund" && tx.amount === 1)
+    : null;
+  requireCheck(
+    proof,
+    "joined_cancel_refunded_status",
+    joinedAfterCancel.challenge?.status === "refunded",
+    { status: joinedAfterCancel.challenge?.status },
+  );
+  requireCheck(
+    proof,
+    "joined_cancel_refunded_balances",
+    joinedAfterCancelCreator.credits === joinedBeforeCreator.credits &&
+      joinedAfterCancelOpponent.credits === joinedBeforeOpponent.credits,
+    {
+      creatorBefore: joinedBeforeCreator.credits,
+      creatorAfterCancel: joinedAfterCancelCreator.credits,
+      opponentBefore: joinedBeforeOpponent.credits,
+      opponentAfterCancel: joinedAfterCancelOpponent.credits,
+    },
+  );
+  requireCheck(
+    proof,
+    "joined_cancel_refund_ledger_rows",
+    Boolean(creatorRefundTx && opponentRefundTx),
+    {
+      creatorRefundTx: creatorRefundTx ? { id: creatorRefundTx.id, amount: creatorRefundTx.amount, balanceAfter: creatorRefundTx.balanceAfter } : null,
+      opponentRefundTx: opponentRefundTx ? { id: opponentRefundTx.id, amount: opponentRefundTx.amount, balanceAfter: opponentRefundTx.balanceAfter } : null,
+    },
   );
 
   console.log(JSON.stringify(proof, null, 2));

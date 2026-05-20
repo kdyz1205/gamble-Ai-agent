@@ -197,6 +197,21 @@ function managementLockReason(challenge: ChallengeDetail, isCreator: boolean) {
   return null;
 }
 
+function canCancelAndRefundBeforeEvidence(challenge: ChallengeDetail, isCreator: boolean) {
+  if (!isCreator) return false;
+  if (!hasActiveNonCreatorParticipant(challenge)) return false;
+  const evidenceCount = challenge._count?.evidence ?? challenge.evidence?.length ?? 0;
+  const judgmentCount = challenge._count?.judgments ?? challenge.judgments?.length ?? 0;
+  if (evidenceCount > 0 || judgmentCount > 0) return false;
+  return [
+    "opponent_accepted",
+    "escrow_locked",
+    "evidence_window_open",
+    "matched",
+    "live",
+  ].includes(challenge.status);
+}
+
 export default function ChallengeVerdictPanel({
   challengeId,
   userId,
@@ -508,6 +523,24 @@ export default function ChallengeVerdictPanel({
     }
   };
 
+  const cancelAndRefundChallenge = async () => {
+    if (!challenge) return;
+    if (!window.confirm(`Cancel "${challenge.title}" and refund all locked stakes? This only works before evidence is submitted.`)) return;
+    setBusy(true);
+    setVerdictErr("");
+    try {
+      const res = await api.cancelChallenge(challenge.id, {
+        reason: "Creator cancelled before evidence was submitted.",
+      });
+      setChallenge(res.challenge);
+      onCreditsMayChange();
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : "Could not cancel and refund this challenge");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const acceptFromContract = async () => {
     if (!challenge || !acceptContractChecked) return;
     setAcceptingChallenge(true);
@@ -561,6 +594,7 @@ export default function ChallengeVerdictPanel({
   const contractBullets = acceptanceContract(challenge);
   const closeLockReason = managementLockReason(challenge, isCreator);
   const canCloseEmpty = !closeLockReason;
+  const canCancelRefund = canCancelAndRefundBeforeEvidence(challenge, isCreator);
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
   const verdictMetrics = parseJudgmentMetrics(verdictRow);
   const participantAMetrics = participantVideoMetrics(verdictMetrics.videoMetrics, "participantA");
@@ -678,11 +712,24 @@ export default function ChallengeVerdictPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>Manage challenge</p>
-                <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason ? "#991B1B" : "#047857" }}>
-                  {closeLockReason || "No opponent, evidence, or judgment exists yet. You can close this challenge and refund the stake."}
+                <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason && !canCancelRefund ? "#991B1B" : "#047857" }}>
+                  {canCancelRefund
+                    ? "Opponent has joined, but no evidence or judgment exists yet. You can cancel and refund all locked stakes."
+                    : closeLockReason || "No opponent, evidence, or judgment exists yet. You can close this challenge and refund the stake."}
                 </p>
               </div>
-              {canCloseEmpty ? (
+              {canCancelRefund ? (
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  disabled={busy}
+                  onClick={() => void cancelAndRefundChallenge()}
+                  className="px-4 py-2 text-xs font-black disabled:opacity-50"
+                  style={{ background: "#FED7AA", color: "#7C2D12", border: "1px solid #FDBA74", borderRadius: "9999px" }}
+                >
+                  Cancel and refund
+                </motion.button>
+              ) : canCloseEmpty ? (
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.97 }}

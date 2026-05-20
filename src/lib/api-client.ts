@@ -616,6 +616,23 @@ export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId
   return apiFetch(`/challenges/${id}`, { method: "DELETE" });
 }
 
+export async function cancelChallenge(id: string, data?: { reason?: string }): Promise<{
+  challenge: ChallengeData;
+  cancellation: {
+    finalStatus: string;
+    refunded: boolean;
+    stake: number;
+    participantCount: number;
+    reason: string;
+  };
+  settlement: { success: boolean; error?: string; txHash?: string };
+}> {
+  return apiFetch(`/challenges/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
+}
+
 export async function submitEvidence(id: string, data: {
   type?: string; url?: string; description?: string; metadata?: Record<string, unknown>; recordingSessionId?: string;
 }): Promise<{ evidence: unknown; sharedEvidenceCount?: number }> {
