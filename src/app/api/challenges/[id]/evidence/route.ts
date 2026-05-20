@@ -141,6 +141,29 @@ export async function POST(
       evidenceRows.push(await upsertEvidenceFor(targetUserId));
     }
     const evidence = evidenceRows[0];
+    for (const row of evidenceRows) {
+      await prisma.evidenceCheck.upsert({
+        where: { evidenceId: row.id },
+        create: {
+          evidenceId: row.id,
+          challengeId: id,
+          userId: row.userId,
+          protocolVersion: challenge.protocolVersion ?? "2.0",
+          decision: "pending",
+        },
+        update: {
+          protocolVersion: challenge.protocolVersion ?? "2.0",
+          identityCheckJson: null,
+          evidenceCheckJson: null,
+          outcomeCheckJson: null,
+          identityConfidence: null,
+          evidenceConfidence: null,
+          outcomeConfidence: null,
+          decision: "pending",
+          blockingIssues: null,
+        },
+      });
+    }
 
     // Activity event
     await prisma.activityEvent.create({

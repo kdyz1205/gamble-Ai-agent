@@ -14,6 +14,7 @@ import {
 } from "@/lib/challenge-state-machine";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
+import { logAiUsage } from "@/lib/ai-usage-log";
 import {
   buildJudgmentMetricsJson,
   evaluateAutoSettleEligibility,
@@ -266,6 +267,13 @@ export async function POST(
         ? "Fallback - no-settlement-v1"
         : aiModelLabel;
   const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
+  await logAiUsage({
+    userId: user.userId,
+    challengeId: id,
+    route: "/api/challenges/[id]/judge",
+    metadata: result.providerCall ?? null,
+    extra: { source: result.source ?? "llm", tierId, autoSettleRequested },
+  });
 
   let inferenceRefunded = false;
   if (result.source === "fallback" && inferenceSpendCharged) {

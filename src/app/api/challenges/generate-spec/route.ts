@@ -7,6 +7,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { evaluateRuleSafety } from "@/lib/rule-safety";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { refundDailyAiQuota, spendDailyAiQuota } from "@/lib/daily-ai-quota";
+import { logAiUsage } from "@/lib/ai-usage-log";
+import { protocolPreview, protocolSpecFromChallengeSpec, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 const INVITE_MODES: ChallengeSpec["invite_mode"][] = ["nearby", "invite_link", "direct_friend", "same_device"];
 const PARTICIPATION_MODES: ChallengeSpec["participation_mode"][] = ["remote_async", "remote_live", "same_camera", "in_person"];
@@ -270,9 +272,20 @@ export async function POST(req: NextRequest) {
 
   try {
     const ai = await generateAiSpec(inputText, fallback, { providerId, model, language, context });
+    const protocol = protocolSpecFromChallengeSpec(ai.spec, inputText, {
+      language: language === "en" || language === "zh" || language === "auto" ? language as ProtocolSpecV2["language"] : undefined,
+    });
+    await logAiUsage({
+      userId: user.userId,
+      route: "/api/challenges/generate-spec",
+      metadata: ai.providerCall,
+      extra: { source: "generate-spec", rawPromptChars: inputText.length },
+    });
     return Response.json({
       rawPrompt: inputText,
       spec: ai.spec,
+      protocol,
+      preview: protocolPreview(protocol),
       model: ai.model,
       source: "llm",
       providerId: ai.providerId,

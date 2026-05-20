@@ -25,6 +25,10 @@ export interface LlmCallMetadata {
   durationMs: number;
   imageCount?: number;
   responseFormat?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  estimatedCostUsd?: number | null;
 }
 
 export interface LlmCallResult {
@@ -90,6 +94,9 @@ async function anthropicCompleteWithMetadata(
       responseId: response.id ?? null,
       responseModel: response.model ?? null,
       durationMs: elapsedMs(startedAt),
+      inputTokens: response.usage?.input_tokens ?? null,
+      outputTokens: response.usage?.output_tokens ?? null,
+      totalTokens: response.usage ? response.usage.input_tokens + response.usage.output_tokens : null,
     },
   };
 }
@@ -131,6 +138,11 @@ async function openAiCompatibleCompleteWithMetadata(
   const data = (await res.json()) as {
     id?: string;
     model?: string;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   return {
@@ -146,6 +158,9 @@ async function openAiCompatibleCompleteWithMetadata(
       responseId: data.id ?? null,
       responseModel: data.model ?? null,
       durationMs: elapsedMs(startedAt),
+      inputTokens: data.usage?.prompt_tokens ?? null,
+      outputTokens: data.usage?.completion_tokens ?? null,
+      totalTokens: data.usage?.total_tokens ?? null,
     },
   };
 }
@@ -176,6 +191,11 @@ async function googleCompleteWithMetadata(
   const data = (await res.json()) as {
     responseId?: string;
     modelVersion?: string;
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const parts = data.candidates?.[0]?.content?.parts;
@@ -192,6 +212,9 @@ async function googleCompleteWithMetadata(
       responseId: data.responseId ?? null,
       responseModel: data.modelVersion ?? null,
       durationMs: elapsedMs(startedAt),
+      inputTokens: data.usageMetadata?.promptTokenCount ?? null,
+      outputTokens: data.usageMetadata?.candidatesTokenCount ?? null,
+      totalTokens: data.usageMetadata?.totalTokenCount ?? null,
     },
   };
 }
@@ -229,6 +252,11 @@ async function googleCompleteVisionWithMetadata(
   const data = (await res.json()) as {
     responseId?: string;
     modelVersion?: string;
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const out = data.candidates?.[0]?.content?.parts;
@@ -246,6 +274,9 @@ async function googleCompleteVisionWithMetadata(
       responseModel: data.modelVersion ?? null,
       durationMs: elapsedMs(startedAt),
       imageCount: images.length,
+      inputTokens: data.usageMetadata?.promptTokenCount ?? null,
+      outputTokens: data.usageMetadata?.candidatesTokenCount ?? null,
+      totalTokens: data.usageMetadata?.totalTokenCount ?? null,
     },
   };
 }
@@ -305,6 +336,9 @@ async function anthropicCompleteVisionWithMetadata(
       responseModel: response.model ?? null,
       durationMs: elapsedMs(startedAt),
       imageCount: images.length,
+      inputTokens: response.usage?.input_tokens ?? null,
+      outputTokens: response.usage?.output_tokens ?? null,
+      totalTokens: response.usage ? response.usage.input_tokens + response.usage.output_tokens : null,
     },
   };
 }
@@ -362,6 +396,11 @@ async function openAiCompatibleVisionCompleteWithMetadata(
   const data = (await res.json()) as {
     id?: string;
     model?: string;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   return {
@@ -379,6 +418,9 @@ async function openAiCompatibleVisionCompleteWithMetadata(
       durationMs: elapsedMs(startedAt),
       imageCount: images.length,
       responseFormat,
+      inputTokens: data.usage?.prompt_tokens ?? null,
+      outputTokens: data.usage?.completion_tokens ?? null,
+      totalTokens: data.usage?.total_tokens ?? null,
     },
   };
 }

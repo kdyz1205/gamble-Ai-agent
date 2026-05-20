@@ -1,3 +1,7 @@
+import type { ProtocolPreviewV2, ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+
+export type { ProtocolPreviewV2, ProtocolSpecV2 };
+
 /**
  * Frontend API Client — Credits-based economy
  * Uses NextAuth sessions + typed fetch wrappers.
@@ -183,6 +187,16 @@ export interface ChallengeData {
   rules: string | null;
   evidenceType: string;
   livenessPrompt?: string | null;
+  protocolVersion?: string | null;
+  participantMode?: string | null;
+  outcomeType?: string | null;
+  evidenceMode?: string | null;
+  identityMode?: string | null;
+  locationMode?: string | null;
+  settlementProtocolMode?: string | null;
+  riskLevel?: string | null;
+  compilerProviderId?: string | null;
+  compilerModel?: string | null;
   settlementMode: string;
   proofSource: string | null;
   arbiter: string | null;
@@ -264,6 +278,29 @@ export async function getChallenge(id: string): Promise<{ challenge: ChallengeDa
   return apiFetch(`/challenges/${id}`);
 }
 
+export async function getChallengeProtocol(id: string): Promise<{
+  challengeId: string;
+  protocol: ProtocolSpecV2 | null;
+  participantBindings: Array<{
+    id: string;
+    challengeId: string;
+    userId: string;
+    participantId: string | null;
+    role: string;
+    displayName: string | null;
+    expectedPosition: string | null;
+    bindingStatus: string;
+    identityConfidence: number | null;
+    verifiedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    livenessCode: string | null;
+    qrTokenHash: string | null;
+  }>;
+}> {
+  return apiFetch(`/challenges/${id}/protocol`);
+}
+
 export async function generateChallengeSpec(inputText: string, prefs?: {
   providerId?: string;
   model?: string | null;
@@ -272,6 +309,8 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
 }): Promise<{
   rawPrompt: string;
   spec: ChallengeSpec;
+  protocol?: ProtocolSpecV2;
+  preview?: ProtocolPreviewV2;
   model: string;
   source?: "llm" | "fallback" | "error";
   providerId?: string;
@@ -286,11 +325,36 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   });
 }
 
+export async function compileChallengeProtocol(inputText: string, prefs?: {
+  providerId?: string;
+  model?: string | null;
+  language?: "en" | "zh" | "auto";
+  context?: Record<string, unknown>;
+}): Promise<{
+  rawPrompt: string;
+  protocol: ProtocolSpecV2;
+  preview: ProtocolPreviewV2;
+  source: "llm" | "error";
+  providerId: string;
+  model: string;
+  externalApiCharged?: boolean;
+  providerCall?: unknown;
+  dailyQuota?: DailyAiQuotaStatus;
+}> {
+  return apiFetch("/challenges/compile", {
+    method: "POST",
+    body: JSON.stringify({ inputText, ...prefs }),
+  });
+}
+
 export async function createChallenge(data: {
   title: string;
   description?: string;
   rawPrompt?: string;
   challengeSpecJson?: string;
+  protocol?: ProtocolSpecV2;
+  compilerProviderId?: string;
+  compilerModel?: string;
   inviteCode?: string;
   currencyType?: string;
   participationMode?: string;

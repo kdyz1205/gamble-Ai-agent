@@ -6,6 +6,8 @@ import { evaluateRuleSafety } from "@/lib/rule-safety";
 import { ChallengeStatus } from "@/lib/enums";
 import { expandChallengeStatusFilter } from "@/lib/challenge-state-machine";
 import { generateLivenessPhrase } from "@/lib/liveness";
+import type { ChallengeSpec } from "@/lib/challenge-spec";
+import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -49,6 +51,35 @@ export async function GET(req: NextRequest) {
   return Response.json({ challenges, total, limit, offset });
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function protocolFromRequest(body: Record<string, unknown>): ProtocolSpecV2 | null {
+  const direct = parseProtocolSpecV2(body.protocol);
+  if (direct) return direct;
+
+  const specJson = parseJsonObject(body.challengeSpecJson);
+  if (!specJson) return null;
+
+  const rawPrompt = typeof body.rawPrompt === "string" ? body.rawPrompt : "";
+  return protocolSpecFromChallengeSpec(specJson as unknown as ChallengeSpec, rawPrompt || String(specJson.objective ?? ""));
+}
+
+function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
+  return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -60,7 +91,7 @@ export async function POST(req: NextRequest) {
       description,
       marketType = "challenge",
       proposition,
-      type = "General",
+      type,
       stake = 0,
       stakeToken = "credits",
       deadline,
@@ -68,27 +99,62 @@ export async function POST(req: NextRequest) {
       joinWindow,
       proofWindow,
       rules,
-      evidenceType = "self_report",
-      settlementMode = "mutual_confirmation",
+      evidenceType,
+      settlementMode,
       proofSource,
       arbiter,
       fallbackRule,
       disputeWindow,
       aiReview = true,
-      isPublic = true,
+      isPublic,
       visibility,
       discoveryLat,
       discoveryLng,
+      compilerProviderId,
+      compilerModel,
+      providerCall,
     } = body;
 
-    if (!title) return Response.json({ error: "title is required" }, { status: 400 });
+    const protocolSpec = protocolFromRequest(body as Record<string, unknown>);
+    if (protocolSpec && !protocolSpec.riskPolicy.allowed) {
+      return Response.json(
+        {
+          error: protocolSpec.riskPolicy.blockedReason || "This challenge protocol is blocked by safety policy.",
+          protocol: protocolSpec,
+        },
+        { status: 400 },
+      );
+    }
+    const protocolLegacy = protocolSpec ? protocolToLegacyChallengeFields(protocolSpec) : null;
+    const resolvedTitle = title || protocolLegacy?.title;
+    const resolvedDescription = description || protocolLegacy?.description;
+    const resolvedProposition = proposition || protocolLegacy?.proposition;
+    const resolvedType = type || protocolLegacy?.type || "General";
+    const resolvedRules = rules || protocolLegacy?.rules;
+    const resolvedEvidenceType = evidenceType || protocolLegacy?.evidenceType || "self_report";
+    const resolvedSettlementMode = settlementMode || protocolLegacy?.settlementMode || "mutual_confirmation";
+    const resolvedFallbackRule = fallbackRule || protocolLegacy?.fallbackRule;
+    const resolvedDisputeWindow = disputeWindow || protocolLegacy?.disputeWindow;
+    const resolvedIsPublic = isPublic ?? protocolLegacy?.isPublic ?? true;
+    const resolvedVisibility = visibility || protocolLegacy?.visibility || (resolvedIsPublic ? "public" : "private");
+    const resolvedCompilerProviderId =
+      typeof compilerProviderId === "string" && compilerProviderId.trim()
+        ? compilerProviderId.trim()
+        : null;
+    const resolvedCompilerModel =
+      typeof compilerModel === "string" && compilerModel.trim()
+        ? compilerModel.trim()
+        : null;
+
+    if (!resolvedTitle) return Response.json({ error: "title is required" }, { status: 400 });
     const safety = evaluateRuleSafety([
-      title,
-      description,
-      proposition,
-      type,
-      rules,
-      evidenceType,
+      resolvedTitle,
+      resolvedDescription,
+      resolvedProposition,
+      resolvedType,
+      resolvedRules,
+      resolvedEvidenceType,
+      protocolSpec ? JSON.stringify(protocolSpec.riskPolicy) : null,
     ].filter(Boolean).join("\n"));
     if (!safety.allowed) {
       return Response.json(
@@ -133,7 +199,7 @@ export async function POST(req: NextRequest) {
       const balance = await getCredits(user.userId);
       if (balance < stakeInt) return noCredits(stakeInt, balance);
 
-      const result = await spendCredits(user.userId, stakeInt, "stake", `Staked ${stakeInt} credits on "${title.slice(0, 40)}"`, undefined);
+      const result = await spendCredits(user.userId, stakeInt, "stake", `Staked ${stakeInt} credits on "${String(resolvedTitle).slice(0, 40)}"`, undefined);
       if (!result.success) return noCredits(stakeInt, result.balance);
       creatorStakeTxId = result.txId;
     }
@@ -154,54 +220,102 @@ export async function POST(req: NextRequest) {
     }
 
     let challenge: { id: string; title: string } | null = null;
-    const livenessPrompt =
-      String(evidenceType).toLowerCase() === "video"
-        ? generateLivenessPhrase()
-        : null;
+    const evidenceDescriptor = [
+      resolvedEvidenceType,
+      protocolSpec?.evidenceProtocol.mode,
+      protocolSpec?.identityProtocol.mode,
+    ].filter(Boolean).join(" ").toLowerCase();
+    const needsLiveness =
+      evidenceDescriptor.includes("video") ||
+      evidenceDescriptor.includes("camera") ||
+      evidenceDescriptor.includes("photo") ||
+      Boolean(protocolSpec?.identityProtocol.required);
+    const livenessPrompt = needsLiveness ? generateLivenessPhrase() : null;
     try {
-      challenge = await prisma.challenge.create({
-        data: {
-          creatorId: user.userId,
-          title,
-          description,
-          marketType,
-          proposition,
-          type,
-          status: ChallengeStatus.waiting_for_opponent,
-          stake: stakeInt,
-          stakeToken,
-          deadline: deadlineDate,
-          eventTime,
-          joinWindow,
-          proofWindow,
-          rules,
-          evidenceType,
-          livenessPrompt,
-          settlementMode,
-          proofSource,
-          arbiter,
-          fallbackRule,
-          disputeWindow,
-          aiReview,
-          isPublic,
-          visibility: visibility || (isPublic ? "public" : "private"),
-          ...(validDiscoveryLocation
-            ? {
-                discoveryLat,
-                discoveryLng,
-                discoveryCapturedAt: new Date(),
-              }
-            : {}),
-          participants: {
-            create: { userId: user.userId, role: "creator", status: "accepted" },
+      challenge = await prisma.$transaction(async (tx) => {
+        const created = await tx.challenge.create({
+          data: {
+            creatorId: user.userId,
+            title: resolvedTitle,
+            description: resolvedDescription,
+            marketType,
+            proposition: resolvedProposition,
+            type: resolvedType,
+            status: ChallengeStatus.waiting_for_opponent,
+            stake: stakeInt,
+            stakeToken,
+            deadline: deadlineDate,
+            eventTime,
+            joinWindow,
+            proofWindow,
+            rules: resolvedRules,
+            evidenceType: resolvedEvidenceType,
+            livenessPrompt,
+            settlementMode: resolvedSettlementMode,
+            proofSource,
+            arbiter,
+            fallbackRule: resolvedFallbackRule,
+            disputeWindow: resolvedDisputeWindow,
+            aiReview,
+            isPublic: resolvedIsPublic,
+            visibility: resolvedVisibility,
+            protocolVersion: protocolSpec?.version ?? "2.0",
+            participantMode: protocolSpec?.participantMode ?? null,
+            outcomeType: protocolSpec?.outcomeType ?? null,
+            evidenceMode: protocolSpec?.evidenceProtocol.mode ?? null,
+            identityMode: protocolSpec?.identityProtocol.mode ?? null,
+            locationMode: protocolSpec?.locationProtocol.mode ?? null,
+            settlementProtocolMode: protocolSpec?.settlementProtocol.mode ?? null,
+            riskLevel: protocolSpec?.riskPolicy.riskLevel ?? null,
+            compilerProviderId: resolvedCompilerProviderId,
+            compilerModel: resolvedCompilerModel,
+            ...(validDiscoveryLocation
+              ? {
+                  discoveryLat,
+                  discoveryLng,
+                  discoveryCapturedAt: new Date(),
+                }
+              : {}),
+            participants: {
+              create: { userId: user.userId, role: "creator", status: "accepted" },
+            },
           },
-        },
-        include: {
-          creator: { select: { id: true, username: true, image: true, credits: true } },
-          participants: {
-            include: { user: { select: { id: true, username: true, image: true } } },
+          include: {
+            creator: { select: { id: true, username: true, image: true, credits: true } },
+            participants: {
+              include: { user: { select: { id: true, username: true, image: true } } },
+            },
           },
-        },
+        });
+
+        const creatorParticipant = created.participants.find((participant) => participant.user.id === user.userId);
+        if (protocolSpec) {
+          await tx.challengeProtocol.create({
+            data: {
+              challengeId: created.id,
+              version: protocolSpec.version,
+              rawPrompt: protocolSpec.rawPrompt,
+              specJson: JSON.stringify(protocolSpec),
+              compilerProviderId: resolvedCompilerProviderId,
+              compilerModel: resolvedCompilerModel,
+              compilerCallJson: providerCall ? JSON.stringify(providerCall) : null,
+            },
+          });
+          await tx.participantBinding.create({
+            data: {
+              challengeId: created.id,
+              userId: user.userId,
+              participantId: creatorParticipant?.id ?? null,
+              role: "creator",
+              displayName: user.username,
+              expectedPosition: expectedPositionFor(protocolSpec, "creator"),
+              livenessCode: livenessPrompt,
+              bindingStatus: protocolSpec.identityProtocol.required ? "pending" : "verified",
+            },
+          });
+        }
+
+        return created;
       });
       if (creatorStakeTxId) {
         const createdChallengeId = challenge.id;
@@ -221,7 +335,7 @@ export async function POST(req: NextRequest) {
       // Compensating refund — never leave a user charged with no Challenge.
       if (stakeInt > 0) {
         try {
-          await addCredits(user.userId, stakeInt, "refund", `Refund — challenge creation failed for "${title.slice(0, 40)}"`);
+          await addCredits(user.userId, stakeInt, "refund", `Refund — challenge creation failed for "${String(resolvedTitle).slice(0, 40)}"`);
         } catch (refundErr) {
           console.error("CRITICAL: stake charged but refund failed", { userId: user.userId, stakeInt, createErr, refundErr });
         }
@@ -243,7 +357,7 @@ export async function POST(req: NextRequest) {
     await prisma.activityEvent.create({
       data: {
         type: "challenge_created",
-        message: `${user.username} created "${title}"${stakeInt > 0 ? ` — ${stakeInt} credits staked` : ""}`,
+        message: `${user.username} created "${resolvedTitle}"${stakeInt > 0 ? ` — ${stakeInt} credits staked` : ""}`,
         userId: user.userId,
         challengeId: challenge.id,
       },

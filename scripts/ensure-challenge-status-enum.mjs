@@ -78,6 +78,186 @@ async function main() {
     `);
     console.log("[status-enum] ensured UserDailyQuota table and indexes.");
 
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "protocolVersion" TEXT DEFAULT '2.0'`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "participantMode" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "outcomeType" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "evidenceMode" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "identityMode" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "locationMode" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "settlementProtocolMode" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "riskLevel" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "compilerProviderId" TEXT`);
+    await client.query(`ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "compilerModel" TEXT`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ChallengeProtocol" (
+        "id" TEXT NOT NULL,
+        "challengeId" TEXT NOT NULL,
+        "version" TEXT NOT NULL,
+        "rawPrompt" TEXT NOT NULL,
+        "specJson" TEXT NOT NULL,
+        "compilerProviderId" TEXT,
+        "compilerModel" TEXT,
+        "compilerCallJson" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ChallengeProtocol_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ChallengeProtocol_challengeId_key" ON "ChallengeProtocol" ("challengeId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ChallengeProtocol_challengeId_fkey') THEN
+          ALTER TABLE "ChallengeProtocol"
+          ADD CONSTRAINT "ChallengeProtocol_challengeId_fkey"
+          FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ParticipantBinding" (
+        "id" TEXT NOT NULL,
+        "challengeId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "participantId" TEXT,
+        "role" TEXT NOT NULL,
+        "displayName" TEXT,
+        "expectedPosition" TEXT,
+        "livenessCode" TEXT,
+        "qrTokenHash" TEXT,
+        "bindingStatus" TEXT NOT NULL DEFAULT 'pending',
+        "identityConfidence" DOUBLE PRECISION,
+        "identityCheckJson" TEXT,
+        "verifiedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ParticipantBinding_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ParticipantBinding_challengeId_userId_key" ON "ParticipantBinding" ("challengeId", "userId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "ParticipantBinding_challengeId_idx" ON "ParticipantBinding" ("challengeId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ParticipantBinding_challengeId_fkey') THEN
+          ALTER TABLE "ParticipantBinding" ADD CONSTRAINT "ParticipantBinding_challengeId_fkey"
+          FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ParticipantBinding_userId_fkey') THEN
+          ALTER TABLE "ParticipantBinding" ADD CONSTRAINT "ParticipantBinding_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ParticipantBinding_participantId_fkey') THEN
+          ALTER TABLE "ParticipantBinding" ADD CONSTRAINT "ParticipantBinding_participantId_fkey"
+          FOREIGN KEY ("participantId") REFERENCES "Participant"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "RecordingSession" (
+        "id" TEXT NOT NULL,
+        "challengeId" TEXT NOT NULL,
+        "createdByUserId" TEXT NOT NULL,
+        "mode" TEXT NOT NULL,
+        "protocolJson" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'started',
+        "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "endedAt" TIMESTAMP(3),
+        CONSTRAINT "RecordingSession_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS "RecordingSession_challengeId_idx" ON "RecordingSession" ("challengeId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'RecordingSession_challengeId_fkey') THEN
+          ALTER TABLE "RecordingSession" ADD CONSTRAINT "RecordingSession_challengeId_fkey"
+          FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'RecordingSession_createdByUserId_fkey') THEN
+          ALTER TABLE "RecordingSession" ADD CONSTRAINT "RecordingSession_createdByUserId_fkey"
+          FOREIGN KEY ("createdByUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "EvidenceCheck" (
+        "id" TEXT NOT NULL,
+        "evidenceId" TEXT NOT NULL,
+        "challengeId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "protocolVersion" TEXT NOT NULL,
+        "identityCheckJson" TEXT,
+        "evidenceCheckJson" TEXT,
+        "outcomeCheckJson" TEXT,
+        "identityConfidence" DOUBLE PRECISION,
+        "evidenceConfidence" DOUBLE PRECISION,
+        "outcomeConfidence" DOUBLE PRECISION,
+        "decision" TEXT NOT NULL,
+        "blockingIssues" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EvidenceCheck_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "EvidenceCheck_evidenceId_key" ON "EvidenceCheck" ("evidenceId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EvidenceCheck_challengeId_idx" ON "EvidenceCheck" ("challengeId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EvidenceCheck_userId_idx" ON "EvidenceCheck" ("userId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EvidenceCheck_evidenceId_fkey') THEN
+          ALTER TABLE "EvidenceCheck" ADD CONSTRAINT "EvidenceCheck_evidenceId_fkey"
+          FOREIGN KEY ("evidenceId") REFERENCES "Evidence"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EvidenceCheck_challengeId_fkey') THEN
+          ALTER TABLE "EvidenceCheck" ADD CONSTRAINT "EvidenceCheck_challengeId_fkey"
+          FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EvidenceCheck_userId_fkey') THEN
+          ALTER TABLE "EvidenceCheck" ADD CONSTRAINT "EvidenceCheck_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "AiUsageLog" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT,
+        "challengeId" TEXT,
+        "route" TEXT NOT NULL,
+        "providerId" TEXT NOT NULL,
+        "model" TEXT NOT NULL,
+        "requestKind" TEXT NOT NULL,
+        "inputTokens" INTEGER,
+        "outputTokens" INTEGER,
+        "totalTokens" INTEGER,
+        "imageCount" INTEGER,
+        "estimatedCostUsd" DOUBLE PRECISION,
+        "durationMs" INTEGER,
+        "responseId" TEXT,
+        "metadataJson" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "AiUsageLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS "AiUsageLog_userId_createdAt_idx" ON "AiUsageLog" ("userId", "createdAt")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "AiUsageLog_challengeId_createdAt_idx" ON "AiUsageLog" ("challengeId", "createdAt")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "AiUsageLog_route_createdAt_idx" ON "AiUsageLog" ("route", "createdAt")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AiUsageLog_userId_fkey') THEN
+          ALTER TABLE "AiUsageLog" ADD CONSTRAINT "AiUsageLog_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AiUsageLog_challengeId_fkey') THEN
+          ALTER TABLE "AiUsageLog" ADD CONSTRAINT "AiUsageLog_challengeId_fkey"
+          FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+    console.log("[status-enum] ensured ProtocolSpecV2 foundation tables and columns.");
+
     const typeResult = await client.query(
       "SELECT 1 FROM pg_type WHERE typname = $1",
       ["ChallengeStatus"],

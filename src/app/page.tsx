@@ -262,6 +262,8 @@ export default function Home() {
         type: spec.challenge_type,
         rawPrompt: prompt,
         challengeSpecJson: JSON.stringify(spec),
+        compilerProviderId: specProviderId,
+        compilerModel: specModel,
         marketType: "ai_peer_challenge",
         proposition: spec.objective,
         stake: spec.stake_amount,
@@ -294,7 +296,7 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "Could not confirm challenge");
       setAppState("preview");
     }
-  }, [prompt, spec, updateSession, user]);
+  }, [prompt, spec, specModel, specProviderId, updateSession, user]);
 
   const handleSelectInvite = useCallback((value: api.ChallengeSpec["invite_mode"]) => {
     setSpec((current) => {
