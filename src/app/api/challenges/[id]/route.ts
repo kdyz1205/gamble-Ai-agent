@@ -78,6 +78,16 @@ export async function DELETE(
     return Response.json({ error: "Only the creator can delete a market" }, { status: 403 });
   }
 
+  const hasOtherParticipant = challenge.participants.some(
+    (participant) => participant.userId !== challenge.creatorId && participant.status !== "declined",
+  );
+  if (hasOtherParticipant) {
+    return Response.json(
+      { error: "Can't close this market because another participant has already joined." },
+      { status: 409 },
+    );
+  }
+
   const deletable = ["draft", "cancelled"];
   if (!deletable.includes(challenge.status) && !isOpenForOpponentStatus(challenge.status)) {
     return Response.json(
@@ -88,15 +98,6 @@ export async function DELETE(
     );
   }
 
-  const hasOtherParticipant = challenge.participants.some(
-    (participant) => participant.userId !== challenge.creatorId && participant.status !== "declined",
-  );
-  if (hasOtherParticipant) {
-    return Response.json(
-      { error: "Can't close this market because another participant has already joined." },
-      { status: 409 },
-    );
-  }
   if (challenge._count.evidence > 0 || challenge._count.judgments > 0 || challenge._count.judgeJobs > 0) {
     return Response.json(
       { error: "Can't delete this challenge because evidence or judgment history already exists. Use dispute/manual resolution instead." },
