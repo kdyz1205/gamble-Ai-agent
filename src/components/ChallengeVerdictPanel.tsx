@@ -177,6 +177,26 @@ function isManualResolutionStatus(status: string) {
   ].includes(status);
 }
 
+function hasActiveNonCreatorParticipant(challenge: ChallengeDetail) {
+  return challenge.participants.some(
+    (participant) => participant.user.id !== challenge.creatorId && participant.status !== "declined",
+  );
+}
+
+function managementLockReason(challenge: ChallengeDetail, isCreator: boolean) {
+  if (!isCreator) return "Only the creator can manage this challenge.";
+  if (hasActiveNonCreatorParticipant(challenge)) return "An opponent has joined, so this challenge cannot be deleted from the creator side.";
+  const evidenceCount = challenge._count?.evidence ?? challenge.evidence?.length ?? 0;
+  const judgmentCount = challenge._count?.judgments ?? challenge.judgments?.length ?? 0;
+  if (evidenceCount > 0 || judgmentCount > 0) {
+    return "Evidence or judgment history already exists. Use dispute, manual review, refund, or void instead of deleting it.";
+  }
+  if (!["draft", "cancelled"].includes(challenge.status) && !isOpenForOpponentStatus(challenge.status)) {
+    return `Status "${lifecycleStatusLabel(challenge.status)}" is past the empty-challenge close window.`;
+  }
+  return null;
+}
+
 export default function ChallengeVerdictPanel({
   challengeId,
   userId,
@@ -526,7 +546,7 @@ export default function ChallengeVerdictPanel({
     );
   }
 
-  const hasOpponent = challenge.participants.some(p => p.role === "opponent");
+  const hasOpponent = hasActiveNonCreatorParticipant(challenge);
   const phaseMatchDone = hasOpponent || !isOpenForOpponentStatus(challenge.status);
   const phases = [
     { key: "match", done: phaseMatchDone, label: "Opponent", icon: "👤" },
@@ -539,7 +559,8 @@ export default function ChallengeVerdictPanel({
   const ruleCards = parseChallengeRules(challenge);
   const compactRules = compactChallengeRules(challenge);
   const contractBullets = acceptanceContract(challenge);
-  const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
+  const closeLockReason = managementLockReason(challenge, isCreator);
+  const canCloseEmpty = !closeLockReason;
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
   const verdictMetrics = parseJudgmentMetrics(verdictRow);
   const participantAMetrics = participantVideoMetrics(verdictMetrics.videoMetrics, "participantA");
@@ -642,6 +663,43 @@ export default function ChallengeVerdictPanel({
                 <p className="text-[11px] font-black" style={{ color: "#9A3412" }}>
                   {copyNotice}
                 </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {isCreator && (
+          <motion.div
+            className="space-y-3 p-4"
+            style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "22px" }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>Manage challenge</p>
+                <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason ? "#991B1B" : "#047857" }}>
+                  {closeLockReason || "No opponent, evidence, or judgment exists yet. You can close this challenge and refund the stake."}
+                </p>
+              </div>
+              {canCloseEmpty ? (
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  disabled={busy}
+                  onClick={() => void closeEmptyChallenge()}
+                  className="px-4 py-2 text-xs font-black disabled:opacity-50"
+                  style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "9999px" }}
+                >
+                  Close empty challenge
+                </motion.button>
+              ) : (
+                <span
+                  className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider"
+                  style={{ background: "#F1F5F9", color: "#64748B", borderRadius: "9999px" }}
+                >
+                  Locked
+                </span>
               )}
             </div>
           </motion.div>

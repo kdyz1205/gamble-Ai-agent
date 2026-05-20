@@ -141,7 +141,7 @@ function requireCheck(proof, name, passed, detail) {
   if (!passed) throw new Error(`E2E check failed: ${name}`);
 }
 
-async function createCloseableChallenge(jar, stamp, stake, label) {
+async function createCloseableChallenge(jar, stamp, stake, label, options = {}) {
   return postJson(jar, "/api/challenges", {
     title: `Close empty challenge ${label} ${stamp}`,
     description: "E2E challenge created only to prove empty challenge management and close behavior.",
@@ -155,8 +155,8 @@ async function createCloseableChallenge(jar, stamp, stake, label) {
     evidenceType: "self_report",
     settlementMode: "manual_review",
     aiReview: false,
-    isPublic: true,
-    visibility: "public",
+    isPublic: options.isPublic ?? true,
+    visibility: options.visibility ?? "public",
   });
 }
 
@@ -276,6 +276,35 @@ try {
     "api_deleted_challenge_is_gone",
     apiDetailAfterClose.status === 404,
     { status: apiDetailAfterClose.status },
+  );
+
+  const opponent = await register(`codex.close.opponent.${stamp}@example.com`, `close_opp_${stamp.slice(-6)}`);
+  const joinedCreated = await createCloseableChallenge(creator.jar, stamp, 0, "joined", {
+    isPublic: false,
+    visibility: "invite_only",
+  });
+  await postJson(opponent.jar, `/api/challenges/${joinedCreated.challenge.id}/accept`, {
+    acceptedRuleContract: true,
+  });
+  const joinedDelete = await requestAllowingError(creator.jar, `/api/challenges/${joinedCreated.challenge.id}`, {
+    method: "DELETE",
+  });
+  const joinedDetail = await getJson(creator.jar, `/api/challenges/${joinedCreated.challenge.id}`);
+  requireCheck(
+    proof,
+    "joined_challenge_delete_blocked",
+    joinedDelete.status === 409 && String(joinedDelete.data?.error || "").includes("participant"),
+    { status: joinedDelete.status, response: joinedDelete.data },
+  );
+  requireCheck(
+    proof,
+    "joined_challenge_still_exists",
+    joinedDetail.challenge?.id === joinedCreated.challenge.id && joinedDetail.challenge.participants?.length >= 2,
+    {
+      id: joinedDetail.challenge?.id,
+      status: joinedDetail.challenge?.status,
+      participants: joinedDetail.challenge?.participants?.length ?? 0,
+    },
   );
 
   console.log(JSON.stringify(proof, null, 2));

@@ -57,6 +57,15 @@ function hasOtherParticipant(market: ChallengeData, userId?: string) {
   ));
 }
 
+function closeLockReason(market: ChallengeData, userId?: string) {
+  if (!userId || market.creatorId !== userId) return null;
+  if (hasOtherParticipant(market, userId)) return "Opponent joined";
+  if ((market._count?.evidence ?? market.evidence?.length ?? 0) > 0) return "Evidence exists";
+  if ((market._count?.judgments ?? market.judgments?.length ?? 0) > 0) return "Judgment exists";
+  if (!["draft", "cancelled"].includes(market.status) && !isOpenForOpponentStatus(market.status)) return "Past close window";
+  return null;
+}
+
 export default function MarketsPage() {
   const { data: session, status: sessionStatus } = useSession();
   const sessionLoading = sessionStatus === "loading";
@@ -257,7 +266,8 @@ export default function MarketsPage() {
               const status = STATUS_STYLE[m.status] || STATUS_STYLE.draft;
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
-              const canClose = (["draft", "cancelled"].includes(m.status) || isOpenForOpponentStatus(m.status)) && !hasOtherParticipant(m, user.id);
+              const lockedReason = closeLockReason(m, user.id);
+              const canClose = m.creatorId === user.id && !lockedReason;
               return (
                 <motion.article
                   key={m.id}
@@ -304,7 +314,7 @@ export default function MarketsPage() {
                       className="flex-1 text-center py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
                     >
-                      Open
+                      Manage
                     </Link>
                     {canClose && (
                       <button
@@ -317,7 +327,21 @@ export default function MarketsPage() {
                         {closingId === m.id ? "Closing..." : "Close"}
                       </button>
                     )}
+                    {!canClose && lockedReason && (
+                      <span
+                        className="px-3 py-2 text-[10px] font-black"
+                        style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}
+                        title={lockedReason}
+                      >
+                        Locked
+                      </span>
+                    )}
                   </div>
+                  {!canClose && lockedReason && (
+                    <p className="mt-2 text-[10px] font-bold" style={{ color: NAVY_DIM }}>
+                      Manage lock: {lockedReason}. Open the challenge for review, dispute, refund, or verdict actions.
+                    </p>
+                  )}
                 </motion.article>
               );
             })}
