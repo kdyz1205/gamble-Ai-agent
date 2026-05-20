@@ -240,6 +240,27 @@ export interface ChallengeData {
   _count?: { evidence: number; judgments?: number; participants?: number };
 }
 
+export interface ChallengeEventData {
+  id: string;
+  creatorId: string;
+  title: string;
+  protocolJson: string;
+  status: string;
+  maxParticipants: number;
+  createdAt: string;
+  updatedAt: string;
+  creator: { id: string; username: string; image: string | null };
+  entries: Array<{
+    id: string;
+    userId: string;
+    ticketCode: string;
+    status: string;
+    joinedAt: string;
+    user: { id: string; username: string; image: string | null };
+  }>;
+  _count?: { entries: number; leaderboardEntries: number };
+}
+
 export async function listChallenges(params?: {
   status?: string; type?: string; mine?: boolean; limit?: number; offset?: number;
 }): Promise<{ challenges: ChallengeData[]; total: number }> {
@@ -458,8 +479,55 @@ export async function createChallenge(data: {
   visibility?: string;
   discoveryLat?: number;
   discoveryLng?: number;
-}): Promise<{ challenge: ChallengeData }> {
+  maxParticipants?: number;
+}): Promise<{
+  challenge?: ChallengeData;
+  event?: ChallengeEventData;
+  creatorEntry?: ChallengeEventData["entries"][number] | null;
+  requiresEventFlow?: true;
+  eventUrl?: string;
+}> {
   return apiFetch("/challenges", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function listEvents(params?: {
+  status?: string; mine?: boolean; limit?: number; offset?: number;
+}): Promise<{ events: ChallengeEventData[]; total: number; limit: number; offset: number }> {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.mine) q.set("mine", "true");
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  return apiFetch(`/events?${q.toString()}`);
+}
+
+export async function getEvent(id: string): Promise<{ event: ChallengeEventData }> {
+  return apiFetch(`/events/${id}`);
+}
+
+export async function joinEvent(id: string): Promise<{
+  event: ChallengeEventData;
+  entry: ChallengeEventData["entries"][number];
+  alreadyJoined: boolean;
+}> {
+  return apiFetch(`/events/${id}/join`, { method: "POST" });
+}
+
+export async function getEventLeaderboard(id: string): Promise<{
+  eventId: string;
+  entries: Array<{
+    id: string;
+    eventId: string;
+    userId: string;
+    score: number | null;
+    rank: number | null;
+    evidenceId: string | null;
+    validationStatus: string;
+    createdAt: string;
+    user: { id: string; username: string; image: string | null };
+  }>;
+}> {
+  return apiFetch(`/events/${id}/leaderboard`);
 }
 
 export async function acceptChallenge(id: string, snapshot?: LocationSnapshot): Promise<{ challenge: ChallengeData }> {

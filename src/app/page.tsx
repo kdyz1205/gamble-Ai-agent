@@ -133,6 +133,7 @@ export default function Home() {
   const [oraclePrefs, setOraclePrefs] = useState<OraclePrefs>(() => initialOraclePrefs());
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [publishedId, setPublishedId] = useState<string | null>(null);
+  const [publishedKind, setPublishedKind] = useState<"challenge" | "event">("challenge");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
@@ -157,6 +158,7 @@ export default function Home() {
     setExternalApiCharged(false);
     setShareLink(null);
     setPublishedId(null);
+    setPublishedKind("challenge");
     setError(null);
     setCopied(false);
     setCopyNotice("");
@@ -260,8 +262,17 @@ export default function Home() {
           : {}),
       });
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setPublishedId(res.challenge.id);
-      setShareLink(`${origin}/join/${res.challenge.id}`);
+      if (res.event) {
+        setPublishedKind("event");
+        setPublishedId(res.event.id);
+        setShareLink(`${origin}/events/${res.event.id}`);
+      } else if (res.challenge) {
+        setPublishedKind("challenge");
+        setPublishedId(res.challenge.id);
+        setShareLink(`${origin}/join/${res.challenge.id}`);
+      } else {
+        throw new Error("Create returned no challenge or event.");
+      }
       setAppState("published");
       await updateSession();
     } catch (err) {
@@ -616,7 +627,7 @@ export default function Home() {
           {appState === "published" && protocol && shareLink && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
               <div className="text-center">
-                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>Challenge is ready</h2>
+                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>{publishedKind === "event" ? "Event is ready" : "Challenge is ready"}</h2>
                 <p className="text-sm font-semibold" style={{ color: "#526078" }}>{protocol.title}</p>
               </div>
               <div className="flex items-center gap-2 p-2 bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "18px" }}>
@@ -631,7 +642,7 @@ export default function Home() {
                 </p>
               )}
               <div className="grid gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => { if (publishedId) window.location.href = `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>Challenge room</button>
+                <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>{publishedKind === "event" ? "Event lobby" : "Challenge room"}</button>
                 <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
                 <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
               </div>

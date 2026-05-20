@@ -90,6 +90,9 @@ model User {
   judgeJobsRequested  JudgeJob[]           @relation("JudgeJobRequester")
   auditLogsActor      AuditLog[]           @relation("AuditLogActor")
   auditLogsTarget     AuditLog[]           @relation("AuditLogTarget")
+  eventsCreated       ChallengeEvent[]     @relation("ChallengeEventCreator")
+  eventEntries        EventEntry[]
+  leaderboardEntries  LeaderboardEntry[]
 }
 
 model UserDailyQuota {
@@ -475,4 +478,60 @@ model ActivityEvent {
   // Feed reads order by createdAt DESC and often filter by type.
   @@index([createdAt])
   @@index([challengeId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MASS EVENT / LEADERBOARD CHALLENGES
+// ═══════════════════════════════════════════════════════════════════════
+
+model ChallengeEvent {
+  id              String   @id @default(cuid())
+  creatorId       String
+  title           String
+  protocolJson    String
+  status          String   @default("open")
+  maxParticipants Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator            User               @relation("ChallengeEventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  entries            EventEntry[]
+  leaderboardEntries LeaderboardEntry[]
+
+  @@index([creatorId, createdAt])
+  @@index([status, createdAt])
+}
+
+model EventEntry {
+  id         String   @id @default(cuid())
+  eventId    String
+  userId     String
+  ticketCode String
+  status     String   @default("joined")
+  joinedAt   DateTime @default(now())
+
+  event ChallengeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId, joinedAt])
+}
+
+model LeaderboardEntry {
+  id               String   @id @default(cuid())
+  eventId           String
+  userId            String
+  score             Float?
+  rank              Int?
+  evidenceId        String?
+  validationStatus  String
+  createdAt         DateTime @default(now())
+
+  event ChallengeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId, createdAt])
+  @@unique([eventId, userId])
 }

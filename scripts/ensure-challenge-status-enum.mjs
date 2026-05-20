@@ -258,6 +258,87 @@ async function main() {
     `);
     console.log("[status-enum] ensured ProtocolSpecV2 foundation tables and columns.");
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ChallengeEvent" (
+        "id" TEXT NOT NULL,
+        "creatorId" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "protocolJson" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'open',
+        "maxParticipants" INTEGER NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ChallengeEvent_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS "ChallengeEvent_creatorId_createdAt_idx" ON "ChallengeEvent" ("creatorId", "createdAt")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "ChallengeEvent_status_createdAt_idx" ON "ChallengeEvent" ("status", "createdAt")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ChallengeEvent_creatorId_fkey') THEN
+          ALTER TABLE "ChallengeEvent" ADD CONSTRAINT "ChallengeEvent_creatorId_fkey"
+          FOREIGN KEY ("creatorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "EventEntry" (
+        "id" TEXT NOT NULL,
+        "eventId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "ticketCode" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'joined',
+        "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EventEntry_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "EventEntry_eventId_userId_key" ON "EventEntry" ("eventId", "userId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EventEntry_eventId_idx" ON "EventEntry" ("eventId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EventEntry_userId_joinedAt_idx" ON "EventEntry" ("userId", "joinedAt")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EventEntry_eventId_fkey') THEN
+          ALTER TABLE "EventEntry" ADD CONSTRAINT "EventEntry_eventId_fkey"
+          FOREIGN KEY ("eventId") REFERENCES "ChallengeEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EventEntry_userId_fkey') THEN
+          ALTER TABLE "EventEntry" ADD CONSTRAINT "EventEntry_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "LeaderboardEntry" (
+        "id" TEXT NOT NULL,
+        "eventId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "score" DOUBLE PRECISION,
+        "rank" INTEGER,
+        "evidenceId" TEXT,
+        "validationStatus" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LeaderboardEntry_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS "LeaderboardEntry_eventId_idx" ON "LeaderboardEntry" ("eventId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "LeaderboardEntry_userId_createdAt_idx" ON "LeaderboardEntry" ("userId", "createdAt")`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "LeaderboardEntry_eventId_userId_key" ON "LeaderboardEntry" ("eventId", "userId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'LeaderboardEntry_eventId_fkey') THEN
+          ALTER TABLE "LeaderboardEntry" ADD CONSTRAINT "LeaderboardEntry_eventId_fkey"
+          FOREIGN KEY ("eventId") REFERENCES "ChallengeEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'LeaderboardEntry_userId_fkey') THEN
+          ALTER TABLE "LeaderboardEntry" ADD CONSTRAINT "LeaderboardEntry_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+    console.log("[status-enum] ensured ChallengeEvent/EventEntry/LeaderboardEntry tables.");
+
     const typeResult = await client.query(
       "SELECT 1 FROM pg_type WHERE typname = $1",
       ["ChallengeStatus"],

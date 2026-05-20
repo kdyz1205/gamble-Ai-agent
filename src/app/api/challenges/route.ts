@@ -7,6 +7,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { expandChallengeStatusFilter } from "@/lib/challenge-state-machine";
 import { generateLivenessPhrase } from "@/lib/liveness";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
+import { createChallengeEventFromProtocol, isEventProtocol } from "@/lib/challenge-events";
 import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 export async function GET(req: NextRequest) {
@@ -125,18 +126,25 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (
-      protocolSpec &&
-      (protocolSpec.participantMode === "mass_crowd" || protocolSpec.settlementProtocol.mode === "leaderboard")
-    ) {
-      return Response.json(
-        {
-          error: "Mass-crowd and leaderboard protocols require the event flow and cannot be created as a 1v1 challenge.",
-          requiresEventFlow: true,
-          protocol: protocolSpec,
+    if (isEventProtocol(protocolSpec)) {
+      const { event, creatorEntry } = await createChallengeEventFromProtocol({
+        user,
+        protocol: protocolSpec as ProtocolSpecV2,
+        maxParticipants: (body as Record<string, unknown>).maxParticipants,
+      });
+      await prisma.activityEvent.create({
+        data: {
+          type: "event_created",
+          message: `${user.username} created event "${event.title}" for up to ${event.maxParticipants} participants`,
+          userId: user.userId,
         },
-        { status: 409 },
-      );
+      }).catch(() => null);
+      return Response.json({
+        event,
+        creatorEntry,
+        requiresEventFlow: true,
+        eventUrl: `/events/${event.id}`,
+      }, { status: 201 });
     }
     const protocolLegacy = protocolSpec ? protocolToLegacyChallengeFields(protocolSpec) : null;
     const resolvedTitle = title || protocolLegacy?.title;
