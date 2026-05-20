@@ -439,6 +439,32 @@ export async function submitEvidence(id: string, data: {
   return apiFetch(`/challenges/${id}/evidence`, { method: "POST", body: JSON.stringify(data) });
 }
 
+export async function verifyEvidenceIdentity(id: string, evidenceId: string): Promise<{
+  challengeId: string;
+  evidenceId: string;
+  userId: string;
+  decision: "passed" | "needs_review" | "invalid";
+  identityCheck: {
+    passed: boolean;
+    confidence: number;
+    mode: string | null;
+    bindingStatus: string | null;
+    livenessDetected: boolean;
+    expectedPosition: string | null;
+    blockingIssues: string[];
+  };
+  evidenceCheck: {
+    passed: boolean;
+    confidence: number;
+    mode: string | null;
+    type: string;
+    blockingIssues: string[];
+  };
+  blockingIssues: string[];
+}> {
+  return apiFetch(`/challenges/${id}/evidence/${evidenceId}/verify-identity`, { method: "POST" });
+}
+
 export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerId?: string;
   model?: string;

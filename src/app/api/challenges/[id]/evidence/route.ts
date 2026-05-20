@@ -6,6 +6,7 @@ import { preExtractAndPersistFrames } from "@/lib/media/pre-extract-frames";
 import { cleanupReplacedEvidenceBlobs } from "@/lib/media/blob-cleanup";
 import { ChallengeStatus } from "@/lib/enums";
 import { EVIDENCE_WINDOW_STATUSES, isEvidenceWindowStatus } from "@/lib/challenge-state-machine";
+import { verifyEvidenceAgainstProtocol } from "@/lib/protocol-evidence-verification";
 
 // Vision frame extraction + Blob upload can take 5-20s for a longer video.
 // Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
@@ -162,6 +163,16 @@ export async function POST(
           decision: "pending",
           blockingIssues: null,
         },
+      });
+    }
+    for (const row of evidenceRows) {
+      await verifyEvidenceAgainstProtocol(row.id).catch((verifyErr) => {
+        console.error("[evidence] protocol verification failed", {
+          challengeId: id,
+          evidenceId: row.id,
+          userId: row.userId,
+          verifyErr,
+        });
       });
     }
 
