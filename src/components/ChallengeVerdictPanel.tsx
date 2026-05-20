@@ -96,11 +96,16 @@ function parseJudgmentMetrics(row: { metricsJson?: string | null; confidence?: n
     metrics.providerCall && typeof metrics.providerCall === "object" && !Array.isArray(metrics.providerCall)
       ? metrics.providerCall as Record<string, unknown>
       : null;
+  const videoMetrics =
+    metrics.videoMetrics && typeof metrics.videoMetrics === "object" && !Array.isArray(metrics.videoMetrics)
+      ? metrics.videoMetrics as Record<string, unknown>
+      : null;
   return {
     evidenceQuality,
     recommendation,
     source: typeof metrics.source === "string" ? metrics.source : null,
     providerCall,
+    videoMetrics,
     blockingIssues,
     autoSettleEligible:
       typeof metrics.autoSettleEligible === "boolean" ? metrics.autoSettleEligible : inferredAutoSettleEligible,
@@ -128,6 +133,29 @@ function providerResponseId(providerCall: Record<string, unknown> | null) {
   if (!providerCall || typeof providerCall.responseId !== "string" || !providerCall.responseId.trim()) return "";
   const id = providerCall.responseId.trim();
   return id.length > 28 ? `${id.slice(0, 18)}...${id.slice(-6)}` : id;
+}
+
+function participantVideoMetrics(videoMetrics: Record<string, unknown> | null, key: "participantA" | "participantB") {
+  const value = videoMetrics?.[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function metricBool(value: unknown) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return "Unknown";
+}
+
+function metricCount(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "Unknown";
+}
+
+function metricNotes(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
 }
 
 function isRejudgeableStatus(status: string) {
@@ -514,6 +542,8 @@ export default function ChallengeVerdictPanel({
   const canCloseEmpty = isCreator && isOpenForOpponentStatus(challenge.status) && !hasOpponent;
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
   const verdictMetrics = parseJudgmentMetrics(verdictRow);
+  const participantAMetrics = participantVideoMetrics(verdictMetrics.videoMetrics, "participantA");
+  const participantBMetrics = participantVideoMetrics(verdictMetrics.videoMetrics, "participantB");
   const selectedManualWinnerId = manualWinnerId || accepted[0]?.user.id || "";
 
   return (
@@ -1179,6 +1209,51 @@ export default function ChallengeVerdictPanel({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {(participantAMetrics || participantBMetrics) && (
+                <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
+                  <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "#64748B" }}>
+                    Video metrics
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["Participant A", participantAMetrics],
+                      ["Participant B", participantBMetrics],
+                    ].map(([label, metrics]) => metrics && (
+                      <div key={label as string} className="p-3" style={{ background: "#F8FAFC", borderRadius: "16px" }}>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs font-black" style={{ color: "#1E293B" }}>{label as string}</p>
+                          <span className="px-2 py-1 text-[10px] font-black" style={{ color: "#047857", background: "#D1FAE5", borderRadius: "9999px" }}>
+                            {metricCount((metrics as Record<string, unknown>).validRepCount)} reps
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-bold" style={{ color: "#475569" }}>
+                          <span>Full body: {metricBool((metrics as Record<string, unknown>).fullBodyVisible)}</span>
+                          <span>Liveness: {metricBool((metrics as Record<string, unknown>).livenessPhraseVisible)}</span>
+                          <span>Duration: {metricBool((metrics as Record<string, unknown>).fullDurationCovered)}</span>
+                          <span>Continuous: {metricBool((metrics as Record<string, unknown>).continuousAttemptLikely)}</span>
+                          <span>Too short: {metricBool((metrics as Record<string, unknown>).videoTooShort)}</span>
+                          <span>Edit/loop: {metricBool((metrics as Record<string, unknown>).suspectedEditingOrLoop)}</span>
+                        </div>
+                        {metricNotes((metrics as Record<string, unknown>).invalidRepNotes).length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {metricNotes((metrics as Record<string, unknown>).invalidRepNotes).slice(0, 3).map((note) => (
+                              <li key={note} className="text-[11px] font-semibold" style={{ color: "#7C2D12" }}>
+                                - {note}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {typeof (metrics as Record<string, unknown>).reasonForManualReview === "string" && (
+                          <p className="mt-2 text-[11px] font-semibold" style={{ color: "#9A3412" }}>
+                            {(metrics as Record<string, unknown>).reasonForManualReview as string}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
