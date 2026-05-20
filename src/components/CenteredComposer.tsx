@@ -55,22 +55,15 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const getRecognitionLanguage = useCallback(() => {
     if (voiceLang === "en") return "en-US";
     if (voiceLang === "zh") return "zh-CN";
-    return navigator.language || "en-US";
+    return undefined;
   }, [voiceLang]);
 
   const getLanguageHint = useCallback((): "en" | "zh" | undefined => {
     if (voiceLang === "en") return "en";
     if (voiceLang === "zh") return "zh";
-    // Auto mode — peek at the browser/device language. A user whose phone is
-    // set to zh-CN / zh-TW / zh-HK almost certainly wants Chinese transcription.
-    // Without this hint Whisper sometimes defaulted to English on short / noisy
-    // clips, producing empty or garbled transcripts.
-    if (typeof navigator !== "undefined") {
-      const nav = navigator.language?.toLowerCase() || "";
-      if (nav.startsWith("zh")) return "zh";
-      if (nav.startsWith("en")) return "en";
-    }
-    return undefined; // let Whisper auto-detect
+    // Auto mode must not force the browser language. The user may speak Chinese
+    // on an English browser, or mix Chinese and English in one prompt.
+    return undefined;
   }, [voiceLang]);
 
   const stopPreviewRecognition = useCallback(() => {
@@ -132,13 +125,19 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   }, [getLanguageHint]);
 
   const startPreviewRecognition = useCallback(() => {
+    // Auto mode should not trust browser speech preview. Chrome/Edge often use
+    // the OS/browser language, so Mandarin can become English-sounding garbage.
+    // Let server transcription decide unless the user explicitly picks EN/中.
+    if (voiceLang === "auto") return;
+
     const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!RecognitionCtor) return;
 
     const recognition = new RecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = getRecognitionLanguage();
+    const recognitionLanguage = getRecognitionLanguage();
+    if (recognitionLanguage) recognition.lang = recognitionLanguage;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = "";
@@ -173,7 +172,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     } catch {
       recognitionRef.current = null;
     }
-  }, [getRecognitionLanguage]);
+  }, [getRecognitionLanguage, voiceLang]);
 
   const startRecording = useCallback(async () => {
     if (isParsing || isTranscribing) return;
@@ -285,7 +284,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     };
   }, [stopAllTracks, stopPreviewRecognition, stopRecorderOnly]);
 
-  const busy = Boolean(isParsing || isTranscribing);
+  const busy = Boolean(isParsing || isTranscribing || listening);
 
   // LuckyPlay canonical palette — see project_luckyplay_design_system memory
   const NAVY = "#1E293B";
@@ -376,7 +375,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
                     animate={{ scale: [1, 1.4, 1], opacity: [1, 0.6, 1] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   />
-                  <span className="text-xs font-bold">Listening…</span>
+                  <span className="text-xs font-bold">Transcribing</span>
                 </>
               ) : listening ? (
                 <>
@@ -386,7 +385,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
                     animate={{ scale: [1, 1.4, 1], opacity: [1, 0.6, 1] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   />
-                  <span className="text-xs font-bold">Recording!</span>
+                  <span className="text-xs font-bold">Recording</span>
                 </>
               ) : (
                 <>
