@@ -286,7 +286,7 @@ export function protocolToLegacyChallengeFields(protocol: ProtocolSpecV2) {
       `Start: ${protocol.timingProtocol.startCondition}`,
       `End: ${protocol.timingProtocol.endCondition}`,
       `Win condition: ${protocol.settlementProtocol.winCondition}`,
-      `AI judging: ${protocol.settlementProtocol.judgeInstructions.join(" ")}`,
+      ...protocol.settlementProtocol.judgeInstructions.map((instruction) => `AI judging: ${instruction}`),
       `Manual review: ${protocol.settlementProtocol.manualReviewTriggers.join(" ")}`,
       `Safety: ${protocol.riskPolicy.warnings.join(" ")}`,
     ].join("\n"),
