@@ -35,7 +35,7 @@ const ALLOWED_ACTIONS: AgentAction[] = [
   "ask_followup", "show_draft", "call_tool", "judge", "confirm", "refuse_or_redirect",
 ];
 const ALLOWED_TOOLS: AgentToolName[] = [
-  "updateDraft", "createChallenge", "acceptChallenge", "generateShareLink",
+  "updateDraft", "compileProtocol", "createChallengeFromProtocol", "createChallenge", "acceptChallenge", "generateShareLink",
   "uploadEvidence", "extractVideoFrames", "runVisionJudge", "confirmVerdict", "settleCredits",
   "findOpenMarkets", "matchMe",
 ];
@@ -170,11 +170,22 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
         baseUrl: input.baseUrl,
         draftState: newDraftState,
         locationSnapshot: input.locationSnapshot ?? null,
+        providerId,
+        model,
       },
       validated.toolArgs ?? {},
     );
     if (result.ok) {
       toolResult = result.data;
+      const toolPatch = extractDraftPatchFromToolResult(result.data);
+      if (toolPatch) {
+        finalPatch = { ...finalPatch, ...toolPatch };
+        finalDraftState = {
+          ...finalDraftState,
+          ...toolPatch,
+          safetyNotes: mergeSafetyNotes(finalDraftState.safetyNotes, toolPatch.safetyNotes),
+        };
+      }
     } else {
       toolError = result.error;
     }
@@ -205,9 +216,9 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
         finalReply = grounded.userVisibleReply || finalReply;
         finalPatch = { ...finalPatch, ...grounded.draftPatch };
         finalDraftState = {
-          ...newDraftState,
+          ...finalDraftState,
           ...grounded.draftPatch,
-          safetyNotes: mergeSafetyNotes(newDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
+          safetyNotes: mergeSafetyNotes(finalDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
         };
         groundedLlmCall = grounded.llmCall;
       }
@@ -299,6 +310,13 @@ async function groundedReplyTurn(args: {
   } catch {
     return null;
   }
+}
+
+function extractDraftPatchFromToolResult(data: unknown): Partial<DraftState> | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const patch = (data as { draftPatch?: unknown }).draftPatch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return null;
+  return patch as Partial<DraftState>;
 }
 
 /** Merge safety notes by union — never lose a redirect. */

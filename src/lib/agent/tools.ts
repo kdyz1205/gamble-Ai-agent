@@ -19,10 +19,11 @@ import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { cleanupChallengeFrameBlobs, cleanupReplacedEvidenceBlobs } from "@/lib/media/blob-cleanup";
 import { evaluateLocationEligibility, parseStoredProtocol, validLatLng } from "@/lib/location-eligibility";
 import { verifyEvidenceAgainstProtocol } from "@/lib/protocol-evidence-verification";
+import { compileProtocolForUser } from "@/lib/protocol-compiler";
 import { ChallengeStatus } from "@/lib/enums";
 import { evaluateAutoSettleEligibility, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
-import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { parseProtocolSpecV2, protocolPreview, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { generateLivenessPhrase } from "@/lib/liveness";
 import {
@@ -41,6 +42,8 @@ export interface ToolContext {
   baseUrl: string; // used to construct share links
   draftState: DraftState;
   locationSnapshot?: { lat: number; lng: number } | null;
+  providerId?: string | null;
+  model?: string | null;
 }
 
 export interface ToolResult {
@@ -163,23 +166,106 @@ function readLocationSnapshot(
 
 /* ─────────────────────────────────────────────── */
 
+async function compileProtocolTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const inputText = String(
+    args.inputText ??
+    args.prompt ??
+    ctx.draftState.rawPrompt ??
+    ctx.draftState.proposition ??
+    ctx.draftState.title ??
+    "",
+  ).trim();
+  if (!inputText) return { ok: false, error: "inputText required" };
+
+  const languageArg = args.language;
+  const language = languageArg === "en" || languageArg === "zh" || languageArg === "auto"
+    ? languageArg
+    : "auto";
+  const compiled = await compileProtocolForUser({
+    userId: ctx.userId,
+    inputText,
+    providerId: typeof args.providerId === "string" ? args.providerId : ctx.providerId ?? undefined,
+    model: typeof args.model === "string" ? args.model : ctx.model ?? undefined,
+    language,
+    context: {
+      surface: "agent_chat",
+      tool: "compileProtocol",
+      locationSnapshot: ctx.locationSnapshot ?? undefined,
+    },
+    route: "/api/agent/respond/compileProtocol",
+  });
+
+  const draftPatch: Partial<DraftState> = {
+    protocol: compiled.protocol,
+    protocolPreview: compiled.preview,
+    rawPrompt: compiled.rawPrompt,
+    readyToCompile: false,
+    missingProtocolFields: [],
+    lastCompilerResult: {
+      providerId: compiled.providerId,
+      model: compiled.model,
+      protocolId: null,
+    },
+    title: compiled.protocol.title,
+    proposition: compiled.protocol.userFacingSummary,
+    participants: compiled.protocol.participantMode,
+    evidenceType: compiled.protocol.evidenceProtocol.mode.includes("photo")
+      ? "photo"
+      : compiled.protocol.evidenceProtocol.mode.includes("video")
+        ? "video"
+        : "text",
+    judgeRule: compiled.protocol.settlementProtocol.winCondition,
+    timeWindow: compiled.protocol.timingProtocol.deadline,
+    safetyNotes: compiled.protocol.riskPolicy.warnings,
+    readyToPublish: compiled.protocol.riskPolicy.allowed,
+  };
+
+  return {
+    ok: true,
+    data: {
+      rawPrompt: compiled.rawPrompt,
+      protocol: compiled.protocol,
+      preview: compiled.preview,
+      source: compiled.source,
+      providerId: compiled.providerId,
+      model: compiled.model,
+      externalApiCharged: compiled.externalApiCharged,
+      providerCall: compiled.providerCall,
+      dailyQuota: compiled.dailyQuota,
+      draftPatch,
+    },
+  };
+}
+
 async function createChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   // Source of truth is the current merged draftState; args can override.
   const draft = ctx.draftState;
-  const title = String(args.title ?? draft.title ?? "").trim();
-  const proposition = String(args.proposition ?? draft.proposition ?? title);
+  const protocolArg = parseProtocolSpecV2(args.protocol);
+  const protocolFromDraft = draft.protocol;
+  const canonicalProtocol = protocolArg ?? protocolFromDraft;
+  const title = String(args.title ?? draft.title ?? canonicalProtocol?.title ?? "").trim();
+  const proposition = String(args.proposition ?? draft.proposition ?? canonicalProtocol?.userFacingSummary ?? title);
   const stake = Math.max(0, Math.floor(Number(args.stake ?? draft.stake ?? 0)));
-  const evidenceType = String(args.evidenceType ?? draft.evidenceType ?? "self_report");
-  const judgeRule = String(args.judgeRule ?? draft.judgeRule ?? "");
-  const timeWindow = String(args.timeWindow ?? draft.timeWindow ?? "24 hours");
+  const evidenceType = String(args.evidenceType ?? draft.evidenceType ?? canonicalProtocol?.evidenceProtocol.mode ?? "self_report");
+  const judgeRule = String(args.judgeRule ?? draft.judgeRule ?? canonicalProtocol?.settlementProtocol.winCondition ?? "");
+  const timeWindow = String(args.timeWindow ?? draft.timeWindow ?? canonicalProtocol?.timingProtocol.deadline ?? "24 hours");
   // Default challenges to PUBLIC so /markets actually has something to show
   // and strangers can find + accept. Agent can override with isPublic=false
   // if the user explicitly says "just me and my friend" / "private".
   const rawIsPublic = args.isPublic;
-  const isPublic = rawIsPublic === undefined ? true : Boolean(rawIsPublic);
+  const protocolPublicDefault = canonicalProtocol
+    ? protocolToLegacyChallengeFields(canonicalProtocol).isPublic
+    : true;
+  const isPublic = rawIsPublic === undefined ? protocolPublicDefault : Boolean(rawIsPublic);
   const locationSnapshot = isPublic ? readLocationSnapshot(args, ctx.locationSnapshot) : null;
 
   if (!title) return { ok: false, error: "title required" };
+  if (canonicalProtocol && !canonicalProtocol.riskPolicy.allowed) {
+    return {
+      ok: false,
+      error: canonicalProtocol.riskPolicy.blockedReason || "This protocol is blocked by the safety policy.",
+    };
+  }
 
   // ── Sanity guard: reject unjudgeable / nonsense challenges ──
   //
@@ -195,7 +281,7 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
     /^(帮我|给我|随便).{0,8}(生成|来|做)/i.test(title);
   const propositionIsJustTitle = !proposition || proposition.trim() === title.trim();
   const judgeRuleTooThin = !judgeRule || judgeRule.trim().length < 20;
-  if (looksLikeMoodOrGarbage || (propositionIsJustTitle && judgeRuleTooThin)) {
+  if (!canonicalProtocol && (looksLikeMoodOrGarbage || (propositionIsJustTitle && judgeRuleTooThin))) {
     return {
       ok: false,
       error:
@@ -205,16 +291,16 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
 
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
   const deadline = parseTimeWindowToDate(timeWindow);
-  const protocolSpec = buildProtocolFromAgentDraft({
-    title,
-    proposition,
-    stake,
-    evidenceType,
-    judgeRule,
-    timeWindow,
-    isPublic,
-    hasDiscoveryLocation: Boolean(locationSnapshot),
-  });
+  const protocolSpec = canonicalProtocol ?? buildProtocolFromAgentDraft({
+      title,
+      proposition,
+      stake,
+      evidenceType,
+      judgeRule,
+      timeWindow,
+      isPublic,
+      hasDiscoveryLocation: Boolean(locationSnapshot),
+    });
   const protocolLegacy = protocolToLegacyChallengeFields(protocolSpec);
   const evidenceDescriptor = [
     evidenceType,
@@ -362,6 +448,19 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
       marketUrl: `${ctx.baseUrl}/challenge/${challenge.id}`,
       challengeUrl: `${ctx.baseUrl}/challenge/${challenge.id}`,
       hasDiscoveryLocation: Boolean(locationSnapshot),
+      draftPatch: {
+        protocol: protocolSpec,
+        protocolPreview: protocolPreview(protocolSpec),
+        rawPrompt: protocolSpec.rawPrompt,
+        readyToCompile: false,
+        missingProtocolFields: [],
+        lastCompilerResult: {
+          providerId: ctx.draftState.lastCompilerResult?.providerId ?? "agent",
+          model: ctx.draftState.lastCompilerResult?.model ?? "agent-draft-to-protocol-v2",
+          protocolId: challenge.id,
+        },
+        readyToPublish: false,
+      },
     },
   };
 }
@@ -1063,6 +1162,8 @@ export async function executeAgentTool(
   args: Record<string, unknown> = {},
 ): Promise<ToolResult> {
   switch (name) {
+    case "compileProtocol":     return compileProtocolTool(ctx, args);
+    case "createChallengeFromProtocol":
     case "createChallenge":    return createChallengeTool(ctx, args);
     case "acceptChallenge":    return acceptChallengeTool(ctx, args);
     case "generateShareLink":  return generateShareLinkTool(ctx, args);

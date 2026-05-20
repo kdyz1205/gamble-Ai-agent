@@ -1,4 +1,5 @@
 import type { DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
+import type { ProtocolPreviewV2, ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 /**
  * Agent Orchestrator — shared types.
@@ -25,6 +26,16 @@ export type AgentAction =
  * the AI decides `show_draft`.
  */
 export interface DraftState {
+  protocol: ProtocolSpecV2 | null;
+  protocolPreview: ProtocolPreviewV2 | null;
+  rawPrompt: string | null;
+  readyToCompile: boolean;
+  missingProtocolFields: string[];
+  lastCompilerResult: {
+    providerId: string;
+    model: string;
+    protocolId?: string | null;
+  } | null;
   title: string | null;
   proposition: string | null;
   participants: string | null;   // human-readable summary ("you + 1 friend")
@@ -39,6 +50,12 @@ export interface DraftState {
 
 export function emptyDraftState(): DraftState {
   return {
+    protocol: null,
+    protocolPreview: null,
+    rawPrompt: null,
+    readyToCompile: false,
+    missingProtocolFields: [],
+    lastCompilerResult: null,
     title: null,
     proposition: null,
     participants: null,
@@ -62,6 +79,8 @@ export interface AgentMessage {
 /** Tool name the agent may request. */
 export type AgentToolName =
   | "updateDraft"          // merge a draft patch (server already did this — LLM can call redundantly but we no-op)
+  | "compileProtocol"      // call the selected AI compiler and return ProtocolSpecV2 without publishing
+  | "createChallengeFromProtocol" // persist Challenge from canonical ProtocolSpecV2
   | "createChallenge"      // persist Challenge row + charge creator stake (atomic)
   | "acceptChallenge"      // opponent seat (returns 409 if full, refunds on race)
   | "generateShareLink"    // just construct the /join/[id] URL

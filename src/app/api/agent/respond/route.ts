@@ -23,6 +23,8 @@ import { runAgentTurn } from "@/lib/agent/orchestrator";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
 import { refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { getProviderById } from "@/lib/llm-providers";
+import { parseProtocolSpecV2, protocolPreview } from "@/lib/protocol-spec-v2";
+import { CompileRequestError, compileProtocolForUser } from "@/lib/protocol-compiler";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -61,7 +63,25 @@ function sanitizeDraftState(raw: unknown): DraftState {
   const base = emptyDraftState();
   if (!raw || typeof raw !== "object") return base;
   const r = raw as Record<string, unknown>;
+  const protocol = parseProtocolSpecV2(r.protocol);
+  const lastCompiler = r.lastCompilerResult && typeof r.lastCompilerResult === "object" && !Array.isArray(r.lastCompilerResult)
+    ? r.lastCompilerResult as Record<string, unknown>
+    : null;
   return {
+    protocol,
+    protocolPreview: protocol ? protocolPreview(protocol) : null,
+    rawPrompt: typeof r.rawPrompt === "string" ? r.rawPrompt : protocol?.rawPrompt ?? null,
+    readyToCompile: !!r.readyToCompile,
+    missingProtocolFields: Array.isArray(r.missingProtocolFields) ? r.missingProtocolFields.filter((x): x is string => typeof x === "string") : [],
+    lastCompilerResult: lastCompiler &&
+      typeof lastCompiler.providerId === "string" &&
+      typeof lastCompiler.model === "string"
+      ? {
+          providerId: lastCompiler.providerId,
+          model: lastCompiler.model,
+          protocolId: typeof lastCompiler.protocolId === "string" ? lastCompiler.protocolId : null,
+        }
+      : null,
     title:         typeof r.title === "string" ? r.title : null,
     proposition:   typeof r.proposition === "string" ? r.proposition : null,
     participants:  typeof r.participants === "string" ? r.participants : null,
@@ -93,6 +113,34 @@ function sanitizeLocationSnapshot(raw: unknown): { lat: number; lng: number } | 
   return { lat, lng };
 }
 
+function detectLanguage(input: string): "en" | "zh" | "auto" {
+  if (/[\u3400-\u9fff]/.test(input)) return "zh";
+  if (/[A-Za-z]/.test(input)) return "en";
+  return "auto";
+}
+
+function shouldDirectCompile(message: string, draftState: DraftState) {
+  if (draftState.protocol) return false;
+  const text = message.trim().toLowerCase();
+  if (!text) return false;
+  if (/\b(do not call|don't call|ask one|follow-up|follow up|join|accept|upload|submit|evidence|judge|verdict|match me)\b/i.test(text)) return false;
+  if (/(加入|接受|提交|证据|判定|匹配|有什么可以玩|找一个挑战)/.test(message)) return false;
+  return /\b(challenge|bet|wager|compete|competition|contest|generate|random|give me)\b/i.test(text) ||
+    /(挑战|赌|比赛|生成|随便|来一个|给我来|给我生成)/.test(message);
+}
+
+function summarizeProviderCall(metadata: unknown) {
+  const raw = metadata && typeof metadata === "object" ? metadata as Record<string, unknown> : {};
+  return {
+    providerId: typeof raw.providerId === "string" ? raw.providerId : "",
+    model: typeof raw.model === "string" ? raw.model : "",
+    responseModel: typeof raw.responseModel === "string" ? raw.responseModel : null,
+    usedApi: raw.usedApi === true,
+    totalTokens: typeof raw.totalTokens === "number" ? raw.totalTokens : null,
+    durationMs: typeof raw.durationMs === "number" ? raw.durationMs : null,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -122,6 +170,83 @@ export async function POST(req: NextRequest) {
   const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : null;
   if (providerId && !getProviderById(providerId)) {
     return Response.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
+  }
+
+  if (shouldDirectCompile(message, draftState)) {
+    try {
+      const compiled = await compileProtocolForUser({
+        userId: user.userId,
+        inputText: message,
+        providerId: providerId ?? undefined,
+        model: model ?? undefined,
+        language: detectLanguage(message),
+        context: {
+          surface: "agent_chat",
+          flow: "direct_protocol_compile",
+          locationSnapshot: locationSnapshot ?? undefined,
+        },
+        route: "/api/agent/respond/direct-compile",
+      });
+      const draftPatch: Partial<DraftState> = {
+        protocol: compiled.protocol,
+        protocolPreview: compiled.preview,
+        rawPrompt: compiled.rawPrompt,
+        readyToCompile: false,
+        missingProtocolFields: [],
+        lastCompilerResult: {
+          providerId: compiled.providerId,
+          model: compiled.model,
+          protocolId: null,
+        },
+        title: compiled.protocol.title,
+        proposition: compiled.protocol.userFacingSummary,
+        participants: compiled.protocol.participantMode,
+        stake: 0,
+        stakeType: "none",
+        evidenceType: compiled.protocol.evidenceProtocol.mode.includes("photo")
+          ? "photo"
+          : compiled.protocol.evidenceProtocol.mode.includes("video")
+            ? "video"
+            : "text",
+        judgeRule: compiled.protocol.settlementProtocol.winCondition,
+        timeWindow: compiled.protocol.timingProtocol.deadline,
+        safetyNotes: compiled.protocol.riskPolicy.warnings,
+        readyToPublish: compiled.protocol.riskPolicy.allowed,
+      };
+      const nextDraftState: DraftState = {
+        ...draftState,
+        ...draftPatch,
+        safetyNotes: [
+          ...new Set([
+            ...draftState.safetyNotes,
+            ...compiled.protocol.riskPolicy.warnings,
+          ]),
+        ],
+      };
+      const blocked = !compiled.protocol.riskPolicy.allowed;
+      const reply = blocked
+        ? compiled.protocol.riskPolicy.safeAlternative
+          ? `${compiled.protocol.riskPolicy.blockedReason || "This challenge is blocked by safety policy."} Safe alternative: ${compiled.protocol.riskPolicy.safeAlternative}`
+          : compiled.protocol.riskPolicy.blockedReason || "This challenge is blocked by safety policy."
+        : `I compiled this into a playable protocol: ${compiled.preview.title}. Review it, then publish when it looks right.`;
+      return Response.json({
+        userVisibleReply: reply,
+        agentAction: blocked ? "refuse_or_redirect" : "show_draft",
+        draftPatch,
+        toolName: null,
+        toolArgs: null,
+        draftState: nextDraftState,
+        llmCall: summarizeProviderCall(compiled.providerCall),
+        dailyQuota: compiled.dailyQuota,
+      });
+    } catch (err) {
+      const status = err instanceof CompileRequestError ? err.status : 500;
+      console.error("[agent/respond] direct compile error:", err);
+      return Response.json(
+        { error: err instanceof Error ? err.message : "Agent protocol compile failed" },
+        { status },
+      );
+    }
   }
 
   const quota = await spendDailyAiQuota(user.userId, "spec");

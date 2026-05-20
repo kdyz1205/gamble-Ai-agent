@@ -800,6 +800,16 @@ export type AgentAction =
   | "ask_followup" | "show_draft" | "call_tool" | "judge" | "confirm" | "refuse_or_redirect";
 
 export interface AgentDraftState {
+  protocol: ProtocolSpecV2 | null;
+  protocolPreview: ProtocolPreviewV2 | null;
+  rawPrompt: string | null;
+  readyToCompile: boolean;
+  missingProtocolFields: string[];
+  lastCompilerResult: {
+    providerId: string;
+    model: string;
+    protocolId?: string | null;
+  } | null;
   title: string | null;
   proposition: string | null;
   participants: string | null;
@@ -852,6 +862,12 @@ export interface AgentResponse {
 
 export function emptyAgentDraftState(): AgentDraftState {
   return {
+    protocol: null,
+    protocolPreview: null,
+    rawPrompt: null,
+    readyToCompile: false,
+    missingProtocolFields: [],
+    lastCompilerResult: null,
     title: null, proposition: null, participants: null,
     stake: null, stakeType: null, evidenceType: null,
     judgeRule: null, timeWindow: null,
