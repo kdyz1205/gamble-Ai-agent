@@ -274,6 +274,84 @@ export async function updateMyLocation(snapshot: LocationSnapshot): Promise<{ su
   });
 }
 
+export async function pingMapLocation(snapshot: LocationSnapshot & {
+  accuracy?: number;
+  mode?: "browsing" | "live_challenge";
+}): Promise<{
+  ok: boolean;
+  mode: "browsing" | "live_challenge";
+  accuracy: number | null;
+  locationPrivacy: "approximate" | "precise_live_only";
+  updatedAt: string;
+}> {
+  return apiFetch("/map/ping", {
+    method: "POST",
+    body: JSON.stringify(snapshot),
+  });
+}
+
+export async function getMapChallenges(params?: {
+  lat?: number; lng?: number; radiusMiles?: number; limit?: number;
+}): Promise<{
+  challenges: Array<ChallengeData & {
+    radar?: {
+      approximateDistanceMeters: number | null;
+      ring: "walk" | "near" | "city" | "global";
+      angle: number | null;
+      locationPrivacy: "approximate";
+    };
+  }>;
+  radar: {
+    mode: "nearby" | "global";
+    radiusMiles: number;
+    limit: number;
+    locationPrivacy: "approximate";
+  };
+  levelMessage: string;
+}> {
+  const q = new URLSearchParams();
+  if (params?.lat !== undefined) q.set("lat", String(params.lat));
+  if (params?.lng !== undefined) q.set("lng", String(params.lng));
+  if (params?.radiusMiles !== undefined) q.set("radiusMiles", String(params.radiusMiles));
+  if (params?.limit) q.set("limit", String(params.limit));
+  return apiFetch(`/map/challenges?${q.toString()}`);
+}
+
+export async function getMapPresence(params: {
+  lat: number; lng: number; radiusMiles?: number;
+}): Promise<{
+  users: Array<{
+    id: string;
+    username: string;
+    image: string | null;
+    approximateDistanceMeters: number;
+    distanceLabel: string;
+    isOnline: boolean;
+    lastSeenAt: string;
+    challengeCount: number;
+  }>;
+  privacy: "approximate";
+  radiusMiles: number;
+}> {
+  const q = new URLSearchParams();
+  q.set("lat", String(params.lat));
+  q.set("lng", String(params.lng));
+  if (params.radiusMiles !== undefined) q.set("radiusMiles", String(params.radiusMiles));
+  return apiFetch(`/map/presence?${q.toString()}`);
+}
+
+export async function checkLocationEligibility(id: string, snapshot: LocationSnapshot): Promise<{
+  eligible: boolean;
+  distanceMeters: number | null;
+  requiredRadiusMeters: number;
+  reason: string;
+}> {
+  return apiFetch(`/challenges/${id}/check-location-eligibility`, {
+    method: "POST",
+    body: JSON.stringify(snapshot),
+  });
+}
+
 export async function getChallenge(id: string): Promise<{ challenge: ChallengeData }> {
   return apiFetch(`/challenges/${id}`);
 }
