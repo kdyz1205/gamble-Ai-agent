@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { getDailyAiQuotaStatus, spendDailyAiQuota } from "@/lib/daily-ai-quota";
+import { logAiUsage } from "@/lib/ai-usage-log";
+import type { LlmCallMetadata } from "@/lib/llm-router";
 
 // Default to classic whisper-1 because it is the most battle-tested multilingual
 // transcription model on OpenAI's platform — Chinese, Spanish, Arabic, Hindi,
@@ -35,6 +38,14 @@ function hitRate(userId: string): { ok: boolean; retryInSec?: number } {
   fresh.push(now);
   userHits.set(userId, fresh);
   return { ok: true };
+}
+
+function hostFromBaseUrl(baseUrl: string) {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -73,6 +84,7 @@ export async function POST(req: NextRequest) {
         language: languageHint || "unknown",
         provider: "preview_fallback",
         usedFallback: true,
+        dailyQuota: await getDailyAiQuotaStatus(user.userId),
       });
     }
 
@@ -82,11 +94,18 @@ export async function POST(req: NextRequest) {
         language: languageHint || "unknown",
         provider: "preview_fallback",
         usedFallback: true,
+        dailyQuota: await getDailyAiQuotaStatus(user.userId),
       });
     }
 
     // Single-shot call builder — reused for primary + fallback so the audio
     // `File` isn't accidentally consumed between attempts.
+    const quota = await spendDailyAiQuota(user.userId, "transcribe");
+    if (!quota.ok) {
+      return Response.json({ error: quota.error, dailyQuota: quota.status }, { status: 429 });
+    }
+    const startedAt = Date.now();
+
     const callWhisper = async (modelName: string, audioFile: File): Promise<Response> => {
       const upstream = new FormData();
       upstream.append("file", audioFile, audioFile.name || "voice.webm");
@@ -114,9 +133,40 @@ export async function POST(req: NextRequest) {
       modelUsed = FALLBACK_MODEL;
     }
 
+    const recordUsage = async (httpStatus: number, extra: Record<string, unknown>) => {
+      const metadata: LlmCallMetadata = {
+        providerId: "openai",
+        providerLabel: "OpenAI",
+        model: modelUsed,
+        requestKind: "audio",
+        usedApi: true,
+        baseUrlHost: hostFromBaseUrl(OPENAI_BASE_URL),
+        httpStatus,
+        responseId: null,
+        responseModel: modelUsed,
+        durationMs: Date.now() - startedAt,
+        responseFormat: "json",
+      };
+      await logAiUsage({
+        userId: user.userId,
+        route: "/api/transcribe",
+        metadata,
+        extra: {
+          fileSizeBytes: file.size,
+          contentType: file.type || null,
+          languageHint: languageHint || null,
+          ...extra,
+        },
+      });
+    };
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[transcribe] upstream failed (${response.status}): ${errorText.slice(0, 300)}`);
+      await recordUsage(response.status, {
+        fallbackUsed: true,
+        upstreamError: errorText.slice(0, 300),
+      });
       return Response.json({
         transcript: previewText,
         language: languageHint || "unknown",
@@ -124,6 +174,7 @@ export async function POST(req: NextRequest) {
         usedFallback: true,
         error: `Upstream transcription failed (${response.status}): ${errorText.slice(0, 200)}`,
         model: modelUsed,
+        dailyQuota: quota.status,
       }, { status: 200 });
     }
 
@@ -132,6 +183,11 @@ export async function POST(req: NextRequest) {
     if (!transcript) {
       console.warn(`[transcribe] empty transcript from ${modelUsed}, lang=${data.language ?? "n/a"}`);
     }
+    await recordUsage(response.status, {
+      fallbackUsed: !data.text,
+      transcriptLength: transcript.length,
+      detectedLanguage: data.language || null,
+    });
 
     return Response.json({
       transcript,
@@ -139,6 +195,7 @@ export async function POST(req: NextRequest) {
       provider: "openai_audio_transcriptions",
       model: modelUsed,
       usedFallback: !data.text,
+      dailyQuota: quota.status,
     });
   } catch (err) {
     console.error("[transcribe] exception:", err);

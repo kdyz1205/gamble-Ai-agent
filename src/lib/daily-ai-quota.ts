@@ -1,6 +1,6 @@
 import prisma from "./db";
 
-export type DailyAiQuotaKind = "spec" | "judge" | "video_judge";
+export type DailyAiQuotaKind = "spec" | "judge" | "video_judge" | "transcribe";
 
 export interface DailyAiQuotaBucket {
   used: number;
@@ -14,11 +14,13 @@ export interface DailyAiQuotaStatus {
   spec: DailyAiQuotaBucket;
   judge: DailyAiQuotaBucket;
   videoJudge: DailyAiQuotaBucket;
+  transcribe: DailyAiQuotaBucket;
 }
 
 const DEFAULT_SPEC_LIMIT = 10;
 const DEFAULT_JUDGE_LIMIT = 3;
 const DEFAULT_VIDEO_JUDGE_LIMIT = 2;
+const DEFAULT_TRANSCRIBE_LIMIT = 20;
 
 function intEnv(name: string, fallback: number) {
   const raw = process.env[name];
@@ -32,6 +34,7 @@ export function dailyAiQuotaLimits() {
     spec: intEnv("BETA_DAILY_SPEC_LIMIT", DEFAULT_SPEC_LIMIT),
     judge: intEnv("BETA_DAILY_JUDGE_LIMIT", DEFAULT_JUDGE_LIMIT),
     videoJudge: intEnv("BETA_DAILY_VIDEO_JUDGE_LIMIT", DEFAULT_VIDEO_JUDGE_LIMIT),
+    transcribe: intEnv("BETA_DAILY_TRANSCRIBE_LIMIT", DEFAULT_TRANSCRIBE_LIMIT),
   };
 }
 
@@ -50,6 +53,7 @@ function bucket(used: number, limit: number): DailyAiQuotaBucket {
 function quotaField(kind: DailyAiQuotaKind) {
   if (kind === "spec") return "specUsed" as const;
   if (kind === "video_judge") return "videoJudgeUsed" as const;
+  if (kind === "transcribe") return "transcribeUsed" as const;
   return "judgeUsed" as const;
 }
 
@@ -57,6 +61,7 @@ function quotaLimit(kind: DailyAiQuotaKind) {
   const limits = dailyAiQuotaLimits();
   if (kind === "spec") return limits.spec;
   if (kind === "video_judge") return limits.videoJudge;
+  if (kind === "transcribe") return limits.transcribe;
   return limits.judge;
 }
 
@@ -78,6 +83,7 @@ export async function getDailyAiQuotaStatus(userId: string): Promise<DailyAiQuot
     spec: bucket(row.specUsed, limits.spec),
     judge: bucket(row.judgeUsed, limits.judge),
     videoJudge: bucket(row.videoJudgeUsed, limits.videoJudge),
+    transcribe: bucket(row.transcribeUsed, limits.transcribe),
   };
 }
 
@@ -103,7 +109,11 @@ export async function spendDailyAiQuota(
   if (result.count > 0) return { ok: true, status };
 
   const retryAt = status.resetsAt;
-  const label = kind === "spec" ? "AI draft generations" : kind === "video_judge" ? "video AI verdicts" : "AI verdicts";
+  const label =
+    kind === "spec" ? "AI draft generations" :
+    kind === "video_judge" ? "video AI verdicts" :
+    kind === "transcribe" ? "voice transcriptions" :
+    "AI verdicts";
   return {
     ok: false,
     status,

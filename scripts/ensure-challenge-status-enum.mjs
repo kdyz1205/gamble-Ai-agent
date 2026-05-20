@@ -57,11 +57,13 @@ async function main() {
         "specUsed" INTEGER NOT NULL DEFAULT 0,
         "judgeUsed" INTEGER NOT NULL DEFAULT 0,
         "videoJudgeUsed" INTEGER NOT NULL DEFAULT 0,
+        "transcribeUsed" INTEGER NOT NULL DEFAULT 0,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "UserDailyQuota_pkey" PRIMARY KEY ("id")
       )
     `);
+    await client.query(`ALTER TABLE "UserDailyQuota" ADD COLUMN IF NOT EXISTS "transcribeUsed" INTEGER NOT NULL DEFAULT 0`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UserDailyQuota_userId_dateKey_key" ON "UserDailyQuota" ("userId", "dateKey")`);
     await client.query(`CREATE INDEX IF NOT EXISTS "UserDailyQuota_dateKey_idx" ON "UserDailyQuota" ("dateKey")`);
     await client.query(`

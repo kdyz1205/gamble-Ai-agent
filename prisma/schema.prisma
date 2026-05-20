@@ -102,6 +102,7 @@ model UserDailyQuota {
   specUsed       Int      @default(0)
   judgeUsed      Int      @default(0)
   videoJudgeUsed Int      @default(0)
+  transcribeUsed Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -523,6 +523,9 @@ export default function Home() {
                           <div className="col-span-2 px-2 py-1 rounded-lg" style={{ background: "#F8FAFC" }}>
                             Video verdicts {dailyQuota.videoJudge.remaining}/{dailyQuota.videoJudge.limit}
                           </div>
+                          <div className="col-span-2 px-2 py-1 rounded-lg" style={{ background: "#F8FAFC" }}>
+                            Voice {dailyQuota.transcribe.remaining}/{dailyQuota.transcribe.limit}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -561,7 +564,7 @@ export default function Home() {
                 Say one sentence. The AI turns it into rules, participants, evidence, judging, invite flow, disputes, and point settlement.
               </p>
               {error && <ErrorBox message={error} />}
-              <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} />
+              <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
               <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
               <OpenChallengeStrip
                 userId={user?.id}

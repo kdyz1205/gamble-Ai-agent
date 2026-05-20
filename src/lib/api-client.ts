@@ -89,6 +89,7 @@ export interface DailyAiQuotaStatus {
   spec: { used: number; limit: number; remaining: number };
   judge: { used: number; limit: number; remaining: number };
   videoJudge: { used: number; limit: number; remaining: number };
+  transcribe: { used: number; limit: number; remaining: number };
 }
 
 export async function getTokenStatus(): Promise<TokenData> {
@@ -943,6 +944,9 @@ export interface TranscriptionResponse {
   language: string;
   provider: string;
   usedFallback: boolean;
+  model?: string;
+  dailyQuota?: DailyAiQuotaStatus;
+  error?: string;
 }
 
 export async function transcribeAudio(

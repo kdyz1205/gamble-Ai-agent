@@ -9,11 +9,12 @@ interface Props {
   isActive: boolean;
   isParsing?: boolean;
   initialValue?: string;
+  onQuotaChange?: (quota: api.DailyAiQuotaStatus) => void;
 }
 
 type VoiceLang = "auto" | "en" | "zh";
 
-export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue }: Props) {
+export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue, onQuotaChange }: Props) {
   const [input, setInput] = useState(initialValue || "");
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
@@ -101,6 +102,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
         languageHint: getLanguageHint(),
         previewText,
       });
+      if (result.dailyQuota) onQuotaChange?.(result.dailyQuota);
 
       const finalText = (result.transcript || previewText).trim();
       if (finalText) {
@@ -118,7 +120,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       setIsTranscribing(false);
       audioChunksRef.current = [];
     }
-  }, [getLanguageHint]);
+  }, [getLanguageHint, onQuotaChange]);
 
   const startPreviewRecognition = useCallback(() => {
     const browserPreviewEnabled = false;

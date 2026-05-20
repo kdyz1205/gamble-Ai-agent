@@ -16,7 +16,7 @@ export interface LlmCallMetadata {
   providerId: string;
   providerLabel: string;
   model: string;
-  requestKind: "text" | "vision";
+  requestKind: "text" | "vision" | "audio";
   usedApi: boolean;
   baseUrlHost?: string | null;
   httpStatus?: number | null;
