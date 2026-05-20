@@ -128,7 +128,9 @@ try {
     },
     title: compiled.protocol?.title,
     evidenceMode: compiled.protocol?.evidenceProtocol?.mode,
+    settlementMode: compiled.protocol?.settlementProtocol?.mode,
     identityRequired: compiled.protocol?.identityProtocol?.required,
+    maxVisionFrames: compiled.protocol?.aiBudgetPolicy?.maxVisionFrames,
   };
   requireCheck(
     proof,
@@ -144,6 +146,18 @@ try {
     proof,
     "compile_returned_protocol_v2",
     compiled.protocol?.version === "2.0" && Boolean(compiled.protocol?.settlementProtocol?.winCondition),
+    proof.compile,
+  );
+  requireCheck(
+    proof,
+    "vision_protocol_settlement_guardrail",
+    compiled.protocol?.evidenceProtocol?.mode !== "same_camera_video" ||
+      (
+        compiled.protocol?.settlementProtocol?.mode === "auto_ai_vision" &&
+        compiled.protocol?.identityProtocol?.required === true &&
+        compiled.protocol?.identityProtocol?.mode === "left_right_assignment" &&
+        compiled.protocol?.aiBudgetPolicy?.maxVisionFrames <= 18
+      ),
     proof.compile,
   );
 

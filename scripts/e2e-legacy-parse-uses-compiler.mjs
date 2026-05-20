@@ -121,6 +121,9 @@ try {
     protocolTitle: parsed.protocol?.title,
     protocolVersion: parsed.protocol?.version,
     evidenceMode: parsed.protocol?.evidenceProtocol?.mode,
+    settlementMode: parsed.protocol?.settlementProtocol?.mode,
+    identityMode: parsed.protocol?.identityProtocol?.mode,
+    maxVisionFrames: parsed.protocol?.aiBudgetPolicy?.maxVisionFrames,
     providerCall: {
       providerId: parsed.providerCall?.providerId,
       model: parsed.providerCall?.model,
@@ -150,6 +153,18 @@ try {
       parsed.parsed.evidenceType === parsed.protocol.evidenceProtocol.mode &&
       typeof parsed.parsed.rules === "string" &&
       parsed.parsed.rules.includes("Win condition:"),
+    proof.parse,
+  );
+  requireCheck(
+    proof,
+    "legacy_parse_vision_settlement_guardrail",
+    parsed.protocol?.evidenceProtocol?.mode !== "same_camera_video" ||
+      (
+        parsed.protocol?.settlementProtocol?.mode === "auto_ai_vision" &&
+        parsed.protocol?.identityProtocol?.required === true &&
+        parsed.protocol?.identityProtocol?.mode === "left_right_assignment" &&
+        parsed.protocol?.aiBudgetPolicy?.maxVisionFrames <= 18
+      ),
     proof.parse,
   );
 

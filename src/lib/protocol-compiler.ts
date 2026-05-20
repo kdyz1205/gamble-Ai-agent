@@ -122,6 +122,79 @@ function extractJson(raw: string) {
   return JSON.parse(match[0]) as unknown;
 }
 
+function isVisionEvidenceMode(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]) {
+  return mode === "same_camera_video" ||
+    mode === "separate_video" ||
+    mode === "live_host_video" ||
+    mode === "photo";
+}
+
+function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
+  const visionEvidence = isVisionEvidenceMode(protocol.evidenceProtocol.mode);
+  const oracleEvidence = protocol.evidenceProtocol.mode === "gps" ||
+    protocol.evidenceProtocol.mode === "public_oracle" ||
+    protocol.evidenceProtocol.mode === "platform_metric";
+  const sameCamera = protocol.evidenceProtocol.mode === "same_camera_video";
+  const riskBlocked = !protocol.riskPolicy.allowed || protocol.riskPolicy.riskLevel === "blocked";
+  const desiredSettlementMode: ProtocolSpecV2["settlementProtocol"]["mode"] =
+    riskBlocked ? "blocked" :
+      protocol.participantMode === "mass_crowd" ? "leaderboard" :
+        visionEvidence ? "auto_ai_vision" :
+          oracleEvidence ? "auto_oracle" :
+            protocol.settlementProtocol.mode;
+  const threshold = Math.max(0.85, Math.min(1, protocol.settlementProtocol.autoSettleConfidenceThreshold || 0.85));
+  const identityThreshold = Math.max(0.85, Math.min(1, protocol.identityProtocol.autoSettlementRequiresIdentityConfidence || 0.85));
+  const requiredMetadata = new Set(protocol.evidenceProtocol.requiredMetadata);
+  if (visionEvidence) {
+    requiredMetadata.add("created_at");
+    requiredMetadata.add("duration");
+    requiredMetadata.add("file_hash");
+    requiredMetadata.add("device_timestamp");
+  }
+  const manualReviewTriggers = new Set(protocol.settlementProtocol.manualReviewTriggers.filter(Boolean));
+  manualReviewTriggers.add("Identity confidence below threshold.");
+  manualReviewTriggers.add("Evidence quality is unclear, insufficient, invalid, edited, or too short.");
+  if (visionEvidence) {
+    manualReviewTriggers.add("Full body, liveness phrase, or continuous attempt cannot be verified.");
+  }
+
+  return {
+    ...protocol,
+    identityProtocol: {
+      ...protocol.identityProtocol,
+      required: protocol.identityProtocol.required || visionEvidence,
+      mode: sameCamera ? "left_right_assignment" : visionEvidence && protocol.identityProtocol.mode === "account_only"
+        ? "liveness_phrase"
+        : protocol.identityProtocol.mode,
+      autoSettlementRequiresIdentityConfidence: identityThreshold,
+      participantBindings: protocol.identityProtocol.participantBindings.map((binding) => ({
+        ...binding,
+        expectedPosition: sameCamera
+          ? binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any"
+          : binding.expectedPosition ?? "any",
+        requiredQrOrCode: binding.requiredQrOrCode || visionEvidence,
+      })),
+    },
+    evidenceProtocol: {
+      ...protocol.evidenceProtocol,
+      requiredMetadata: [...requiredMetadata],
+    },
+    settlementProtocol: {
+      ...protocol.settlementProtocol,
+      mode: desiredSettlementMode,
+      autoSettleConfidenceThreshold: threshold,
+      manualReviewTriggers: [...manualReviewTriggers],
+    },
+    aiBudgetPolicy: {
+      ...protocol.aiBudgetPolicy,
+      estimatedCostTier: visionEvidence ? "medium" : protocol.aiBudgetPolicy.estimatedCostTier,
+      maxVisionFrames: visionEvidence
+        ? Math.min(18, Math.max(8, protocol.aiBudgetPolicy.maxVisionFrames || 12))
+        : 0,
+    },
+  };
+}
+
 function compileSystemPrompt() {
   return `You are GambleAI, an AI challenge protocol compiler.
 
@@ -248,6 +321,7 @@ export async function compileProtocolForUser(input: {
       language,
     });
     if (!protocol) throw new Error("LLM response did not match ProtocolSpecV2");
+    const normalizedProtocol = normalizeCompiledProtocol(protocol);
     await logAiUsage({
       userId: input.userId,
       route: input.route ?? "/api/challenges/compile",
@@ -257,8 +331,8 @@ export async function compileProtocolForUser(input: {
 
     return {
       rawPrompt: inputText,
-      protocol,
-      preview: protocolPreview(protocol),
+      protocol: normalizedProtocol,
+      preview: protocolPreview(normalizedProtocol),
       source: "llm" as const,
       providerId: provider.id,
       model: selectedModel,
