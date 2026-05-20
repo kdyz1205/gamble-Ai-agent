@@ -447,7 +447,7 @@ const cases = [
     id: "non_pushup_video",
     title: "One user submits non-push-up video should not auto-settle",
     expect: "not_settled",
-    metricExpectation: "creator_reps_higher",
+    metricExpectation: "non_pushup_invalid",
     creator: { repCount: 4, durationSec: 60, variant: "clean" },
     opponent: { repCount: 1, durationSec: 60, variant: "non_pushup" },
   },
@@ -673,11 +673,20 @@ try {
     } else {
       requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
       requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
-      if (caseDef.metricExpectation === "creator_reps_higher") {
+      if (caseDef.metricExpectation === "non_pushup_invalid") {
+        const opponentNotes = [
+          ...(judged.videoMetrics?.participantB?.invalidRepNotes ?? []),
+          ...(judged.videoMetrics?.participantB?.antiCheatFlags ?? []),
+          judged.videoMetrics?.participantB?.reasonForManualReview,
+          judged.videoMetrics?.participantB?.unclearReason,
+        ].filter(Boolean).join(" ").toLowerCase();
         requireCheck(
           caseProof,
-          "creator_reps_higher_than_non_pushup",
-          Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? -1),
+          "non_pushup_rejected_or_invalid",
+          judged.evidenceQuality === "invalid" ||
+            judged.settlementRecommendation === "invalid_evidence" ||
+            Number(judged.videoMetrics?.participantB?.validRepCount ?? -1) === 0 ||
+            /\b(no|not|non)\b.*\b(push[-\s]?up|motion|attempt)\b|\bstanding|unrelated|invalid\b/.test(opponentNotes),
           judged.videoMetrics,
         );
       }
