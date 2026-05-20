@@ -126,7 +126,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [protocol, setProtocol] = useState<api.ProtocolSpecV2 | null>(null);
   const [specModel, setSpecModel] = useState("");
-  const [specSource, setSpecSource] = useState<"llm" | "fallback" | "">("");
+  const [specSource, setSpecSource] = useState<"llm" | "safety_prefilter" | "fallback" | "">("");
   const [specProviderId, setSpecProviderId] = useState("");
   const [providerCall, setProviderCall] = useState<unknown>(null);
   const [externalApiCharged, setExternalApiCharged] = useState(false);
@@ -202,12 +202,12 @@ export default function Home() {
           flow: "draft_before_create",
         },
       });
-      if (res.source !== "llm") {
+      if (!res.protocol || res.source === "error") {
         throw new Error("AI protocol compilation did not complete with the selected provider/model. No draft was created.");
       }
       setProtocol(res.protocol);
       setSpecModel(res.model);
-      setSpecSource("llm");
+      setSpecSource(res.source);
       setSpecProviderId(res.providerId || nextPrefs.providerId);
       setProviderCall(res.providerCall ?? null);
       setExternalApiCharged(Boolean(res.externalApiCharged));
@@ -594,8 +594,13 @@ export default function Home() {
                 onSelectVisibility={handleSelectVisibility}
               />
               <div className="grid gap-2 sm:grid-cols-2">
-                <button onClick={handleConfirm} className="py-4 text-sm font-extrabold rounded-full shadow-sm active:scale-95 transition" style={{ background: "#10B981", color: "#FFFFFF" }}>
-                  Confirm challenge
+                <button
+                  onClick={handleConfirm}
+                  disabled={!protocol.riskPolicy.allowed}
+                  className="py-4 text-sm font-extrabold rounded-full shadow-sm active:scale-95 transition disabled:opacity-60"
+                  style={{ background: protocol.riskPolicy.allowed ? "#10B981" : "#CBD5E1", color: "#FFFFFF" }}
+                >
+                  {protocol.riskPolicy.allowed ? "Confirm challenge" : "Blocked by safety policy"}
                 </button>
                 <button onClick={() => setAppState("idle")} className="py-4 text-sm font-extrabold rounded-full border bg-white active:scale-95 transition" style={{ color: "#172033", borderColor: "#E2E8F0" }}>
                   Revise with AI
@@ -829,7 +834,7 @@ function ChallengeSpecPreview({
   protocol: api.ProtocolSpecV2;
   prompt: string;
   model: string;
-  source: "llm" | "fallback" | "";
+  source: "llm" | "safety_prefilter" | "fallback" | "";
   providerId: string;
   externalApiCharged: boolean;
   onSelectInvite: (value: "invite_link" | "nearby" | "same_device") => void;
@@ -875,7 +880,7 @@ function ChallengeSpecPreview({
           <Pill>{protocol.identityProtocol.mode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.locationProtocol.locationPrivacy.replace(/_/g, " ")}</Pill>
           <Pill>vs {opponent}</Pill>
-          {model && <Pill>{source === "llm" ? "AI model" : "fallback"}: {model}</Pill>}
+          {model && <Pill>{source === "llm" ? "AI model" : source === "safety_prefilter" ? "safety gate" : "fallback"}: {model}</Pill>}
           {providerId && <Pill>{externalApiCharged ? "paid API enabled" : "no paid API"}: {providerId}</Pill>}
         </div>
       </div>
@@ -888,7 +893,7 @@ function ChallengeSpecPreview({
         <SpecBlock title="Winner logic" body={protocol.settlementProtocol.winCondition} />
         <SpecBlock title="AI judging" body={protocol.settlementProtocol.judgeInstructions.join(" ")} />
         <SpecBlock title="Manual review triggers" body={protocol.settlementProtocol.manualReviewTriggers.join(" ")} />
-        <SpecBlock title="Safety / risk" body={`${protocol.riskPolicy.riskLevel}. ${protocol.riskPolicy.warnings.join(" ") || "No extra warning."}`} />
+        <SpecBlock title="Safety / risk" body={`${protocol.riskPolicy.riskLevel}. ${protocol.riskPolicy.blockedReason || protocol.riskPolicy.warnings.join(" ") || "No extra warning."}${protocol.riskPolicy.safeAlternative ? ` Safe alternative: ${protocol.riskPolicy.safeAlternative}` : ""}`} />
         <SpecBlock title="AI cost tier" body={`${protocol.aiBudgetPolicy.estimatedCostTier}. Max vision frames: ${protocol.aiBudgetPolicy.maxVisionFrames}. Escalation: ${protocol.aiBudgetPolicy.allowEscalation ? "allowed" : "off"}.`} />
       </div>
       <div className="grid gap-5 px-5 pb-5">

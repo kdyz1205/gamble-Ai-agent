@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
-import { refundDailyAiQuota, spendDailyAiQuota } from "@/lib/daily-ai-quota";
+import { getDailyAiQuotaStatus, refundDailyAiQuota, spendDailyAiQuota } from "@/lib/daily-ai-quota";
 import { logAiUsage } from "@/lib/ai-usage-log";
 import { completeOraclePromptWithMetadata } from "@/lib/llm-router";
 import {
@@ -13,7 +13,80 @@ import {
 } from "@/lib/llm-providers";
 import { protocolPreview, parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { rateLimit } from "@/lib/rate-limit";
-import { evaluateRuleSafety } from "@/lib/rule-safety";
+import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
+
+function safeAlternativeFor(flags: string[]) {
+  if (flags.includes("drugs_or_alcohol")) return "Try a water bottle speed challenge with a clear safety limit.";
+  if (flags.includes("violence")) return "Try a push-up, plank, sprint, trivia, or game-score challenge instead.";
+  if (flags.includes("chance_or_real_money_gambling")) return "Try an internal-credit skill challenge with objective evidence.";
+  if (flags.includes("non_consensual_or_harassment")) return "Create a voluntary challenge where every participant opts in before recording.";
+  if (flags.includes("illegal_activity")) return "Use a legal skill, fitness, learning, or game challenge.";
+  return "Rewrite this as a safe, voluntary, internal-credit skill challenge.";
+}
+
+function blockedProtocol(inputText: string, language: "en" | "zh" | "auto", safety: RuleSafetyDecision) {
+  return {
+    version: "2.0" as const,
+    title: "Challenge blocked by safety policy",
+    userFacingSummary: safety.reason,
+    rawPrompt: inputText,
+    language,
+    participantMode: "head_to_head" as const,
+    outcomeType: "custom" as const,
+    evidenceProtocol: {
+      mode: "manual_review" as const,
+      requiredEvidence: ["No evidence can be accepted until the challenge is rewritten safely."],
+      captureInstructions: ["Create a safe alternative before publishing."],
+      invalidEvidenceRules: ["Unsafe, illegal, coercive, or non-consensual evidence is invalid."],
+      requiredMetadata: ["created_at"],
+    },
+    identityProtocol: {
+      mode: "manual_identity_review" as const,
+      required: true,
+      participantBindings: [
+        { role: "creator" as const, label: "Creator", expectedPosition: "any" as const, requiredQrOrCode: false },
+        { role: "opponent" as const, label: "Opponent", expectedPosition: "any" as const, requiredQrOrCode: false },
+      ],
+      autoSettlementRequiresIdentityConfidence: 1,
+    },
+    locationProtocol: {
+      mode: "none" as const,
+      requiresLiveLocation: false,
+      requiresCoPresence: false,
+      locationPrivacy: "hidden" as const,
+    },
+    timingProtocol: {
+      startCondition: "Blocked until rewritten.",
+      endCondition: "Blocked until rewritten.",
+      deadline: "none",
+      tieBreaker: "none",
+      allowedAttempts: "0",
+    },
+    settlementProtocol: {
+      mode: "blocked" as const,
+      winCondition: "No winner can be decided for a blocked challenge.",
+      judgeInstructions: ["Do not judge or settle this challenge."],
+      autoSettleConfidenceThreshold: 1,
+      manualReviewTriggers: [safety.reason],
+    },
+    riskPolicy: {
+      riskLevel: safety.category === "review" ? "high" as const : "blocked" as const,
+      allowed: false,
+      warnings: [safety.reason],
+      restrictions: ["This challenge cannot be published or settled in its current form."],
+      safeAlternative: safeAlternativeFor(safety.flags),
+      blockedReason: safety.reason,
+    },
+    aiBudgetPolicy: {
+      compileMaxTokens: 0,
+      judgeMaxTokens: 0,
+      maxVisionFrames: 0,
+      allowEscalation: false,
+      estimatedCostTier: "low" as const,
+      requireHumanReviewAboveStake: 0,
+    },
+  };
+}
 
 class CompileRequestError extends Error {
   status: number;
@@ -130,7 +203,23 @@ export async function POST(req: NextRequest) {
 
   const safety = evaluateRuleSafety(inputText);
   if (!safety.allowed) {
-    return Response.json({ error: safety.reason, safety }, { status: 400 });
+    const protocol = blockedProtocol(inputText, language, safety);
+    console.warn("[compile-protocol] blocked by safety prefilter", {
+      userId: user.userId,
+      flags: safety.flags,
+      reason: safety.reason,
+    });
+    return Response.json({
+      rawPrompt: inputText,
+      protocol,
+      preview: protocolPreview(protocol),
+      source: "safety_prefilter",
+      providerId: "safety_prefilter",
+      model: "rule-safety",
+      externalApiCharged: false,
+      providerCall: null,
+      dailyQuota: await getDailyAiQuotaStatus(user.userId),
+    });
   }
 
   const quota = await spendDailyAiQuota(user.userId, "spec");

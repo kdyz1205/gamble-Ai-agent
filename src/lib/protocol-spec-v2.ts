@@ -75,6 +75,16 @@ export type ProtocolPreviewV2 = {
   requiredSteps: string[];
 };
 
+const PARTICIPANT_MODES: ProtocolSpecV2["participantMode"][] = ["solo", "head_to_head", "small_group", "team_vs_team", "mass_crowd", "public_market"];
+const OUTCOME_TYPES: ProtocolSpecV2["outcomeType"][] = ["speed", "count", "completion", "threshold", "yes_no", "ranking", "quality_score", "prediction", "location_checkin", "survival_duration", "custom"];
+const EVIDENCE_MODES: ProtocolSpecV2["evidenceProtocol"]["mode"][] = ["same_camera_video", "separate_video", "live_host_video", "photo", "screenshot", "gps", "receipt", "public_oracle", "platform_metric", "witness", "manual_review"];
+const IDENTITY_MODES: ProtocolSpecV2["identityProtocol"]["mode"][] = ["account_only", "liveness_phrase", "left_right_assignment", "qr_participant_card", "host_checkin", "group_lobby_ticket", "manual_identity_review"];
+const LOCATION_MODES: ProtocolSpecV2["locationProtocol"]["mode"][] = ["none", "nearby_discovery", "same_place_required", "walk_to_join", "geo_fenced_zone", "live_route", "mass_local_event"];
+const LOCATION_PRIVACY: ProtocolSpecV2["locationProtocol"]["locationPrivacy"][] = ["hidden", "approximate", "precise_until_challenge_ends", "precise_live_only"];
+const SETTLEMENT_MODES: ProtocolSpecV2["settlementProtocol"]["mode"][] = ["auto_oracle", "auto_ai_text", "auto_ai_vision", "leaderboard", "host_confirmed", "peer_confirmed", "manual_review", "blocked"];
+const RISK_LEVELS: ProtocolSpecV2["riskPolicy"]["riskLevel"][] = ["safe", "medium", "high", "blocked"];
+const COST_TIERS: ProtocolSpecV2["aiBudgetPolicy"]["estimatedCostTier"][] = ["low", "medium", "high"];
+
 function detectLanguage(input: string): ProtocolSpecV2["language"] {
   if (/[\u3400-\u9fff]/.test(input)) return "zh";
   if (/[A-Za-z]/.test(input)) return "en";
@@ -241,10 +251,39 @@ export function parseProtocolSpecV2(input: unknown): ProtocolSpecV2 | null {
   const candidate = input as Partial<ProtocolSpecV2>;
   if (candidate.version !== "2.0") return null;
   if (typeof candidate.title !== "string" || !candidate.title.trim()) return null;
+  if (typeof candidate.userFacingSummary !== "string" || !candidate.userFacingSummary.trim()) return null;
   if (typeof candidate.rawPrompt !== "string") return null;
-  if (!candidate.evidenceProtocol || !candidate.identityProtocol || !candidate.settlementProtocol || !candidate.riskPolicy) {
-    return null;
-  }
+  if (candidate.language !== "en" && candidate.language !== "zh" && candidate.language !== "auto") return null;
+  if (!candidate.participantMode || !PARTICIPANT_MODES.includes(candidate.participantMode)) return null;
+  if (!candidate.outcomeType || !OUTCOME_TYPES.includes(candidate.outcomeType)) return null;
+
+  const evidence = candidate.evidenceProtocol;
+  if (!evidence || !EVIDENCE_MODES.includes(evidence.mode)) return null;
+  if (!Array.isArray(evidence.requiredEvidence) || !Array.isArray(evidence.captureInstructions) || !Array.isArray(evidence.invalidEvidenceRules) || !Array.isArray(evidence.requiredMetadata)) return null;
+
+  const identity = candidate.identityProtocol;
+  if (!identity || !IDENTITY_MODES.includes(identity.mode)) return null;
+  if (typeof identity.required !== "boolean") return null;
+  if (!Array.isArray(identity.participantBindings)) return null;
+  if (typeof identity.autoSettlementRequiresIdentityConfidence !== "number" || !Number.isFinite(identity.autoSettlementRequiresIdentityConfidence)) return null;
+
+  const location = candidate.locationProtocol;
+  if (!location || !LOCATION_MODES.includes(location.mode) || !LOCATION_PRIVACY.includes(location.locationPrivacy)) return null;
+
+  const timing = candidate.timingProtocol;
+  if (!timing || typeof timing.startCondition !== "string" || typeof timing.endCondition !== "string" || typeof timing.deadline !== "string" || typeof timing.allowedAttempts !== "string") return null;
+
+  const settlement = candidate.settlementProtocol;
+  if (!settlement || !SETTLEMENT_MODES.includes(settlement.mode)) return null;
+  if (typeof settlement.winCondition !== "string" || !Array.isArray(settlement.judgeInstructions) || !Array.isArray(settlement.manualReviewTriggers)) return null;
+  if (typeof settlement.autoSettleConfidenceThreshold !== "number" || !Number.isFinite(settlement.autoSettleConfidenceThreshold)) return null;
+
+  const risk = candidate.riskPolicy;
+  if (!risk || !RISK_LEVELS.includes(risk.riskLevel) || typeof risk.allowed !== "boolean" || !Array.isArray(risk.warnings) || !Array.isArray(risk.restrictions)) return null;
+
+  const budget = candidate.aiBudgetPolicy;
+  if (!budget || typeof budget.compileMaxTokens !== "number" || typeof budget.judgeMaxTokens !== "number" || typeof budget.maxVisionFrames !== "number" || typeof budget.allowEscalation !== "boolean" || !COST_TIERS.includes(budget.estimatedCostTier)) return null;
+
   return candidate as ProtocolSpecV2;
 }
 

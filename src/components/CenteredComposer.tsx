@@ -21,6 +21,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Kept only as a defensive cleanup handle for older browser-preview code.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -67,14 +68,9 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   }, [voiceLang]);
 
   const stopPreviewRecognition = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore
-      }
-      recognitionRef.current = null;
-    }
+    // No browser speech preview. The mic has one source of truth:
+    // recorded audio -> backend transcription. This avoids duplicate
+    // listening/recording states and bad mixed-language guesses.
   }, []);
 
   const stopRecorderOnly = useCallback(() => {
@@ -125,6 +121,8 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   }, [getLanguageHint]);
 
   const startPreviewRecognition = useCallback(() => {
+    const browserPreviewEnabled = false;
+    if (!browserPreviewEnabled) return;
     // Auto mode should not trust browser speech preview. Chrome/Edge often use
     // the OS/browser language, so Mandarin can become English-sounding garbage.
     // Let server transcription decide unless the user explicitly picks EN/中.
@@ -181,7 +179,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     const hasGetUserMedia = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
 
     if (!hasMediaRecorder || !hasGetUserMedia) {
-      alert("当前浏览器不支持录音。");
+      alert("This browser does not support voice recording.");
       return;
     }
 
@@ -316,7 +314,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={isActive ? "✏️ tweak it: \"$20 stake\" or \"video proof\"" : "🎲 I bet Benny's wife fails the DMV test — $10..."}
+          placeholder={isActive ? "Tweak it: \"$20 stake\" or \"video proof\"" : "I bet Alex I can do 20 pushups in one minute..."}
           rows={isActive ? 1 : 2}
           disabled={busy}
           className="w-full bg-transparent px-5 py-4 text-base font-semibold resize-none focus:outline-none placeholder:font-normal"
@@ -352,7 +350,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
                     borderRadius: "999px",
                   }}
                 >
-                  {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "中"}
+                  {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "ZH"}
                 </button>
               ))}
             </div>
@@ -414,7 +412,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
               boxShadow: canSend ? `0 4px 14px 0 ${ORANGE_GLOW}` : "none",
             }}
           >
-            {busy ? "…" : isActive ? "Update ✨" : "Send 🚀"}
+            {busy ? "..." : isActive ? "Update" : "Send"}
           </motion.button>
         </div>
       </div>
