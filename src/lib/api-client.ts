@@ -462,8 +462,11 @@ export async function createChallenge(data: {
   return apiFetch("/challenges", { method: "POST", body: JSON.stringify(data) });
 }
 
-export async function acceptChallenge(id: string): Promise<{ challenge: ChallengeData }> {
-  return apiFetch(`/challenges/${id}/accept`, { method: "POST" });
+export async function acceptChallenge(id: string, snapshot?: LocationSnapshot): Promise<{ challenge: ChallengeData }> {
+  return apiFetch(`/challenges/${id}/accept`, {
+    method: "POST",
+    body: snapshot ? JSON.stringify(snapshot) : undefined,
+  });
 }
 
 export async function issueParticipantBinding(id: string, data?: {

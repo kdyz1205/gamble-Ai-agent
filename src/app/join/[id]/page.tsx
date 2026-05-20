@@ -23,8 +23,20 @@ interface Challenge {
   proofWindow: string | null;
   settlementMode: string;
   fallbackRule: string | null;
+  locationMode?: string | null;
   creator: { id: string; username: string };
 }
+
+type JoinLocationStatus = "idle" | "checking" | "ready" | "blocked" | "unavailable";
+
+const LOCATION_GATED_MODES = new Set([
+  "nearby_discovery",
+  "same_place_required",
+  "walk_to_join",
+  "geo_fenced_zone",
+  "live_route",
+  "mass_local_event",
+]);
 
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
@@ -51,6 +63,9 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const [accepting, setAccepting] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [contractAccepted, setContractAccepted] = useState(false);
+  const [locationSnapshot, setLocationSnapshot] = useState<api.LocationSnapshot | null>(null);
+  const [locationStatus, setLocationStatus] = useState<JoinLocationStatus>("idle");
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     api.getChallenge(id)
@@ -64,6 +79,72 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
       });
   }, [id]);
 
+  const needsLocationGate = (target: Challenge | null) => {
+    if (!target?.locationMode) return false;
+    return LOCATION_GATED_MODES.has(target.locationMode);
+  };
+
+  const requestBrowserLocation = () => new Promise<api.LocationSnapshot>((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("This browser cannot provide location."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => reject(new Error("Location permission is required before joining this nearby challenge.")),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  });
+
+  const verifyLocationForJoin = async (): Promise<api.LocationSnapshot> => {
+    setLocationStatus("checking");
+    setLocationMessage("Checking whether you are close enough to join...");
+    let snapshot: api.LocationSnapshot;
+    try {
+      snapshot = await requestBrowserLocation();
+    } catch (err) {
+      setLocationSnapshot(null);
+      setLocationStatus("unavailable");
+      setLocationMessage(err instanceof Error ? err.message : "Location permission is required before joining this nearby challenge.");
+      throw err;
+    }
+    const result = await api.checkLocationEligibility(id, snapshot);
+    if (!result.eligible) {
+      setLocationSnapshot(null);
+      setLocationStatus("blocked");
+      const distanceLabel = result.distanceMeters == null
+        ? ""
+        : ` You are about ${Math.round(result.distanceMeters)}m away; required radius is ${result.requiredRadiusMeters}m.`;
+      setLocationMessage(`${result.reason}${distanceLabel}`);
+      throw new Error(result.reason);
+    }
+    setLocationSnapshot(snapshot);
+    setLocationStatus("ready");
+    setLocationMessage(result.reason);
+    return snapshot;
+  };
+
+  const handleCheckLocation = async () => {
+    if (!challenge) return;
+    if (!user) {
+      setShowAuth(true);
+      setError("Sign in before checking location.");
+      return;
+    }
+    setError(null);
+    try {
+      await verifyLocationForJoin();
+    } catch (err) {
+      setLocationStatus(err instanceof Error && err.message.includes("permission") ? "unavailable" : "blocked");
+      setError(err instanceof Error ? err.message : "Could not verify your location.");
+    }
+  };
+
   const handleAccept = async () => {
     if (!contractAccepted) {
       setError("Accept the rule contract first.");
@@ -76,7 +157,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
     setAccepting(true);
     setError(null);
     try {
-      await api.acceptChallenge(id);
+      const joinSnapshot = challenge && needsLocationGate(challenge)
+        ? await verifyLocationForJoin()
+        : locationSnapshot;
+      await api.acceptChallenge(id, joinSnapshot ?? undefined);
       setAccepted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to accept challenge.");
@@ -128,6 +212,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const ruleCards = parseChallengeRules(c);
   const compactRules = compactChallengeRules(c);
   const contract = acceptanceContract(c);
+  const locationGateRequired = needsLocationGate(c);
 
   return (
     <div className="min-h-screen relative">
@@ -258,6 +343,49 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 </details>
               )}
             </div>
+
+            {locationGateRequired && (
+              <div
+                className="mb-5 px-4 py-3"
+                style={{
+                  background: locationStatus === "ready" ? `${MINT}18` : "#FFFFFF",
+                  border: `1px solid ${locationStatus === "ready" ? MINT : NAVY_FAINT}`,
+                  borderRadius: "16px",
+                }}
+              >
+                <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>
+                  Location required
+                </p>
+                <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: NAVY }}>
+                  This nearby challenge requires a live location check before joining. Your exact location is used only to confirm eligibility.
+                </p>
+                {locationMessage && (
+                  <p
+                    className="text-xs font-bold leading-relaxed mb-3"
+                    style={{ color: locationStatus === "blocked" || locationStatus === "unavailable" ? ROSE_TEXT : MINT_TEXT }}
+                  >
+                    {locationMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCheckLocation}
+                  disabled={locationStatus === "checking"}
+                  className="px-4 py-2 text-xs font-extrabold disabled:opacity-60 active:scale-95 transition-transform"
+                  style={{
+                    background: locationStatus === "ready" ? MINT : PEACH,
+                    color: locationStatus === "ready" ? MINT_TEXT : PEACH_TEXT,
+                    borderRadius: "9999px",
+                  }}
+                >
+                  {locationStatus === "checking"
+                    ? "Checking..."
+                    : locationStatus === "ready"
+                      ? "Location verified"
+                      : "Check location"}
+                </button>
+              </div>
+            )}
 
             <div className="mb-5 px-4 py-3" style={{ background: CREAM, border: "1px solid #FFE0CC", borderRadius: "16px" }}>
               <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: PEACH_TEXT }}>
