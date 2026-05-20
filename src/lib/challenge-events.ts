@@ -58,6 +58,44 @@ export function issueEventTicketCode() {
   return `GMB-${randomInt(100_000, 1_000_000)}`;
 }
 
+export async function recomputeEventLeaderboard(eventId: string) {
+  const rows = await prisma.leaderboardEntry.findMany({
+    where: {
+      eventId,
+      score: { not: null },
+      validationStatus: { notIn: ["invalid", "rejected", "voided"] },
+    },
+    orderBy: [
+      { score: "desc" },
+      { createdAt: "asc" },
+    ],
+  });
+
+  await prisma.$transaction(
+    rows.map((row, index) =>
+      prisma.leaderboardEntry.update({
+        where: { id: row.id },
+        data: {
+          rank: index + 1,
+          validationStatus: row.validationStatus === "submitted" ? "valid" : row.validationStatus,
+        },
+      }),
+    ),
+  );
+
+  return prisma.leaderboardEntry.findMany({
+    where: { eventId },
+    include: {
+      user: { select: { id: true, username: true, image: true } },
+    },
+    orderBy: [
+      { rank: "asc" },
+      { score: "desc" },
+      { createdAt: "asc" },
+    ],
+  });
+}
+
 export async function createChallengeEventFromProtocol(args: {
   user: AuthUser;
   protocol: ProtocolSpecV2;

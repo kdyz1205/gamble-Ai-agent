@@ -220,12 +220,48 @@ try {
   };
   requireCheck(proof, "leaderboard_route_readable", leaderboard.eventId === eventId && Array.isArray(leaderboard.entries), proof.leaderboard);
 
+  const creatorSubmission = await postJson(creator.jar, `/api/events/${eventId}/submissions`, {
+    score: 10,
+    evidenceId: `creator-evidence-${stamp}`,
+  });
+  const participantSubmission = await postJson(participant.jar, `/api/events/${eventId}/submissions`, {
+    score: 20,
+    evidenceId: `participant-evidence-${stamp}`,
+  });
+  proof.submissions = {
+    creatorScore: creatorSubmission.entry.score,
+    participantScore: participantSubmission.entry.score,
+    creatorStatus: creatorSubmission.entry.validationStatus,
+    participantStatus: participantSubmission.entry.validationStatus,
+  };
+  requireCheck(proof, "event_submissions_created", creatorSubmission.entry.score === 10 && participantSubmission.entry.score === 20, proof.submissions);
+
+  const recomputed = await postJson(creator.jar, `/api/events/${eventId}/leaderboard/recompute`, {});
+  const top = recomputed.entries[0];
+  proof.recompute = {
+    entryCount: recomputed.entries.length,
+    topUserRedacted: top ? "[redacted]" : null,
+    topRank: top?.rank ?? null,
+    topScore: top?.score ?? null,
+    statuses: recomputed.entries.map((entry) => entry.validationStatus),
+  };
+  requireCheck(proof, "leaderboard_recomputed_participant_first", top?.rank === 1 && top?.score === 20, proof.recompute);
+
+  const finalized = await postJson(creator.jar, `/api/events/${eventId}/finalize`, {});
+  proof.finalize = {
+    status: finalized.event.status,
+    entryCount: finalized.entries.length,
+    alreadyFinalized: finalized.alreadyFinalized,
+  };
+  requireCheck(proof, "event_finalized", finalized.event.status === "finalized" && finalized.entries.length === 2, proof.finalize);
+
   const page = await request(null, `/events/${eventId}`);
   proof.page = {
     status: page.res.status,
     containsTitle: typeof page.text === "string" && page.text.includes(protocol.title),
+    containsLeaderboard: typeof page.text === "string" && page.text.includes("Leaderboard"),
   };
-  requireCheck(proof, "event_page_renders", proof.page.status === 200 && proof.page.containsTitle, proof.page);
+  requireCheck(proof, "event_page_renders", proof.page.status === 200 && proof.page.containsTitle && proof.page.containsLeaderboard, proof.page);
 
   proof.eventFlowReady = true;
   console.log(JSON.stringify(proof, null, 2));

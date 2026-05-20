@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { eventPublicInclude } from "@/lib/challenge-events";
 import type { ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import EventJoinButton from "./EventJoinButton";
+import EventScorePanel from "./EventScorePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,16 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     include: eventPublicInclude,
   });
   if (!event) notFound();
+  const leaderboard = await prisma.leaderboardEntry.findMany({
+    where: { eventId: id },
+    include: { user: { select: { id: true, username: true, image: true } } },
+    orderBy: [
+      { rank: "asc" },
+      { score: "desc" },
+      { createdAt: "asc" },
+    ],
+    take: 10,
+  });
 
   const protocol = parseProtocol(event.protocolJson);
   const joinedCount = event._count.entries;
@@ -100,17 +111,22 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-white/85 p-5" style={{ borderColor: "#DDE7F0" }}>
-            <h2 className="text-lg font-black" style={{ color: "#172033" }}>Recent tickets</h2>
-            <div className="mt-4 space-y-3">
-              {event.entries.length > 0 ? event.entries.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "#F8FAFC" }}>
-                  <span className="truncate text-sm font-bold" style={{ color: "#172033" }}>{entry.user.username}</span>
-                  <span className="text-xs font-extrabold" style={{ color: "#047857" }}>{entry.status}</span>
-                </div>
-              )) : (
-                <p className="text-sm font-semibold" style={{ color: "#64748B" }}>No tickets yet.</p>
-              )}
+          <div className="space-y-4">
+            <EventScorePanel eventId={event.id} disabled={!["open", "submissions_open"].includes(event.status)} />
+            <div className="rounded-2xl border bg-white/85 p-5" style={{ borderColor: "#DDE7F0" }}>
+              <h2 className="text-lg font-black" style={{ color: "#172033" }}>Leaderboard</h2>
+              <div className="mt-4 space-y-3">
+                {leaderboard.length > 0 ? leaderboard.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "#F8FAFC" }}>
+                    <span className="truncate text-sm font-bold" style={{ color: "#172033" }}>
+                      #{entry.rank ?? "-"} {entry.user.username}
+                    </span>
+                    <span className="text-xs font-extrabold" style={{ color: "#047857" }}>{entry.score ?? "-"}</span>
+                  </div>
+                )) : (
+                  <p className="text-sm font-semibold" style={{ color: "#64748B" }}>No scores yet.</p>
+                )}
+              </div>
             </div>
           </div>
         </section>

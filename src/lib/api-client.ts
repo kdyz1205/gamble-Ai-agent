@@ -261,6 +261,18 @@ export interface ChallengeEventData {
   _count?: { entries: number; leaderboardEntries: number };
 }
 
+export interface EventLeaderboardEntryData {
+  id: string;
+  eventId: string;
+  userId: string;
+  score: number | null;
+  rank: number | null;
+  evidenceId: string | null;
+  validationStatus: string;
+  createdAt: string;
+  user: { id: string; username: string; image: string | null };
+}
+
 export async function listChallenges(params?: {
   status?: string; type?: string; mine?: boolean; limit?: number; offset?: number;
 }): Promise<{ challenges: ChallengeData[]; total: number }> {
@@ -515,19 +527,32 @@ export async function joinEvent(id: string): Promise<{
 
 export async function getEventLeaderboard(id: string): Promise<{
   eventId: string;
-  entries: Array<{
-    id: string;
-    eventId: string;
-    userId: string;
-    score: number | null;
-    rank: number | null;
-    evidenceId: string | null;
-    validationStatus: string;
-    createdAt: string;
-    user: { id: string; username: string; image: string | null };
-  }>;
+  entries: EventLeaderboardEntryData[];
 }> {
   return apiFetch(`/events/${id}/leaderboard`);
+}
+
+export async function submitEventScore(id: string, data: {
+  score: number;
+  evidenceId?: string | null;
+  validationStatus?: string;
+}): Promise<{ eventId: string; entry: EventLeaderboardEntryData }> {
+  return apiFetch(`/events/${id}/submissions`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function recomputeEventLeaderboard(id: string): Promise<{
+  eventId: string;
+  entries: EventLeaderboardEntryData[];
+}> {
+  return apiFetch(`/events/${id}/leaderboard/recompute`, { method: "POST" });
+}
+
+export async function finalizeEvent(id: string): Promise<{
+  event: ChallengeEventData | null;
+  entries: EventLeaderboardEntryData[];
+  alreadyFinalized: boolean;
+}> {
+  return apiFetch(`/events/${id}/finalize`, { method: "POST" });
 }
 
 export async function acceptChallenge(id: string, snapshot?: LocationSnapshot): Promise<{ challenge: ChallengeData }> {
