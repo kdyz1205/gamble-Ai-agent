@@ -68,6 +68,7 @@ export async function DELETE(
       stake: true,
       title: true,
       participants: { select: { userId: true, status: true } },
+      _count: { select: { evidence: true, judgments: true, judgeJobs: true } },
     },
   });
   if (!challenge) {
@@ -93,6 +94,12 @@ export async function DELETE(
   if (hasOtherParticipant) {
     return Response.json(
       { error: "Can't close this market because another participant has already joined." },
+      { status: 409 },
+    );
+  }
+  if (challenge._count.evidence > 0 || challenge._count.judgments > 0 || challenge._count.judgeJobs > 0) {
+    return Response.json(
+      { error: "Can't delete this challenge because evidence or judgment history already exists. Use dispute/manual resolution instead." },
       { status: 409 },
     );
   }
@@ -123,6 +130,31 @@ export async function DELETE(
         refunded = challenge.stake;
       }
 
+      await tx.activityEvent.updateMany({
+        where: { challengeId: id },
+        data: {
+          challengeId: null,
+          message: `[closed] ${challenge.title}`,
+          metadata: JSON.stringify({
+            deletedChallengeId: id,
+            deletedChallengeTitle: challenge.title,
+            closedByUserId: user.userId,
+            reason: "creator_closed_empty_challenge",
+          }),
+        },
+      });
+      await tx.auditLog.updateMany({
+        where: { challengeId: id },
+        data: {
+          challengeId: null,
+          payload: JSON.stringify({
+            deletedChallengeId: id,
+            deletedChallengeTitle: challenge.title,
+            closedByUserId: user.userId,
+            reason: "creator_closed_empty_challenge",
+          }),
+        },
+      });
       await tx.challenge.delete({ where: { id } });
       return refunded;
     });
