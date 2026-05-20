@@ -337,3 +337,70 @@ export function protocolToLegacyChallengeFields(protocol: ProtocolSpecV2) {
     visibility: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) ? "public" : "invite_only",
   };
 }
+
+export function challengeSpecFromProtocol(protocol: ProtocolSpecV2): ChallengeSpec {
+  const creator = protocol.identityProtocol.participantBindings.find((item) => item.role === "creator");
+  const opponent = protocol.identityProtocol.participantBindings.find((item) => item.role === "opponent");
+  const inviteMode: ChallengeSpec["invite_mode"] =
+    protocol.locationProtocol.mode === "nearby_discovery" || protocol.locationProtocol.mode === "walk_to_join"
+      ? "nearby"
+      : protocol.evidenceProtocol.mode === "same_camera_video"
+        ? "same_device"
+        : "invite_link";
+  const participationMode: ChallengeSpec["participation_mode"] =
+    protocol.evidenceProtocol.mode === "same_camera_video"
+      ? "same_camera"
+      : protocol.locationProtocol.requiresCoPresence
+        ? "in_person"
+        : "remote_async";
+  const publicOrPrivate: ChallengeSpec["public_or_private"] =
+    ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) ||
+    protocol.participantMode === "mass_crowd" ||
+    protocol.participantMode === "public_market"
+      ? "public"
+      : "private";
+
+  return {
+    challenge_title: protocol.title,
+    challenge_type: protocol.outcomeType,
+    participants: [
+      { role: "creator", label: creator?.label || "Creator", user_id: null },
+      { role: "opponent", label: opponent?.label || "Opponent", user_id: null },
+    ],
+    stake_amount: 0,
+    currency_or_points: "credits",
+    public_or_private: publicOrPrivate,
+    invite_mode: inviteMode,
+    participation_mode: participationMode,
+    objective: protocol.userFacingSummary,
+    winning_condition: protocol.settlementProtocol.winCondition,
+    required_evidence: protocol.evidenceProtocol.requiredEvidence.join(" "),
+    video_capture_instructions: protocol.evidenceProtocol.captureInstructions.join(" "),
+    start_condition: protocol.timingProtocol.startCondition,
+    end_condition: protocol.timingProtocol.endCondition,
+    timing_method: protocol.timingProtocol.deadline,
+    valid_repetition_definition: protocol.settlementProtocol.judgeInstructions.find((item) => /valid/i.test(item)) || protocol.settlementProtocol.winCondition,
+    scoring_method: protocol.timingProtocol.tieBreaker || protocol.settlementProtocol.winCondition,
+    allowed_attempts: protocol.timingProtocol.allowedAttempts,
+    anti_cheat_rules: protocol.evidenceProtocol.invalidEvidenceRules,
+    ai_judging_method: protocol.settlementProtocol.judgeInstructions.join(" "),
+    dispute_window: protocol.timingProtocol.deadline,
+    fallback_manual_review: protocol.settlementProtocol.manualReviewTriggers.join(" "),
+    payout_rule: protocol.settlementProtocol.mode === "blocked"
+      ? "No payout. This challenge cannot settle while blocked."
+      : "Winner receives internal credits only after protocol, identity, evidence, outcome, and confidence gates pass.",
+    safety_warning: [
+      ...protocol.riskPolicy.warnings,
+      ...protocol.riskPolicy.restrictions,
+      protocol.riskPolicy.blockedReason,
+    ].filter(Boolean).join(" ") || "Only attempt safe, legal, voluntary challenges.",
+    legal_compliance_flag: protocol.riskPolicy.allowed && protocol.riskPolicy.riskLevel !== "high"
+      ? "internal_points_only"
+      : "requires_legal_review",
+    mode_options: [
+      { label: "Invite link", value: "invite_link", description: "Send a join link to a known opponent." },
+      { label: "Nearby", value: "nearby", description: "Allow nearby users to discover and join." },
+      { label: "Same camera", value: "same_camera", description: "Record both participants on one device with identity binding." },
+    ],
+  };
+}

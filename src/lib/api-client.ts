@@ -423,7 +423,7 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   protocol?: ProtocolSpecV2;
   preview?: ProtocolPreviewV2;
   model: string;
-  source?: "llm" | "fallback" | "error";
+  source?: "llm" | "safety_prefilter" | "fallback" | "error";
   providerId?: string;
   externalApiCharged?: boolean;
   providerCall?: unknown;
