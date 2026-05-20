@@ -14,6 +14,8 @@ const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
 const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const fixtureDir = process.env.REAL_VIDEO_FIXTURE_DIR || "";
+const videoStorage = process.env.E2E_VIDEO_STORAGE || "public_fixture";
+const publicFixtureLivenessPhrase = "GambleAI VIDEO-E2E-STATIC";
 const caseDelayMs = Number(process.env.E2E_ROBUSTNESS_CASE_DELAY_MS || (judgeProvider === "openai" ? 45_000 : 5_000));
 const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 const selectedCaseIds = (process.env.RUN_ROBUSTNESS_CASES || "")
@@ -259,6 +261,24 @@ async function videoForCase(dir, caseDef, side, livenessPhrase) {
   return { path: generatedPath, source: "synthetic_phone_style_fixture" };
 }
 
+function publicFixtureUrlsForCase(caseId) {
+  if (caseId === "clean_a_beats_b" || caseId === "no_visible_role_label") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-a-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-b-static-phrase.mp4`,
+      source: "public_app_fixture",
+    };
+  }
+  if (caseId === "static_loop") {
+    return {
+      creator: `${base}/e2e-fixtures/pushups-c-static-phrase.mp4`,
+      opponent: `${base}/e2e-fixtures/pushups-d-static-phrase.mp4`,
+      source: "public_app_static_fixture",
+    };
+  }
+  return null;
+}
+
 async function uploadVideo(jar, challengeId, filePath, filename) {
   const buffer = await readFile(filePath);
   const file = new File([buffer], filename, { type: "video/mp4" });
@@ -426,6 +446,7 @@ try {
       stamp,
       title: `Robustness: ${caseDef.title} ${stamp}`,
       rawPrompt: `Robustness case ${caseDef.id}: who completes more valid push-ups in a 60-second continuous video attempt?`,
+      livenessPhrase: videoStorage === "public_fixture" ? publicFixtureLivenessPhrase : null,
     });
     const created = await postJson(creator.jar, "/api/challenges", {
       protocol,
@@ -462,30 +483,59 @@ try {
         created.challenge.settlementProtocolMode === "auto_ai_vision",
       caseProof.protocol,
     );
+    if (videoStorage === "public_fixture") {
+      requireCheck(caseProof, "public_fixture_liveness_matches_challenge", livenessPhrase === publicFixtureLivenessPhrase, {
+        livenessPhrase,
+        publicFixtureLivenessPhrase,
+      });
+    }
 
     const accepted = await postJson(opponent.jar, `/api/challenges/${challengeId}/accept`, {});
     requireCheck(caseProof, "accepted_evidence_window_open", accepted.challenge.status === "evidence_window_open", accepted.challenge.status);
 
-    const creatorVideo = await videoForCase(tempDir, caseDef, "creator", livenessPhrase);
-    const opponentVideo = await videoForCase(tempDir, caseDef, "opponent", livenessPhrase);
-    const creatorVideoSize = (await readFile(creatorVideo.path)).length;
-    const opponentVideoSize = (await readFile(opponentVideo.path)).length;
-    caseProof.videoSources = { creator: creatorVideo.source, opponent: opponentVideo.source };
-
-    const creatorBlob = await uploadVideo(creator.jar, challengeId, creatorVideo.path, `${caseDef.id}-creator-${stamp}.mp4`);
-    const opponentBlob = await uploadVideo(opponent.jar, challengeId, opponentVideo.path, `${caseDef.id}-opponent-${stamp}.mp4`);
+    let creatorVideoUrl = "";
+    let opponentVideoUrl = "";
+    let creatorVideoSize = null;
+    let opponentVideoSize = null;
+    let fixtureSource = "";
+    const publicUrls = videoStorage === "public_fixture" ? publicFixtureUrlsForCase(caseDef.id) : null;
+    if (publicUrls) {
+      creatorVideoUrl = publicUrls.creator;
+      opponentVideoUrl = publicUrls.opponent;
+      fixtureSource = publicUrls.source;
+      const [creatorHead, opponentHead] = await Promise.all([
+        fetch(creatorVideoUrl, { method: "HEAD" }),
+        fetch(opponentVideoUrl, { method: "HEAD" }),
+      ]);
+      requireCheck(caseProof, "public_creator_fixture_reachable", creatorHead.ok, { status: creatorHead.status, url: creatorVideoUrl });
+      requireCheck(caseProof, "public_opponent_fixture_reachable", opponentHead.ok, { status: opponentHead.status, url: opponentVideoUrl });
+    } else {
+      if (videoStorage === "public_fixture") {
+        throw new Error(`No public fixture mapping for robustness case ${caseDef.id}; set E2E_VIDEO_STORAGE=blob after Blob storage is available.`);
+      }
+      const creatorVideo = await videoForCase(tempDir, caseDef, "creator", livenessPhrase);
+      const opponentVideo = await videoForCase(tempDir, caseDef, "opponent", livenessPhrase);
+      creatorVideoSize = (await readFile(creatorVideo.path)).length;
+      opponentVideoSize = (await readFile(opponentVideo.path)).length;
+      fixtureSource = `${creatorVideo.source}/${opponentVideo.source}`;
+      const creatorBlob = await uploadVideo(creator.jar, challengeId, creatorVideo.path, `${caseDef.id}-creator-${stamp}.mp4`);
+      const opponentBlob = await uploadVideo(opponent.jar, challengeId, opponentVideo.path, `${caseDef.id}-opponent-${stamp}.mp4`);
+      creatorVideoUrl = creatorBlob.url;
+      opponentVideoUrl = opponentBlob.url;
+    }
+    caseProof.videoSources = { creator: fixtureSource, opponent: fixtureSource };
 
     const evCreator = await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
       type: "video",
-      url: creatorBlob.url,
+      url: creatorVideoUrl,
       description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
-      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: creatorVideo.source, fileSizeBytes: creatorVideoSize },
+      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource, fileSizeBytes: creatorVideoSize },
     });
     const evOpponent = await postJson(opponent.jar, `/api/challenges/${challengeId}/evidence`, {
       type: "video",
-      url: opponentBlob.url,
+      url: opponentVideoUrl,
       description: `Robustness case ${caseDef.id}. Liveness phrase visible: ${livenessPhrase}. Synthetic fixture uses a side-view pose diagram; infer push-up motion from the body moving high/top to low/down and back over time. No direct rep-count label is present.`,
-      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource: opponentVideo.source, fileSizeBytes: opponentVideoSize },
+      metadata: { robustnessCase: caseDef.id, livenessPhrase, fixtureSource, fileSizeBytes: opponentVideoSize },
     });
     caseProof.evidence = {
       creatorEvidenceId: evCreator.evidence.id,

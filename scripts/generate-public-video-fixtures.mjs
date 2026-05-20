@@ -49,7 +49,7 @@ function svgFrame({ role, color, phase, elapsedSec, durationSec }) {
 </svg>`;
 }
 
-async function makeVideo({ filename, role, color, repCount }) {
+async function makeVideo({ filename, role, color, repCount, staticPose = false }) {
   if (!ffmpegPath) throw new Error("ffmpeg-static did not resolve an ffmpeg binary");
   const durationSec = 60;
   const tmp = path.join(tmpdir(), `gamble-public-fixture-${filename}-${Date.now()}`);
@@ -57,7 +57,7 @@ async function makeVideo({ filename, role, color, repCount }) {
   try {
     const framePaths = [];
     for (let i = 0; i < durationSec; i += 1) {
-      const phase = pushupPhaseAt(repCount, durationSec, i);
+      const phase = staticPose ? "top" : pushupPhaseAt(repCount, durationSec, i);
       const svg = svgFrame({ role, color, phase, elapsedSec: i, durationSec });
       const framePath = path.join(tmp, `${String(i).padStart(2, "0")}.png`);
       await sharp(Buffer.from(svg)).png().toFile(framePath);
@@ -99,6 +99,20 @@ const outputs = [
     role: "PARTICIPANT B",
     color: "#b91c1c",
     repCount: 1,
+  }),
+  await makeVideo({
+    filename: "pushups-c-static-phrase.mp4",
+    role: "PARTICIPANT A",
+    color: "#047857",
+    repCount: 1,
+    staticPose: true,
+  }),
+  await makeVideo({
+    filename: "pushups-d-static-phrase.mp4",
+    role: "PARTICIPANT B",
+    color: "#b91c1c",
+    repCount: 1,
+    staticPose: true,
   }),
 ];
 
