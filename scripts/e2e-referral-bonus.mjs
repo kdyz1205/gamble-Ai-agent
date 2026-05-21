@@ -143,6 +143,8 @@ try {
   });
   const inviterAfter = await getJson(inviter.jar, "/api/credits");
   const inviteeAfter = await getJson(invitee.jar, "/api/credits");
+  const inviterStats = await getJson(inviter.jar, "/api/referrals/stats");
+  const inviteeStats = await getJson(invitee.jar, "/api/referrals/stats");
 
   const inviterBonus = inviterAfter.transactions.find((tx) => tx.type === "bonus" && String(tx.description || "").includes(`Referral referrer bonus: ${invitee.username}`));
   const inviteeBonus = inviteeAfter.transactions.find((tx) => tx.type === "bonus" && String(tx.description || "").includes(`Referral invitee bonus: invited by ${inviter.username}`));
@@ -163,6 +165,10 @@ try {
   proof.ledger = {
     inviterBonus: inviterBonus ? { amount: inviterBonus.amount, balanceAfter: inviterBonus.balanceAfter, description: inviterBonus.description } : null,
     inviteeBonus: inviteeBonus ? { amount: inviteeBonus.amount, balanceAfter: inviteeBonus.balanceAfter, description: inviteeBonus.description } : null,
+  };
+  proof.stats = {
+    inviter: inviterStats,
+    invitee: inviteeStats,
   };
 
   requireCheck(
@@ -194,6 +200,14 @@ try {
     "self_referral_blocked",
     selfClaim.claimed === false && selfClaim.reason === "self_referral_blocked",
     selfClaim,
+  );
+  requireCheck(
+    proof,
+    "referral_stats_track_invites_and_bonus",
+    inviterStats.invitedCount >= 1 &&
+      inviterStats.bonusEarned >= 10 &&
+      String(inviterStats.inviteLink || "").includes(`ref=${encodeURIComponent(inviter.username)}`),
+    inviterStats,
   );
 
   console.log(JSON.stringify(proof, null, 2));

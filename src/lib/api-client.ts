@@ -131,6 +131,18 @@ export async function claimReferral(data: {
   });
 }
 
+export async function getReferralStats(): Promise<{
+  inviteLink: string | null;
+  invitedCount: number;
+  bonusEarned: number;
+  recentInvites: Array<{
+    username: string | null;
+    createdAt: string;
+  }>;
+}> {
+  return apiFetch("/referrals/stats");
+}
+
 export async function linkWallet(address: string): Promise<{ success: boolean }> {
   return apiFetch("/tokens/link-wallet", {
     method: "POST",

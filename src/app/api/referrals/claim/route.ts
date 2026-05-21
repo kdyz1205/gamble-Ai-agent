@@ -91,6 +91,7 @@ export async function POST(req: Request) {
       ref,
       referrerId: inviter.id,
       inviteeId: currentUser.id,
+      inviteeUsername: currentUser.username,
       campaign,
       source,
       landingUrl,

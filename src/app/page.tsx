@@ -25,6 +25,33 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:claude|anthropic)$/i, providerId: "anthropic" },
 ];
 
+const LAUNCH_PROMPTS = [
+  {
+    title: "Push-up battle",
+    prompt: "I want to challenge a friend: who can do more valid push-ups in 60 seconds?",
+  },
+  {
+    title: "Plank hold",
+    prompt: "Create a two-person challenge for who can hold a plank longer with video evidence.",
+  },
+  {
+    title: "Typing race",
+    prompt: "I want to bet a friend who can type a 100-word paragraph faster with a screenshot proof.",
+  },
+  {
+    title: "Study streak",
+    prompt: "Make a 3-day study streak challenge where both people submit daily proof.",
+  },
+  {
+    title: "Nearby check-in",
+    prompt: "Create a nearby public challenge where people walk to the location and check in.",
+  },
+  {
+    title: "Game score",
+    prompt: "I want to challenge someone on who gets the higher score in one game round using screenshot evidence.",
+  },
+];
+
 const REFERRAL_STORAGE_KEY = "gambleai_referral";
 const GTM_STORAGE_KEY = "gambleai_gtm";
 
@@ -179,6 +206,11 @@ export default function Home() {
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
   const [referralNotice, setReferralNotice] = useState("");
   const [personalInviteLink, setPersonalInviteLink] = useState("");
+  const [referralStats, setReferralStats] = useState<{
+    invitedCount: number;
+    bonusEarned: number;
+    inviteLink: string | null;
+  } | null>(null);
 
   const reset = useCallback(() => {
     setAppState("idle");
@@ -214,6 +246,32 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setPersonalInviteLink(user?.username ? withLaunchTracking("/", user.username) : "");
+  }, [user?.username]);
+
+  const refreshReferralStats = useCallback(async () => {
+    if (!user?.id) {
+      setReferralStats(null);
+      return;
+    }
+    try {
+      const stats = await api.getReferralStats();
+      setReferralStats({
+        invitedCount: stats.invitedCount,
+        bonusEarned: stats.bonusEarned,
+        inviteLink: stats.inviteLink,
+      });
+      if (stats.inviteLink) setPersonalInviteLink(stats.inviteLink);
+    } catch {
+      setReferralStats(null);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void refreshReferralStats();
+  }, [refreshReferralStats]);
+
+  useEffect(() => {
     if (!user?.id) return;
     const stored = readStoredGtm();
     if (!stored.ref) return;
@@ -231,15 +289,12 @@ export default function Home() {
         if (res.claimed) {
           setReferralNotice(`Invite bonus unlocked: +${res.bonus ?? 10} pts from ${res.referrer?.username || "your friend"}.`);
           await updateSession();
+          await refreshReferralStats();
         }
       })
       .catch(() => null);
     return () => { cancelled = true; };
-  }, [updateSession, user?.id]);
-
-  useEffect(() => {
-    setPersonalInviteLink(user?.username ? withLaunchTracking("/", user.username) : "");
-  }, [user?.username]);
+  }, [refreshReferralStats, updateSession, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -297,6 +352,11 @@ export default function Home() {
       setAppState("idle");
     }
   }, [oraclePrefs, user]);
+
+  const handleLaunchPrompt = useCallback((value: string) => {
+    setPrompt(value);
+    void handleGenerate(value);
+  }, [handleGenerate]);
 
   const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
     const provider = getProviderById(providerId);
@@ -558,6 +618,22 @@ export default function Home() {
       .catch(() => done("Clipboard is blocked. Use the visible invite link."));
   }, [personalInviteLink]);
 
+  const sharePublishedChallenge = useCallback(async () => {
+    if (!shareLink || !protocol) return;
+    const text = `Join my AI-judged challenge: ${protocol.title}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: protocol.title, text, url: shareLink });
+        return;
+      } catch {
+        // User cancelled or share sheet failed; fall through to X intent.
+      }
+    }
+    const intent = new URL("https://twitter.com/intent/tweet");
+    intent.searchParams.set("text", `${text}\n${shareLink}`);
+    window.open(intent.toString(), "_blank", "noopener,noreferrer");
+  }, [protocol, shareLink]);
+
   return (
     <div className="relative min-h-screen flex flex-col" onClick={() => showProfile && setShowProfile(false)}>
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
@@ -657,11 +733,14 @@ export default function Home() {
               </p>
               {error && <ErrorBox message={error} />}
               <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
+              <LaunchPromptStrip onPick={handleLaunchPrompt} />
               <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
               {user && (
                 <LaunchInviteCard
                   inviteLink={personalInviteLink}
                   notice={referralNotice}
+                  invitedCount={referralStats?.invitedCount ?? 0}
+                  bonusEarned={referralStats?.bonusEarned ?? 0}
                   onCopy={copyPersonalInvite}
                 />
               )}
@@ -743,8 +822,9 @@ export default function Home() {
                   {copyNotice}
                 </p>
               )}
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-4">
                 <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>{publishedKind === "event" ? "Event lobby" : "Challenge room"}</button>
+                <button type="button" onClick={sharePublishedChallenge} className="py-3 text-sm font-bold rounded-full" style={{ background: "#A7F3D0", color: "#065F46" }}>Share now</button>
                 <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
                 <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
               </div>
@@ -761,10 +841,14 @@ export default function Home() {
 function LaunchInviteCard({
   inviteLink,
   notice,
+  invitedCount,
+  bonusEarned,
   onCopy,
 }: {
   inviteLink: string;
   notice: string;
+  invitedCount: number;
+  bonusEarned: number;
   onCopy: () => void;
 }) {
   return (
@@ -774,6 +858,9 @@ function LaunchInviteCard({
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Beta invite</p>
           <p className="text-sm font-bold" style={{ color: "#172033" }}>
             Give a friend +10 pts. You get +10 pts when they join.
+          </p>
+          <p className="mt-1 text-xs font-semibold" style={{ color: "#64748B" }}>
+            {invitedCount} joined from your link · {bonusEarned} pts earned
           </p>
         </div>
         <button
@@ -796,6 +883,35 @@ function LaunchInviteCard({
           {notice}
         </p>
       )}
+    </section>
+  );
+}
+
+function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
+          One-tap challenge ideas
+        </p>
+        <p className="hidden text-xs font-semibold sm:block" style={{ color: "#64748B" }}>
+          Built for first-time users to publish faster.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {LAUNCH_PROMPTS.map((item) => (
+          <button
+            key={item.title}
+            type="button"
+            onClick={() => onPick(item.prompt)}
+            className="rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition active:scale-[0.99]"
+            style={{ borderColor: "#E2E8F0" }}
+          >
+            <p className="text-sm font-extrabold" style={{ color: "#172033" }}>{item.title}</p>
+            <p className="mt-1 line-clamp-2 text-xs font-semibold" style={{ color: "#64748B" }}>{item.prompt}</p>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
