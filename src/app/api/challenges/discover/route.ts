@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db";
 import {
   discoveryMetaForChallenge,
@@ -28,8 +29,20 @@ const CHALLENGE_SELECT = {
   _count: { select: { evidence: true, judgments: true } },
 } as const;
 
+function discoverableWhere(now: Date): Prisma.ChallengeWhereInput {
+  return {
+    status: { in: OPEN_FOR_OPPONENT_STATUSES.map(String) },
+    isPublic: true,
+    // Public nearby discovery is for currently playable challenges only.
+    // Old smoke/E2E rows and no-deadline drafts should remain visible to their
+    // creators in "My challenges", but they must not block the public join strip.
+    deadline: { gt: now },
+  };
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
+  const now = new Date();
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "24", 10), 50);
   const latRaw = url.searchParams.get("lat");
   const lngRaw = url.searchParams.get("lng");
@@ -45,7 +58,7 @@ export async function GET(req: NextRequest) {
   if (hasGeo) {
     // Fetch a larger pool so we can sort by distance then trim.
     const pool = await prisma.challenge.findMany({
-      where: { status: { in: [...OPEN_FOR_OPPONENT_STATUSES] }, isPublic: true },
+      where: discoverableWhere(now),
       include: {
         ...CHALLENGE_SELECT,
         // Include creator geo fields for distance calc only — stripped below.
@@ -96,7 +109,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 2: global fallback ──────────────────────────────────────────────
   const globalRows = await prisma.challenge.findMany({
-    where: { status: { in: [...OPEN_FOR_OPPONENT_STATUSES] }, isPublic: true },
+    where: discoverableWhere(now),
     include: CHALLENGE_SELECT,
     orderBy: [{ stake: "desc" }, { createdAt: "desc" }],
     take: limit,
