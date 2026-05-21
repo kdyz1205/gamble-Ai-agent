@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 
 const TEST_PREFIX_RE =
   /^(codex|test|e2e|radar|agent|rob|rej|vid|video|discover|close|manual|smoke|diag|load|lt|luckyplay)[._-]?/i;
+const INTERNAL_TEST_DOMAINS = new Set(["example.com", "luckyplay.test", "test.local", "gambleai.local", "t.io"]);
 
 function redactEmail(email: string) {
   const [local = "", domain = ""] = email.split("@");
@@ -30,14 +31,14 @@ function redactText(value: string | null) {
 function isLikelyTestUser(user: { email: string; username: string }) {
   const local = user.email.split("@")[0] ?? "";
   const domain = user.email.split("@")[1]?.toLowerCase() ?? "";
-  const isTestDomain = domain === "example.com" || domain.endsWith(".test");
+  const isTestDomain = INTERNAL_TEST_DOMAINS.has(domain) || domain.endsWith(".test");
   return isTestDomain || TEST_PREFIX_RE.test(local) || TEST_PREFIX_RE.test(user.username);
 }
 
 function testReason(user: { email: string; username: string }) {
   const local = user.email.split("@")[0] ?? "";
   const domain = user.email.split("@")[1]?.toLowerCase() ?? "";
-  if (domain === "example.com") return "example.com";
+  if (INTERNAL_TEST_DOMAINS.has(domain)) return domain;
   if (domain.endsWith(".test")) return ".test-domain";
   if (TEST_PREFIX_RE.test(local)) return "email-prefix";
   if (TEST_PREFIX_RE.test(user.username)) return "username-prefix";
