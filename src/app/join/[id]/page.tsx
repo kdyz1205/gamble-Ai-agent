@@ -203,6 +203,18 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
         >
           Create a new challenge
         </Link>
+        <Link
+          href="/markets"
+          className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
+          style={{
+            color: NAVY,
+            background: "#FFFFFF",
+            border: `1px solid ${NAVY_FAINT}`,
+            borderRadius: "9999px",
+          }}
+        >
+          Back to challenge manager
+        </Link>
       </div>
     );
   }
@@ -218,8 +230,24 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
     <div className="min-h-screen relative">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          GambleAI
         </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/markets"
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
+            style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
+          >
+            My challenges
+          </Link>
+          <Link
+            href="/radar"
+            className="hidden text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform sm:inline-block"
+            style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
+          >
+            Radar
+          </Link>
+        </div>
       </header>
 
       <main className="relative z-10 max-w-lg mx-auto px-4 py-6">
@@ -461,7 +489,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               ) : !isOpenForOpponentStatus(c.status) ? (
                 <motion.div
                   key="closed"
-                  className="text-center py-4"
+                  className="text-center py-4 px-4"
                   style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}
                 >
                   <p className="text-sm font-bold" style={{ color: NAVY_DIM }}>
@@ -473,6 +501,22 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                           ? "Already settled."
                           : "This challenge is no longer open."}
                   </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Link
+                      href={`/challenge/${id}`}
+                      className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
+                      style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
+                    >
+                      Open challenge room
+                    </Link>
+                    <Link
+                      href="/markets"
+                      className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
+                      style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
+                    >
+                      Back to manager
+                    </Link>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.button

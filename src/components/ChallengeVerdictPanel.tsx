@@ -515,7 +515,7 @@ export default function ChallengeVerdictPanel({
     setVerdictErr("");
     try {
       await api.deleteChallenge(challenge.id);
-      window.location.href = "/";
+      window.location.href = "/markets";
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "Could not close this challenge");
     } finally {
@@ -558,9 +558,24 @@ export default function ChallengeVerdictPanel({
 
   if (loadErr) {
     return (
-      <div className="rounded-2xl p-5 text-sm font-bold glow-danger"
-           style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "16px" }}>
-        {loadErr}
+      <div
+        className="rounded-2xl p-5 text-sm font-bold glow-danger"
+        style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "16px" }}
+      >
+        <p>{loadErr}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/markets" className="rounded-full bg-white px-4 py-2 text-xs font-black" style={{ color: "#1E293B" }}>
+            Back to challenge manager
+          </a>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="rounded-full bg-white px-4 py-2 text-xs font-black"
+            style={{ color: "#991B1B" }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

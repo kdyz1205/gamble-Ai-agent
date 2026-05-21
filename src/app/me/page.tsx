@@ -37,13 +37,24 @@ export default function MePage() {
 
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
 
-  useEffect(() => {
+  const loadMine = () => {
     if (!user) return;
+    setLoading(true);
+    setMessage(null);
     api.listChallenges({ mine: true, limit: 50 })
       .then(res => { setMarkets(res.challenges); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setMessage("Could not load your challenge history. Refresh and try again.");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadMine();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   if (!user) {
@@ -71,14 +82,29 @@ export default function MePage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>LuckyPlay</Link>
-        <Link href="/" className="text-xs font-bold px-4 py-2"
-          style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          + New Market
-        </Link>
+        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>GambleAI</Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadMine}
+            disabled={loading}
+            className="text-xs font-bold px-3 py-2 disabled:opacity-50"
+            style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
+          >
+            Refresh
+          </button>
+          <Link href="/markets" className="text-xs font-bold px-3 py-2"
+            style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
+            Manager
+          </Link>
+          <Link href="/" className="text-xs font-bold px-4 py-2"
+            style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
+            + New
+          </Link>
+        </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6">
+      <main className="max-w-3xl mx-auto px-4 py-6">
         {/* Profile card */}
         <div className="mb-6 p-5 lp-glass"
           style={{ borderRadius: "28px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}>
@@ -113,9 +139,14 @@ export default function MePage() {
 
         {/* Markets section */}
         <div className="mb-3 flex items-center justify-between px-1">
-          <h2 className="text-base font-bold" style={{ color: NAVY }}>Your Markets</h2>
+          <h2 className="text-base font-bold" style={{ color: NAVY }}>Your challenges</h2>
           <span className="text-xs font-semibold" style={{ color: NAVY_DIM }}>{markets.length} total</span>
         </div>
+        {message && (
+          <p className="mb-3 rounded-2xl border bg-white px-4 py-3 text-xs font-bold" style={{ color: NAVY_DIM, borderColor: NAVY_FAINT }}>
+            {message}
+          </p>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
@@ -146,12 +177,12 @@ export default function MePage() {
           <div className="text-center py-12 px-6 shadow-sm"
             style={{ background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "20px" }}>
             <p className="text-sm mb-4" style={{ color: NAVY_DIM }}>
-              {tab === "all" ? "No markets yet — make a friendly call!" : `No ${tab} markets right now.`}
+              {tab === "all" ? "No challenges yet. Create one from the composer." : `No ${tab} challenges right now.`}
             </p>
             {tab === "all" && (
               <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold"
                 style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-                ✨ Create your first market
+                Create your first challenge
               </Link>
             )}
           </div>

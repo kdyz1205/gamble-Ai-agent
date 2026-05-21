@@ -65,16 +65,29 @@ export default function RadarPage() {
   const loadRadar = useCallback(async (nextSnapshot: api.LocationSnapshot | null) => {
     setLoading(true);
     try {
-      const [challengeRes, presenceRes] = await Promise.all([
+      const [challengeResult, presenceResult] = await Promise.allSettled([
         api.getMapChallenges({ ...(nextSnapshot ?? {}), radiusMiles: 10, limit: 30 }),
         nextSnapshot ? api.getMapPresence({ ...nextSnapshot, radiusMiles: 5 }).catch(() => ({ users: [], privacy: "approximate" as const, radiusMiles: 5 })) : Promise.resolve({ users: [], privacy: "approximate" as const, radiusMiles: 5 }),
       ]);
+      if (challengeResult.status !== "fulfilled") {
+        console.warn("[radar] challenge load failed", challengeResult.reason);
+        setChallenges([]);
+        setPresence([]);
+        setMessage("Challenge radar is temporarily unavailable. You can still create or manage challenges.");
+        setStatus("error");
+        return;
+      }
+      const challengeRes = challengeResult.value;
+      const presenceRes = presenceResult.status === "fulfilled"
+        ? presenceResult.value
+        : { users: [], privacy: "approximate" as const, radiusMiles: 5 };
       setChallenges(challengeRes.challenges);
       setPresence(presenceRes.users);
       setMessage(challengeRes.levelMessage);
       setStatus(nextSnapshot ? "ready" : "global");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Radar could not load.");
+      console.warn("[radar] load failed", err);
+      setMessage("Challenge radar is temporarily unavailable. You can still create or manage challenges.");
       setStatus("error");
     } finally {
       setLoading(false);
@@ -117,7 +130,15 @@ export default function RadarPage() {
             <h1 className="text-2xl font-black md:text-3xl">Challenge Radar</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Link className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold" href="/markets">Markets</Link>
+            <button
+              type="button"
+              onClick={() => { void loadRadar(snapshot); }}
+              disabled={loading}
+              className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold disabled:opacity-50"
+            >
+              Refresh
+            </button>
+            <Link className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold" href="/markets">My challenges</Link>
             <Link className="rounded-full bg-[#111827] px-4 py-2 text-sm font-bold text-white" href="/">Create</Link>
           </div>
         </header>

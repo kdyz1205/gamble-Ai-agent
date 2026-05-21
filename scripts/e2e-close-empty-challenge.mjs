@@ -223,7 +223,7 @@ try {
   await page.goto(`${base}/markets`, { waitUntil: "networkidle" });
   await page.getByText(title, { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
   const card = page.locator("article").filter({ hasText: title }).first();
-  await card.getByRole("button", { name: /^Close$/ }).click();
+  await card.getByRole("button", { name: /^Close empty$/ }).click();
   await page.getByText("Closed. 1 credits refunded.", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
   await card.waitFor({ state: "detached", timeout: 20_000 }).catch(async () => {
     await page.waitForTimeout(500);
@@ -332,17 +332,18 @@ try {
       opponentAfterAccept: joinedAfterAcceptOpponent.credits,
     },
   );
-  await page.goto(`${base}/challenge/${joinedCreated.challenge.id}`, { waitUntil: "networkidle" });
-  await page.getByText("Manage challenge", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-  await page.getByRole("button", { name: "Cancel and refund" }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.goto(`${base}/markets`, { waitUntil: "networkidle" });
+  await page.getByText(joinedCreated.challenge.title, { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+  const joinedCard = page.locator("article").filter({ hasText: joinedCreated.challenge.title }).first();
+  await joinedCard.getByRole("button", { name: /^Cancel & refund$/ }).waitFor({ state: "visible", timeout: 20_000 });
   requireCheck(
     proof,
-    "detail_manage_panel_joined_cancel_visible",
+    "manager_joined_cancel_refund_visible",
     true,
     { challengeId: joinedCreated.challenge.id },
   );
-  await page.getByRole("button", { name: "Cancel and refund" }).click();
-  await page.getByText("Refunded", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+  await joinedCard.getByRole("button", { name: /^Cancel & refund$/ }).click();
+  await page.getByText("Cancelled. Credits refunded.", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
   const joinedAfterCancel = await getJson(creator.jar, `/api/challenges/${joinedCreated.challenge.id}`);
   const joinedAfterCancelCreator = await getJson(creator.jar, "/api/credits");
   const joinedAfterCancelOpponent = await getJson(opponent.jar, "/api/credits");
