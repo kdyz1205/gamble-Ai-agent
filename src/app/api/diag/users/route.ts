@@ -11,7 +11,7 @@ import prisma from "@/lib/db";
 export const runtime = "nodejs";
 
 const TEST_PREFIX_RE =
-  /^(codex|test|e2e|radar|agent|rob|rej|vid|video|discover|close|manual|smoke|diag|load)[._-]?/i;
+  /^(codex|test|e2e|radar|agent|rob|rej|vid|video|discover|close|manual|smoke|diag|load|lt|luckyplay)[._-]?/i;
 
 function redactEmail(email: string) {
   const [local = "", domain = ""] = email.split("@");
@@ -29,8 +29,19 @@ function redactText(value: string | null) {
 
 function isLikelyTestUser(user: { email: string; username: string }) {
   const local = user.email.split("@")[0] ?? "";
-  const isExampleDomain = user.email.toLowerCase().endsWith("@example.com");
-  return isExampleDomain && (TEST_PREFIX_RE.test(local) || TEST_PREFIX_RE.test(user.username));
+  const domain = user.email.split("@")[1]?.toLowerCase() ?? "";
+  const isTestDomain = domain === "example.com" || domain.endsWith(".test");
+  return isTestDomain || TEST_PREFIX_RE.test(local) || TEST_PREFIX_RE.test(user.username);
+}
+
+function testReason(user: { email: string; username: string }) {
+  const local = user.email.split("@")[0] ?? "";
+  const domain = user.email.split("@")[1]?.toLowerCase() ?? "";
+  if (domain === "example.com") return "example.com";
+  if (domain.endsWith(".test")) return ".test-domain";
+  if (TEST_PREFIX_RE.test(local)) return "email-prefix";
+  if (TEST_PREFIX_RE.test(user.username)) return "username-prefix";
+  return "unknown";
 }
 
 function toDateBuckets(createdAt: Date, now: Date) {
@@ -102,7 +113,15 @@ export async function GET(req: NextRequest) {
   const testUsers = users.filter(isLikelyTestUser);
   const nonTestUsers = users.filter((u) => !isLikelyTestUser(u));
   const providerCounts = new Map<string, number>();
+  const domainCounts = new Map<string, number>();
+  const testReasonCounts = new Map<string, number>();
   for (const user of users) {
+    const domain = user.email.split("@")[1]?.toLowerCase() ?? "unknown";
+    domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
+    if (isLikelyTestUser(user)) {
+      const reason = testReason(user);
+      testReasonCounts.set(reason, (testReasonCounts.get(reason) ?? 0) + 1);
+    }
     for (const account of user.accounts) {
       providerCounts.set(account.provider, (providerCounts.get(account.provider) ?? 0) + 1);
     }
@@ -139,6 +158,8 @@ export async function GET(req: NextRequest) {
       ...bucketCounts,
     },
     providerCounts: Object.fromEntries([...providerCounts.entries()].sort(([a], [b]) => a.localeCompare(b))),
+    domainCounts: Object.fromEntries([...domainCounts.entries()].sort(([, a], [, b]) => b - a).slice(0, 20)),
+    testReasonCounts: Object.fromEntries([...testReasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b))),
     nonTestPreview: nonTestUsers.slice(0, 25).map((user) => ({
       id: user.id,
       email: redactEmail(user.email),
