@@ -25,6 +25,37 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:claude|anthropic)$/i, providerId: "anthropic" },
 ];
 
+const REFERRAL_STORAGE_KEY = "gambleai_referral";
+const GTM_STORAGE_KEY = "gambleai_gtm";
+
+function withLaunchTracking(path: string, username?: string | null) {
+  if (typeof window === "undefined") return path;
+  const url = new URL(path, window.location.origin);
+  if (username) url.searchParams.set("ref", username);
+  url.searchParams.set("utm_source", "invite");
+  url.searchParams.set("utm_medium", "share");
+  url.searchParams.set("utm_campaign", "beta_launch");
+  return url.toString();
+}
+
+function readStoredGtm() {
+  if (typeof window === "undefined") return { ref: "", source: "", campaign: "", landingUrl: "" };
+  const storedRef = window.localStorage.getItem(REFERRAL_STORAGE_KEY) || "";
+  const stored = window.localStorage.getItem(GTM_STORAGE_KEY);
+  if (!stored) return { ref: storedRef, source: "", campaign: "", landingUrl: window.location.href };
+  try {
+    const parsed = JSON.parse(stored) as { source?: string; campaign?: string; landingUrl?: string };
+    return {
+      ref: storedRef,
+      source: parsed.source || "",
+      campaign: parsed.campaign || "",
+      landingUrl: parsed.landingUrl || window.location.href,
+    };
+  } catch {
+    return { ref: storedRef, source: "", campaign: "", landingUrl: window.location.href };
+  }
+}
+
 function initialOraclePrefs(): OraclePrefs {
   const prefs = readOracleLlmPrefs();
   const provider = (prefs.providerId ? getProviderById(prefs.providerId) : undefined) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
@@ -146,6 +177,8 @@ export default function Home() {
   const joiningId: string | null = null;
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
+  const [referralNotice, setReferralNotice] = useState("");
+  const [personalInviteLink, setPersonalInviteLink] = useState("");
 
   const reset = useCallback(() => {
     setAppState("idle");
@@ -163,6 +196,50 @@ export default function Home() {
     setCopied(false);
     setCopyNotice("");
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const ref = (url.searchParams.get("ref") || url.searchParams.get("r") || "").trim().replace(/^@+/, "");
+    const source = url.searchParams.get("utm_source") || "";
+    const campaign = url.searchParams.get("utm_campaign") || "";
+    if (ref) {
+      window.localStorage.setItem(REFERRAL_STORAGE_KEY, ref);
+      window.localStorage.setItem(GTM_STORAGE_KEY, JSON.stringify({
+        source,
+        campaign,
+        landingUrl: window.location.href,
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const stored = readStoredGtm();
+    if (!stored.ref) return;
+    let cancelled = false;
+    api.claimReferral({
+      ref: stored.ref,
+      source: stored.source || "invite",
+      campaign: stored.campaign || "beta_launch",
+      landingUrl: stored.landingUrl,
+    })
+      .then(async (res) => {
+        if (cancelled) return;
+        window.localStorage.removeItem(REFERRAL_STORAGE_KEY);
+        window.localStorage.removeItem(GTM_STORAGE_KEY);
+        if (res.claimed) {
+          setReferralNotice(`Invite bonus unlocked: +${res.bonus ?? 10} pts from ${res.referrer?.username || "your friend"}.`);
+          await updateSession();
+        }
+      })
+      .catch(() => null);
+    return () => { cancelled = true; };
+  }, [updateSession, user?.id]);
+
+  useEffect(() => {
+    setPersonalInviteLink(user?.username ? withLaunchTracking("/", user.username) : "");
+  }, [user?.username]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -265,11 +342,11 @@ export default function Home() {
       if (res.event) {
         setPublishedKind("event");
         setPublishedId(res.event.id);
-        setShareLink(`${origin}/events/${res.event.id}`);
+        setShareLink(withLaunchTracking(`${origin}/events/${res.event.id}`, user.username));
       } else if (res.challenge) {
         setPublishedKind("challenge");
         setPublishedId(res.challenge.id);
-        setShareLink(`${origin}/join/${res.challenge.id}`);
+        setShareLink(withLaunchTracking(`${origin}/join/${res.challenge.id}`, user.username));
       } else {
         throw new Error("Create returned no challenge or event.");
       }
@@ -466,6 +543,21 @@ export default function Home() {
       .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
   }, [shareLink]);
 
+  const copyPersonalInvite = useCallback(() => {
+    if (!personalInviteLink) return;
+    const done = (message: string) => {
+      setReferralNotice(message);
+      setTimeout(() => setReferralNotice(""), 2600);
+    };
+    if (!navigator.clipboard?.writeText) {
+      done("Clipboard is blocked. Use the visible invite link.");
+      return;
+    }
+    navigator.clipboard.writeText(personalInviteLink)
+      .then(() => done("Personal invite link copied."))
+      .catch(() => done("Clipboard is blocked. Use the visible invite link."));
+  }, [personalInviteLink]);
+
   return (
     <div className="relative min-h-screen flex flex-col" onClick={() => showProfile && setShowProfile(false)}>
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
@@ -566,6 +658,13 @@ export default function Home() {
               {error && <ErrorBox message={error} />}
               <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
               <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
+              {user && (
+                <LaunchInviteCard
+                  inviteLink={personalInviteLink}
+                  notice={referralNotice}
+                  onCopy={copyPersonalInvite}
+                />
+              )}
               <OpenChallengeStrip
                 userId={user?.id}
                 challenges={openChallenges}
@@ -656,6 +755,48 @@ export default function Home() {
 
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} onSuccess={() => updateSession()} />
     </div>
+  );
+}
+
+function LaunchInviteCard({
+  inviteLink,
+  notice,
+  onCopy,
+}: {
+  inviteLink: string;
+  notice: string;
+  onCopy: () => void;
+}) {
+  return (
+    <section className="mx-auto mt-4 max-w-2xl rounded-2xl border bg-white px-4 py-3 text-left shadow-sm" style={{ borderColor: "#D1FAE5" }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Beta invite</p>
+          <p className="text-sm font-bold" style={{ color: "#172033" }}>
+            Give a friend +10 pts. You get +10 pts when they join.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="shrink-0 rounded-full px-4 py-2 text-xs font-black"
+          style={{ background: "#A7F3D0", color: "#065F46" }}
+        >
+          Copy invite
+        </button>
+      </div>
+      <input
+        readOnly
+        value={inviteLink}
+        className="mt-3 w-full truncate rounded-xl border bg-[#F8FAFC] px-3 py-2 text-xs font-semibold outline-none"
+        style={{ borderColor: "#E2E8F0", color: "#526078" }}
+      />
+      {notice && (
+        <p className="mt-2 text-xs font-bold" style={{ color: "#047857" }}>
+          {notice}
+        </p>
+      )}
+    </section>
   );
 }
 

@@ -113,6 +113,24 @@ export async function getCredits(): Promise<{
   return apiFetch("/credits");
 }
 
+export async function claimReferral(data: {
+  ref: string;
+  campaign?: string | null;
+  source?: string | null;
+  landingUrl?: string | null;
+}): Promise<{
+  claimed: boolean;
+  reason?: string;
+  bonus?: number;
+  credits?: number;
+  referrer?: { id: string; username: string };
+}> {
+  return apiFetch("/referrals/claim", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function linkWallet(address: string): Promise<{ success: boolean }> {
   return apiFetch("/tokens/link-wallet", {
     method: "POST",
