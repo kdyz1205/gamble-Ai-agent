@@ -39,7 +39,7 @@ export default function RoomClient({
           className="text-base font-bold tracking-tight active:scale-95 transition-transform"
           style={{ color: NAVY }}
         >
-          LuckyPlay
+          GambleAI
         </button>
         <div className="flex items-center gap-2">
           <Link
@@ -64,7 +64,7 @@ export default function RoomClient({
               borderRadius: "9999px",
             }}
           >
-            + New bet
+            + New challenge
           </Link>
           {user ? (
             <div

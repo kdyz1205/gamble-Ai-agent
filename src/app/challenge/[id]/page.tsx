@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import RoomClient from "./RoomClient";
 
@@ -12,9 +12,9 @@ export default async function ChallengeRoomPage({
   const challenge = await prisma.challenge.findUnique({
     where: { id },
     select: { id: true, title: true, isPublic: true },
-  });
+  }).catch(() => null);
 
-  if (!challenge) redirect("/");
+  if (!challenge) notFound();
 
   return <RoomClient challengeId={id} title={challenge.title} />;
 }

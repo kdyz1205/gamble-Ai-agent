@@ -666,10 +666,16 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           </div>
           <h2 className="text-xl font-black text-text-primary">Sign in to enter the arena</h2>
           <p className="text-sm text-text-secondary">You need an account to view and join battles</p>
-          <Link href="/" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold text-white"
-                style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}>
-            Go to Home
-          </Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link href="/markets" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold text-white"
+                  style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}>
+              My challenges
+            </Link>
+            <Link href="/" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold"
+                  style={{ background: "rgba(255,255,255,0.08)", color: "rgba(240,240,255,0.88)", border: "1px solid rgba(255,255,255,0.12)" }}>
+              Create challenge
+            </Link>
+          </div>
         </motion.div>
       </div>
     );
@@ -691,7 +697,14 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               <p className="text-sm text-text-muted">Loading battle arena...</p>
             </div>
           )}
-          <Link href="/" className="text-accent text-sm font-bold hover:underline">Back home</Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link href="/markets" className="rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)" }}>
+              Back to manager
+            </Link>
+            <Link href="/" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold text-accent">
+              Create challenge
+            </Link>
+          </div>
         </motion.div>
       </div>
     );
@@ -1349,7 +1362,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             Refresh
           </motion.button>
 
-          <Link href="/">
+          <Link href="/markets">
             <motion.div
               whileHover={{ scale: 1.03, y: -1 }}
               whileTap={{ scale: 0.97 }}
@@ -1359,7 +1372,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
-              Home
+              Manager
             </motion.div>
           </Link>
         </motion.div>

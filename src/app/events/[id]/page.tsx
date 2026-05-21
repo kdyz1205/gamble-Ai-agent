@@ -25,7 +25,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const event = await prisma.challengeEvent.findUnique({
     where: { id },
     include: eventPublicInclude,
-  });
+  }).catch(() => null);
   if (!event) notFound();
   const leaderboard = await prisma.leaderboardEntry.findMany({
     where: { eventId: id },
@@ -36,7 +36,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       { createdAt: "asc" },
     ],
     take: 10,
-  });
+  }).catch(() => []);
 
   const protocol = parseProtocol(event.protocolJson);
   const joinedCount = event._count.entries;
@@ -50,9 +50,22 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   return (
     <main className="min-h-screen px-5 py-8" style={{ background: "linear-gradient(135deg, #D7FFF2 0%, #EEF2FF 50%, #FFF1F2 100%)" }}>
       <div className="mx-auto max-w-4xl space-y-6">
-        <Link href="/" className="inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#047857" }}>
-          Back
-        </Link>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/" className="text-base font-black tracking-tight" style={{ color: "#172033" }}>
+            GambleAI
+          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/markets" className="inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#172033" }}>
+              My challenges
+            </Link>
+            <Link href="/radar" className="inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#047857" }}>
+              Radar
+            </Link>
+            <Link href="/" className="inline-flex rounded-full px-4 py-2 text-sm font-bold shadow-sm" style={{ background: "#FED7AA", color: "#7C2D12" }}>
+              Create
+            </Link>
+          </div>
+        </header>
 
         <section className="rounded-[28px] border bg-white/90 p-6 shadow-sm" style={{ borderColor: "#DDE7F0" }}>
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
