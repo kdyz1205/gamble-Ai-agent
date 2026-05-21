@@ -31,6 +31,7 @@ function metersFromMiles(miles: number | null) {
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
+  const now = new Date();
   const lat = readNumber(url, "lat");
   const lng = readNumber(url, "lng");
   const radiusMiles = Math.min(Math.max(readNumber(url, "radiusMiles") ?? 10, 0.1), 50);
@@ -43,6 +44,10 @@ export async function GET(req: NextRequest) {
     where: {
       status: { in: [...OPEN_FOR_OPPONENT_STATUSES] },
       isPublic: true,
+      // Radar is for playable challenges. Expired / no-deadline smoke rows
+      // stay available to their owners through the manager, but must not be
+      // shown to strangers as joinable nearby challenges.
+      deadline: { gt: now },
     },
     include: {
       creator: { select: CREATOR_SELECT },

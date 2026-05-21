@@ -174,10 +174,40 @@ const proof = { base, stamp, checks: {} };
 const near = { lat: 37.7749, lng: -122.4194 };
 const nearOpponent = { lat: 37.7751, lng: -122.4195 };
 const far = { lat: 34.0522, lng: -118.2437 };
+let cleanupCreator = null;
+let cleanupChallengeId = null;
+let opponentAccepted = false;
+
+async function cleanupCreatedChallenge() {
+  if (!cleanupCreator || !cleanupChallengeId) return { skipped: true };
+  if (opponentAccepted) {
+    const cancelled = await requestAllowError(cleanupCreator.jar, `/api/challenges/${cleanupChallengeId}/cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "E2E radar cleanup." }),
+    });
+    return {
+      action: "cancel",
+      status: cancelled.status ?? 200,
+      ok: !cancelled.error,
+      data: cancelled.data ?? null,
+    };
+  }
+  const deleted = await requestAllowError(cleanupCreator.jar, `/api/challenges/${cleanupChallengeId}`, {
+    method: "DELETE",
+  });
+  return {
+    action: "delete",
+    status: deleted.status ?? 200,
+    ok: !deleted.error,
+    data: deleted.data ?? null,
+  };
+}
 
 try {
   const creator = await register(`codex.radar.creator.${stamp}@example.com`, `radar_creator_${stamp.slice(-6)}`);
   const opponent = await register(`codex.radar.opponent.${stamp}@example.com`, `radar_opponent_${stamp.slice(-6)}`);
+  cleanupCreator = creator;
 
   await postJson(creator.jar, "/api/map/ping", { ...near, accuracy: 15, mode: "browsing" });
   await postJson(opponent.jar, "/api/map/ping", { ...nearOpponent, accuracy: 15, mode: "browsing" });
@@ -187,8 +217,10 @@ try {
     discoveryLat: near.lat,
     discoveryLng: near.lng,
     stake: 0,
+    deadline: "1 hour",
   });
   const challengeId = created.challenge?.id;
+  cleanupChallengeId = challengeId;
   proof.create = {
     challengeId,
     status: created.challenge?.status,
@@ -240,6 +272,7 @@ try {
     ...nearOpponent,
     acceptedRuleContract: true,
   });
+  opponentAccepted = true;
   proof.accept = {
     challengeId: accepted.challenge.id,
     status: accepted.challenge.status,
@@ -247,9 +280,15 @@ try {
   };
   requireCheck(proof, "near_location_accepts_and_opens_evidence", accepted.challenge.status === "evidence_window_open", proof.accept);
 
+  proof.cleanup = await cleanupCreatedChallenge();
+  requireCheck(proof, "cleanup_removed_public_radar_row", proof.cleanup.ok === true, proof.cleanup);
   proof.radarLocationFlowReady = true;
   console.log(JSON.stringify(proof, null, 2));
 } catch (error) {
+  proof.cleanup = await cleanupCreatedChallenge().catch((cleanupError) => ({
+    ok: false,
+    error: cleanupError?.message ?? String(cleanupError),
+  }));
   proof.error = {
     message: error?.message,
     status: error?.status,

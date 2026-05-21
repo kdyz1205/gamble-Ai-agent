@@ -200,6 +200,8 @@ try {
   const created = await postJson(creator.jar, "/api/challenges", {
     protocol: protocol(stamp),
     stake: 0,
+    isPublic: false,
+    visibility: "private",
   });
   const challengeId = created.challenge?.id;
   proof.create = {

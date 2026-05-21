@@ -154,8 +154,8 @@ try {
     evidenceType: "self_report",
     settlementMode: "manual_confirmation",
     aiReview: true,
-    isPublic: true,
-    visibility: "public",
+    isPublic: false,
+    visibility: "private",
   });
   const challengeId = created.challenge.id;
   proof.challengeId = challengeId;

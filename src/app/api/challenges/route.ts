@@ -235,11 +235,12 @@ export async function POST(req: NextRequest) {
     }
 
     let deadlineDate: Date | null = null;
-    if (deadline) {
-      const hoursMatch = String(deadline).match(/(\d+)\s*hour/i);
-      const daysMatch  = String(deadline).match(/(\d+)\s*day/i);
-      const weeksMatch = String(deadline).match(/(\d+)\s*week/i);
-      const minsMatch  = String(deadline).match(/(\d+)\s*min/i);
+    const deadlineSource = deadline || protocolSpec?.timingProtocol.deadline;
+    if (deadlineSource) {
+      const hoursMatch = String(deadlineSource).match(/(\d+)\s*hour/i);
+      const daysMatch  = String(deadlineSource).match(/(\d+)\s*day/i);
+      const weeksMatch = String(deadlineSource).match(/(\d+)\s*week/i);
+      const minsMatch  = String(deadlineSource).match(/(\d+)\s*min/i);
 
       deadlineDate = new Date();
       if (hoursMatch) deadlineDate.setHours(deadlineDate.getHours() + parseInt(hoursMatch[1]));

@@ -527,8 +527,8 @@ try {
         "Auto settlement: only if source=vision_llm, confidence>=0.85, quality=good, both videos cover the required duration, both bodies are visible, liveness is visible, and no anti-cheat flag is present.",
       ].join("\n"),
       aiReview: true,
-      isPublic: true,
-      visibility: "public",
+      isPublic: false,
+      visibility: "private",
     });
     const challengeId = created.challenge.id;
     const livenessPhrase = created.challenge.livenessPrompt || `Axelrod ${stamp}`;

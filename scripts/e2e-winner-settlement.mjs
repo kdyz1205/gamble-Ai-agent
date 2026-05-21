@@ -238,8 +238,8 @@ try {
     stake: 1,
     stakeToken: "credits",
     aiReview: true,
-    isPublic: true,
-    visibility: "public",
+    isPublic: false,
+    visibility: "private",
   });
   const challengeId = created.challenge.id;
   proof.challenge = {

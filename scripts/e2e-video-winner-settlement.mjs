@@ -356,8 +356,8 @@ try {
     stakeToken: "credits",
     rules,
     aiReview: true,
-    isPublic: true,
-    visibility: "public",
+    isPublic: false,
+    visibility: "private",
   });
   const challengeId = created.challenge.id;
   const livenessPhrase = created.challenge.livenessPrompt || `Axelrod video proof ${stamp}`;
