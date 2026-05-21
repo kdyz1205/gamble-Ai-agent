@@ -45,7 +45,7 @@ function statusConfig(s: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
     open:      { label: "Awaiting Opponent",  color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
     waiting_for_opponent: { label: "Awaiting Opponent", color: "#a78bfa", bg: "rgba(124,92,252,0.1)", border: "rgba(124,92,252,0.25)" },
-    live:      { label: "Battle in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    live:      { label: "Challenge in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     evidence_window_open: { label: "Evidence Window", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
     creator_submitted: { label: "Creator Submitted", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
     opponent_submitted: { label: "Opponent Submitted", color: "#00e87a", bg: "rgba(0,232,122,0.1)", border: "rgba(0,232,122,0.25)" },
@@ -56,7 +56,7 @@ function statusConfig(s: string) {
     manual_review_required: { label: "Manual Review", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
     ai_inconclusive: { label: "AI Inconclusive", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
     finalized: { label: "Finalized", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
-    settled:   { label: "Battle Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    settled:   { label: "Challenge Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     cancelled: { label: "Cancelled",          color: "#ff4757", bg: "rgba(255,71,87,0.1)",   border: "rgba(255,71,87,0.25)" },
     refunded: { label: "Refunded", color: "#ff4757", bg: "rgba(255,71,87,0.1)", border: "rgba(255,71,87,0.25)" },
     voided: { label: "Voided", color: "#ff4757", bg: "rgba(255,71,87,0.1)", border: "rgba(255,71,87,0.25)" },
@@ -135,7 +135,7 @@ function PlayerSide({
   }
 
   const username = participant.user.username;
-  const role = participant.role === "creator" ? "Challenger" : "Warrior";
+  const role = participant.role === "creator" ? "Creator" : "Opponent";
   const hasEvidence = Boolean(evidence);
 
   return (
@@ -664,8 +664,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <h2 className="text-xl font-black text-text-primary">Sign in to enter the arena</h2>
-          <p className="text-sm text-text-secondary">You need an account to view and join battles</p>
+          <h2 className="text-xl font-black text-text-primary">Sign in to enter the challenge</h2>
+          <p className="text-sm text-text-secondary">You need an account to view and join challenges</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/markets" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold text-white"
                   style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}>
@@ -694,7 +694,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           ) : (
             <div className="space-y-3">
               <div className="w-12 h-12 rounded-xl mx-auto animate-breathe-glow" style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }} />
-              <p className="text-sm text-text-muted">Loading battle arena...</p>
+              <p className="text-sm text-text-muted">Loading challenge room...</p>
             </div>
           )}
           <div className="flex flex-wrap justify-center gap-3">

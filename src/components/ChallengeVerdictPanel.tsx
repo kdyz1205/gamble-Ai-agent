@@ -630,7 +630,7 @@ export default function ChallengeVerdictPanel({
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The bet</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The challenge</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
             <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
               This is an AI-judged challenge between two people. Join only if you agree to the rules, upload evidence when done, and the AI reviews the evidence to recommend a winner.
@@ -693,7 +693,7 @@ export default function ChallengeVerdictPanel({
                     className="px-4 py-2 text-xs font-black disabled:opacity-50"
                     style={{ background: "#FFFFFF", color: "#991B1B", border: "1px solid #FECACA", borderRadius: "9999px" }}
                   >
-                    Close bet
+                    Close challenge
                   </motion.button>
                 )}
               </div>

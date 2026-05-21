@@ -320,7 +320,7 @@ export default function PlazaSection({ onAccept, onRequireAuth }: Props) {
                 )}
                 <div className="flex items-center gap-2 mt-2 text-[10px] text-text-muted">
                   <span>{c.type}</span>
-                  <span>by {c.creator.username || "Anonymous Gambler"}</span>
+                  <span>by {c.creator.username || "Anonymous creator"}</span>
                 </div>
               </div>
             </motion.div>

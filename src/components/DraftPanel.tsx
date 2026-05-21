@@ -30,7 +30,7 @@ interface Props {
   onActionItem?: (a: ActionItem) => void;
 }
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+// Axelrod canonical palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -78,7 +78,7 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
         className="px-5 py-2.5 flex items-center justify-between"
         style={{ background: `linear-gradient(90deg, ${PEACH}1A, ${MINT}1A, ${LAVENDER}1A)`, borderBottom: `1px solid ${NAVY_FAINT}` }}
       >
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>📝 Your market</span>
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Your challenge</span>
         <span className="text-xs font-bold px-2.5 py-0.5" style={{ background: "#FFFFFF", color: PEACH_DARK, borderRadius: "999px" }}>
           {d.isPublic ? "🌍 Public" : "🔒 Private"}
         </span>
@@ -104,7 +104,7 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
           </p>
         )}
 
-        {/* Oracle attachments — AI called real tools and wired them into the bet.
+        {/* Oracle attachments: AI called real tools and wired them into the challenge.
             Rendered as a dashed card with source + current value + verify link. */}
         {rich?.oracles && rich.oracles.length > 0 && (
           <div

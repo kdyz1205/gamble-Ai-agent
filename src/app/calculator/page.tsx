@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-// LuckyPlay palette (canonical)
+// Axelrod palette
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -184,7 +184,7 @@ export default function CalculatorPage() {
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          Axelrod
         </Link>
         <span className="text-xs font-semibold px-3 py-1.5"
           style={{ color: NAVY_DIM, background: NAVY_HAIR, borderRadius: "9999px" }}>
@@ -196,10 +196,10 @@ export default function CalculatorPage() {
         {/* Intro — plain language explainer */}
         <section>
           <h1 className="text-3xl font-extrabold mb-2 tracking-tight" style={{ color: NAVY }}>
-            Will LuckyPlay make money?
+            Will Axelrod make money?
           </h1>
           <p className="text-base font-medium leading-relaxed" style={{ color: NAVY_DIM }}>
-            Play with the sliders below to model LuckyPlay&apos;s economics.
+            Play with the sliders below to model Axelrod&apos;s economics.
             The calculator tells you if the business is profitable at those numbers,
             and breaks down exactly where revenue comes from and where money is spent.
           </p>
@@ -276,7 +276,7 @@ export default function CalculatorPage() {
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Growth</p>
             <Slider
               label="Monthly active users"
-              explain="How many unique people play LuckyPlay in a month."
+              explain="How many unique people use Axelrod in a month."
               value={inputs.mau}
               min={100} max={10_000_000} step={100}
               format={fmtInt}
@@ -315,7 +315,7 @@ export default function CalculatorPage() {
             />
             <Slider
               label="Avg stake per challenge"
-              explain="When users bet real money, how much on average. Small-casual: $1–3. Serious: $10+."
+              explain="If this becomes paid, this models the average credit stake or paid entry size per challenge."
               value={inputs.avgStakeUsd}
               min={0} max={100} step={1}
               format={(v) => `$${v.toFixed(0)}`}
@@ -323,7 +323,7 @@ export default function CalculatorPage() {
             />
             <Slider
               label="Platform rake on stakes"
-              explain="What % LuckyPlay keeps from each settled stake. Poker sites: ~5%. DraftKings: ~10%."
+              explain="What % the platform keeps from each eligible settled paid challenge. Keep this conservative until compliance is clear."
               value={inputs.rakePct}
               min={0} max={15} step={0.25}
               format={(v) => `${v.toFixed(2)}%`}

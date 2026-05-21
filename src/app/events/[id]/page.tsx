@@ -52,7 +52,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="text-base font-black tracking-tight" style={{ color: "#172033" }}>
-            GambleAI
+            Axelrod
           </Link>
           <div className="flex flex-wrap gap-2">
             <Link href="/markets" className="inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#172033" }}>

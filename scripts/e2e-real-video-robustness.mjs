@@ -15,7 +15,7 @@ const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const fixtureDir = process.env.REAL_VIDEO_FIXTURE_DIR || "";
 const videoStorage = process.env.E2E_VIDEO_STORAGE || "public_fixture";
-const publicFixtureLivenessPhrase = "GambleAI VIDEO-E2E-STATIC";
+const publicFixtureLivenessPhrase = "Axelrod VIDEO-E2E-STATIC";
 const caseDelayMs = Number(process.env.E2E_ROBUSTNESS_CASE_DELAY_MS || (judgeProvider === "openai" ? 45_000 : 5_000));
 const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 const selectedCaseIds = (process.env.RUN_ROBUSTNESS_CASES || "")
@@ -531,7 +531,7 @@ try {
       visibility: "public",
     });
     const challengeId = created.challenge.id;
-    const livenessPhrase = created.challenge.livenessPrompt || `GambleAI ${stamp}`;
+    const livenessPhrase = created.challenge.livenessPrompt || `Axelrod ${stamp}`;
     caseProof.challengeId = challengeId;
     caseProof.livenessPrompt = livenessPhrase;
     caseProof.protocol = {

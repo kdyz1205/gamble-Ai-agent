@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
 
 /**
- * LuckyPlay chat thread. Each Turn is either a plain user message, a plain
+ * Axelrod chat thread. Each Turn is either a plain user message, a plain
  * AI message, or an AI message with an inline structured card slotted below
  * the text (used for the current / updated draft).
  *
- * The whole point: the user experience of BUILDING a bet should feel like
- * talking to ChatGPT — you say something, AI talks back, a structured card
+ * The whole point: the user experience of BUILDING a challenge should feel like
+ * talking to ChatGPT: you say something, AI talks back, a structured card
  * materializes, you tweak by typing, AI replies + updates the card.
  * Previously the product jumped from composer to a silent DraftPanel with
  * no conversational glue. This component IS the glue.
@@ -28,7 +28,7 @@ interface Props {
   isAiThinking: boolean; // shows the typing indicator as the final row
 }
 
-// LuckyPlay palette
+// Axelrod palette
 const PEACH = "#FED7AA";
 const PEACH_DARK = "#FDBA74";
 const PEACH_TEXT = "#7C2D12";

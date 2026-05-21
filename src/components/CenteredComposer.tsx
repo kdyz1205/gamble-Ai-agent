@@ -286,7 +286,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
   const busy = Boolean(isParsing || isTranscribing || listening);
 
-  // LuckyPlay canonical palette — see project_luckyplay_design_system memory
+  // Axelrod canonical palette.
   const NAVY = "#1E293B";
   const NAVY_DIM = "#64748B";
   const NAVY_FAINT = "#E2E8F0";
@@ -316,7 +316,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={isActive ? "Tweak it: \"$20 stake\" or \"video proof\"" : "I bet Alex I can do 20 pushups in one minute..."}
+          placeholder={isActive ? "Tweak it: \"$20 stake\" or \"video proof\"" : "Challenge Alex: I can do 20 pushups in one minute..."}
           rows={isActive ? 1 : 2}
           disabled={busy}
           className="w-full bg-transparent px-5 py-4 text-base font-semibold resize-none focus:outline-none placeholder:font-normal"

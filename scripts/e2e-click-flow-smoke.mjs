@@ -105,13 +105,13 @@ async function runCoreNavSuite(proof, page, labelPrefix = "") {
   ], labelPrefix);
 
   await checkRoute(proof, page, "/challenge/not-a-real-challenge-id/versus", [
-    "Sign in to enter the arena",
+    "Sign in to enter the challenge",
     "My challenges",
     "Create challenge",
   ], labelPrefix);
 
   await checkRoute(proof, page, "/calculator", [
-    "Will LuckyPlay make money?",
+    "Will Axelrod make money?",
     "Founder math",
   ], labelPrefix);
   await page.getByRole("button", { name: "Growth" }).click();

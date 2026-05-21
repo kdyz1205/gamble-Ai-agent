@@ -5,9 +5,9 @@ import SoftBackground from "@/components/SoftBackground";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LuckyPlay — Your Playful Predictor",
+  title: "Axelrod - AI Referee for Real-World Challenges",
   description:
-    "Cute, friendly prediction play. Make a call, stake your credits, let the AI judge — win with fun.",
+    "Turn real-world challenges into playable, provable games with rules, evidence, AI judging, and credits.",
 };
 
 export const viewport: Viewport = {

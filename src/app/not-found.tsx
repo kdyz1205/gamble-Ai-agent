@@ -17,7 +17,7 @@ export default function NotFound() {
       <div className="mx-auto flex min-h-[calc(100vh-48px)] max-w-2xl flex-col">
         <header className="flex items-center justify-between">
           <Link href="/" className="text-base font-black tracking-tight" style={{ color: NAVY }}>
-            GambleAI
+            Axelrod
           </Link>
           <Link
             href="/markets"

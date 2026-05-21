@@ -19,7 +19,7 @@ export function generateLivenessPrompt(): string {
 
 export function generateLivenessPhrase(): string {
   const code = randomBytes(3).toString("hex").toUpperCase();
-  return `GambleAI ${code}`;
+  return `Axelrod ${code}`;
 }
 
 /* ── Screen-flash color sequence (layer 2 — anti-splice) ── */

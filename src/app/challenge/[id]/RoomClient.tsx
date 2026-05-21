@@ -39,7 +39,7 @@ export default function RoomClient({
           className="text-base font-bold tracking-tight active:scale-95 transition-transform"
           style={{ color: NAVY }}
         >
-          GambleAI
+          Axelrod
         </button>
         <div className="flex items-center gap-2">
           <Link

@@ -8,7 +8,7 @@ import sharp from "sharp";
 
 const execFile = promisify(execFileCallback);
 const outDir = path.resolve("public", "e2e-fixtures");
-const phrase = "GambleAI VIDEO-E2E-STATIC";
+const phrase = "Axelrod VIDEO-E2E-STATIC";
 
 function pushupPhaseAt(repCount, durationSec, elapsedSec) {
   const cycleSec = durationSec / repCount;

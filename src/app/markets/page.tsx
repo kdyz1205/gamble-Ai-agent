@@ -226,7 +226,7 @@ export default function MarketsPage() {
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-            GambleAI
+            Axelrod
           </Link>
           <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>
             Challenge manager
@@ -295,7 +295,7 @@ export default function MarketsPage() {
             Match me with an open challenge
           </p>
           <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
-            Let AI pair you with someone else&apos;s open bet.
+            Let AI pair you with someone else&apos;s open challenge.
           </p>
           <button
             onClick={tryMatchMe}
@@ -399,7 +399,7 @@ export default function MarketsPage() {
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
             >
-              Make your first bet
+              Create your first challenge
             </Link>
           </div>
         ) : (

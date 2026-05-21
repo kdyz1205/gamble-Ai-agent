@@ -8,7 +8,7 @@ import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 
-// LuckyPlay status palette — canonical pastels
+// Axelrod status palette — canonical pastels
 const STATUS_COLOR: Record<string, string> = {
   open:      "#FED7AA", // orange-200 — accepting joiners
   live:      "#A7F3D0", // mint-200 — in progress
@@ -19,7 +19,7 @@ const STATUS_COLOR: Record<string, string> = {
   draft:     "#E2E8F0", // slate-200 — neutral
 };
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+// Axelrod canonical palette — see project_luckyplay_design_system memory
 const NAVY = "#1E293B";        // slate-800 headlines
 const NAVY_DIM = "#64748B";    // slate-500 muted text
 const NAVY_FAINT = "#E2E8F0";  // slate-200 hairline borders
@@ -82,7 +82,7 @@ export default function MePage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>GambleAI</Link>
+        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>Axelrod</Link>
         <div className="flex items-center gap-2">
           <button
             type="button"

@@ -275,11 +275,11 @@ export default function ChallengeCard({
         {(challenge.status === "open" || challenge.status === "live") && (
           <>
             <button className="flex-1 py-2.5 text-sm font-semibold text-accent bg-accent-light rounded-xl hover:bg-accent/20 transition-colors">
-              Bet on {challenge.playerA.name.split(" ")[0]}
+              Pick {challenge.playerA.name.split(" ")[0]}
             </button>
             {challenge.playerB && (
               <button className="flex-1 py-2.5 text-sm font-semibold text-teal bg-teal-light rounded-xl hover:bg-teal/20 transition-colors">
-                Bet on {challenge.playerB.name.split(" ")[0]}
+                Pick {challenge.playerB.name.split(" ")[0]}
               </button>
             )}
           </>

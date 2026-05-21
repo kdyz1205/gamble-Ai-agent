@@ -1,13 +1,12 @@
-# LuckyPlay
+# Axelrod
 
 Proprietary / confidential. See [LICENSE](./LICENSE). Do not share, fork, or mirror.
 
-LuckyPlay is a chat-first AI-judged challenge & betting platform. Users type a
-bet in natural language, AI compiles it into a structured market (with real
-oracle attachments when relevant — e.g. live CoinGecko prices for crypto
-predictions), an opponent accepts via a shareable link, both submit video/photo
-evidence, and GPT-4o vision judges with rubric-based reasoning and confidence
-calibration. Credits settle automatically on creator confirmation.
+Axelrod is a chat-first AI referee for real-world challenges. Users describe a
+challenge in natural language, AI compiles it into a structured protocol with
+rules, evidence, identity checks, and oracle attachments when relevant. An
+opponent accepts via a shareable link, both sides submit evidence, and the AI
+judge produces rubric-based reasoning with confidence before credits settle.
 
 ## Stack
 
@@ -22,17 +21,17 @@ calibration. Credits settle automatically on creator confirmation.
 
 ## Agentic capabilities
 
-- Tool calling (CoinGecko / Open-Meteo) at parse time — oracle sources attach
+- Tool calling (CoinGecko / Open-Meteo) at parse time: oracle sources attach
   directly to the draft so settlement has ground truth, not self-report.
 - Proactive `actionItems` (top up / reduce scope / adjust stake) surfaced as
   clickable buttons in the draft panel.
 - Self-correction: stub/low-confidence parse passes automatically retry on the
-  flagship model in the same family (gpt-4o-mini → gpt-4o; haiku → sonnet;
-  flash → 2.5-pro).
+  flagship model in the same family (gpt-4o-mini -> gpt-4o; haiku -> sonnet;
+  flash -> 2.5-pro).
 - Conversation memory: localStorage-backed draft history per user so
-  "再来一个 / another one" branches from the prior draft.
+  "another one" branches from the prior draft.
 - Voice input: Whisper transcription wired into the composer Mic button.
-- Pre-extracted vision frames on evidence submit → judge latency ~17s → ~5s.
+- Pre-extracted vision frames on evidence submit -> judge latency ~17s -> ~5s.
 
 ## Development
 
@@ -65,4 +64,4 @@ the build step (see `build:vercel` in `package.json`).
 
 ---
 
-© 2026 kdyz1205. All rights reserved. Unauthorized use is strictly prohibited.
+Copyright 2026 kdyz1205. All rights reserved. Unauthorized use is strictly prohibited.

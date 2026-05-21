@@ -15,7 +15,7 @@ const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 const videoStorage = process.env.E2E_VIDEO_STORAGE || "public_fixture";
-const publicFixtureLivenessPhrase = "GambleAI VIDEO-E2E-STATIC";
+const publicFixtureLivenessPhrase = "Axelrod VIDEO-E2E-STATIC";
 
 class Jar {
   constructor(name) {
@@ -360,7 +360,7 @@ try {
     visibility: "public",
   });
   const challengeId = created.challenge.id;
-  const livenessPhrase = created.challenge.livenessPrompt || `GambleAI video proof ${stamp}`;
+  const livenessPhrase = created.challenge.livenessPrompt || `Axelrod video proof ${stamp}`;
   proof.challenge = {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,

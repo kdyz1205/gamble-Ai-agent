@@ -932,7 +932,7 @@ export function emptyAgentDraftState(): AgentDraftState {
 }
 
 /**
- * One conversational turn with GambleAI. Frontend keeps conversationHistory
+ * One conversational turn with Axelrod. Frontend keeps conversationHistory
  * and draftState in React; each call sends them back for server-side merge.
  */
 export async function agentRespond(

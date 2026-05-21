@@ -10,7 +10,7 @@ interface Props {
   onSuccess: () => void;
 }
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
+// Axelrod canonical palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -212,7 +212,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <span className="text-4xl">🎉</span>
+                        <span className="text-3xl font-black">A</span>
                       </motion.div>
                       <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
                         You&apos;re in! Let&apos;s play
@@ -235,7 +235,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
                     }}
                   >
-                    <span className="text-3xl">🎲</span>
+                    <span className="text-3xl font-black" style={{ color: PEACH_TEXT }}>A</span>
                   </motion.div>
 
                   <AnimatePresence mode="wait">
@@ -247,11 +247,11 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       transition={{ duration: 0.25 }}
                     >
                       <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join LuckyPlay" : "Welcome back"}
+                        {mode === "register" ? "Join Axelrod" : "Welcome back"}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Let's make your first bet ✨"
+                          ? "Let's create your first challenge"
                           : "Good to see you again"}
                       </p>
                     </motion.div>

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
-   DESIGN SYSTEM — LuckyPlay · Playful Predictor
+   DESIGN SYSTEM - Axelrod
    Soft sky pastels, friendly mascot energy, rounded pills
    ═══════════════════════════════════════════════════ */
 
@@ -722,7 +722,7 @@ input, textarea, [contenteditable="true"] {
    INTERACTIVE FOCUS STATES
    ═══════════════════════════════════════════════════ */
 
-/* Input focus glow — LuckyPlay orange ring */
+/* Input focus glow - Axelrod orange ring */
 input:focus, textarea:focus, select:focus {
   border-color: rgba(251,146,60,0.6) !important;
   box-shadow:

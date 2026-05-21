@@ -27,7 +27,7 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
 
 const LAUNCH_PROMPTS = [
   {
-    title: "Push-up battle",
+    title: "Push-up challenge",
     prompt: "I want to challenge a friend: who can do more valid push-ups in 60 seconds?",
   },
   {
@@ -36,7 +36,7 @@ const LAUNCH_PROMPTS = [
   },
   {
     title: "Typing race",
-    prompt: "I want to bet a friend who can type a 100-word paragraph faster with a screenshot proof.",
+    prompt: "Challenge a friend on who can type a 100-word paragraph faster with screenshot proof.",
   },
   {
     title: "Study streak",
@@ -52,8 +52,8 @@ const LAUNCH_PROMPTS = [
   },
 ];
 
-const REFERRAL_STORAGE_KEY = "gambleai_referral";
-const GTM_STORAGE_KEY = "gambleai_gtm";
+const REFERRAL_STORAGE_KEY = "axelrod_referral";
+const GTM_STORAGE_KEY = "axelrod_gtm";
 
 function withLaunchTracking(path: string, username?: string | null) {
   if (typeof window === "undefined") return path;
@@ -658,7 +658,7 @@ export default function Home() {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl border bg-white text-xs shadow-sm" style={{ borderColor: "#D1FAE5", color: "#047857" }}>
             AI
           </span>
-          <span>GambleAI</span>
+          <span>Axelrod</span>
         </button>
         <div className="flex items-center gap-2 sm:gap-3">
           {appState !== "idle" && (
@@ -861,7 +861,7 @@ export default function Home() {
               <div className="grid gap-2 sm:grid-cols-4">
                 <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>{publishedKind === "event" ? "Event lobby" : "Challenge room"}</button>
                 <button type="button" onClick={sharePublishedChallenge} className="py-3 text-sm font-bold rounded-full" style={{ background: "#A7F3D0", color: "#065F46" }}>Share now</button>
-                <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Public list</button>
+                <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Challenge board</button>
                 <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
               </div>
             </motion.div>
@@ -967,7 +967,7 @@ function PublishedLaunchKit({
     },
     {
       label: "Public post",
-      body: `I am testing GambleAI - an AI challenge host that turns dares into rules, evidence, judging, and credit settlement.\nTry this challenge: ${title}\n${shareLink}`,
+      body: `I am testing Axelrod - an AI challenge host that turns dares into rules, evidence, judging, and credit settlement.\nTry this challenge: ${title}\n${shareLink}`,
     },
   ];
 
@@ -1072,7 +1072,7 @@ function LiveProofPanel() {
       <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#D1FAE5", background: "#ECFDF5" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-black" style={{ color: "#064E3B" }}>Push-up battle</p>
+            <p className="text-sm font-black" style={{ color: "#064E3B" }}>Push-up challenge</p>
             <p className="mt-1 text-xs font-bold" style={{ color: "#047857" }}>same camera - liveness phrase - winner payout</p>
           </div>
           <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFFFFF", color: "#047857" }}>ready</span>
