@@ -195,6 +195,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
+  const [launchNotice, setLaunchNotice] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [openChallenges, setOpenChallenges] = useState<api.ChallengeData[]>([]);
@@ -227,6 +228,7 @@ export default function Home() {
     setError(null);
     setCopied(false);
     setCopyNotice("");
+    setLaunchNotice("");
   }, []);
 
   useEffect(() => {
@@ -528,9 +530,10 @@ export default function Home() {
               : "Location not enabled yet. Tap Enable location to sort nearby; showing global challenges for now.",
       );
     } catch (err) {
+      console.warn("[discover] failed to load open challenges", err);
       setOpenChallenges([]);
       setLocationState("global");
-      setDiscoveryMessage(err instanceof Error ? err.message : "Could not load open challenges.");
+      setDiscoveryMessage("Nearby discovery is temporarily unavailable. You can still create and share a challenge by link.");
     } finally {
       setDiscoveryLoading(false);
     }
@@ -602,6 +605,20 @@ export default function Home() {
       .then(() => showCopied("Join link copied."))
       .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
   }, [shareLink]);
+
+  const copyLaunchText = useCallback((text: string, label: string) => {
+    const done = (message: string) => {
+      setLaunchNotice(message);
+      setTimeout(() => setLaunchNotice(""), 2200);
+    };
+    if (!navigator.clipboard?.writeText) {
+      done("Clipboard is blocked. Use the visible text.");
+      return;
+    }
+    navigator.clipboard.writeText(text)
+      .then(() => done(`${label} copied.`))
+      .catch(() => done("Clipboard is blocked. Use the visible text."));
+  }, []);
 
   const copyPersonalInvite = useCallback(() => {
     if (!personalInviteLink) return;
@@ -736,6 +753,7 @@ export default function Home() {
                 <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
                   Say one sentence. The AI builds the rules, opponent flow, evidence, judging, disputes, and credit settlement.
                 </p>
+                <HeroMetricStrip />
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
@@ -834,6 +852,12 @@ export default function Home() {
                   {copyNotice}
                 </p>
               )}
+              <PublishedLaunchKit
+                title={protocol.title}
+                shareLink={shareLink}
+                notice={launchNotice}
+                onCopy={copyLaunchText}
+              />
               <div className="grid gap-2 sm:grid-cols-4">
                 <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>{publishedKind === "event" ? "Event lobby" : "Challenge room"}</button>
                 <button type="button" onClick={sharePublishedChallenge} className="py-3 text-sm font-bold rounded-full" style={{ background: "#A7F3D0", color: "#065F46" }}>Share now</button>
@@ -894,6 +918,91 @@ function LaunchInviteCard({
         <p className="mt-2 text-xs font-bold" style={{ color: "#047857" }}>
           {notice}
         </p>
+      )}
+    </section>
+  );
+}
+
+function HeroMetricStrip() {
+  const metrics = [
+    { label: "Beta reward", value: "+10 pts invite" },
+    { label: "Judge gate", value: "85% confidence" },
+    { label: "Flow", value: "prompt to payout" },
+  ];
+  return (
+    <div className="mt-5 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3">
+      {metrics.map((metric) => (
+        <div
+          key={metric.label}
+          className="rounded-[18px] border bg-white/80 px-4 py-3 shadow-sm"
+          style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 26px rgba(15,23,42,0.04)" }}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.13em]" style={{ color: "#64748B" }}>{metric.label}</p>
+          <p className="mt-1 text-sm font-black" style={{ color: "#172033" }}>{metric.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PublishedLaunchKit({
+  title,
+  shareLink,
+  notice,
+  onCopy,
+}: {
+  title: string;
+  shareLink: string;
+  notice: string;
+  onCopy: (text: string, label: string) => void;
+}) {
+  const templates = [
+    {
+      label: "Friend DM",
+      body: `I made an AI-judged challenge for us: ${title}\nJoin here: ${shareLink}\nWinner gets the credits after evidence review.`,
+    },
+    {
+      label: "Group chat",
+      body: `Challenge is live: ${title}\nJoin, accept the rules, submit evidence, and let the AI recommend the winner.\n${shareLink}`,
+    },
+    {
+      label: "Public post",
+      body: `I am testing GambleAI - an AI challenge host that turns dares into rules, evidence, judging, and credit settlement.\nTry this challenge: ${title}\n${shareLink}`,
+    },
+  ];
+
+  return (
+    <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Launch kit</p>
+          <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Send this challenge to 3 people</h3>
+          <p className="mt-1 text-sm font-semibold" style={{ color: "#64748B" }}>
+            Use a real invite sentence, not just a raw link. Each invite carries referral tracking.
+          </p>
+        </div>
+        <span className="w-fit rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#ECFDF5", color: "#047857" }}>
+          GTM ready
+        </span>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {templates.map((template) => (
+          <button
+            key={template.label}
+            type="button"
+            onClick={() => onCopy(template.body, template.label)}
+            className="rounded-[18px] border bg-[#F8FAFC] p-3 text-left transition hover:bg-white active:scale-[0.99]"
+            style={{ borderColor: "#E2E8F0" }}
+          >
+            <p className="text-sm font-black" style={{ color: "#172033" }}>{template.label}</p>
+            <p className="mt-2 line-clamp-4 text-xs font-semibold leading-relaxed" style={{ color: "#64748B" }}>
+              {template.body}
+            </p>
+          </button>
+        ))}
+      </div>
+      {notice && (
+        <p className="mt-3 text-xs font-bold" style={{ color: "#047857" }}>{notice}</p>
       )}
     </section>
   );
