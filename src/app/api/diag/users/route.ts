@@ -54,6 +54,43 @@ function toDateBuckets(createdAt: Date, now: Date) {
   };
 }
 
+function serializeUser(user: {
+  id: string;
+  email: string;
+  username: string;
+  name: string | null;
+  image: string | null;
+  passwordHash: string | null;
+  credits: number;
+  createdAt: Date;
+  accounts: Array<{ provider: string; type: string }>;
+  sessions: Array<{ id: string }>;
+  _count: {
+    challengesCreated: number;
+    participations: number;
+    evidenceSubmissions: number;
+    transactions: number;
+  };
+}) {
+  const classification = isLikelyTestUser(user) ? "likely_test" : "non_test";
+  return {
+    id: user.id,
+    classification,
+    testReason: classification === "likely_test" ? testReason(user) : null,
+    email: redactEmail(user.email),
+    emailDomain: user.email.split("@")[1]?.toLowerCase() ?? "unknown",
+    username: redactText(user.username),
+    name: redactText(user.name),
+    hasImage: Boolean(user.image),
+    hasPassword: Boolean(user.passwordHash),
+    credits: user.credits,
+    createdAt: user.createdAt,
+    providers: user.accounts.map((a) => a.provider),
+    activeSession: user.sessions.length > 0,
+    counts: user._count,
+  };
+}
+
 function safeEqualHex(a: string, b: string) {
   if (!/^[0-9a-f]+$/i.test(a) || !/^[0-9a-f]+$/i.test(b)) return false;
   const left = Buffer.from(a, "hex");
@@ -83,6 +120,8 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
+  const includeUsers = req.nextUrl.searchParams.get("includeUsers") === "1";
+  const userLimit = Math.min(Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 1000), 1), 2000);
   const users = await prisma.user.findMany({
     select: {
       id: true,
@@ -161,18 +200,8 @@ export async function GET(req: NextRequest) {
     providerCounts: Object.fromEntries([...providerCounts.entries()].sort(([a], [b]) => a.localeCompare(b))),
     domainCounts: Object.fromEntries([...domainCounts.entries()].sort(([, a], [, b]) => b - a).slice(0, 20)),
     testReasonCounts: Object.fromEntries([...testReasonCounts.entries()].sort(([a], [b]) => a.localeCompare(b))),
-    nonTestPreview: nonTestUsers.slice(0, 25).map((user) => ({
-      id: user.id,
-      email: redactEmail(user.email),
-      username: redactText(user.username),
-      name: redactText(user.name),
-      hasImage: Boolean(user.image),
-      credits: user.credits,
-      createdAt: user.createdAt,
-      providers: user.accounts.map((a) => a.provider),
-      activeSession: user.sessions.length > 0,
-      counts: user._count,
-    })),
+    nonTestPreview: nonTestUsers.slice(0, 25).map(serializeUser),
+    users: includeUsers ? users.slice(0, userLimit).map(serializeUser) : undefined,
     testSummary: {
       firstCreatedAt: testUsers[0]?.createdAt ?? null,
       lastCreatedAt: testUsers.at(-1)?.createdAt ?? null,
