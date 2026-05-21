@@ -268,7 +268,7 @@ export interface ChallengeData {
     createdAt: string;
     winner?: { id: string; username: string } | null;
   }>;
-  _count?: { evidence: number; judgments?: number; participants?: number };
+  _count?: { evidence: number; judgments?: number; participants?: number; judgeJobs?: number };
 }
 
 export interface ChallengeEventData {

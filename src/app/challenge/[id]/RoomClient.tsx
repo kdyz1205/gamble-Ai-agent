@@ -43,6 +43,18 @@ export default function RoomClient({
         </button>
         <div className="flex items-center gap-2">
           <Link
+            href="/markets"
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
+            style={{
+              color: NAVY,
+              background: "#FFFFFF",
+              border: `1px solid ${NAVY_FAINT}`,
+              borderRadius: "9999px",
+            }}
+          >
+            My challenges
+          </Link>
+          <Link
             href="/"
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{

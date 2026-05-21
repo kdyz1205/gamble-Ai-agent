@@ -731,7 +731,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
       >
         <div className="plasma-line" />
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <Link href="/markets" className="flex items-center gap-2.5 group">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center"
                  style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)", boxShadow: "0 0 16px rgba(124,92,252,0.4)" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -739,11 +739,17 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               </svg>
             </div>
             <span className="text-sm font-extrabold text-text-primary group-hover:text-white transition-colors">
-              ChallengeAI
+              My challenges
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="hidden rounded-full border border-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-text-secondary transition-colors hover:text-white sm:inline-flex"
+            >
+              New challenge
+            </Link>
             {/* Status badge */}
             <motion.div
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider"

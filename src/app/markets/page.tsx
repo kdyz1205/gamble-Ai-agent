@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
-import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
+import { isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
@@ -21,6 +21,16 @@ const LAVENDER_TEXT = "#6B21A8";
 const CREAM = "#FFEDD5";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
+
+const CANCELLABLE_BEFORE_EVIDENCE = new Set([
+  "waiting_for_opponent",
+  "open",
+  "opponent_accepted",
+  "escrow_locked",
+  "evidence_window_open",
+  "matched",
+  "live",
+]);
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: NAVY_FAINT, text: NAVY_DIM, label: "Draft" },
@@ -57,13 +67,53 @@ function hasOtherParticipant(market: ChallengeData, userId?: string) {
   ));
 }
 
-function closeLockReason(market: ChallengeData, userId?: string) {
+function hasChallengeHistory(market: ChallengeData) {
+  return (
+    (market._count?.evidence ?? market.evidence?.length ?? 0) > 0 ||
+    (market._count?.judgments ?? market.judgments?.length ?? 0) > 0 ||
+    (market._count?.judgeJobs ?? 0) > 0
+  );
+}
+
+type ManageAction =
+  | { kind: "delete"; label: string; confirm: string; success: string }
+  | { kind: "cancel"; label: string; confirm: string; success: string }
+  | { kind: "locked"; label: string; reason: string };
+
+function getManageAction(market: ChallengeData, userId?: string): ManageAction | null {
   if (!userId || market.creatorId !== userId) return null;
-  if (hasOtherParticipant(market, userId)) return "Opponent joined";
-  if ((market._count?.evidence ?? market.evidence?.length ?? 0) > 0) return "Evidence exists";
-  if ((market._count?.judgments ?? market.judgments?.length ?? 0) > 0) return "Judgment exists";
-  if (!["draft", "cancelled"].includes(market.status) && !isOpenForOpponentStatus(market.status)) return "Past close window";
-  return null;
+  if (isTerminalStatus(market.status)) {
+    return { kind: "locked", label: "Closed", reason: `Already ${market.status.replace(/_/g, " ")}` };
+  }
+  if (hasChallengeHistory(market)) {
+    return { kind: "locked", label: "Review", reason: "Evidence or judgment exists. Resolve it from the challenge room." };
+  }
+
+  const hasOpponent = hasOtherParticipant(market, userId);
+  const canDeleteEmpty = !hasOpponent && (["draft", "cancelled"].includes(market.status) || isOpenForOpponentStatus(market.status));
+  if (canDeleteEmpty) {
+    return {
+      kind: "delete",
+      label: "Close empty",
+      confirm: `Close "${market.title}"? Nobody else has joined, so this removes it from discovery.`,
+      success: market.stake > 0 ? "Closed and creator stake refunded." : "Closed and removed from discovery.",
+    };
+  }
+  if (CANCELLABLE_BEFORE_EVIDENCE.has(market.status)) {
+    return {
+      kind: "cancel",
+      label: hasOpponent ? "Cancel & refund" : "Cancel",
+      confirm: `Cancel "${market.title}"? This stops the challenge before evidence/judging and refunds locked credits when needed.`,
+      success: market.stake > 0 ? "Cancelled and locked credits refunded." : "Cancelled.",
+    };
+  }
+  return { kind: "locked", label: "Locked", reason: `Status ${market.status.replace(/_/g, " ")} needs room review.` };
+}
+
+function messageColor(message: string) {
+  if (/closed|cancelled|refunded/i.test(message)) return MINT_TEXT;
+  if (/temporarily unavailable|still usable/i.test(message)) return NAVY_DIM;
+  return ROSE_TEXT;
 }
 
 export default function MarketsPage() {
@@ -78,29 +128,46 @@ export default function MarketsPage() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadChallenges = useCallback(async () => {
     if (sessionLoading) return;
-    let active = true;
     setLoading(true);
-    Promise.all([
-      userId ? api.listChallenges({ mine: true, limit: 50 }) : Promise.resolve({ challenges: [], total: 0 }),
-      api.discoverChallenges({ limit: 30 }),
-    ])
-      .then(([mine, publ]) => {
-        if (!active) return;
-        setMarkets(mine.challenges);
-        setOpenPublic((publ.challenges || []).filter((c) => c.creator.id !== userId));
-      })
-      .catch((err) => {
-        if (active) setMessage(err instanceof Error ? err.message : "Couldn't load challenges");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    setMessage(null);
+    try {
+      const [mineResult, publicResult] = await Promise.allSettled([
+        userId ? api.listChallenges({ mine: true, limit: 50 }) : Promise.resolve({ challenges: [], total: 0 }),
+        api.discoverChallenges({ limit: 30 }),
+      ]);
+      if (mineResult.status === "fulfilled") {
+        setMarkets(mineResult.value.challenges);
+      } else {
+        setMarkets([]);
+        setMessage("Could not load your challenge board. Refresh and try again.");
+      }
+      if (publicResult.status === "fulfilled") {
+        setOpenPublic((publicResult.value.challenges || []).filter((c) => c.creator.id !== userId));
+      } else {
+        setOpenPublic([]);
+        if (mineResult.status === "fulfilled") {
+          setMessage("Open challenge discovery is temporarily unavailable. Your own challenge board is still usable.");
+        }
+      }
+    } catch (err) {
+      console.warn("[markets] challenge manager load failed", err);
+      setMessage("Could not load challenge manager. Refresh and try again.");
+    } finally {
+      setLoading(false);
+    }
   }, [sessionLoading, userId]);
+
+  useEffect(() => {
+    void loadChallenges();
+  }, [loadChallenges]);
+
+  const grouped = useMemo(() => {
+    const active = markets.filter((market) => !isTerminalStatus(market.status));
+    const closed = markets.filter((market) => isTerminalStatus(market.status));
+    return { active, closed };
+  }, [markets]);
 
   const tryMatchMe = async () => {
     if (!user) {
@@ -118,21 +185,35 @@ export default function MarketsPage() {
       }
       setMessage(tr?.message || tr?.reason || r.userVisibleReply || "No open challenges to match right now.");
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Couldn't match right now");
+      console.warn("[markets] match failed", e);
+      setMessage("Matchmaking is temporarily unavailable. You can still join from a shared link or create a challenge.");
     } finally {
       setMatching(false);
     }
   };
 
-  const closeEmptyMarket = async (market: ChallengeData) => {
-    if (!window.confirm(`Close "${market.title}"? This only works while nobody else has joined.`)) return;
+  const closeChallenge = async (market: ChallengeData) => {
+    const action = getManageAction(market, user?.id);
+    if (!action || action.kind === "locked") return;
+    if (!window.confirm(action.confirm)) return;
     setClosingId(market.id);
     setMessage(null);
     try {
-      const res = await api.deleteChallenge(market.id);
-      setMarkets((prev) => prev.filter((item) => item.id !== market.id));
-      setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
-      setMessage(res.refundedStake > 0 ? `Closed. ${res.refundedStake} credits refunded.` : "Closed.");
+      if (action.kind === "delete") {
+        const res = await api.deleteChallenge(market.id);
+        setMarkets((prev) => prev.filter((item) => item.id !== market.id));
+        setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
+        setMessage(res.refundedStake > 0 ? `Closed. ${res.refundedStake} credits refunded.` : action.success);
+      } else {
+        const res = await api.cancelChallenge(market.id, { reason: "Creator cancelled from challenge manager." });
+        if (res.challenge) {
+          setMarkets((prev) => prev.map((item) => item.id === market.id ? res.challenge : item));
+          setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
+        } else {
+          await loadChallenges();
+        }
+        setMessage(res.cancellation.refunded ? "Cancelled. Credits refunded." : action.success);
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Couldn't close this challenge");
     } finally {
@@ -143,19 +224,64 @@ export default function MarketsPage() {
   return (
     <div className="relative min-h-screen">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
-        </Link>
-        <Link
-          href="/"
-          className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
-          style={{ color: PEACH_TEXT, background: CREAM, border: "1px solid #FFE0CC", borderRadius: "9999px" }}
-        >
-          + New bet
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
+            GambleAI
+          </Link>
+          <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>
+            Challenge manager
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadChallenges}
+            disabled={loading}
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 disabled:opacity-50 transition-transform"
+            style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
+          >
+            {loading ? "Refreshing" : "Refresh"}
+          </button>
+          <Link
+            href="/"
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
+            style={{ color: PEACH_TEXT, background: CREAM, border: "1px solid #FFE0CC", borderRadius: "9999px" }}
+          >
+            + New challenge
+          </Link>
+        </div>
       </header>
 
-      <main className="relative z-10 max-w-lg mx-auto px-4 py-4">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 py-4">
+        <section className="mb-5 rounded-[28px] border bg-white/90 p-5 shadow-sm" style={{ borderColor: NAVY_FAINT, boxShadow: "0 18px 50px rgba(15,23,42,0.06)" }}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MINT_TEXT }}>
+                Manage challenges
+              </p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" style={{ color: NAVY }}>
+                Keep every challenge closeable, traceable, and easy to re-enter.
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed" style={{ color: NAVY_DIM }}>
+                Your active challenges stay here. Empty challenges can be removed, accepted challenges can be cancelled before evidence, and locked challenges point you back to the room for review.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center md:min-w-[320px]">
+              <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Active</p>
+                <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{grouped.active.length}</p>
+              </div>
+              <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Closed</p>
+                <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{grouped.closed.length}</p>
+              </div>
+              <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Nearby</p>
+                <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{openPublic.length}</p>
+              </div>
+            </div>
+          </div>
+        </section>
         <motion.div
           className="mb-5 lp-glass p-4 rounded-[20px]"
           initial={{ opacity: 0, y: 8 }}
@@ -185,7 +311,7 @@ export default function MarketsPage() {
             {matching ? "Looking..." : "Match me now"}
           </button>
           {message && (
-            <p className="text-[11px] font-semibold mt-2" style={{ color: message.startsWith("Closed") ? MINT_TEXT : ROSE_TEXT }}>{message}</p>
+            <p className="text-[11px] font-semibold mt-2" style={{ color: messageColor(message) }}>{message}</p>
           )}
         </motion.div>
 
@@ -225,9 +351,25 @@ export default function MarketsPage() {
           </section>
         )}
 
-        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>
-          {sessionLoading ? "Challenges" : user ? "My challenges" : "Open challenges"}
-        </h1>
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-extrabold" style={{ color: NAVY }}>
+              {sessionLoading ? "Challenges" : user ? "Your challenge board" : "Open challenges"}
+            </h2>
+            {user && (
+              <p className="mt-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
+                Active first, closed history below. Use Manage to return to the exact room.
+              </p>
+            )}
+          </div>
+          <Link
+            href="/"
+            className="hidden shrink-0 px-4 py-2 text-xs font-black active:scale-95 transition-transform sm:inline-block"
+            style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
+          >
+            Create another
+          </Link>
+        </div>
 
         {loading ? (
           <div className="text-center py-16">
@@ -261,13 +403,24 @@ export default function MarketsPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {markets.map((m, i) => {
+          <div className="space-y-6">
+            {([
+              ["Active", grouped.active],
+              ["Closed history", grouped.closed],
+            ] as const).map(([groupLabel, groupItems]) => groupItems.length > 0 && (
+              <section key={groupLabel}>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: groupLabel === "Active" ? MINT_TEXT : NAVY_DIM }}>
+                    {groupLabel} / {groupItems.length}
+                  </h3>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+            {groupItems.map((m, i) => {
               const status = STATUS_STYLE[m.status] || STATUS_STYLE.draft;
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
-              const lockedReason = closeLockReason(m, user.id);
-              const canClose = m.creatorId === user.id && !lockedReason;
+              const manageAction = getManageAction(m, user.id);
+              const canAct = manageAction?.kind === "delete" || manageAction?.kind === "cancel";
               return (
                 <motion.article
                   key={m.id}
@@ -316,35 +469,38 @@ export default function MarketsPage() {
                     >
                       Manage
                     </Link>
-                    {canClose && (
+                    {canAct && (
                       <button
                         type="button"
-                        onClick={() => closeEmptyMarket(m)}
+                        onClick={() => closeChallenge(m)}
                         disabled={closingId === m.id}
                         className="px-4 py-2 text-xs font-black active:scale-95 disabled:opacity-50 transition-transform"
                         style={{ color: ROSE_TEXT, background: ROSE_BG, border: "1px solid #FDA4AF", borderRadius: "9999px" }}
                       >
-                        {closingId === m.id ? "Closing..." : "Close"}
+                        {closingId === m.id ? "Closing..." : manageAction.label}
                       </button>
                     )}
-                    {!canClose && lockedReason && (
+                    {manageAction?.kind === "locked" && (
                       <span
                         className="px-3 py-2 text-[10px] font-black"
                         style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}
-                        title={lockedReason}
+                        title={manageAction.reason}
                       >
-                        Locked
+                        {manageAction.label}
                       </span>
                     )}
                   </div>
-                  {!canClose && lockedReason && (
+                  {manageAction?.kind === "locked" && (
                     <p className="mt-2 text-[10px] font-bold" style={{ color: NAVY_DIM }}>
-                      Manage lock: {lockedReason}. Open the challenge for review, dispute, refund, or verdict actions.
+                      {manageAction.reason}
                     </p>
                   )}
                 </motion.article>
               );
             })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </main>

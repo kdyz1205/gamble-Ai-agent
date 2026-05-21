@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
         participants: {
           include: { user: { select: { id: true, username: true, image: true } } },
         },
-        _count: { select: { evidence: true, judgments: true } },
+        _count: { select: { evidence: true, judgments: true, judgeJobs: true, participants: true } },
       },
       orderBy: { createdAt: "desc" },
       take: limit,

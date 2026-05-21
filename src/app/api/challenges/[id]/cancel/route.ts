@@ -89,15 +89,9 @@ export async function POST(
     }
 
     const acceptedParticipants = challenge.participants.filter((participant) => participant.status === "accepted");
-    const hasOtherAcceptedParticipant = acceptedParticipants.some(
-      (participant) => participant.userId !== challenge.creatorId,
-    );
-    if (!hasOtherAcceptedParticipant) {
-      return Response.json(
-        { error: "No opponent has accepted yet. Close the empty challenge instead." },
-        { status: 409 },
-      );
-    }
+    const participantsToRefund = acceptedParticipants.length > 0
+      ? acceptedParticipants
+      : [{ userId: challenge.creatorId }];
 
     const existingSettlementRows = await prisma.creditTx.count({
       where: { challengeId: id, type: { in: ["win", "loss", "refund"] } },
@@ -125,7 +119,7 @@ export async function POST(
       id,
       null,
       challenge.stake,
-      acceptedParticipants.map((participant) => ({ userId: participant.userId })),
+      participantsToRefund.map((participant) => ({ userId: participant.userId })),
     );
     if (!settlement.success) {
       await prisma.challenge.update({
@@ -155,7 +149,7 @@ export async function POST(
         previousStatus: status,
         finalStatus,
         reason,
-        participantsRefunded: acceptedParticipants.map((participant) => participant.userId),
+        participantsRefunded: participantsToRefund.map((participant) => participant.userId),
         stake: challenge.stake,
       },
     });
@@ -184,7 +178,7 @@ export async function POST(
         finalStatus,
         refunded: challenge.stake > 0,
         stake: challenge.stake,
-        participantCount: acceptedParticipants.length,
+        participantCount: participantsToRefund.length,
         reason,
       },
       settlement,
