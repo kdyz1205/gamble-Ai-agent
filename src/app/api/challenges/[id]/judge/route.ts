@@ -61,7 +61,7 @@ export async function POST(
     autoSettleRequested = body?.autoSettle === true;
     rejudgeRequested = body?.rejudge === true;
     if (typeof body?.reason === "string") rejudgeReason = body.reason.trim().slice(0, 500);
-  } catch { /* default to haiku */ }
+  } catch { /* default to the Light tier */ }
 
   const cost = TIER_MULTIPLIER[tierId];
 

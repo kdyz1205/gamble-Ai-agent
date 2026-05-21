@@ -18,7 +18,7 @@ import {
 } from "@/lib/challenge-state-machine";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
-const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
+const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Light", 2: "Pro", 3: "Max" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
   1: "Fast & efficient",
   2: "Balanced judgment",

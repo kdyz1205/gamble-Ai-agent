@@ -83,9 +83,9 @@ export async function getAllBalances(userAddress: Address): Promise<TierBalance[
   });
 
   return [
-    { id: 1, name: "Haiku",  balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
-    { id: 2, name: "Sonnet", balance: Number(balances[1]), valueUsd: Number(balances[1]) * 0.05 },
-    { id: 3, name: "Opus",   balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
+    { id: 1, name: "Light", balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
+    { id: 2, name: "Pro", balance: Number(balances[1]), valueUsd: Number(balances[1]) * 0.05 },
+    { id: 3, name: "Max", balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
   ];
 }
 

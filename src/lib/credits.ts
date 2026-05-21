@@ -23,11 +23,11 @@ import type { Address } from "viem";
  * Tokens are:
  *   - Bought with USDC (on-chain mint)
  *   - Burned when AI is called (1 token = 1 inference)
- *   - Staked as bets (Opus stakes are worth 25x Haiku stakes)
+ *   - Staked as bets (Max stakes are worth 25x Light stakes)
  *   - Freely tradeable on any ERC-1155 marketplace
  *
- * Off-chain mode: uses integer credits in PostgreSQL (1 credit = 1 Haiku equivalent)
- * Off-chain tier multipliers: HAIKU=1, SONNET=5, OPUS=25
+ * Off-chain mode: uses integer credits in PostgreSQL (1 credit = 1 Light equivalent)
+ * Off-chain tier multipliers: LIGHT=1, PRO=5, MAX=25
  */
 
 export const TIER_MULTIPLIER = { 1: 1, 2: 5, 3: 25 } as const;
@@ -35,7 +35,7 @@ export const TIER_MULTIPLIER = { 1: 1, 2: 5, 3: 25 } as const;
 export const COSTS = {
   PARSE: 1,
   JUDGE: 1,
-  SIGNUP_BONUS: 50, // 50 Haiku-equivalent credits
+  SIGNUP_BONUS: 50, // 50 Light-equivalent credits
   CREDITS_PER_USDC: 100,
 } as const;
 

@@ -31,6 +31,10 @@ export async function GET() {
     take: 30,
   });
 
+  const lightTier = { id: 1, name: "Light", priceUsd: 0.01, creditCost: TIER_MULTIPLIER[1], model: MODEL_TIERS.LIGHT.model };
+  const proTier = { id: 2, name: "Pro", priceUsd: 0.05, creditCost: TIER_MULTIPLIER[2], model: MODEL_TIERS.PRO.model };
+  const maxTier = { id: 3, name: "Max", priceUsd: 0.25, creditCost: TIER_MULTIPLIER[3], model: MODEL_TIERS.MAX.model };
+
   return Response.json({
     offChain: {
       credits: dbUser.credits,
@@ -49,9 +53,13 @@ export async function GET() {
     evmAddress: dbUser.evmAddress,
     transactions: recentTxs,
     tiers: {
-      haiku:  { id: 1, name: "Haiku",  priceUsd: 0.01, creditCost: TIER_MULTIPLIER[1], model: MODEL_TIERS.HAIKU.model },
-      sonnet: { id: 2, name: "Sonnet", priceUsd: 0.05, creditCost: TIER_MULTIPLIER[2], model: MODEL_TIERS.SONNET.model },
-      opus:   { id: 3, name: "Opus",   priceUsd: 0.25, creditCost: TIER_MULTIPLIER[3], model: MODEL_TIERS.OPUS.model },
+      light: lightTier,
+      pro: proTier,
+      max: maxTier,
+      // Backwards-compatible aliases for older clients.
+      haiku: lightTier,
+      sonnet: proTier,
+      opus: maxTier,
     },
   });
 }

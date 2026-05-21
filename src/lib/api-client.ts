@@ -77,6 +77,10 @@ export interface TokenData {
     x402TxHash: string | null;
   }>;
   tiers: {
+    light: TierInfo;
+    pro: TierInfo;
+    max: TierInfo;
+    /** Backwards-compatible aliases for older clients. */
     haiku: TierInfo;
     sonnet: TierInfo;
     opus: TierInfo;
