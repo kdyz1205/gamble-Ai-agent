@@ -636,11 +636,14 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex flex-col" onClick={() => showProfile && setShowProfile(false)}>
-      <header className="relative z-20 flex items-center justify-between px-5 py-4">
-        <button onClick={reset} className="text-base font-extrabold tracking-tight" style={{ color: "#172033" }}>
-          AI Gamble Agent
+      <header className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
+        <button onClick={reset} className="flex items-center gap-2 text-base font-black tracking-tight" style={{ color: "#172033" }}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl border bg-white text-xs shadow-sm" style={{ borderColor: "#D1FAE5", color: "#047857" }}>
+            AI
+          </span>
+          <span>GambleAI</span>
         </button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {appState !== "idle" && (
             <button onClick={reset} className="text-xs font-bold uppercase tracking-wide" style={{ color: "#64748B" }}>
               New
@@ -718,44 +721,53 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-20">
-        <div className="w-full max-w-3xl">
+      <main className="relative z-10 flex-1 px-4 pb-16 pt-4 sm:px-6 lg:pt-8">
+        <div className="mx-auto w-full max-w-7xl">
           {appState === "idle" && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border bg-white shadow-sm" style={{ borderColor: "#D1FAE5", color: "#047857" }}>
-                AI
-              </div>
-              <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-3" style={{ color: "#172033" }}>
-                What do you want to challenge someone on?
-              </h1>
-              <p className="text-base md:text-lg font-medium mb-7 mx-auto max-w-2xl" style={{ color: "#526078" }}>
-                Say one sentence. The AI turns it into rules, participants, evidence, judging, invite flow, disputes, and point settlement.
-              </p>
-              {error && <ErrorBox message={error} />}
-              <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
-              <LaunchPromptStrip onPick={handleLaunchPrompt} />
-              <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
-              {user && (
-                <LaunchInviteCard
-                  inviteLink={personalInviteLink}
-                  notice={referralNotice}
-                  invitedCount={referralStats?.invitedCount ?? 0}
-                  bonusEarned={referralStats?.bonusEarned ?? 0}
-                  onCopy={copyPersonalInvite}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+              <section className="min-w-0">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border bg-white/90 px-3 py-2 shadow-sm" style={{ borderColor: "#D1FAE5" }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
+                  <span className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>AI challenge host</span>
+                </div>
+                <h1 className="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" style={{ color: "#172033", lineHeight: 1.02 }}>
+                  Turn any dare into a playable challenge.
+                </h1>
+                <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
+                  Say one sentence. The AI builds the rules, opponent flow, evidence, judging, disputes, and credit settlement.
+                </p>
+                <div className="mt-7">
+                  {error && <ErrorBox message={error} />}
+                  <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
+                  <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
+                  <LaunchPromptStrip onPick={handleLaunchPrompt} />
+                </div>
+              </section>
+
+              <aside className="grid gap-4">
+                <LiveProofPanel />
+                {user && (
+                  <LaunchInviteCard
+                    inviteLink={personalInviteLink}
+                    notice={referralNotice}
+                    invitedCount={referralStats?.invitedCount ?? 0}
+                    bonusEarned={referralStats?.bonusEarned ?? 0}
+                    onCopy={copyPersonalInvite}
+                  />
+                )}
+                <OpenChallengeStrip
+                  userId={user?.id}
+                  challenges={openChallenges}
+                  loading={discoveryLoading}
+                  message={discoveryMessage}
+                  joiningId={joiningId}
+                  joinMessage={joinMessage}
+                  locationState={locationState}
+                  onRefresh={loadOpenChallenges}
+                  onEnableLocation={() => loadOpenChallenges({ promptForLocation: true })}
+                  onJoin={handleJoinChallenge}
                 />
-              )}
-              <OpenChallengeStrip
-                userId={user?.id}
-                challenges={openChallenges}
-                loading={discoveryLoading}
-                message={discoveryMessage}
-                joiningId={joiningId}
-                joinMessage={joinMessage}
-                locationState={locationState}
-                onRefresh={loadOpenChallenges}
-                onEnableLocation={() => loadOpenChallenges({ promptForLocation: true })}
-                onJoin={handleJoinChallenge}
-              />
+              </aside>
             </motion.div>
           )}
 
@@ -852,7 +864,7 @@ function LaunchInviteCard({
   onCopy: () => void;
 }) {
   return (
-    <section className="mx-auto mt-4 max-w-2xl rounded-2xl border bg-white px-4 py-3 text-left shadow-sm" style={{ borderColor: "#D1FAE5" }}>
+    <section className="rounded-[22px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Beta invite</p>
@@ -860,7 +872,7 @@ function LaunchInviteCard({
             Give a friend +10 pts. You get +10 pts when they join.
           </p>
           <p className="mt-1 text-xs font-semibold" style={{ color: "#64748B" }}>
-            {invitedCount} joined from your link · {bonusEarned} pts earned
+            {invitedCount} joined from your link - {bonusEarned} pts earned
           </p>
         </div>
         <button
@@ -889,28 +901,73 @@ function LaunchInviteCard({
 
 function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
   return (
-    <section className="mt-4">
+    <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
-          One-tap challenge ideas
+          Tap to start
         </p>
         <p className="hidden text-xs font-semibold sm:block" style={{ color: "#64748B" }}>
           Built for first-time users to publish faster.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {LAUNCH_PROMPTS.map((item) => (
           <button
             key={item.title}
             type="button"
             onClick={() => onPick(item.prompt)}
-            className="rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition active:scale-[0.99]"
-            style={{ borderColor: "#E2E8F0" }}
+            className="group rounded-[18px] border bg-white/90 px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
+            style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 28px rgba(15,23,42,0.04)" }}
           >
-            <p className="text-sm font-extrabold" style={{ color: "#172033" }}>{item.title}</p>
+            <p className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</p>
             <p className="mt-1 line-clamp-2 text-xs font-semibold" style={{ color: "#64748B" }}>{item.prompt}</p>
           </button>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function LiveProofPanel() {
+  const steps = [
+    { label: "Prompt", value: "one sentence" },
+    { label: "Protocol", value: "rules + safety" },
+    { label: "Evidence", value: "video/photo/GPS" },
+    { label: "Verdict", value: "AI + review" },
+  ];
+  return (
+    <section className="overflow-hidden rounded-[28px] border bg-white/95 p-5 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 24px 70px rgba(15,23,42,0.09)" }}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Live protocol</p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight" style={{ color: "#172033" }}>Challenge radar is open</h2>
+          <p className="mt-2 text-sm font-semibold leading-relaxed" style={{ color: "#64748B" }}>
+            Create, invite, verify evidence, and settle credits from one guided flow.
+          </p>
+        </div>
+        <div className="rounded-2xl border px-3 py-2 text-center" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
+          <p className="text-lg font-black" style={{ color: "#10B981" }}>0.85</p>
+          <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>auto gate</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        {steps.map((step) => (
+          <div key={step.label} className="rounded-[16px] border p-3" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
+            <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>{step.label}</p>
+            <p className="mt-1 text-sm font-extrabold" style={{ color: "#172033" }}>{step.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#D1FAE5", background: "#ECFDF5" }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black" style={{ color: "#064E3B" }}>Push-up battle</p>
+            <p className="mt-1 text-xs font-bold" style={{ color: "#047857" }}>same camera - liveness phrase - winner payout</p>
+          </div>
+          <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFFFFF", color: "#047857" }}>ready</span>
+        </div>
       </div>
     </section>
   );
@@ -941,7 +998,7 @@ function OpenChallengeStrip({
 }) {
   const canAskForLocation = locationState !== "ready" && locationState !== "unavailable";
   return (
-    <section className="mt-6 text-left">
+    <section className="text-left">
       <div className="flex items-center justify-between gap-3 mb-2">
         <div>
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Join nearby</p>
@@ -973,13 +1030,13 @@ function OpenChallengeStrip({
         </div>
       </div>
       {joinMessage && <ErrorBox message={joinMessage} />}
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid gap-2">
         {loading ? (
           [0, 1, 2].map((item) => (
-            <div key={item} className="h-24 animate-pulse rounded-2xl border bg-white/70" style={{ borderColor: "#E2E8F0" }} />
+            <div key={item} className="h-24 animate-pulse rounded-[18px] border bg-white/70" style={{ borderColor: "#E2E8F0" }} />
           ))
         ) : challenges.length === 0 ? (
-          <div className="md:col-span-3 rounded-2xl border bg-white px-4 py-4 text-sm font-semibold" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
+          <div className="rounded-[18px] border bg-white/95 px-4 py-4 text-sm font-semibold shadow-sm" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
             No open public challenge is waiting right now.
           </div>
         ) : (
@@ -988,13 +1045,18 @@ function OpenChallengeStrip({
             const joined = Boolean(userId && challenge.participants.some((participant) => participant.user.id === userId));
             const distance = challenge.discovery?.distanceMiles;
             return (
-              <article key={challenge.id} className="rounded-2xl border bg-white p-3 shadow-sm" style={{ borderColor: "#E2E8F0" }}>
-                <div className="min-h-12">
-                  <p className="line-clamp-2 text-sm font-extrabold" style={{ color: "#172033" }}>{challenge.title}</p>
-                  <p className="mt-1 text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    @{challenge.creator.username} / {challenge.stake > 0 ? `${challenge.stake} pts` : "free"}
-                    {distance != null ? ` / ${distance} mi` : ""}
-                  </p>
+              <article key={challenge.id} className="rounded-[20px] border bg-white/95 p-3 shadow-sm" style={{ borderColor: "#E2E8F0", boxShadow: "0 12px 34px rgba(15,23,42,0.05)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-extrabold" style={{ color: "#172033" }}>{challenge.title}</p>
+                    <p className="mt-1 text-[11px] font-semibold" style={{ color: "#64748B" }}>
+                      @{challenge.creator.username} / {challenge.stake > 0 ? `${challenge.stake} pts` : "free"}
+                      {distance != null ? ` / ${distance} mi` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase" style={{ background: "#F8FAFC", color: "#64748B" }}>
+                    {challenge.participants.length}/{challenge.maxParticipants ?? 2}
+                  </span>
                 </div>
                 <button
                   type="button"
