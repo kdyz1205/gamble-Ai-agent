@@ -14,6 +14,7 @@ import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
+type LanguageMode = api.ProtocolSpecV2["language"];
 type DiscoveryLocationState = "checking" | "ready" | "global" | "blocked" | "unavailable";
 type BrowserLocationStatus = "ready" | "blocked" | "timeout" | "unavailable" | "error";
 
@@ -115,10 +116,27 @@ function extractModelDirective(input: string): { prompt: string; prefs: OraclePr
   return { prompt: input.trim(), prefs: null };
 }
 
-function detectPromptLanguage(input: string) {
+function detectPromptLanguage(input: string): LanguageMode {
   if (/[\u3400-\u9FFF]/.test(input)) return "zh";
   if (/[A-Za-z]/.test(input)) return "en";
   return "auto";
+}
+
+function resolveCompileLanguage(input: string, languageMode?: LanguageMode): LanguageMode {
+  if (languageMode && languageMode !== "auto") return languageMode;
+  return detectPromptLanguage(input);
+}
+
+function protocolLanguageLabel(language: LanguageMode | null | undefined) {
+  if (language === "zh") return "中文";
+  if (language === "en") return "English";
+  return "Auto";
+}
+
+function protocolLanguageStatus(language: LanguageMode | null | undefined) {
+  if (language === "zh") return "中文版本：规则、证据要求和结算说明应优先用中文呈现。";
+  if (language === "en") return "English version: rules, evidence, and settlement copy should stay in English.";
+  return "Auto language: Axelrod used the prompt to choose the protocol language.";
 }
 
 function requestBrowserLocation(timeoutMs = 3500): Promise<{
@@ -314,7 +332,7 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const handleGenerate = useCallback(async (input: string) => {
+  const handleGenerate = useCallback(async (input: string, languageMode?: LanguageMode) => {
     if (!user) {
       setError("Sign in to use your daily beta AI draft credits.");
       setShowAuth(true);
@@ -332,7 +350,7 @@ export default function Home() {
     try {
       const res = await api.compileChallengeProtocol(directive.prompt, {
         ...nextPrefs,
-        language: detectPromptLanguage(directive.prompt),
+        language: resolveCompileLanguage(directive.prompt, languageMode),
         context: {
           surface: "homepage_composer",
           flow: "draft_before_create",
@@ -1299,6 +1317,8 @@ function ChallengeSpecPreview({
     `confidence ${Math.round(protocol.settlementProtocol.autoSettleConfidenceThreshold * 100)}%`,
     protocol.riskPolicy.allowed ? "settlement eligible if gates pass" : "blocked",
   ].join(" -> ");
+  const languageLabel = protocolLanguageLabel(protocol.language);
+  const languageStatus = protocolLanguageStatus(protocol.language);
   const inviteOptions: Array<{ value: "invite_link" | "nearby" | "same_device"; label: string; description: string }> = [
     { value: "invite_link", label: "Invite link", description: "Send Jerry or another opponent a private join link." },
     { value: "nearby", label: "Nearby discovery", description: "Make it public so nearby users can discover and join." },
@@ -1315,7 +1335,13 @@ function ChallengeSpecPreview({
       <div className="p-5 border-b" style={{ borderColor: "#EEF2F7" }}>
         <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "#047857" }}>Generated from: {prompt}</p>
         <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: "#172033" }}>{protocol.title}</h2>
+        <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "#D1FAE5", background: "#F0FDF4" }}>
+          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Protocol language</p>
+          <p className="mt-1 text-sm font-extrabold" style={{ color: "#172033" }}>{languageLabel}</p>
+          <p className="mt-1 text-xs font-semibold" style={{ color: "#526078" }}>{languageStatus}</p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
+          <Pill>language: {languageLabel}</Pill>
           <Pill>{protocol.participantMode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.outcomeType.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.evidenceProtocol.mode.replace(/_/g, " ")}</Pill>

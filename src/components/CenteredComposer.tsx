@@ -4,15 +4,41 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as api from "@/lib/api-client";
 
+type VoiceLang = "auto" | "en" | "zh";
+
 interface Props {
-  onSubmit: (message: string) => void;
+  onSubmit: (message: string, languageMode: VoiceLang) => void;
   isActive: boolean;
   isParsing?: boolean;
   initialValue?: string;
   onQuotaChange?: (quota: api.DailyAiQuotaStatus) => void;
 }
 
-type VoiceLang = "auto" | "en" | "zh";
+const LANGUAGE_OPTIONS: Array<{
+  value: VoiceLang;
+  shortLabel: string;
+  label: string;
+  status: string;
+}> = [
+  {
+    value: "auto",
+    shortLabel: "Auto",
+    label: "Auto language",
+    status: "Auto language: detects English or Chinese from your sentence.",
+  },
+  {
+    value: "en",
+    shortLabel: "English",
+    label: "English",
+    status: "English mode: transcribe and generate the protocol in English.",
+  },
+  {
+    value: "zh",
+    shortLabel: "中文",
+    label: "中文",
+    status: "中文模式：语音转写和挑战规则都会优先使用中文。",
+  },
+];
 
 export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue, onQuotaChange }: Props) {
   const [input, setInput] = useState(initialValue || "");
@@ -34,10 +60,10 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const send = useCallback(() => {
     const v = input.trim();
     if (!v || isParsing || isTranscribing) return;
-    onSubmit(v);
+    onSubmit(v, voiceLang);
     setInput("");
     setInterim("");
-  }, [input, isParsing, isTranscribing, onSubmit]);
+  }, [input, isParsing, isTranscribing, onSubmit, voiceLang]);
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -297,6 +323,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const MINT = "#A7F3D0";        // mint-200
   const ROSE = "#FECACA";        // red-200 (gentle)
   const canSend = Boolean(input.trim() && !busy);
+  const selectedLanguage = LANGUAGE_OPTIONS.find(option => option.value === voiceLang) ?? LANGUAGE_OPTIONS[0];
 
   return (
     <div className="w-full">
@@ -339,20 +366,23 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
         <div className="flex items-center justify-between px-3 py-2.5 border-t" style={{ borderColor: NAVY_FAINT }}>
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1">
-              {(["auto", "en", "zh"] as const).map(lang => (
+            <div className="flex items-center gap-1" aria-label="Language mode">
+              {LANGUAGE_OPTIONS.map(option => (
                 <button
-                  key={lang}
-                  onClick={() => setVoiceLang(lang)}
+                  key={option.value}
+                  onClick={() => setVoiceLang(option.value)}
                   disabled={listening || isTranscribing}
-                  className="px-2.5 py-1 text-[11px] font-bold uppercase transition-all disabled:opacity-40"
+                  className="px-2.5 py-1 text-[11px] font-bold transition-all disabled:opacity-40"
                   style={{
-                    color: voiceLang === lang ? "#FFFFFF" : NAVY_DIM,
-                    background: voiceLang === lang ? PEACH : "transparent",
+                    color: voiceLang === option.value ? "#FFFFFF" : NAVY_DIM,
+                    background: voiceLang === option.value ? PEACH : "transparent",
                     borderRadius: "999px",
                   }}
+                  title={option.status}
+                  aria-pressed={voiceLang === option.value}
                 >
-                  {lang === "auto" ? "Auto" : lang === "en" ? "EN" : "ZH"}
+                  <span className="hidden sm:inline">{option.label}</span>
+                  <span className="sm:hidden">{option.shortLabel}</span>
                 </button>
               ))}
             </div>
@@ -418,6 +448,9 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           </motion.button>
         </div>
       </div>
+      <p className="mt-2 px-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
+        {selectedLanguage.status}
+      </p>
     </div>
   );
 }

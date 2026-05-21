@@ -48,6 +48,9 @@ async function runCoreNavSuite(proof, page, labelPrefix = "") {
   await checkRoute(proof, page, "/", [
     "Turn any dare into a playable challenge.",
     "TAP TO START",
+    "Auto language",
+    "English",
+    "中文",
   ], labelPrefix);
 
   await checkRoute(proof, page, "/markets", [

@@ -29,7 +29,7 @@ export default function ChallengeInput() {
           Challenge <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-teal">Anyone</span>
         </h1>
         <p className="text-base sm:text-lg text-text-secondary max-w-md mx-auto">
-          Describe your challenge in plain English. AI will structure, match, and arbitrate it.
+          Describe your challenge in English or Chinese. AI will structure, match, and arbitrate it.
         </p>
       </div>
 
