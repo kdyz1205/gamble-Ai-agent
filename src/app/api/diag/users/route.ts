@@ -5,6 +5,7 @@
  * redacted previews only; no tokens, hashes, or full emails. Gated by DIAG_TOKEN.
  */
 import { NextRequest } from "next/server";
+import { createHmac, timingSafeEqual } from "crypto";
 import prisma from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -41,9 +42,31 @@ function toDateBuckets(createdAt: Date, now: Date) {
   };
 }
 
-export async function GET(req: NextRequest) {
+function safeEqualHex(a: string, b: string) {
+  if (!/^[0-9a-f]+$/i.test(a) || !/^[0-9a-f]+$/i.test(b)) return false;
+  const left = Buffer.from(a, "hex");
+  const right = Buffer.from(b, "hex");
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function hasValidDiagProof(req: NextRequest) {
   const token = req.headers.get("x-diag-token");
-  if (!process.env.DIAG_TOKEN || token !== process.env.DIAG_TOKEN) {
+  if (process.env.DIAG_TOKEN && token === process.env.DIAG_TOKEN) return true;
+
+  const secret = process.env.NEXTAUTH_SECRET;
+  const timestampHeader = req.headers.get("x-diag-timestamp");
+  const signature = req.headers.get("x-diag-signature");
+  const timestamp = Number(timestampHeader);
+  if (!secret || !timestampHeader || !signature || !Number.isFinite(timestamp)) return false;
+  if (Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) return false;
+
+  const path = req.nextUrl.pathname;
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${path}`).digest("hex");
+  return safeEqualHex(signature, expected);
+}
+
+export async function GET(req: NextRequest) {
+  if (!hasValidDiagProof(req)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
