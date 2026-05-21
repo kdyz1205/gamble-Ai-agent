@@ -236,6 +236,13 @@ try {
   requireCheck(proof, "two_ai_judge_rows", judgeRows.length === 2, judgeRows.map(txView));
   requireCheck(proof, "first_cost_spent", judgeRows.some((tx) => tx.amount === -1), judgeRows.map(txView));
   requireCheck(proof, "second_cost_spent", judgeRows.some((tx) => tx.amount === -5), judgeRows.map(txView));
+  requireCheck(
+    proof,
+    "provider_neutral_tier_labels",
+    judgeRows.every((tx) => /\[(Light|Pro|Max)( on-chain)?\]/.test(String(tx.description ?? ""))) &&
+      judgeRows.every((tx) => !/\[(Haiku|Sonnet|Opus)( on-chain)?\]/.test(String(tx.description ?? ""))),
+    judgeRows.map(txView),
+  );
   requireCheck(proof, "no_provider_fallback_refund", refundRows.length === 0, refundRows.map(txView));
 
   proof.passed = true;
