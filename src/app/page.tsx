@@ -656,7 +656,7 @@ export default function Home() {
       <header className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
         <button onClick={reset} className="flex items-center gap-2 text-base font-black tracking-tight" style={{ color: "#172033" }}>
           <span className="flex h-9 w-9 items-center justify-center rounded-xl border bg-white text-xs shadow-sm" style={{ borderColor: "#D1FAE5", color: "#047857" }}>
-            AI
+            XR
           </span>
           <span>Axelrod</span>
         </button>

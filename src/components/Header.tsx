@@ -25,7 +25,7 @@ export default function Header() {
             </svg>
           </div>
           <span className="text-lg font-bold tracking-tight text-text-primary">
-            Challenge<span className="text-accent">AI</span>
+            Axelrod
           </span>
         </div>
 

@@ -171,6 +171,41 @@ export function generateChallengeSpec(inputText: string): ChallengeSpec {
     };
   }
 
+  if (/plank/.test(lower) || /平板支撑/.test(input)) {
+    return {
+      ...spec,
+      challenge_title: `Plank Hold Challenge vs ${opponent}`,
+      challenge_type: "fitness_challenge",
+      stake_amount: spec.stake_amount > 0 ? spec.stake_amount : DEFAULT_PHYSICAL_STAKE,
+      currency_or_points: "credits",
+      objective: "Each participant holds a valid plank position for as long as possible under the same rules.",
+      winning_condition: "Winner is the participant who holds a valid plank position the longest without form breaking.",
+      required_evidence: sameCamera
+        ? "One continuous same-camera video showing both participants holding plank positions at the same time."
+        : "Continuous video evidence from each participant showing full body plank position and timer.",
+      participation_mode: sameCamera ? "same_camera" : "remote_async",
+      video_capture_instructions: sameCamera
+        ? "Use one phone and keep both participants' full bodies visible from start to finish. Put creator on the left and opponent on the right when possible. Do not cut, speed up, or move the camera away."
+        : "Record from a side angle with shoulders, hips, knees, and feet visible. Keep a visible timer or in-app timestamp throughout the attempt.",
+      start_condition: "Timer starts when the participant reaches a straight plank position with elbows/hands and feet set.",
+      end_condition: "Timer ends when hips sag, knees touch, hands/feet move out of position, or the participant voluntarily stops.",
+      timing_method: "Use in-app timestamp plus visible video frame timing.",
+      valid_repetition_definition: "A valid plank keeps shoulders, hips, knees, and ankles aligned without knees touching the ground or hips rising/sagging noticeably.",
+      scoring_method: "Longest verified valid hold time wins; unclear form or missing body visibility pauses settlement for manual review.",
+      allowed_attempts: "One official recorded attempt per participant.",
+      anti_cheat_rules: [
+        "Full body must remain visible.",
+        "No cuts, speed changes, or edited clips.",
+        "Timer or in-app timestamp must be visible or recoverable from metadata.",
+        "If body alignment cannot be verified, auto-settlement is blocked.",
+      ],
+      ai_judging_method: "AI vision checks body alignment, full-duration coverage, timer evidence, and hold duration; it auto-settles only with confidence at least 0.85.",
+      fallback_manual_review: "If confidence is below 0.85, body visibility is incomplete, frame coverage is unclear, or identity/timing cannot be verified, pause settlement and require manual review.",
+      payout_rule: "Winner receives the pooled internal credits only after protocol, identity, evidence, outcome, and confidence gates pass.",
+      safety_warning: "Stop if there is pain or dizziness. Do not attempt if injured or medically restricted.",
+    };
+  }
+
   if (/water|bottle|drink/.test(lower)) {
     return {
       ...spec,

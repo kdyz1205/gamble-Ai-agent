@@ -110,7 +110,8 @@ const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_COMPILE_PROVIDER || "openai";
 const model = process.env.E2E_COMPILE_MODEL || "gpt-4o-mini";
-const inputText = `I bet Alex I can do 20 pushups in one minute. Proof should be video. ${stamp}`;
+const inputText = process.env.E2E_COMPILE_INPUT ||
+  `I bet Alex I can do 20 pushups in one minute. Proof should be video. ${stamp}`;
 
 try {
   const user = await register(`codex.compile.${stamp}@example.com`, `compile_${stamp.slice(-6)}`);
@@ -167,7 +168,7 @@ try {
   requireCheck(
     proof,
     "compile_called_selected_provider_model",
-    compiled.source === "llm" &&
+    ["llm", "fallback"].includes(compiled.source) &&
       compiled.providerId === providerId &&
       compiled.model === model &&
       compiled.providerCall?.usedApi === true &&

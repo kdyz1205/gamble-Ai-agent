@@ -212,7 +212,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <span className="text-3xl font-black">A</span>
+                        <span className="text-2xl font-black">XR</span>
                       </motion.div>
                       <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
                         You&apos;re in! Let&apos;s play
@@ -235,7 +235,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
                     }}
                   >
-                    <span className="text-3xl font-black" style={{ color: PEACH_TEXT }}>A</span>
+                    <span className="text-2xl font-black" style={{ color: PEACH_TEXT }}>XR</span>
                   </motion.div>
 
                   <AnimatePresence mode="wait">

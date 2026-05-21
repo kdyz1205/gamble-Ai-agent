@@ -47,9 +47,9 @@ function AIAvatar({ animate }: { animate: boolean }) {
       }}
       animate={animate ? { scale: [1, 1.04, 1] } : { scale: 1 }}
       transition={animate ? { duration: 3, repeat: Infinity, ease: "easeInOut" } : { duration: 0 }}
-      aria-label="AI"
+      aria-label="Axelrod AI"
     >
-      <span className="text-sm" role="img" aria-hidden>✨</span>
+      <span className="text-[10px] font-black" aria-hidden>XR</span>
     </motion.div>
   );
 }

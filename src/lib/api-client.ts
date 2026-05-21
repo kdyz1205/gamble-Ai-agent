@@ -476,11 +476,12 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   rawPrompt: string;
   protocol: ProtocolSpecV2;
   preview: ProtocolPreviewV2;
-  source: "llm" | "safety_prefilter" | "error";
+  source: "llm" | "safety_prefilter" | "fallback" | "error";
   providerId: string;
   model: string;
   externalApiCharged?: boolean;
   providerCall?: unknown;
+  fallbackReason?: string;
   dailyQuota?: DailyAiQuotaStatus;
 }> {
   return apiFetch("/challenges/compile", {

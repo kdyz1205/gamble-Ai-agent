@@ -9,10 +9,11 @@ import {
   resolveTierModel,
   resolveTierProvider,
 } from "@/lib/llm-providers";
-import { protocolPreview, parseProtocolSpecV2, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { generateChallengeSpec } from "@/lib/challenge-spec";
+import { protocolPreview, parseProtocolSpecV2, protocolSpecFromChallengeSpec, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
 
-export type CompileProtocolSource = "llm" | "safety_prefilter";
+export type CompileProtocolSource = "llm" | "safety_prefilter" | "fallback";
 
 export class CompileRequestError extends Error {
   status: number;
@@ -120,6 +121,56 @@ function extractJson(raw: string) {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("LLM did not return JSON");
   return JSON.parse(match[0]) as unknown;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function safeString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function fallbackProtocolFromPrompt(
+  inputText: string,
+  language: ProtocolSpecV2["language"],
+  parsed?: unknown,
+) {
+  const protocol = protocolSpecFromChallengeSpec(generateChallengeSpec(inputText), inputText, { language });
+  const record = objectRecord(parsed);
+  const evidence = objectRecord(record?.evidenceProtocol);
+  const settlement = objectRecord(record?.settlementProtocol);
+  const risk = objectRecord(record?.riskPolicy);
+
+  return normalizeCompiledProtocol({
+    ...protocol,
+    title: safeString(record?.title) ?? protocol.title,
+    userFacingSummary: safeString(record?.userFacingSummary) ?? protocol.userFacingSummary,
+    evidenceProtocol: {
+      ...protocol.evidenceProtocol,
+      requiredEvidence: Array.isArray(evidence?.requiredEvidence) && evidence.requiredEvidence.length
+        ? evidence.requiredEvidence.map(String).filter(Boolean)
+        : protocol.evidenceProtocol.requiredEvidence,
+      captureInstructions: Array.isArray(evidence?.captureInstructions) && evidence.captureInstructions.length
+        ? evidence.captureInstructions.map(String).filter(Boolean)
+        : protocol.evidenceProtocol.captureInstructions,
+    },
+    settlementProtocol: {
+      ...protocol.settlementProtocol,
+      winCondition: safeString(settlement?.winCondition) ?? protocol.settlementProtocol.winCondition,
+      judgeInstructions: Array.isArray(settlement?.judgeInstructions) && settlement.judgeInstructions.length
+        ? settlement.judgeInstructions.map(String).filter(Boolean)
+        : protocol.settlementProtocol.judgeInstructions,
+    },
+    riskPolicy: {
+      ...protocol.riskPolicy,
+      warnings: Array.isArray(risk?.warnings) && risk.warnings.length
+        ? risk.warnings.map(String).filter(Boolean)
+        : protocol.riskPolicy.warnings,
+    },
+  });
 }
 
 function isVisionEvidenceMode(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]) {
@@ -313,15 +364,6 @@ export async function compileProtocolForUser(input: {
       maxTokens: 2400,
       temperature: 0.15,
     });
-    const parsed = extractJson(completion.text);
-    const protocol = parseProtocolSpecV2({
-      ...(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}),
-      version: "2.0",
-      rawPrompt: inputText,
-      language,
-    });
-    if (!protocol) throw new Error("LLM response did not match ProtocolSpecV2");
-    const normalizedProtocol = normalizeCompiledProtocol(protocol);
     await logAiUsage({
       userId: input.userId,
       route: input.route ?? "/api/challenges/compile",
@@ -329,15 +371,45 @@ export async function compileProtocolForUser(input: {
       extra: { surface: input.context?.surface ?? null, rawPromptChars: inputText.length },
     });
 
+    let parsed: unknown = null;
+    let normalizedProtocol: ProtocolSpecV2 | null = null;
+    let fallbackReason: string | null = null;
+    try {
+      parsed = extractJson(completion.text);
+      const protocol = parseProtocolSpecV2({
+        ...(objectRecord(parsed) ?? {}),
+        version: "2.0",
+        rawPrompt: inputText,
+        language,
+      });
+      if (protocol) {
+        normalizedProtocol = normalizeCompiledProtocol(protocol);
+      } else {
+        fallbackReason = "LLM response did not match ProtocolSpecV2";
+      }
+    } catch (err) {
+      fallbackReason = err instanceof Error ? err.message : "LLM did not return valid protocol JSON";
+    }
+
+    const repairedProtocol = normalizedProtocol ?? fallbackProtocolFromPrompt(inputText, language, parsed);
+    if (fallbackReason) {
+      console.warn("[compile-protocol] repaired malformed LLM protocol", {
+        providerId: provider.id,
+        model: selectedModel,
+        reason: fallbackReason,
+      });
+    }
+
     return {
       rawPrompt: inputText,
-      protocol: normalizedProtocol,
-      preview: protocolPreview(normalizedProtocol),
-      source: "llm" as const,
+      protocol: repairedProtocol,
+      preview: protocolPreview(repairedProtocol),
+      source: fallbackReason ? "fallback" as const : "llm" as const,
       providerId: provider.id,
       model: selectedModel,
       externalApiCharged: isPaidProvider(provider),
       providerCall: completion.metadata,
+      fallbackReason: fallbackReason ?? undefined,
       dailyQuota: quota.status,
     };
   } catch (error) {
