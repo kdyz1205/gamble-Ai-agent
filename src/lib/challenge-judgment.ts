@@ -118,10 +118,20 @@ export async function executeChallengeJudgment(
   // into a ledger-polluting no-op that still burned inference credit.
   const creator = challenge.participants.find((p) => p.role === "creator");
   const opponent = challenge.participants.find((p) => p.role === "opponent");
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const isSoloProtocol = protocol?.participantMode === "solo";
   if (!creator) {
     return { ok: false, error: "Creator not found", status: 400 };
   }
-  if (!opponent) {
+  if (!opponent && !isSoloProtocol) {
     return {
       ok: false,
       error: "No opponent has accepted — judgment requires at least two participants.",
@@ -256,16 +266,8 @@ export async function executeChallengeJudgment(
     ),
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
+    solo: isSoloProtocol,
   };
-  const protocol = challenge.protocol?.specJson
-    ? (() => {
-        try {
-          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
-        } catch {
-          return null;
-        }
-      })()
-    : null;
   const protocolGates = evaluateProtocolJudgmentGates({
     protocol,
     participants: challenge.participants,

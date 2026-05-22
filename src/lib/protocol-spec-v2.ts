@@ -363,10 +363,12 @@ export function challengeSpecFromProtocol(protocol: ProtocolSpecV2): ChallengeSp
   return {
     challenge_title: protocol.title,
     challenge_type: protocol.outcomeType,
-    participants: [
-      { role: "creator", label: creator?.label || "Creator", user_id: null },
-      { role: "opponent", label: opponent?.label || "Opponent", user_id: null },
-    ],
+    participants: protocol.participantMode === "solo"
+      ? [{ role: "creator", label: creator?.label || "Creator", user_id: null }]
+      : [
+          { role: "creator", label: creator?.label || "Creator", user_id: null },
+          { role: "opponent", label: opponent?.label || "Opponent", user_id: null },
+        ],
     stake_amount: 0,
     currency_or_points: "credits",
     public_or_private: publicOrPrivate,

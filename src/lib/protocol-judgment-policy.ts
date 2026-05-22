@@ -147,8 +147,8 @@ function protocolCompliance(protocol: ProtocolSpecV2 | null, participants: Parti
     issues.push(protocol.riskPolicy.blockedReason || "Protocol risk policy does not allow this challenge.");
   }
   const accepted = acceptedParticipants(participants);
+  if (!accepted.some((participant) => participant.role === "creator")) issues.push("Creator participant is missing.");
   if (protocol.participantMode === "head_to_head") {
-    if (!accepted.some((participant) => participant.role === "creator")) issues.push("Creator participant is missing.");
     if (!accepted.some((participant) => participant.role === "opponent")) issues.push("Opponent participant is missing.");
   }
   return { passed: issues.length === 0, blockingIssues: uniqueIssues(issues) };
@@ -297,7 +297,9 @@ function evidenceResult(
   if (videoLike) {
     if (result?.source !== "vision_llm") issues.push("Protocol requires visual evidence, but a vision judge did not produce the verdict.");
     issues.push(...videoEvidenceIssues(result?.videoMetrics?.participantA, "Participant A"));
-    issues.push(...videoEvidenceIssues(result?.videoMetrics?.participantB, "Participant B"));
+    if (protocol.participantMode !== "solo" && requiredParticipants.some((participant) => participant.role === "opponent")) {
+      issues.push(...videoEvidenceIssues(result?.videoMetrics?.participantB, "Participant B"));
+    }
   }
 
   if (result?.evidenceQuality && result.evidenceQuality !== "good") {

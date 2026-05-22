@@ -670,7 +670,7 @@ function applyObservedVideoGuards(
 }
 
 function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentResult | null {
-  if (!params.participantBId || !params.evidenceA || !params.evidenceB) return null;
+  if (!params.evidenceA) return null;
 
   const expectedRaw = extractExpectedAnswer(params);
   const expected = normalizeObjectiveAnswer(expectedRaw);
@@ -681,6 +681,36 @@ function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentR
   const answerA = normalizeObjectiveAnswer(answerARaw);
   const answerB = normalizeObjectiveAnswer(answerBRaw);
   if (!answerA && !answerB) return null;
+
+  if (!params.participantBId) {
+    if (answerA === expected) {
+      return {
+        winnerId: params.participantAId,
+        confidence: 0.99,
+        evidenceQuality: "good",
+        recommendation: "settle_winner",
+        settlementRecommendation: "settle_winner",
+        source: "deterministic",
+        reasoning:
+          `Deterministic solo objective check: expected "${expectedRaw}". ` +
+          `Participant A submitted "${answerARaw ?? "(none)"}", which matched the expected answer, so the solo claim passed.`,
+      };
+    }
+    return {
+      winnerId: null,
+      confidence: 0.4,
+      evidenceQuality: "invalid",
+      recommendation: "invalid_evidence",
+      settlementRecommendation: "invalid_evidence",
+      blockingIssues: ["Participant A did not submit the expected answer."],
+      source: "deterministic",
+      reasoning:
+        `Deterministic solo objective check: expected "${expectedRaw}". ` +
+        `Participant A submitted "${answerARaw ?? "(none)"}", so the solo claim was not proven.`,
+    };
+  }
+
+  if (!params.evidenceB) return null;
 
   const aCorrect = answerA === expected;
   const bCorrect = answerB === expected;
@@ -737,22 +767,23 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   const hasSharedSameCameraFlag = (evidence: JudgeEvidencePayload | null | undefined) =>
     evidence?.metadata?.sharedSameCamera === true || evidence?.metadata?.captureMode === "one_phone_same_camera";
 
-  if (evidenceA && !evidenceB && hasSharedSameCameraFlag(evidenceA)) {
+  if (participantBId && evidenceA && !evidenceB && hasSharedSameCameraFlag(evidenceA)) {
     evidenceB = {
       ...evidenceA,
       description: `${evidenceA.description || ""}\nThis shared same-camera media is also the opponent's evidence; compare both visible people in the same video.`,
     };
   }
-  if (!evidenceA && evidenceB && hasSharedSameCameraFlag(evidenceB)) {
+  if (participantBId && !evidenceA && evidenceB && hasSharedSameCameraFlag(evidenceB)) {
     evidenceA = {
       ...evidenceB,
       description: `${evidenceB.description || ""}\nThis shared same-camera media is also the creator's evidence; compare both visible people in the same video.`,
     };
   }
-  const sharedSameCamera =
+  const sharedSameCamera = Boolean(participantBId) && (
     hasSharedSameCameraFlag(evidenceA) ||
     hasSharedSameCameraFlag(evidenceB) ||
-    Boolean(evidenceA?.url && evidenceB?.url && evidenceA.url === evidenceB.url && evidenceA.url);
+    Boolean(evidenceA?.url && evidenceB?.url && evidenceA.url === evidenceB.url && evidenceA.url)
+  );
 
   if (sharedSameCamera && evidenceA?.url && evidenceB?.url && evidenceA.url === evidenceB.url) {
     if (evidenceA.preparedFrames?.length && !evidenceB.preparedFrames?.length) {
@@ -807,18 +838,8 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
       blockingIssues: ["Participant A did not submit evidence."],
     };
   }
-  // Solo / no opponent — accept the single submission.
-  if (!participantBId && evidenceA) {
-    return {
-      winnerId: participantAId,
-      reasoning: "No opponent accepted this challenge. Solo submission needs manual review before any settlement.",
-      confidence: 0.85,
-      evidenceQuality: "unclear",
-      recommendation: "needs_review",
-      settlementRecommendation: "needs_review",
-      blockingIssues: ["No opponent accepted this challenge."],
-    };
-  }
+  // Solo / no opponent: judge Participant A's evidence as a pass/fail claim.
+  const soloMode = !participantBId;
 
   // ── System: strict, rubric-based, honest about uncertainty ──
   const deterministicResult = tryDeterministicObjectiveJudge({
@@ -835,6 +856,13 @@ Your job:
 2. Examine each participant's evidence: text description, plus (if present) the actual media frames attached to this message.
 3. For each participant, ask: did the evidence actually demonstrate the required action/outcome?
 4. Pick the winner — or null — per the rubric below.
+
+${soloMode ? `SOLO MODE:
+- Participant B does not exist. The challenge is a creator-submitted pass/fail claim.
+- Return winner: "A" only when Participant A's evidence proves the claim under the rules with confidence >= 0.85 and evidenceQuality="good".
+- Return winner: null when the claim is unproven, evidence is unclear/invalid, or manual review is needed.
+- Do not require opponent evidence, comparison, or a loser.
+` : ""}
 
 RUBRIC (apply in order):
 - If exactly one participant's evidence satisfies the rules → they win.
@@ -938,7 +966,9 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   try {
     [visualsA, visualsB] = await Promise.all([
       getVisualsForParticipant("Participant A", evidenceA!),
-      getVisualsForParticipant("Participant B", evidenceB!),
+      evidenceB
+        ? getVisualsForParticipant("Participant B", evidenceB)
+        : Promise.resolve({ preambleLines: [], visuals: [] }),
     ]);
   } catch {
     // Vision extraction is best-effort; if it fails, fall through to text-only.
@@ -959,21 +989,22 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
 
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
   const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
-description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}${evidenceA!.metadata ? `\nmetadata: ${JSON.stringify(evidenceA!.metadata)}` : ""}
-
-Participant B evidence (${evidenceB!.type}):
-description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}${evidenceB!.metadata ? `\nmetadata: ${JSON.stringify(evidenceB!.metadata)}` : ""}`;
+description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}${evidenceA!.metadata ? `\nmetadata: ${JSON.stringify(evidenceA!.metadata)}` : ""}${
+    evidenceB
+      ? `\n\nParticipant B evidence (${evidenceB.type}):\ndescription: ${evidenceB.description || "(none)"}${evidenceB.url ? `\nmedia: ${evidenceB.url}` : ""}${evidenceB.metadata ? `\nmetadata: ${JSON.stringify(evidenceB.metadata)}` : ""}`
+      : "\n\nParticipant B evidence: not applicable; this is a solo pass/fail challenge."
+  }`;
 
   const userText = `Challenge: "${title}"
 Type: ${type}
 ${params.description ? `Context: ${params.description}\n` : ""}Rules / Task: ${rules || title}
 Evidence policy: ${params.evidencePolicy || "self_report"}${params.deadlineIso ? `\nDeadline: ${params.deadlineIso}` : ""}
 ${params.livenessPrompt ? `Required liveness phrase: ${params.livenessPrompt}\n` : ""}
-${sharedSameCamera ? "Shared same-camera: yes. The same media may appear under both participants; compare the two visible people inside that media.\n" : ""}
+${sharedSameCamera && !soloMode ? "Shared same-camera: yes. The same media may appear under both participants; compare the two visible people inside that media.\n" : ""}
 
 ${evidenceSummary}
 
-${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allVisuals.length > 0 ? `I have attached ${allVisuals.length} frame(s) from the submitted media — examine them as your primary evidence; the descriptions above are supporting context only.\n\n` : ""}Decide now. Return JSON only.`;
+${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allVisuals.length > 0 ? `I have attached ${allVisuals.length} frame(s) from the submitted media — examine them as your primary evidence; the descriptions above are supporting context only.\n\n` : ""}${soloMode ? "Solo mode: Participant B does not exist. Return winner=\"A\" only if Participant A proved the claim; otherwise return winner=null. Do not require opponent evidence.\n" : ""}Decide now. Return JSON only.`;
 
   // One-shot vision call, with optional low-confidence escalation to a bigger model
   // in the same family. Default path: gpt-4o-mini (fast/cheap). Escalation: gpt-4o.
@@ -1081,7 +1112,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     }) as typeof parsedResult;
     const winnerId =
       parsedResult.winner === "A" ? participantAId :
-      parsedResult.winner === "B" ? participantBId :
+      parsedResult.winner === "B" && !soloMode ? participantBId :
       null;
     const fullReasoning = parsedResult.analysis && parsedResult.analysis.trim().length > 0
       ? `${parsedResult.reasoning}\n\n(Analysis: ${parsedResult.analysis.trim()})`
@@ -1112,7 +1143,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     };
   }
 
-  return judgeChallengeFallback(title, evidenceA!, evidenceB!, participantAId, participantBId!);
+  return judgeChallengeFallback(title, evidenceA!, evidenceB, participantAId, participantBId);
 }
 
 /**
@@ -1239,9 +1270,9 @@ function parseChallengeFallback(input: string): ParsedChallenge {
 function judgeChallengeFallback(
   challengeTitle: string,
   _evidenceA: { description: string | null; type: string },
-  _evidenceB: { description: string | null; type: string },
+  _evidenceB: { description: string | null; type: string } | null,
   _participantAId: string,
-  _participantBId: string,
+  _participantBId: string | null,
 ): JudgmentResult {
   return {
     winnerId: null,

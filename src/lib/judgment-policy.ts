@@ -19,6 +19,7 @@ export interface JudgmentPolicyOptions {
   requiresRepCountWinner?: boolean;
   participantAId?: string | null;
   participantBId?: string | null;
+  solo?: boolean;
 }
 
 export interface AutoSettlePolicyResult {
@@ -182,7 +183,9 @@ export function blockingIssuesForJudgment(
       issues.push("Structured video metrics are missing.");
     } else {
       issues.push(...participantBlockingIssues("Participant A", result.videoMetrics.participantA));
-      issues.push(...participantBlockingIssues("Participant B", result.videoMetrics.participantB));
+      if (!options.solo && options.participantBId) {
+        issues.push(...participantBlockingIssues("Participant B", result.videoMetrics.participantB));
+      }
       issues.push(...repCountWinnerIssues(result, options));
     }
   }

@@ -262,6 +262,10 @@ export async function POST(req: NextRequest) {
       evidenceDescriptor.includes("photo") ||
       Boolean(protocolSpec?.identityProtocol.required);
     const livenessPrompt = needsLiveness ? livenessPhraseFor(protocolSpec) ?? generateLivenessPhrase() : null;
+    const initialStatus =
+      protocolSpec?.participantMode === "solo"
+        ? ChallengeStatus.evidence_window_open
+        : ChallengeStatus.waiting_for_opponent;
     try {
       challenge = await prisma.$transaction(async (tx) => {
         const created = await tx.challenge.create({
@@ -272,7 +276,7 @@ export async function POST(req: NextRequest) {
             marketType,
             proposition: resolvedProposition,
             type: resolvedType,
-            status: ChallengeStatus.waiting_for_opponent,
+            status: initialStatus,
             stake: stakeInt,
             stakeToken,
             deadline: deadlineDate,

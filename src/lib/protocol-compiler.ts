@@ -180,16 +180,46 @@ function isVisionEvidenceMode(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]) 
     mode === "photo";
 }
 
+function hasExplicitCounterparty(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  if (/\b(vs\.?|versus|against|opponent|rival|challenger)\b/.test(text)) return true;
+  if (/\b(who|whose|which of us)\b.*\b(faster|more|most|longer|better|wins?|winner)\b/.test(text)) return true;
+  if (/\b(faster|more|most|longer|better)\s+than\b/.test(text)) return true;
+  if (/\b(beat|outlast|defeat)\s+(?!my\b|the\b|this\b|that\b|a\b|an\b)/.test(text)) return true;
+  if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:my|our|the|this|that|his|her|their)\b/.test(text)) return true;
+  if (/(跟|和|对战|挑战).{0,12}(朋友|对手|别人|他|她|jer|jerry|alex)/i.test(rawPrompt)) return true;
+  if (/(谁|哪一方|哪个).{0,12}(更|先|赢|多|快|久)/.test(rawPrompt)) return true;
+  return false;
+}
+
+function looksLikeSoloClaim(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  if (hasExplicitCounterparty(rawPrompt)) return false;
+  if (/\b(i|we|my|our)\b.{0,80}\b(can|will|finish|complete|do|hold|eat|make|solve|run|arrive|stay|last)\b/.test(text)) return true;
+  if (/\b(my|our)\s+(cat|dog|pet|kid|robot|team|car|bike)\b/.test(text)) return true;
+  if (/(我|我的|我们|我们的).{0,30}(能|可以|会|完成|吃完|做到|坚持|到达|跑完)/.test(rawPrompt)) return true;
+  return false;
+}
+
 function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
-  const visionEvidence = isVisionEvidenceMode(protocol.evidenceProtocol.mode);
-  const oracleEvidence = protocol.evidenceProtocol.mode === "gps" ||
-    protocol.evidenceProtocol.mode === "public_oracle" ||
-    protocol.evidenceProtocol.mode === "platform_metric";
-  const sameCamera = protocol.evidenceProtocol.mode === "same_camera_video";
+  const inferredSolo =
+    protocol.participantMode !== "public_market" &&
+    protocol.participantMode !== "mass_crowd" &&
+    looksLikeSoloClaim(protocol.rawPrompt);
+  const participantMode = inferredSolo ? "solo" : protocol.participantMode;
+  const evidenceMode =
+    participantMode === "solo" && protocol.evidenceProtocol.mode === "same_camera_video"
+      ? "separate_video"
+      : protocol.evidenceProtocol.mode;
+  const visionEvidence = isVisionEvidenceMode(evidenceMode);
+  const oracleEvidence = evidenceMode === "gps" ||
+    evidenceMode === "public_oracle" ||
+    evidenceMode === "platform_metric";
+  const sameCamera = evidenceMode === "same_camera_video";
   const riskBlocked = !protocol.riskPolicy.allowed || protocol.riskPolicy.riskLevel === "blocked";
   const desiredSettlementMode: ProtocolSpecV2["settlementProtocol"]["mode"] =
     riskBlocked ? "blocked" :
-      protocol.participantMode === "mass_crowd" ? "leaderboard" :
+      participantMode === "mass_crowd" ? "leaderboard" :
         visionEvidence ? "auto_ai_vision" :
           oracleEvidence ? "auto_oracle" :
             protocol.settlementProtocol.mode;
@@ -209,25 +239,39 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     manualReviewTriggers.add("Full body, liveness phrase, or continuous attempt cannot be verified.");
   }
 
+  const participantBindings = protocol.identityProtocol.participantBindings
+    .filter((binding) => participantMode !== "solo" || binding.role !== "opponent")
+    .map((binding) => ({
+      ...binding,
+      expectedPosition: sameCamera
+        ? binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any"
+        : "any",
+      requiredQrOrCode: binding.requiredQrOrCode || visionEvidence,
+    }));
+  if (!participantBindings.some((binding) => binding.role === "creator")) {
+    participantBindings.unshift({
+      role: "creator",
+      label: "Creator",
+      expectedPosition: "any",
+      requiredQrOrCode: visionEvidence,
+    });
+  }
+
   return {
     ...protocol,
+    participantMode,
     identityProtocol: {
       ...protocol.identityProtocol,
       required: protocol.identityProtocol.required || visionEvidence,
-      mode: sameCamera ? "left_right_assignment" : visionEvidence && protocol.identityProtocol.mode === "account_only"
+      mode: sameCamera ? "left_right_assignment" : visionEvidence && (protocol.identityProtocol.mode === "account_only" || participantMode === "solo")
         ? "liveness_phrase"
         : protocol.identityProtocol.mode,
       autoSettlementRequiresIdentityConfidence: identityThreshold,
-      participantBindings: protocol.identityProtocol.participantBindings.map((binding) => ({
-        ...binding,
-        expectedPosition: sameCamera
-          ? binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any"
-          : binding.expectedPosition ?? "any",
-        requiredQrOrCode: binding.requiredQrOrCode || visionEvidence,
-      })),
+      participantBindings,
     },
     evidenceProtocol: {
       ...protocol.evidenceProtocol,
+      mode: evidenceMode,
       requiredMetadata: [...requiredMetadata],
     },
     settlementProtocol: {
@@ -295,6 +339,9 @@ Return ONLY valid JSON with this exact top-level shape:
 
 Rules:
 - If the user asks for a random challenge, invent one concrete safe challenge.
+- Distinguish the counterparty from the evidence subject. "I bet my cat can finish the food under one minute" is a solo threshold/completion claim: the cat is the subject, not an opponent. Use participantMode="solo" unless the user names a counterparty ("I bet Jerry that my cat..."), compares two participants ("my cat vs Jerry's cat"), or asks nearby/public users to join.
+- For solo claims, do not add an opponent participant binding. Use creator-only identity, evidence from the creator, and a pass/fail outcome. Do not make the user invite someone just to prove their own/pet's action.
+- If the user bets another person that a solo subject will or will not satisfy a claim, use participantMode="head_to_head": the other person is the counterparty, not the subject in the video.
 - If the idea is unsafe, illegal, coercive, alcohol/drug based, violent, non-consensual, stalking-like, or chance-based real-money gambling, set riskPolicy.allowed=false and settlementProtocol.mode="blocked"; include a safeAlternative when possible.
 - Same-camera physical challenges require identityProtocol.required=true, identityProtocol.mode="left_right_assignment", creator left, opponent right, liveness/QR code required, and no auto-settlement unless identity is verified.
 - Nearby or walk-by challenges should use locationProtocol.mode="nearby_discovery" or "walk_to_join", approximate public privacy, and a conservative radius.

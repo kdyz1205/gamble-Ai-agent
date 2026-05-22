@@ -1301,6 +1301,7 @@ function ChallengeSpecPreview({
   onSelectParticipation: (value: "remote_async" | "remote_live" | "same_camera" | "in_person") => void;
   onSelectVisibility: (value: "public" | "private") => void;
 }) {
+  const isSolo = protocol.participantMode === "solo";
   const opponent = protocol.identityProtocol.participantBindings.find((p) => p.role === "opponent")?.label || "Opponent";
   const inviteValue =
     protocol.locationProtocol.mode === "nearby_discovery" || protocol.locationProtocol.mode === "walk_to_join" ? "nearby" :
@@ -1347,14 +1348,14 @@ function ChallengeSpecPreview({
           <Pill>{protocol.evidenceProtocol.mode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.identityProtocol.mode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.locationProtocol.locationPrivacy.replace(/_/g, " ")}</Pill>
-          <Pill>vs {opponent}</Pill>
+          <Pill>{isSolo ? "solo proof" : `vs ${opponent}`}</Pill>
           {model && <Pill>{source === "llm" ? "AI model" : source === "safety_prefilter" ? "safety gate" : "fallback"}: {model}</Pill>}
           {providerId && <Pill>{externalApiCharged ? "paid API enabled" : "no paid API"}: {providerId}</Pill>}
         </div>
       </div>
       <div className="grid gap-4 p-5 md:grid-cols-2">
         <SpecBlock title="What you are playing" body={protocol.userFacingSummary} />
-        <SpecBlock title="Who can join" body={`${protocol.participantMode.replace(/_/g, " ")}. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.`} />
+        <SpecBlock title="Who can join" body={isSolo ? `Solo proof. No opponent required. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.` : `${protocol.participantMode.replace(/_/g, " ")}. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.`} />
         <SpecBlock title="Identity verification" body={`${protocol.identityProtocol.required ? "Required" : "Optional"} via ${protocol.identityProtocol.mode.replace(/_/g, " ")}. Auto-settle requires ${Math.round(protocol.identityProtocol.autoSettlementRequiresIdentityConfidence * 100)}% identity confidence.`} />
         <SpecBlock title="Evidence required" body={protocol.evidenceProtocol.requiredEvidence.join(" ")} />
         <SpecBlock title="Capture instructions" body={protocol.evidenceProtocol.captureInstructions.join(" ")} />
@@ -1367,7 +1368,7 @@ function ChallengeSpecPreview({
       <div className="grid gap-5 px-5 pb-5">
         <OptionSection
           title="Invite mode"
-          subtitle="How the opponent finds or enters this challenge."
+          subtitle={isSolo ? "Solo challenges can stay private; no opponent has to accept first." : "How the opponent finds or enters this challenge."}
           value={inviteValue}
           options={inviteOptions}
           onSelect={(value) => onSelectInvite(value as "invite_link" | "nearby" | "same_device")}

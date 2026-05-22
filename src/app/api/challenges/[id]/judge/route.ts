@@ -250,6 +250,16 @@ export async function POST(
     providerId,
     livenessPrompt: challenge.livenessPrompt,
   });
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const isSoloProtocol = protocol?.participantMode === "solo";
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
   const judgmentPolicyOptions = {
     requiresVision,
@@ -261,16 +271,8 @@ export async function POST(
     ),
     participantAId: creator.userId,
     participantBId: opponent?.userId ?? null,
+    solo: isSoloProtocol,
   };
-  const protocol = challenge.protocol?.specJson
-    ? (() => {
-        try {
-          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
-        } catch {
-          return null;
-        }
-      })()
-    : null;
   const protocolGates = evaluateProtocolJudgmentGates({
     protocol,
     participants: challenge.participants,
