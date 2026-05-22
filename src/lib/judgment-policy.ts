@@ -17,6 +17,7 @@ export type VerdictStatus =
 export interface JudgmentPolicyOptions {
   requiresVision?: boolean;
   requiresRepCountWinner?: boolean;
+  requiresHoldDurationWinner?: boolean;
   participantAId?: string | null;
   participantBId?: string | null;
   solo?: boolean;
@@ -95,6 +96,14 @@ export function requiresRepCountWinnerFromText(...parts: Array<string | null | u
   return hasRepSubject && hasCountScoring;
 }
 
+export function requiresHoldDurationWinnerFromText(...parts: Array<string | null | undefined>): boolean {
+  const text = parts.filter(Boolean).join("\n").toLowerCase();
+  if (!text) return false;
+  const hasHoldSubject = /\b(plank|hold|撑|平板支撑|坚持)\b/.test(text);
+  const hasDurationScoring = /\b(longer|longest|duration|hold time|lasts?|survival|time held|seconds?|minutes?|更久|最长|时间)\b/.test(text);
+  return hasHoldSubject && hasDurationScoring;
+}
+
 function participantBlockingIssues(
   label: string,
   metrics: VideoJudgmentParticipantMetrics | undefined,
@@ -122,6 +131,10 @@ function participantBlockingIssues(
 }
 
 function numericRepCount(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function numericDuration(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
@@ -159,6 +172,40 @@ function repCountWinnerIssues(
   return issues;
 }
 
+function holdDurationWinnerIssues(
+  result: JudgmentResult,
+  options: JudgmentPolicyOptions,
+): string[] {
+  if (!options.requiresHoldDurationWinner) return [];
+  if (!result.videoMetrics) return ["Hold-duration challenge requires structured video metrics."];
+  const durationA = numericDuration(result.videoMetrics.participantA?.holdDurationSec);
+  const durationB = numericDuration(result.videoMetrics.participantB?.holdDurationSec);
+  const issues: string[] = [];
+
+  if (durationA === null || durationB === null) {
+    issues.push("Hold duration is required for both participants before settlement.");
+    return issues;
+  }
+  if (durationA === durationB) {
+    issues.push(`Hold durations are tied at ${durationA}s; no winner can auto-settle from duration.`);
+    return issues;
+  }
+
+  const participantAId = options.participantAId ?? null;
+  const participantBId = options.participantBId ?? null;
+  if (result.winnerId && participantAId && result.winnerId === participantAId && durationA <= durationB) {
+    issues.push(`Participant A was selected as winner, but video metrics show ${durationA}s held versus Participant B's ${durationB}s.`);
+  } else if (result.winnerId && participantBId && result.winnerId === participantBId && durationB <= durationA) {
+    issues.push(`Participant B was selected as winner, but video metrics show ${durationB}s held versus Participant A's ${durationA}s.`);
+  } else if (result.winnerId && participantAId && participantBId && ![participantAId, participantBId].includes(result.winnerId)) {
+    issues.push("Winner cannot be mapped to Participant A or Participant B.");
+  } else if (result.winnerId && (!participantAId || !participantBId)) {
+    issues.push("Participant identity mapping is required before hold-duration settlement.");
+  }
+
+  return issues;
+}
+
 export function blockingIssuesForJudgment(
   result: JudgmentResult,
   options: JudgmentPolicyOptions = {},
@@ -187,6 +234,7 @@ export function blockingIssuesForJudgment(
         issues.push(...participantBlockingIssues("Participant B", result.videoMetrics.participantB));
       }
       issues.push(...repCountWinnerIssues(result, options));
+      issues.push(...holdDurationWinnerIssues(result, options));
     }
   }
 

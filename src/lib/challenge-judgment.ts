@@ -16,6 +16,7 @@ import {
   evaluateAutoSettleEligibility,
   effectiveJudgmentVerdictFields,
   blockingIssuesForJudgment,
+  requiresHoldDurationWinnerFromText,
   requiresRepCountWinnerFromText,
   statusForJudgmentResult,
 } from "./judgment-policy";
@@ -259,6 +260,12 @@ export async function executeChallengeJudgment(
   const judgmentPolicyOptions = {
     requiresVision,
     requiresRepCountWinner: requiresRepCountWinnerFromText(
+      challenge.title,
+      challenge.description,
+      challenge.proposition,
+      challenge.rules,
+    ),
+    requiresHoldDurationWinner: requiresHoldDurationWinnerFromText(
       challenge.title,
       challenge.description,
       challenge.proposition,

@@ -21,7 +21,7 @@ import { evaluateLocationEligibility, parseStoredProtocol, validLatLng } from "@
 import { verifyEvidenceAgainstProtocol } from "@/lib/protocol-evidence-verification";
 import { compileProtocolForUser } from "@/lib/protocol-compiler";
 import { ChallengeStatus } from "@/lib/enums";
-import { evaluateAutoSettleEligibility, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
+import { evaluateAutoSettleEligibility, requiresHoldDurationWinnerFromText, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
 import { parseProtocolSpecV2, protocolPreview, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
@@ -969,6 +969,12 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
         challenge.evidenceType === "video" ||
         challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video"),
       requiresRepCountWinner: requiresRepCountWinnerFromText(
+        challenge.title,
+        challenge.description,
+        challenge.proposition,
+        challenge.rules,
+      ),
+      requiresHoldDurationWinner: requiresHoldDurationWinnerFromText(
         challenge.title,
         challenge.description,
         challenge.proposition,

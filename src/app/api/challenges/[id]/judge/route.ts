@@ -25,6 +25,7 @@ import {
   evaluateAutoSettleEligibility,
   effectiveJudgmentVerdictFields,
   blockingIssuesForJudgment,
+  requiresHoldDurationWinnerFromText,
   requiresRepCountWinnerFromText,
   statusForJudgmentResult,
   type EvidenceQuality,
@@ -264,6 +265,12 @@ export async function POST(
   const judgmentPolicyOptions = {
     requiresVision,
     requiresRepCountWinner: requiresRepCountWinnerFromText(
+      challenge.title,
+      challenge.description,
+      challenge.proposition,
+      challenge.rules,
+    ),
+    requiresHoldDurationWinner: requiresHoldDurationWinnerFromText(
       challenge.title,
       challenge.description,
       challenge.proposition,

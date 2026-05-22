@@ -1346,7 +1346,9 @@ export default function ChallengeVerdictPanel({
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <p className="text-xs font-black" style={{ color: "#1E293B" }}>{label as string}</p>
                           <span className="px-2 py-1 text-[10px] font-black" style={{ color: "#047857", background: "#D1FAE5", borderRadius: "9999px" }}>
-                            {metricCount((metrics as Record<string, unknown>).validRepCount)} reps
+                            {typeof (metrics as Record<string, unknown>).holdDurationSec === "number"
+                              ? `${(metrics as Record<string, unknown>).holdDurationSec as number}s hold`
+                              : `${metricCount((metrics as Record<string, unknown>).validRepCount)} reps`}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold" style={{ color: "#475569" }}>

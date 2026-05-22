@@ -128,6 +128,7 @@ export interface JudgmentResult {
 
 export interface VideoJudgmentParticipantMetrics {
   validRepCount: number | null;
+  holdDurationSec?: number | null;
   invalidRepNotes: string[];
   observedPosition?: "left" | "right" | "center" | "unclear" | null;
   fullDurationCovered: boolean | null;
@@ -535,6 +536,13 @@ function repCountOrNull(value: unknown): number | null {
     : null;
 }
 
+function nonNegativeNumberOrNull(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0
+    ? Math.round(numberValue * 10) / 10
+    : null;
+}
+
 function coerceRecommendation(value: unknown): JudgmentResult["recommendation"] | undefined {
   if (value === "settle_winner" || value === "needs_review" || value === "invalid_evidence" || value === "tie_or_no_winner") {
     return value;
@@ -556,6 +564,7 @@ function coerceParticipantVideoMetrics(value: unknown): VideoJudgmentParticipant
     : {};
   return {
     validRepCount: repCountOrNull(source.validRepCount),
+    holdDurationSec: nonNegativeNumberOrNull(source.holdDurationSec),
     invalidRepNotes: stringArray(source.invalidRepNotes),
     observedPosition: coerceObservedPosition(source.observedPosition),
     fullDurationCovered: boolOrNull(source.fullDurationCovered),
@@ -884,6 +893,8 @@ VIDEO FRAMES (when images are attached to this message):
 - If one participant shows multiple high/low/high cycles and the other stays standing, static, or non-push-up, videoMetrics.validRepCount for the first participant must be greater than the second. Settlement may still be blocked later by confidence/recommendation, but the metrics should reflect the visible motion.
 - For "who did more reps" challenges, never return a winner unless the winner's videoMetrics.validRepCount is strictly higher than the other participant's count. If counts are equal, zero, missing, or inconsistent with the selected winner, use winner=null or recommendation="needs_review" and list that as a blockingIssue.
 - A push-up is valid only when the participant starts at the top with arms extended, lowers chest/body clearly, keeps a reasonably straight body line, and returns to the top.
+- For plank-hold or hold-longer challenges, explicitly estimate videoMetrics.holdDurationSec for each participant from the ordered frames and timer labels. A valid plank keeps shoulders, hips, knees, and ankles aligned without knees touching the ground or hips rising/sagging noticeably. Stop counting when knees drop, hips sag/rise materially, the participant sits/stands, or the body leaves the visible plank position.
+- For "who holds longer" challenges, never return a winner unless the winner's videoMetrics.holdDurationSec is strictly higher than the other participant's duration by a visually clear margin. If durations are tied, missing, or inconsistent with the selected winner, use winner=null or recommendation="needs_review" and list that as a blockingIssue.
 - When sampled frames make exact totals hard, still compare visible cadence: repeated top/down/top cycles across many timestamps strongly indicate more completed repetitions than a clip that stays mostly static or changes position only once or twice.
 - If the frames are sampled rather than every frame, only give a high-confidence winner when the count or result is visually obvious from the full video evidence, frame labels, metadata, and descriptions. Otherwise return winner null or confidence below 0.85.
 - Anti-cheat/liveness checks are required for video evidence: verify the liveness phrase if one is provided in metadata/rules, full body visibility, continuous attempt, required duration coverage, and whether the clip looks edited, looped, static, too dark, blurry, or cropped.
@@ -925,6 +936,7 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   "videoMetrics": {
     "participantA": {
       "validRepCount": number | null,
+      "holdDurationSec": number | null,
       "invalidRepNotes": string[],
       "observedPosition": "left" | "right" | "center" | "unclear" | null,
       "fullDurationCovered": boolean | null,
@@ -939,6 +951,7 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
     },
     "participantB": {
       "validRepCount": number | null,
+      "holdDurationSec": number | null,
       "invalidRepNotes": string[],
       "observedPosition": "left" | "right" | "center" | "unclear" | null,
       "fullDurationCovered": boolean | null,

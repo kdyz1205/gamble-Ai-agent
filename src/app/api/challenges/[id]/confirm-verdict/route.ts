@@ -10,6 +10,7 @@ import {
 } from "@/lib/challenge-state-machine";
 import {
   evaluateAutoSettleEligibility,
+  requiresHoldDurationWinnerFromText,
   requiresRepCountWinnerFromText,
   type EvidenceQuality,
   type VerdictRecommendation,
@@ -120,6 +121,12 @@ export async function POST(
       {
         requiresVision: challenge.evidenceType === "video",
         requiresRepCountWinner: requiresRepCountWinnerFromText(
+          challenge.title,
+          challenge.description,
+          challenge.proposition,
+          challenge.rules,
+        ),
+        requiresHoldDurationWinner: requiresHoldDurationWinnerFromText(
           challenge.title,
           challenge.description,
           challenge.proposition,
