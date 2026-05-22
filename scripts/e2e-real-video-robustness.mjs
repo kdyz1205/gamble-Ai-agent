@@ -516,7 +516,7 @@ try {
     });
     const created = await postJson(creator.jar, "/api/challenges", {
       protocol,
-      stake: caseDef.stake ?? 0,
+      stake: caseDef.stake ?? (caseDef.expect === "settled" ? 1 : 0),
       stakeToken: "credits",
       rules: [
         "Objective: determine who completes more valid push-ups in a 60-second continuous video attempt.",
@@ -533,6 +533,7 @@ try {
     const challengeId = created.challenge.id;
     const livenessPhrase = created.challenge.livenessPrompt || `Axelrod ${stamp}`;
     caseProof.challengeId = challengeId;
+    caseProof.stake = created.challenge.stake;
     caseProof.livenessPrompt = livenessPhrase;
     caseProof.protocol = {
       version: created.challenge.protocolVersion,
@@ -672,6 +673,15 @@ try {
       requireCheck(caseProof, "evidence_quality_good", judged.evidenceQuality === "good", caseProof.judgment);
       requireCheck(caseProof, "auto_settle_eligible", judged.autoSettleEligible === true, caseProof.judgment);
       requireCheck(caseProof, "rep_count_a_higher", Number(judged.videoMetrics?.participantA?.validRepCount ?? 0) > Number(judged.videoMetrics?.participantB?.validRepCount ?? 0), judged.videoMetrics);
+      if ((created.challenge.stake ?? 0) > 0) {
+        const winnerTxs = judged.winnerId === creator.session.user.id ? creatorTxs : opponentTxs;
+        const loserTxs = judged.winnerId === creator.session.user.id ? opponentTxs : creatorTxs;
+        requireCheck(caseProof, "winner_ledger_has_stake", winnerTxs.some((tx) => tx.type === "stake" && tx.amount < 0), caseProof.creditTx);
+        requireCheck(caseProof, "winner_ledger_has_win", winnerTxs.some((tx) => tx.type === "win" && tx.amount > 0), caseProof.creditTx);
+        requireCheck(caseProof, "loser_ledger_has_stake", loserTxs.some((tx) => tx.type === "stake" && tx.amount < 0), caseProof.creditTx);
+        requireCheck(caseProof, "loser_ledger_has_loss", loserTxs.some((tx) => tx.type === "loss" && tx.amount < 0), caseProof.creditTx);
+        requireCheck(caseProof, "settled_case_no_refunds", refundRows.length === 0, caseProof.creditTx);
+      }
     } else {
       requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
       requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
