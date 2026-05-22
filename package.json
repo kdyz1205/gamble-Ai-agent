@@ -15,7 +15,8 @@
     "db:studio": "prisma studio",
     "e2e:click-flow": "node scripts/e2e-click-flow-smoke.mjs",
     "e2e:manage-flow": "node scripts/e2e-close-empty-challenge.mjs",
-    "e2e:solo-flow": "node scripts/e2e-solo-challenge-flow.mjs"
+    "e2e:solo-flow": "node scripts/e2e-solo-challenge-flow.mjs",
+    "e2e:screenshot-settlement": "node scripts/e2e-screenshot-settlement.mjs"
   },
   "repository": {
     "type": "git",
