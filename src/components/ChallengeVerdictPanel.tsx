@@ -230,6 +230,7 @@ export default function ChallengeVerdictPanel({
   // in <EvidenceUploader />; this panel is verdict + settle only.)
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictErr, setVerdictErr] = useState("");
+  const [manageNotice, setManageNotice] = useState("");
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -541,6 +542,27 @@ export default function ChallengeVerdictPanel({
     }
   };
 
+  const archiveOrRestoreChallenge = async (archived: boolean) => {
+    if (!challenge) return;
+    const verb = archived ? "Archive" : "Restore";
+    const detail = archived
+      ? "This keeps evidence, verdict, and ledger history but removes it from your default challenge board and public discovery."
+      : "This returns it to your private challenge board. It will stay out of public discovery.";
+    if (!window.confirm(`${verb} "${challenge.title}"? ${detail}`)) return;
+    setBusy(true);
+    setVerdictErr("");
+    setManageNotice("");
+    try {
+      const res = await api.archiveChallenge(challenge.id, { archived });
+      setChallenge(res.challenge);
+      setManageNotice(archived ? "Archived. History and ledger are preserved." : "Restored to your private challenge board.");
+    } catch (e) {
+      setVerdictErr(e instanceof Error ? e.message : `Could not ${verb.toLowerCase()} this challenge`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const acceptFromContract = async () => {
     if (!challenge || !acceptContractChecked) return;
     setAcceptingChallenge(true);
@@ -610,6 +632,8 @@ export default function ChallengeVerdictPanel({
   const closeLockReason = managementLockReason(challenge, isCreator);
   const canCloseEmpty = !closeLockReason;
   const canCancelRefund = canCancelAndRefundBeforeEvidence(challenge, isCreator);
+  const isArchived = challenge.visibility === "archived";
+  const canArchiveInstead = isCreator && !isArchived && !canCloseEmpty && !canCancelRefund;
   const inviteUrl = `${origin || ""}/join/${challengeId}`;
   const verdictMetrics = parseJudgmentMetrics(verdictRow);
   const participantAMetrics = participantVideoMetrics(verdictMetrics.videoMetrics, "participantA");
@@ -728,12 +752,30 @@ export default function ChallengeVerdictPanel({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>Manage challenge</p>
                 <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason && !canCancelRefund ? "#991B1B" : "#047857" }}>
-                  {canCancelRefund
+                  {isArchived
+                    ? "This challenge is archived. It is hidden from your default board and public discovery, but audit/history stays intact."
+                    : canCancelRefund
                     ? "Opponent has joined, but no evidence or judgment exists yet. You can cancel and refund all locked stakes."
                     : closeLockReason || "No opponent, evidence, or judgment exists yet. You can close this challenge and refund the stake."}
                 </p>
+                {manageNotice && (
+                  <p className="mt-2 text-[11px] font-black" style={{ color: "#047857" }}>
+                    {manageNotice}
+                  </p>
+                )}
               </div>
-              {canCancelRefund ? (
+              {isArchived ? (
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  disabled={busy}
+                  onClick={() => void archiveOrRestoreChallenge(false)}
+                  className="px-4 py-2 text-xs font-black disabled:opacity-50"
+                  style={{ background: "#A7F3D0", color: "#065F46", border: "1px solid #6EE7B7", borderRadius: "9999px" }}
+                >
+                  Restore
+                </motion.button>
+              ) : canCancelRefund ? (
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.97 }}
@@ -754,6 +796,17 @@ export default function ChallengeVerdictPanel({
                   style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "9999px" }}
                 >
                   Close empty challenge
+                </motion.button>
+              ) : canArchiveInstead ? (
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  disabled={busy}
+                  onClick={() => void archiveOrRestoreChallenge(true)}
+                  className="px-4 py-2 text-xs font-black disabled:opacity-50"
+                  style={{ background: "#F1F5F9", color: "#334155", border: "1px solid #CBD5E1", borderRadius: "9999px" }}
+                >
+                  Archive
                 </motion.button>
               ) : (
                 <span

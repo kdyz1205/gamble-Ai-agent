@@ -309,12 +309,13 @@ export interface EventLeaderboardEntryData {
 }
 
 export async function listChallenges(params?: {
-  status?: string; type?: string; mine?: boolean; limit?: number; offset?: number;
+  status?: string; type?: string; mine?: boolean; includeArchived?: boolean; limit?: number; offset?: number;
 }): Promise<{ challenges: ChallengeData[]; total: number }> {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.type) q.set("type", params.type);
   if (params?.mine) q.set("mine", "true");
+  if (params?.includeArchived) q.set("includeArchived", "true");
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   return apiFetch(`/challenges?${q.toString()}`);
@@ -663,6 +664,21 @@ export async function cancelChallenge(id: string, data?: { reason?: string }): P
   settlement: { success: boolean; error?: string; txHash?: string };
 }> {
   return apiFetch(`/challenges/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
+}
+
+export async function archiveChallenge(id: string, data?: { archived?: boolean }): Promise<{
+  challenge: ChallengeData;
+  archive: {
+    archived: boolean;
+    visibility: string;
+    removedFromDiscovery: boolean;
+    statusPreserved: string;
+  };
+}> {
+  return apiFetch(`/challenges/${id}/archive`, {
     method: "POST",
     body: JSON.stringify(data ?? {}),
   });

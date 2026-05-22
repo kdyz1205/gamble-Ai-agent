@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get("status");
   const type   = url.searchParams.get("type");
   const mine   = url.searchParams.get("mine") === "true";
+  const includeArchived = url.searchParams.get("includeArchived") === "true";
   const limit  = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
       { creatorId: user.userId },
       { participants: { some: { userId: user.userId } } },
     ];
+    if (!includeArchived) where.visibility = { not: "archived" };
+  } else {
+    where.visibility = { not: "archived" };
   }
 
   const [challenges, total] = await Promise.all([

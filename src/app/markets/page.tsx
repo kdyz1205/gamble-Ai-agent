@@ -78,15 +78,35 @@ function hasChallengeHistory(market: ChallengeData) {
 type ManageAction =
   | { kind: "delete"; label: string; confirm: string; success: string }
   | { kind: "cancel"; label: string; confirm: string; success: string }
+  | { kind: "archive"; label: string; confirm: string; success: string }
+  | { kind: "restore"; label: string; confirm: string; success: string }
   | { kind: "locked"; label: string; reason: string };
 
 function getManageAction(market: ChallengeData, userId?: string): ManageAction | null {
   if (!userId || market.creatorId !== userId) return null;
+  if (market.visibility === "archived") {
+    return {
+      kind: "restore",
+      label: "Restore",
+      confirm: `Restore "${market.title}" to your challenge board? It will stay private and out of public discovery.`,
+      success: "Restored to your private challenge board.",
+    };
+  }
   if (isTerminalStatus(market.status)) {
-    return { kind: "locked", label: "Closed", reason: `Already ${market.status.replace(/_/g, " ")}` };
+    return {
+      kind: "archive",
+      label: "Archive",
+      confirm: `Archive "${market.title}"? The result and ledger stay preserved, but it will leave your default board.`,
+      success: "Archived. Result and ledger history were preserved.",
+    };
   }
   if (hasChallengeHistory(market)) {
-    return { kind: "locked", label: "Review", reason: "Evidence or judgment exists. Resolve it from the challenge room." };
+    return {
+      kind: "archive",
+      label: "Archive",
+      confirm: `Archive "${market.title}"? Evidence and judgment history stay preserved for audit.`,
+      success: "Archived. Evidence and judgment history were preserved.",
+    };
   }
 
   const hasOpponent = hasOtherParticipant(market, userId);
@@ -127,6 +147,7 @@ export default function MarketsPage() {
   const [matching, setMatching] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadChallenges = useCallback(async () => {
     if (sessionLoading) return;
@@ -134,7 +155,7 @@ export default function MarketsPage() {
     setMessage(null);
     try {
       const [mineResult, publicResult] = await Promise.allSettled([
-        userId ? api.listChallenges({ mine: true, limit: 50 }) : Promise.resolve({ challenges: [], total: 0 }),
+        userId ? api.listChallenges({ mine: true, includeArchived: showArchived, limit: 50 }) : Promise.resolve({ challenges: [], total: 0 }),
         api.discoverChallenges({ limit: 30 }),
       ]);
       if (mineResult.status === "fulfilled") {
@@ -157,16 +178,18 @@ export default function MarketsPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionLoading, userId]);
+  }, [sessionLoading, showArchived, userId]);
 
   useEffect(() => {
     void loadChallenges();
   }, [loadChallenges]);
 
   const grouped = useMemo(() => {
-    const active = markets.filter((market) => !isTerminalStatus(market.status));
-    const closed = markets.filter((market) => isTerminalStatus(market.status));
-    return { active, closed };
+    const archived = markets.filter((market) => market.visibility === "archived");
+    const visible = markets.filter((market) => market.visibility !== "archived");
+    const active = visible.filter((market) => !isTerminalStatus(market.status));
+    const closed = visible.filter((market) => isTerminalStatus(market.status));
+    return { active, closed, archived };
   }, [markets]);
 
   const tryMatchMe = async () => {
@@ -204,7 +227,7 @@ export default function MarketsPage() {
         setMarkets((prev) => prev.filter((item) => item.id !== market.id));
         setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
         setMessage(res.refundedStake > 0 ? `Closed. ${res.refundedStake} credits refunded.` : action.success);
-      } else {
+      } else if (action.kind === "cancel") {
         const res = await api.cancelChallenge(market.id, { reason: "Creator cancelled from challenge manager." });
         if (res.challenge) {
           setMarkets((prev) => prev.map((item) => item.id === market.id ? res.challenge : item));
@@ -213,6 +236,14 @@ export default function MarketsPage() {
           await loadChallenges();
         }
         setMessage(res.cancellation.refunded ? "Cancelled. Credits refunded." : action.success);
+      } else {
+        const res = await api.archiveChallenge(market.id, { archived: action.kind === "archive" });
+        setMarkets((prev) => {
+          if (action.kind === "archive" && !showArchived) return prev.filter((item) => item.id !== market.id);
+          return prev.map((item) => item.id === market.id ? res.challenge : item);
+        });
+        setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
+        setMessage(action.success);
       }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Couldn't close this challenge");
@@ -281,6 +312,21 @@ export default function MarketsPage() {
               </div>
             </div>
           </div>
+          {user && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: NAVY_FAINT }}>
+              <p className="text-xs font-bold" style={{ color: NAVY_DIM }}>
+                Archive keeps evidence, verdict, and ledger history but removes clutter from the default board.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowArchived((value) => !value)}
+                className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
+                style={{ color: showArchived ? PEACH_TEXT : NAVY, background: showArchived ? CREAM : "#FFFFFF", border: `1px solid ${showArchived ? "#FDBA74" : NAVY_FAINT}`, borderRadius: "9999px" }}
+              >
+                {showArchived ? "Hide archived" : "Show archived"}
+              </button>
+            </div>
+          )}
         </section>
         <motion.div
           className="mb-5 lp-glass p-4 rounded-[20px]"
@@ -407,6 +453,7 @@ export default function MarketsPage() {
             {([
               ["Active", grouped.active],
               ["Closed history", grouped.closed],
+              ["Archived", grouped.archived],
             ] as const).map(([groupLabel, groupItems]) => groupItems.length > 0 && (
               <section key={groupLabel}>
                 <div className="mb-2 flex items-center justify-between">
@@ -420,7 +467,7 @@ export default function MarketsPage() {
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
               const manageAction = getManageAction(m, user.id);
-              const canAct = manageAction?.kind === "delete" || manageAction?.kind === "cancel";
+              const canAct = manageAction?.kind === "delete" || manageAction?.kind === "cancel" || manageAction?.kind === "archive" || manageAction?.kind === "restore";
               return (
                 <motion.article
                   key={m.id}
@@ -475,7 +522,12 @@ export default function MarketsPage() {
                         onClick={() => closeChallenge(m)}
                         disabled={closingId === m.id}
                         className="px-4 py-2 text-xs font-black active:scale-95 disabled:opacity-50 transition-transform"
-                        style={{ color: ROSE_TEXT, background: ROSE_BG, border: "1px solid #FDA4AF", borderRadius: "9999px" }}
+                        style={{
+                          color: manageAction.kind === "restore" ? MINT_TEXT : manageAction.kind === "archive" ? NAVY : ROSE_TEXT,
+                          background: manageAction.kind === "restore" ? MINT : manageAction.kind === "archive" ? NAVY_FAINT : ROSE_BG,
+                          border: `1px solid ${manageAction.kind === "restore" ? "#6EE7B7" : manageAction.kind === "archive" ? "#CBD5E1" : "#FDA4AF"}`,
+                          borderRadius: "9999px",
+                        }}
                       >
                         {closingId === m.id ? "Closing..." : manageAction.label}
                       </button>
