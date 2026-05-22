@@ -59,3 +59,50 @@ Important limitation: this proof uses controlled generated/public fixture videos
 - The two valid winner cases settled automatically.
 - The eight unsafe/unclear/invalid/tie cases did not auto-settle.
 - The negative cases preserved credit safety: no winner settlement when evidence was insufficient, invalid, tied, cropped, too short, too dark, bad angle, non-push-up, or static/looped.
+
+---
+
+## 2026-05-22 Re-Proof After No-Label Fixture Hardening
+
+Production target: `https://gamble-ai-agent.vercel.app`
+
+Commit under test: `4975c9152e2715f3b3573a7e2ebe7cc1c81965e7`
+
+Deployment URL: `https://gamble-ai-agent-2c567fi5d-kdyz1205s-projects.vercel.app`
+
+Deployment ID: `dpl_E1MFQEpjkv9XxQpjyvK65D6mE3g1`
+
+Command:
+
+```powershell
+$env:E2E_BASE_URL='https://gamble-ai-agent.vercel.app'
+$env:E2E_JUDGE_PROVIDER='openai'
+$env:E2E_JUDGE_MODEL='gpt-4o'
+Remove-Item Env:RUN_ROBUSTNESS_CASES -ErrorAction SilentlyContinue
+$env:E2E_ROBUSTNESS_CASE_DELAY_MS='0'
+npm run e2e:real-video-robustness
+```
+
+Result: `passed=true`, 10 cases.
+
+Why this run was needed:
+- A previous production run on commit `ad8e2409ab517fd1002ff365103b0b033bd62e72` proved the bad-evidence guardrails, but the `no_visible_role_label` positive case failed safely as `ai_inconclusive`.
+- The no-label B fixture was first made static, but that correctly triggered `invalid_evidence` because a zero-motion submission is not a valid completed push-up attempt.
+- Commit `4975c9152e2715f3b3573a7e2ebe7cc1c81965e7` changes the no-label B fixture to one slow visible push-up attempt, preserving the rule that the model must infer from motion/body position instead of reading a direct answer label.
+
+Confirmed positive cases:
+- `clean_a_beats_b`: settled with `source=vision_llm`, OpenAI `gpt-4o`, `requestKind=vision`, `usedApi=true`, `confidence=0.95`, `evidenceQuality=good`, `settlementRecommendation=settle_winner`.
+- `no_visible_role_label`: settled with `source=vision_llm`, OpenAI `gpt-4o`, `requestKind=vision`, `usedApi=true`, `confidence=0.9`, `evidenceQuality=good`, `settlementRecommendation=settle_winner`. The model counted Participant A higher than Participant B without visible role/answer text.
+
+Confirmed negative cases:
+- `bad_angle`: did not auto-settle.
+- `partial_body`: did not auto-settle.
+- `too_dark_blurry`: did not auto-settle.
+- `cropped_video`: did not auto-settle.
+- `short_video`: did not auto-settle.
+- `tie_video`: did not auto-settle.
+- `non_pushup_video`: did not auto-settle.
+- `static_loop`: did not auto-settle; final status `ai_inconclusive`, `evidenceQuality=invalid`, `settlementRecommendation=invalid_evidence`, `autoSettleEligible=false`.
+
+Important limitation:
+- This is still a controlled generated/public fixture suite. It is stronger than the earlier single happy-path fixture proof, but it still does not prove reliable automatic judging for arbitrary real phone videos from uncontrolled users.
