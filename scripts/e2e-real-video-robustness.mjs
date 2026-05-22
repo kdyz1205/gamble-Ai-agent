@@ -456,7 +456,7 @@ const cases = [
     title: "Visible role label removed, motion/body position only",
     expect: "settled",
     creator: { repCount: 12, durationSec: 60, variant: "no_text_label" },
-    opponent: { repCount: 4, durationSec: 60, variant: "no_text_label" },
+    opponent: { repCount: 1, durationSec: 60, variant: "no_text_static" },
   },
   {
     id: "static_loop",

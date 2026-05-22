@@ -162,7 +162,7 @@ const outputs = [
   await makeVideo({ filename: "pushups-non-pushup-a-static-phrase.mp4", role: "PARTICIPANT A", color: "#047857", repCount: 4 }),
   await makeVideo({ filename: "pushups-non-pushup-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 1, variant: "non_pushup" }),
   await makeVideo({ filename: "pushups-no-label-a-static-phrase.mp4", role: "PARTICIPANT A", color: "#047857", repCount: 12, variant: "no_text_label" }),
-  await makeVideo({ filename: "pushups-no-label-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 4, variant: "no_text_label" }),
+  await makeVideo({ filename: "pushups-no-label-b-static-phrase.mp4", role: "PARTICIPANT B", color: "#b91c1c", repCount: 1, variant: "no_text_static" }),
 ];
 
 console.log(JSON.stringify({ phrase, outputs }, null, 2));
