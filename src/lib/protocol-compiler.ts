@@ -201,6 +201,37 @@ function looksLikeSoloClaim(rawPrompt: string) {
   return false;
 }
 
+function looksLikeRandomChallengePrompt(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  if (/\b(give|generate|create|make|pick|suggest)\s+(me\s+)?(a\s+)?(random|safe|fun|any)?\s*challenge\b/.test(text)) return true;
+  if (/\b(random|any|surprise)\s+challenge\b/.test(text)) return true;
+  return /[\u968f\u4fbf\u968f\u673a].{0,20}[\u6311\u6218]/.test(rawPrompt) ||
+    /[\u6765\u751f\u6210].{0,12}[\u4e00\u4e2a].{0,12}[\u6311\u6218]/.test(rawPrompt);
+}
+
+function looksLikeGenericProtocolTitle(title: string) {
+  const text = title.trim().toLowerCase();
+  if (!text) return true;
+  if (/^(challenge|ai challenge|challenge protocol|protocol example|challenge protocol example|generated challenge)$/i.test(text)) return true;
+  return /[\u6311\u6218]\s*[\u534f\u8bae]/.test(title) ||
+    /[\u793a\u4f8b\u6837\u4f8b\u6a21\u677f]/.test(title);
+}
+
+function concreteRandomProtocol(rawPrompt: string, language: ProtocolSpecV2["language"]) {
+  const seedPrompt = language === "zh"
+    ? "生成一个安全的双人平板支撑挑战，需要连续视频证据。"
+    : "Create a safe two-person plank hold challenge with continuous video evidence.";
+  const protocol = protocolSpecFromChallengeSpec(generateChallengeSpec(seedPrompt), rawPrompt, { language });
+  return normalizeCompiledProtocol({
+    ...protocol,
+    rawPrompt,
+    language,
+    userFacingSummary: language === "zh"
+      ? "两个人分别录制连续视频，比谁能保持标准平板支撑更久。AI 只在视频清晰、身份和动作都可信时推荐赢家。"
+      : "Two people record continuous video and compete on who can hold a valid plank longer. AI recommends a winner only when video, identity, and form are clear.",
+  });
+}
+
 function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const inferredSolo =
     protocol.participantMode !== "public_market" &&
@@ -287,6 +318,16 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
         ? Math.min(18, Math.max(8, protocol.aiBudgetPolicy.maxVisionFrames || 12))
         : 0,
     },
+  };
+}
+
+function repairRandomProtocolIfGeneric(protocol: ProtocolSpecV2, language: ProtocolSpecV2["language"]) {
+  if (!looksLikeRandomChallengePrompt(protocol.rawPrompt) || !looksLikeGenericProtocolTitle(protocol.title)) {
+    return { protocol, repaired: false };
+  }
+  return {
+    protocol: concreteRandomProtocol(protocol.rawPrompt, language),
+    repaired: true,
   };
 }
 
@@ -430,7 +471,12 @@ export async function compileProtocolForUser(input: {
         language,
       });
       if (protocol) {
-        normalizedProtocol = normalizeCompiledProtocol(protocol);
+        const normalized = normalizeCompiledProtocol(protocol);
+        const repaired = repairRandomProtocolIfGeneric(normalized, language);
+        normalizedProtocol = repaired.protocol;
+        if (repaired.repaired) {
+          fallbackReason = "LLM returned a generic random-challenge title; repaired to a concrete playable protocol";
+        }
       } else {
         fallbackReason = "LLM response did not match ProtocolSpecV2";
       }
