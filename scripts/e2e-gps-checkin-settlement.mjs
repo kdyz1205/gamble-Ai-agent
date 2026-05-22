@@ -47,6 +47,14 @@ async function request(jar, path, options = {}) {
   return { res, data };
 }
 
+async function requestAllowError(jar, path, options = {}) {
+  try {
+    return await request(jar, path, options);
+  } catch (error) {
+    return { error, data: error.data, status: error.status };
+  }
+}
+
 function postJson(jar, path, body) {
   return request(jar, path, {
     method: "POST",
@@ -190,10 +198,40 @@ const near = { lat: 37.7749, lng: -122.4194 };
 const nearOpponent = { lat: 37.7751, lng: -122.4195 };
 const far = { lat: 34.0522, lng: -118.2437 };
 const proof = { base, commitSha: currentCommitSha(), stamp, checks: {} };
+let cleanupCreator = null;
+let cleanupChallengeId = null;
+let opponentAccepted = false;
+
+async function cleanupCreatedChallenge() {
+  if (!cleanupCreator || !cleanupChallengeId) return { skipped: true };
+  if (opponentAccepted) {
+    const cancelled = await requestAllowError(cleanupCreator.jar, `/api/challenges/${cleanupChallengeId}/cancel`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "GPS settlement E2E cleanup after failure." }),
+    });
+    return {
+      action: "cancel",
+      status: cancelled.status ?? 200,
+      ok: !cancelled.error,
+      data: cancelled.data ?? null,
+    };
+  }
+  const deleted = await requestAllowError(cleanupCreator.jar, `/api/challenges/${cleanupChallengeId}`, {
+    method: "DELETE",
+  });
+  return {
+    action: "delete",
+    status: deleted.status ?? 200,
+    ok: !deleted.error,
+    data: deleted.data ?? null,
+  };
+}
 
 try {
   const creator = await register(`codex.gps.creator.${stamp}@example.com`, `gps_creator_${stamp.slice(-6)}`);
   const opponent = await register(`codex.gps.opponent.${stamp}@example.com`, `gps_opp_${stamp.slice(-6)}`);
+  cleanupCreator = creator;
   const beforeCreator = await getJson(creator.jar, "/api/credits");
   const beforeOpponent = await getJson(opponent.jar, "/api/credits");
 
@@ -207,10 +245,11 @@ try {
     stake: 1,
     stakeToken: "credits",
     aiReview: true,
-    isPublic: true,
-    visibility: "public",
+    isPublic: false,
+    visibility: "private",
   });
   const challengeId = created.challenge.id;
+  cleanupChallengeId = challengeId;
   proof.challenge = {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,
@@ -229,6 +268,7 @@ try {
     ...nearOpponent,
     accuracy: 15,
   });
+  opponentAccepted = true;
   proof.accept = { status: accepted.challenge.status, participants: accepted.challenge.participants.length };
 
   const evCreator = await postJson(creator.jar, `/api/challenges/${challengeId}/evidence`, {
@@ -304,6 +344,7 @@ try {
   console.log(JSON.stringify(proof, null, 2));
 } catch (error) {
   proof.error = { message: error?.message, status: error?.status, data: error?.data };
+  proof.cleanup = await cleanupCreatedChallenge();
   proof.gpsSettled = false;
   console.log(JSON.stringify(proof, null, 2));
   process.exit(1);

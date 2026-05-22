@@ -1005,10 +1005,10 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
-          Tap to start
+          Certified loops
         </p>
         <p className="hidden text-xs font-semibold sm:block" style={{ color: "#64748B" }}>
-          Built for first-time users to publish faster.
+          Pick a proven path first; review-only paths stay labeled instead of pretending to auto-settle.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -1031,6 +1031,9 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
               </span>
             </div>
             <p className="mt-1 line-clamp-2 text-xs font-semibold" style={{ color: "#64748B" }}>{item.prompt}</p>
+            <p className="mt-2 text-[11px] font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
+              {item.participantMode.replaceAll("_", " ")} · {item.evidenceMode.replaceAll("_", " ")}
+            </p>
           </button>
         ))}
       </div>

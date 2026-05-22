@@ -118,6 +118,7 @@ export const CERTIFIED_CHALLENGE_LOOPS: ChallengeLoopCatalogItem[] = [
       "Nearby location is accepted.",
       "Both participants submit GPS metadata evidence.",
       "Fixture GPS check-in can settle winner credits.",
+      "Settlement proof runs private to avoid polluting public challenge lists; public radar discovery is covered separately.",
       "Precise stranger location still must stay private in UI.",
     ],
   },
@@ -138,7 +139,7 @@ export const CERTIFIED_CHALLENGE_LOOPS: ChallengeLoopCatalogItem[] = [
   },
 ];
 
-export const HOMEPAGE_CHALLENGE_LOOPS = CERTIFIED_CHALLENGE_LOOPS.slice(0, 6);
+export const HOMEPAGE_CHALLENGE_LOOPS = CERTIFIED_CHALLENGE_LOOPS;
 
 export function challengeLoopStatusLabel(status: ChallengeLoopStatus) {
   if (status === "production_proven") return "production proven";

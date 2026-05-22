@@ -47,7 +47,15 @@ async function checkRoute(proof, page, route, expected, labelPrefix = "") {
 async function runCoreNavSuite(proof, page, labelPrefix = "") {
   await checkRoute(proof, page, "/", [
     "Turn any dare into a playable challenge.",
-    "TAP TO START",
+    "CERTIFIED LOOPS",
+    "Solo proof",
+    "Answer challenge",
+    "Push-up video",
+    "Plank hold",
+    "Typing race",
+    "Study streak",
+    "Nearby check-in",
+    "Game score",
     "Auto language",
     "English",
     "中文",
