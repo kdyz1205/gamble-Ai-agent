@@ -16,7 +16,9 @@
     "e2e:click-flow": "node scripts/e2e-click-flow-smoke.mjs",
     "e2e:manage-flow": "node scripts/e2e-close-empty-challenge.mjs",
     "e2e:solo-flow": "node scripts/e2e-solo-challenge-flow.mjs",
-    "e2e:screenshot-settlement": "node scripts/e2e-screenshot-settlement.mjs"
+    "e2e:screenshot-settlement": "node scripts/e2e-screenshot-settlement.mjs",
+    "e2e:gps-checkin-settlement": "node scripts/e2e-gps-checkin-settlement.mjs",
+    "e2e:study-streak-settlement": "node scripts/e2e-study-streak-settlement.mjs"
   },
   "repository": {
     "type": "git",
