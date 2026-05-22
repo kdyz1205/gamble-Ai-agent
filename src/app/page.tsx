@@ -11,6 +11,7 @@ import * as api from "@/lib/api-client";
 import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
+import { HOMEPAGE_CHALLENGE_LOOPS, challengeLoopStatusLabel } from "@/lib/challenge-loop-catalog";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
@@ -24,33 +25,6 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:kimi|moonshot)$/i, providerId: "moonshot" },
   { pattern: /^(?:gpt|openai|premium)$/i, providerId: "openai" },
   { pattern: /^(?:claude|anthropic)$/i, providerId: "anthropic" },
-];
-
-const LAUNCH_PROMPTS = [
-  {
-    title: "Push-up challenge",
-    prompt: "I want to challenge a friend: who can do more valid push-ups in 60 seconds?",
-  },
-  {
-    title: "Plank hold",
-    prompt: "Create a two-person challenge for who can hold a plank longer with video evidence.",
-  },
-  {
-    title: "Typing race",
-    prompt: "Challenge a friend on who can type a 100-word paragraph faster with screenshot proof.",
-  },
-  {
-    title: "Study streak",
-    prompt: "Make a 3-day study streak challenge where both people submit daily proof.",
-  },
-  {
-    title: "Nearby check-in",
-    prompt: "Create a nearby public challenge where people walk to the location and check in.",
-  },
-  {
-    title: "Game score",
-    prompt: "I want to challenge someone on who gets the higher score in one game round using screenshot evidence.",
-  },
 ];
 
 const REFERRAL_STORAGE_KEY = "axelrod_referral";
@@ -1038,15 +1012,24 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {LAUNCH_PROMPTS.map((item) => (
+        {HOMEPAGE_CHALLENGE_LOOPS.map((item) => (
           <button
-            key={item.title}
+            key={item.id}
             type="button"
             onClick={() => onPick(item.prompt)}
             className="group rounded-[18px] border bg-white/90 px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
             style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 28px rgba(15,23,42,0.04)" }}
           >
-            <p className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</p>
+              <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase" style={{
+                borderColor: item.status === "production_proven" ? "#A7F3D0" : item.status === "fixture_proven" ? "#FED7AA" : "#E2E8F0",
+                color: item.status === "production_proven" ? "#047857" : item.status === "fixture_proven" ? "#9A3412" : "#64748B",
+                background: item.status === "production_proven" ? "#ECFDF5" : item.status === "fixture_proven" ? "#FFF7ED" : "#F8FAFC",
+              }}>
+                {challengeLoopStatusLabel(item.status)}
+              </span>
+            </div>
             <p className="mt-1 line-clamp-2 text-xs font-semibold" style={{ color: "#64748B" }}>{item.prompt}</p>
           </button>
         ))}
