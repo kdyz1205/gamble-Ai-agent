@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { addCredits, COSTS } from "@/lib/credits";
+import { moneyModeBlock, paymentJurisdictionFromRequest, usdcCreditTopupEnabled } from "@/lib/payment-policy";
 
 /**
  * POST /api/credits/topup — Buy credits with USDC (verified by x402 middleware).
@@ -15,7 +16,13 @@ export async function POST(req: NextRequest) {
   if (!user) return unauthorized();
 
   try {
-    const { usdcAmount, txHash } = await req.json();
+    const body = await req.json();
+    const paymentJurisdiction = paymentJurisdictionFromRequest(req, body);
+    if (!usdcCreditTopupEnabled(paymentJurisdiction)) {
+      return Response.json(moneyModeBlock("usdc", paymentJurisdiction), { status: 403 });
+    }
+
+    const { usdcAmount, txHash } = body;
 
     if (!usdcAmount || usdcAmount <= 0) {
       return Response.json({ error: "Invalid USDC amount" }, { status: 400 });

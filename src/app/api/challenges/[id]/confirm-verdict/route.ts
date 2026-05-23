@@ -21,6 +21,7 @@ import {
   evaluateProtocolJudgmentGates,
 } from "@/lib/protocol-judgment-policy";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,7 @@ function stringArray(value: unknown): string[] {
  * The AI recommends; the creator makes the final product action explicit.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getAuthUser();
@@ -208,6 +209,11 @@ export async function POST(
 
     let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
     if (challenge.stake > 0) {
+      const stakeToken = normalizeStakeToken(challenge.stakeToken);
+      const paymentJurisdiction = paymentJurisdictionFromRequest(req);
+      if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+        return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+      }
       settlement = await settleChallenge(
         id,
         judgment.winnerId,

@@ -16,6 +16,7 @@ import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { logAiUsage } from "@/lib/ai-usage-log";
 import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "@/lib/crypto-price-oracle";
 import {
   combineAutoSettlePolicyWithProtocolGates,
   evaluateProtocolJudgmentGates,
@@ -32,6 +33,7 @@ import {
   type VerdictRecommendation,
   type VerdictStatus,
 } from "@/lib/judgment-policy";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 
 /**
  * POST /api/challenges/[id]/judge
@@ -54,8 +56,10 @@ export async function POST(
   let autoSettleRequested = false;
   let rejudgeRequested = false;
   let rejudgeReason = "";
+  let requestBody: Record<string, unknown> = {};
   try {
     const body = await req.json();
+    requestBody = body && typeof body === "object" && !Array.isArray(body) ? body : {};
     if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
     if (typeof body?.providerId === "string") providerIdOverride = body.providerId;
     if (typeof body?.model === "string") modelOverride = body.model;
@@ -82,16 +86,292 @@ export async function POST(
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
+  const protocol = challenge.protocol?.specJson
+    ? (() => {
+        try {
+          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const cryptoOracleSpec = extractCryptoPriceOracleSpec({
+    protocol,
+    title: challenge.title,
+    description: challenge.description,
+    proposition: challenge.proposition,
+    rules: challenge.rules,
+    deadlineIso: challenge.deadline?.toISOString() ?? null,
+  });
+  const publicOracleJudgeStatuses = new Set<string>([
+    ChallengeStatus.evidence_window_open,
+    ChallengeStatus.creator_submitted,
+    ChallengeStatus.opponent_submitted,
+    ChallengeStatus.ai_reviewing,
+    ChallengeStatus.judging,
+  ]);
+  const canJudgePublicOracle = Boolean(cryptoOracleSpec) && publicOracleJudgeStatuses.has(challenge.status);
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
   if (isTerminalStatus(challenge.status)) {
     return Response.json({ error: "Terminal challenges cannot be rejudged after settlement/refund/void." }, { status: 409 });
   }
   const isRejudge = rejudgeRequested && isVerdictReadyStatus(challenge.status) && challenge._count.judgments > 0;
-  if (!isAiReviewStatus(challenge.status) && !isRejudge) {
+  if (!isAiReviewStatus(challenge.status) && !isRejudge && !canJudgePublicOracle) {
     return Response.json(
       { error: rejudgeRequested ? "No previous AI verdict is available to rejudge." : "Not ready for judgment" },
       { status: 400 },
     );
+  }
+
+  const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
+  const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
+  if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
+
+  if (cryptoOracleSpec && !isRejudge) {
+    const oracle = await judgeCryptoPriceOracle({
+      spec: cryptoOracleSpec,
+      participantAId: creator.userId,
+      participantBId: opponent?.userId ?? null,
+    });
+    if (oracle.status === "not_due") {
+      return Response.json({
+        error: oracle.reason,
+        status: "not_due",
+        settlementTime: oracle.settlementTime,
+      }, { status: 409 });
+    }
+
+    const result = oracle.result;
+    const judgmentPolicyOptions = {
+      requiresVision: false,
+      requiresRepCountWinner: false,
+      requiresHoldDurationWinner: false,
+      participantAId: creator.userId,
+      participantBId: opponent?.userId ?? null,
+      solo: protocol?.participantMode === "solo",
+    };
+    const protocolGates = evaluateProtocolJudgmentGates({
+      protocol,
+      participants: challenge.participants,
+      participantBindings: challenge.participantBindings,
+      evidence: challenge.evidence,
+      evidenceChecks: challenge.evidenceChecks,
+      result,
+    });
+    const aiOnlyAutoSettlePolicy = evaluateAutoSettleEligibility(result, judgmentPolicyOptions);
+    const autoSettlePolicy = combineAutoSettlePolicyWithProtocolGates(aiOnlyAutoSettlePolicy, protocolGates);
+    const aiOnlyVerdictStatus = statusForJudgmentResult(result, judgmentPolicyOptions);
+    const verdictStatus =
+      aiOnlyVerdictStatus === ChallengeStatus.ai_verdict_ready && !protocolGates.settlementEligibility.eligible
+        ? ChallengeStatus.manual_review_required
+        : aiOnlyVerdictStatus;
+    const blockingIssues = autoSettlePolicy.blockingIssues.length
+      ? autoSettlePolicy.blockingIssues
+      : blockingIssuesForJudgment(result, judgmentPolicyOptions);
+    const { evidenceQuality, recommendation } = effectiveJudgmentVerdictFields(result, autoSettlePolicy);
+    const effectiveAiModelLabel = "Oracle - CoinGecko simple-price";
+    const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
+    await logAiUsage({
+      userId: user.userId,
+      challengeId: id,
+      route: "/api/challenges/[id]/judge",
+      metadata: result.providerCall ?? null,
+      extra: { source: "oracle", chargedInference: false },
+    });
+
+    const judgment = await prisma.judgment.create({
+      data: {
+        challengeId: id,
+        winnerId: result.winnerId,
+        method: "ai",
+        aiModel: effectiveAiModelLabel,
+        reasoning: result.reasoning,
+        confidence: result.confidence,
+        status: "completed",
+        metricsJson: buildJudgmentMetricsJson(result, {
+          model: effectiveAiModelLabel,
+          autoSettlePolicy,
+          status: verdictStatus,
+          protocolGates,
+        }),
+      },
+      include: { winner: { select: { id: true, username: true } } },
+    });
+
+    const verdict = {
+      status: verdictStatus,
+      winnerId: result.winnerId,
+      confidence: result.confidence,
+      reasoning: result.reasoning,
+      evidenceQuality,
+      recommendation,
+      settlementRecommendation: recommendation,
+      source: result.source ?? "oracle",
+      providerCall: providerCallAudit,
+      videoMetrics: null,
+      autoSettleEligible: autoSettlePolicy.eligible,
+      autoSettleBlockReason: autoSettlePolicy.reason,
+      blockingIssues,
+      protocolCompliance: protocolGates.protocolCompliance,
+      identityResult: protocolGates.identityResult,
+      evidenceResult: protocolGates.evidenceResult,
+      settlementEligibility: protocolGates.settlementEligibility,
+    };
+
+    if (!autoSettlePolicy.eligible) {
+      await prisma.challenge.update({
+        where: { id },
+        data: { status: verdictStatus, aiModel: effectiveAiModelLabel },
+      });
+      await appendAuditLog({
+        action: AuditActions.JUDGMENT_COMPLETED,
+        actorUserId: user.userId,
+        challengeId: id,
+        payload: {
+          winnerId: result.winnerId,
+          judgmentId: judgment.id,
+          confidence: result.confidence,
+          settlementOk: false,
+          newStatus: verdictStatus,
+          source: result.source,
+          providerCall: providerCallAudit,
+          evidenceQuality,
+          recommendation,
+          settlementRecommendation: recommendation,
+          blockingIssues,
+          protocolCompliance: protocolGates.protocolCompliance,
+          identityResult: protocolGates.identityResult,
+          evidenceResult: protocolGates.evidenceResult,
+          settlementEligibility: protocolGates.settlementEligibility,
+          autoSettleBlockReason: autoSettlePolicy.reason,
+          reasoning: result.reasoning?.slice(0, 500),
+        },
+      });
+      return Response.json({
+        ...verdict,
+        verdict,
+        judgment,
+        settlement: { success: false, error: autoSettlePolicy.reason || "Oracle verdict not eligible for settlement" },
+        challenge: { id, status: verdictStatus },
+        model: effectiveAiModelLabel,
+        tierId,
+        creditsUsed: 0,
+        creditsRefunded: 0,
+        txHash: null,
+        freeMode: true,
+      });
+    }
+
+    const currentStatus = challenge.status;
+    if (currentStatus !== ChallengeStatus.ai_reviewing && currentStatus !== ChallengeStatus.judging) {
+      assertChallengeTransition(currentStatus, ChallengeStatus.ai_reviewing);
+      await prisma.challenge.update({
+        where: { id },
+        data: { status: ChallengeStatus.ai_reviewing, aiModel: effectiveAiModelLabel },
+      });
+    }
+    const reviewStatus = currentStatus === ChallengeStatus.judging
+      ? ChallengeStatus.judging
+      : ChallengeStatus.ai_reviewing;
+    assertChallengeTransition(reviewStatus, ChallengeStatus.ai_verdict_ready);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.ai_verdict_ready, aiModel: effectiveAiModelLabel },
+    });
+    assertChallengeTransition(ChallengeStatus.ai_verdict_ready, ChallengeStatus.dispute_window_open);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.dispute_window_open, aiModel: effectiveAiModelLabel },
+    });
+    assertChallengeTransition(ChallengeStatus.dispute_window_open, ChallengeStatus.finalized);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.finalized, aiModel: effectiveAiModelLabel },
+    });
+
+    let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
+    if (challenge.stake > 0) {
+      const stakeToken = normalizeStakeToken(challenge.stakeToken);
+      const paymentJurisdiction = paymentJurisdictionFromRequest(req, requestBody);
+      if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+        return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+      }
+      settlement = await settleChallenge(
+        id,
+        result.winnerId,
+        challenge.stake,
+        challenge.participants.map((p: { userId: string }) => ({ userId: p.userId })),
+      );
+      if (!settlement.success) {
+        return Response.json({
+          error: settlement.error || "Settlement failed",
+          ...verdict,
+          verdict,
+          judgment,
+          settlement,
+          challenge: { id, status: ChallengeStatus.finalized },
+          model: effectiveAiModelLabel,
+          tierId,
+          creditsUsed: 0,
+          creditsRefunded: 0,
+          freeMode: true,
+        }, { status: 502 });
+      }
+    }
+
+    assertChallengeTransition(ChallengeStatus.finalized, ChallengeStatus.settled);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.settled, aiModel: effectiveAiModelLabel },
+    });
+
+    await appendAuditLog({
+      action: AuditActions.JUDGMENT_COMPLETED,
+      actorUserId: user.userId,
+      challengeId: id,
+      payload: {
+        winnerId: result.winnerId,
+        judgmentId: judgment.id,
+        confidence: result.confidence,
+        settlementOk: settlement.success,
+        source: result.source,
+        providerCall: providerCallAudit,
+        evidenceQuality,
+        recommendation,
+        settlementRecommendation: recommendation,
+        blockingIssues,
+        protocolCompliance: protocolGates.protocolCompliance,
+        identityResult: protocolGates.identityResult,
+        evidenceResult: protocolGates.evidenceResult,
+        settlementEligibility: protocolGates.settlementEligibility,
+        reasoning: result.reasoning?.slice(0, 500),
+      },
+    });
+
+    const winnerName = judgment.winner?.username || "No one";
+    await prisma.activityEvent.create({
+      data: {
+        type: "challenge_settled",
+        message: `"${challenge.title}" resolved by CoinGecko oracle; ${winnerName} wins${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}.`,
+        userId: result.winnerId,
+        challengeId: id,
+      },
+    });
+
+    return Response.json({
+      ...verdict,
+      status: ChallengeStatus.settled,
+      verdict: { ...verdict, status: ChallengeStatus.settled },
+      judgment,
+      settlement,
+      challenge: { id, status: ChallengeStatus.settled },
+      model: effectiveAiModelLabel,
+      tierId,
+      creditsUsed: 0,
+      creditsRefunded: 0,
+      txHash: settlement.txHash ?? null,
+      freeMode: true,
+    });
   }
 
   // Free Mode: when the challenge has no stake, AI judgment is free.
@@ -160,10 +440,6 @@ export async function POST(
       },
     });
   }
-
-  const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
-  const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
-  if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
 
   const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
@@ -251,15 +527,6 @@ export async function POST(
     providerId,
     livenessPrompt: challenge.livenessPrompt,
   });
-  const protocol = challenge.protocol?.specJson
-    ? (() => {
-        try {
-          return parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
-        } catch {
-          return null;
-        }
-      })()
-    : null;
   const isSoloProtocol = protocol?.participantMode === "solo";
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
   const judgmentPolicyOptions = {
@@ -302,6 +569,8 @@ export async function POST(
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
+      : result.source === "oracle"
+        ? "Oracle - CoinGecko simple-price"
       : result.source === "fallback"
         ? "Fallback - no-settlement-v1"
         : aiModelLabel;
@@ -473,6 +742,11 @@ export async function POST(
 
   let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
   if (challenge.stake > 0) {
+    const stakeToken = normalizeStakeToken(challenge.stakeToken);
+    const paymentJurisdiction = paymentJurisdictionFromRequest(req, requestBody);
+    if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+      return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+    }
     settlement = await settleChallenge(
       id,
       result.winnerId,

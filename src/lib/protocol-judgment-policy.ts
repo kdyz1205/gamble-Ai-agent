@@ -275,6 +275,18 @@ function evidenceResult(
     return { passed: false, confidence: 0, blockingIssues: ["Evidence cannot be verified without ProtocolSpecV2."] };
   }
 
+  const mode = protocol.evidenceProtocol.mode;
+  if (mode === "public_oracle" || mode === "platform_metric") {
+    if (result?.source !== "oracle" && mode === "public_oracle") {
+      issues.push("Protocol requires a public oracle verdict, but the result did not come from an oracle source.");
+    }
+    if (result?.evidenceQuality && result.evidenceQuality !== "good") {
+      issues.push(`Judge evidence quality is ${result.evidenceQuality}, not good.`);
+    }
+    const confidence = issues.length === 0 ? (result?.confidence ?? 1) : (result?.confidence ?? 0);
+    return { passed: issues.length === 0, confidence, blockingIssues: uniqueIssues(issues) };
+  }
+
   const requiredParticipants = acceptedParticipants(participants).filter((participant) => participant.role !== "spectator");
   for (const participant of requiredParticipants) {
     const submitted = evidence.find((item) => item.userId === participant.userId);
@@ -292,7 +304,6 @@ function evidenceResult(
     issues.push(...parsedBlockingIssues(check.blockingIssues).map((issue) => `Evidence check: ${issue}`));
   }
 
-  const mode = protocol.evidenceProtocol.mode;
   const videoLike = mode === "same_camera_video" || mode === "separate_video" || mode === "live_host_video" || mode === "photo";
   if (videoLike) {
     if (result?.source !== "vision_llm") issues.push("Protocol requires visual evidence, but a vision judge did not produce the verdict.");

@@ -8,6 +8,7 @@ import {
 } from "./llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured } from "./llm-providers";
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
+import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "./crypto-price-oracle";
 import {
   prepareParticipantVisuals,
   prepareParticipantVisualsFast,
@@ -121,7 +122,7 @@ export interface JudgmentResult {
   /** @deprecated use recommendation. Kept so older callers/tests do not break immediately. */
   settlementRecommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner" | "refund" | "manual_review";
   blockingIssues?: string[];
-  source?: "deterministic" | "vision_llm" | "llm" | "fallback";
+  source?: "deterministic" | "vision_llm" | "llm" | "oracle" | "fallback";
   providerCall?: LlmCallMetadata;
   videoMetrics?: VideoJudgmentMetrics;
 }
@@ -773,6 +774,30 @@ function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentR
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
   let { evidenceA, evidenceB } = params;
   const { participantAId, participantBId, title, type, rules } = params;
+  const cryptoOracleSpec = extractCryptoPriceOracleSpec({
+    title,
+    description: params.description,
+    rules,
+    deadlineIso: params.deadlineIso,
+  });
+  if (cryptoOracleSpec) {
+    const oracle = await judgeCryptoPriceOracle({
+      spec: cryptoOracleSpec,
+      participantAId,
+      participantBId,
+    });
+    if (oracle.status === "ready") return oracle.result;
+    return {
+      winnerId: null,
+      reasoning: oracle.reason,
+      confidence: 0.4,
+      evidenceQuality: "unclear",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: [oracle.reason],
+      source: "oracle",
+    };
+  }
   const hasSharedSameCameraFlag = (evidence: JudgeEvidencePayload | null | undefined) =>
     evidence?.metadata?.sharedSameCamera === true || evidence?.metadata?.captureMode === "one_phone_same_camera";
 

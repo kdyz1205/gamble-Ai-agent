@@ -24,6 +24,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { evaluateAutoSettleEligibility, requiresHoldDurationWinnerFromText, requiresRepCountWinnerFromText, type EvidenceQuality, type VerdictRecommendation } from "@/lib/judgment-policy";
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
 import { parseProtocolSpecV2, protocolPreview, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken } from "@/lib/payment-policy";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { generateLivenessPhrase } from "@/lib/liveness";
 import {
@@ -1041,6 +1042,10 @@ async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown
   if (claim.count === 0) return { ok: false, error: "Already being finalized by another request" };
 
   if (challenge.stake > 0) {
+    const stakeToken = normalizeStakeToken(challenge.stakeToken);
+    if (!isStakeTokenAllowed(stakeToken, null)) {
+      return { ok: false, error: JSON.stringify(moneyModeBlock(stakeToken, null)) };
+    }
     const settlement = await settleChallenge(
       challengeId,
       j.winnerId,

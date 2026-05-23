@@ -6,6 +6,7 @@ import { settleChallenge } from "@/lib/credits";
 import { ChallengeStatus, type ChallengeStatus as ChallengeStatusValue } from "@/lib/enums";
 import { assertChallengeTransition, isTerminalStatus } from "@/lib/challenge-state-machine";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 
 export const runtime = "nodejs";
 
@@ -113,6 +114,14 @@ export async function POST(
         { error: "This challenge was already changed by another request." },
         { status: 409 },
       );
+    }
+
+    if (challenge.stake > 0) {
+      const stakeToken = normalizeStakeToken(challenge.stakeToken);
+      const paymentJurisdiction = paymentJurisdictionFromRequest(req);
+      if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+        return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+      }
     }
 
     const settlement = await settleChallenge(

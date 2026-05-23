@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { CompileRequestError, compileProtocolForUser } from "@/lib/protocol-compiler";
 import { rateLimit } from "@/lib/rate-limit";
+import { paymentJurisdictionFromRequest, paymentPolicyStatus } from "@/lib/payment-policy";
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
@@ -18,6 +19,11 @@ export async function POST(req: NextRequest) {
   const context = body.context && typeof body.context === "object" && !Array.isArray(body.context)
     ? body.context as Record<string, unknown>
     : undefined;
+  const paymentPolicy = paymentPolicyStatus(paymentJurisdictionFromRequest(req, context));
+  const trustedContext = {
+    ...(context ?? {}),
+    paymentPolicy,
+  };
 
   try {
     const compiled = await compileProtocolForUser({
@@ -26,7 +32,7 @@ export async function POST(req: NextRequest) {
       providerId,
       model,
       language,
-      context,
+      context: trustedContext,
       tierId: 1,
       route: "/api/challenges/compile",
     });

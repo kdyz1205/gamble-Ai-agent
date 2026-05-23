@@ -25,6 +25,7 @@ import {
   combineAutoSettlePolicyWithProtocolGates,
   evaluateProtocolJudgmentGates,
 } from "./protocol-judgment-policy";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken } from "./payment-policy";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -468,6 +469,13 @@ export async function executeChallengeJudgment(
   });
 
   if (challenge.stake > 0) {
+    const stakeToken = normalizeStakeToken(challenge.stakeToken);
+    if (!isStakeTokenAllowed(stakeToken, null)) {
+      settlementResult = {
+        success: false,
+        error: JSON.stringify(moneyModeBlock(stakeToken, null)),
+      };
+    } else {
     settlementResult = await settleChallenge(
       challengeId,
       result.winnerId,
@@ -475,6 +483,7 @@ export async function executeChallengeJudgment(
       challenge.participants.map((p) => ({ userId: p.userId })),
       { reasoning: result.reasoning, confidence: result.confidence },
     );
+    }
 
     if (!settlementResult.success) {
       // Settlement failed (chain reverted, out of gas, ledger failed, etc.)

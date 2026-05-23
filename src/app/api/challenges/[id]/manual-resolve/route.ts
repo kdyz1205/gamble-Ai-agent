@@ -6,6 +6,7 @@ import { settleChallenge } from "@/lib/credits";
 import { ChallengeStatus, type ChallengeStatus as ChallengeStatusValue } from "@/lib/enums";
 import { assertChallengeTransition, isTerminalStatus } from "@/lib/challenge-state-machine";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 
 export const runtime = "nodejs";
 
@@ -143,6 +144,11 @@ export async function POST(
 
     let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
     if (challenge.stake > 0 && body.outcome !== "void") {
+      const stakeToken = normalizeStakeToken(challenge.stakeToken);
+      const paymentJurisdiction = paymentJurisdictionFromRequest(req);
+      if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+        return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+      }
       settlement = await settleChallenge(
         id,
         body.outcome === "winner" ? winnerId : null,

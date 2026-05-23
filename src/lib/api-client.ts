@@ -163,6 +163,40 @@ export async function topUpCredits(usdcAmount: number, txHash: string): Promise<
   });
 }
 
+export async function createStripeCheckoutSession(data?: {
+  product?: "beta_supporter";
+  amountCents?: number;
+}): Promise<{ id: string; url: string; product: string; wagering: false }> {
+  return apiFetch("/stripe/checkout", {
+    method: "POST",
+    body: JSON.stringify(data ?? { product: "beta_supporter" }),
+  });
+}
+
+export interface PaymentPolicyStatus {
+  jurisdiction: {
+    country: string | null;
+    region: string | null;
+    source: "vercel" | "cloudflare" | "header" | "body" | "unknown";
+  };
+  internalCreditsAllowed: true;
+  cashStakeAllowed: boolean;
+  cashTopupAllowed: boolean;
+  stripeSupporterCheckoutAllowed: boolean;
+  realMoneyWageringConfigured: boolean;
+  hardBlocked: boolean;
+  reason: string | null;
+  allowedCountries: string[];
+  allowedRegions: string[];
+  blockedCountries: string[];
+  blockedRegions: string[];
+  hardBlockedCountries: string[];
+}
+
+export async function getPaymentPolicy(): Promise<PaymentPolicyStatus> {
+  return apiFetch("/payments/policy");
+}
+
 /* ── Challenges ── */
 
 export interface LocationSnapshot {
@@ -459,7 +493,7 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   protocol?: ProtocolSpecV2;
   preview?: ProtocolPreviewV2;
   model: string;
-  source?: "llm" | "safety_prefilter" | "fallback" | "error";
+  source?: "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "error";
   providerId?: string;
   externalApiCharged?: boolean;
   providerCall?: unknown;
@@ -481,7 +515,7 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   rawPrompt: string;
   protocol: ProtocolSpecV2;
   preview: ProtocolPreviewV2;
-  source: "llm" | "safety_prefilter" | "fallback" | "error";
+  source: "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "error";
   providerId: string;
   model: string;
   externalApiCharged?: boolean;

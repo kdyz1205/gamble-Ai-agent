@@ -10,6 +10,7 @@ import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { generateLivenessPhrase } from "@/lib/liveness";
 import type { ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { evaluateLocationEligibility, parseStoredProtocol, validLatLng } from "@/lib/location-eligibility";
+import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 
 /** Detect "AI出题" intent — title or proposition mentions math / quiz / trivia. */
 const QUIZ_PATTERN = /\b(math|quiz|trivia)\b|算|题/i;
@@ -128,6 +129,11 @@ export async function POST(
 
   // Escrow: deduct staked credits upfront (atomic — see spendCredits in credits.ts).
   if (challenge.stake > 0) {
+    const stakeToken = normalizeStakeToken(challenge.stakeToken);
+    const paymentJurisdiction = paymentJurisdictionFromRequest(req, source);
+    if (!isStakeTokenAllowed(stakeToken, paymentJurisdiction)) {
+      return Response.json(moneyModeBlock(stakeToken, paymentJurisdiction), { status: 403 });
+    }
     const balance = await getCredits(user.userId);
     if (balance < challenge.stake) return noCredits(challenge.stake, balance);
 

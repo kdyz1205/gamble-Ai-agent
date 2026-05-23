@@ -176,7 +176,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [protocol, setProtocol] = useState<api.ProtocolSpecV2 | null>(null);
   const [specModel, setSpecModel] = useState("");
-  const [specSource, setSpecSource] = useState<"llm" | "safety_prefilter" | "fallback" | "">("");
+  const [specSource, setSpecSource] = useState<"llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "">("");
   const [specProviderId, setSpecProviderId] = useState("");
   const [providerCall, setProviderCall] = useState<unknown>(null);
   const [externalApiCharged, setExternalApiCharged] = useState(false);
@@ -204,6 +204,7 @@ export default function Home() {
     bonusEarned: number;
     inviteLink: string | null;
   } | null>(null);
+  const [paymentPolicy, setPaymentPolicy] = useState<api.PaymentPolicyStatus | null>(null);
 
   const reset = useCallback(() => {
     setAppState("idle");
@@ -264,6 +265,18 @@ export default function Home() {
   useEffect(() => {
     void refreshReferralStats();
   }, [refreshReferralStats]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getPaymentPolicy()
+      .then((policy) => {
+        if (!cancelled) setPaymentPolicy(policy);
+      })
+      .catch(() => {
+        if (!cancelled) setPaymentPolicy(null);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -756,6 +769,7 @@ export default function Home() {
 
               <aside className="grid gap-4">
                 <LiveProofPanel />
+                <MoneyModeCard policy={paymentPolicy} />
                 {user && (
                   <LaunchInviteCard
                     inviteLink={personalInviteLink}
@@ -911,6 +925,43 @@ function LaunchInviteCard({
           {notice}
         </p>
       )}
+    </section>
+  );
+}
+
+function MoneyModeCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
+  const country = policy?.jurisdiction.country || "unknown";
+  const region = policy?.jurisdiction.region ? `-${policy.jurisdiction.region}` : "";
+  const cashAllowed = Boolean(policy?.cashStakeAllowed);
+  const reasonLabel = policy?.reason === "hard_blocked_country"
+    ? "US cash mode blocked"
+    : policy?.reason === "unknown_jurisdiction"
+      ? "Location unknown"
+      : policy?.reason === "not_allowlisted"
+        ? "Not in cash allowlist"
+        : policy?.reason === "real_money_flags_disabled"
+          ? "Cash flags off"
+          : policy?.reason || "Checking policy";
+
+  return (
+    <section className="rounded-[22px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: cashAllowed ? "#A7F3D0" : "#E2E8F0", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: cashAllowed ? "#047857" : "#64748B" }}>Money mode</p>
+          <p className="mt-1 text-sm font-black" style={{ color: "#172033" }}>
+            {cashAllowed ? "Cash challenges available here" : "Internal pts only here"}
+          </p>
+          <p className="mt-1 text-xs font-semibold" style={{ color: "#64748B" }}>
+            Jurisdiction: {country}{region} / {cashAllowed ? "cash stake enabled" : reasonLabel}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full px-3 py-1 text-[11px] font-black" style={{ background: cashAllowed ? "#ECFDF5" : "#F8FAFC", color: cashAllowed ? "#047857" : "#64748B" }}>
+          {cashAllowed ? "cash on" : "cash off"}
+        </span>
+      </div>
+      <p className="mt-3 text-xs font-semibold leading-relaxed" style={{ color: "#526078" }}>
+        US and unknown regions cannot use real-money stakes. Allowed regions are controlled server-side; credits remain playable everywhere.
+      </p>
     </section>
   );
 }
@@ -1280,7 +1331,7 @@ function ChallengeSpecPreview({
   protocol: api.ProtocolSpecV2;
   prompt: string;
   model: string;
-  source: "llm" | "safety_prefilter" | "fallback" | "";
+  source: "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "";
   providerId: string;
   externalApiCharged: boolean;
   onSelectInvite: (value: "invite_link" | "nearby" | "same_device") => void;
@@ -1335,7 +1386,7 @@ function ChallengeSpecPreview({
           <Pill>{protocol.identityProtocol.mode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.locationProtocol.locationPrivacy.replace(/_/g, " ")}</Pill>
           <Pill>{isSolo ? "solo proof" : `vs ${opponent}`}</Pill>
-          {model && <Pill>{source === "llm" ? "AI model" : source === "safety_prefilter" ? "safety gate" : "fallback"}: {model}</Pill>}
+          {model && <Pill>{source === "llm" ? "AI model" : source === "safety_prefilter" ? "safety gate" : source === "deterministic_oracle" ? "price oracle" : "fallback"}: {model}</Pill>}
           {providerId && <Pill>{externalApiCharged ? "paid API enabled" : "no paid API"}: {providerId}</Pill>}
         </div>
       </div>
