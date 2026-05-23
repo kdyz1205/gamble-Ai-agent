@@ -6,6 +6,13 @@ export type CryptoPriceCondition = "above" | "below";
 
 export type CryptoPriceOracleSpec = {
   symbol: string;
+  coingeckoId?: string;
+  assetName?: string;
+  marketCapRank?: number | null;
+  currentPriceUsd?: number;
+  priceQueriedAt?: string;
+  oracleUrl?: string;
+  ambiguousAssetMatches?: Array<{ id: string; symbol: string; name: string; marketCapRank: number | null }>;
   condition: CryptoPriceCondition;
   targetUsd: number;
   settlementTime: Date;
@@ -31,6 +38,8 @@ const SYMBOL_ALIASES: Record<string, string> = {
   link: "LINK",
   avalanche: "AVAX",
   avax: "AVAX",
+  usdc: "USDC",
+  usdt: "USDT",
 };
 
 const WEEKDAYS: Record<string, number> = {
@@ -50,17 +59,58 @@ const WEEKDAYS: Record<string, number> = {
   sat: 6,
 };
 
+const NON_ASSET_TICKERS = new Set([
+  "USD",
+  "AI",
+  "API",
+  "GPS",
+  "KTV",
+  "WILL",
+  "CAN",
+  "REACH",
+  "HIT",
+  "TOKEN",
+  "COIN",
+  "PRICE",
+  "TODAY",
+  "TOMORROW",
+]);
+
+function normalizeTicker(candidate: string | undefined | null): string | null {
+  const clean = String(candidate ?? "").trim().replace(/^[#$]+/, "").replace(/[.,;:!?)]$/g, "");
+  if (!/^[A-Za-z][A-Za-z0-9-]{1,15}$/.test(clean)) return null;
+  const upper = clean.toUpperCase();
+  if (NON_ASSET_TICKERS.has(upper)) return null;
+  return upper;
+}
+
+function detectGenericTicker(text: string): string | null {
+  const patterns = [
+    /\$([A-Za-z][A-Za-z0-9-]{1,15})\b/g,
+    /\b([A-Za-z][A-Za-z0-9-]{1,15})\s+(?:token|coin|ticker|币|代币)\b/gi,
+    /\b(?:token|coin|ticker|币|代币)\s+([A-Za-z][A-Za-z0-9-]{1,15})\b/gi,
+    /\b([A-Z][A-Z0-9-]{1,12})\b(?=[\s\S]{0,80}\b(?:price|token|coin|reach|hit|above|below|over|under|break|目标|价格|到|突破)\b)/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const ticker = normalizeTicker(match[1]);
+      if (ticker) return ticker;
+    }
+  }
+  return null;
+}
+
 function detectSymbol(text: string): string | null {
   const lower = text.toLowerCase();
   for (const [alias, symbol] of Object.entries(SYMBOL_ALIASES)) {
     if (new RegExp(`(?:^|[^a-z0-9])${alias}(?:$|[^a-z0-9])`, "i").test(lower)) return symbol;
   }
-  return null;
+  return detectGenericTicker(text);
 }
 
 function detectCondition(text: string): CryptoPriceCondition | null {
   const lower = text.toLowerCase();
-  if (/(?:>=|>|above|over|higher than|at least|breaks? above|hits?|reaches?|高于|超过|大于|涨到|突破|站上)/i.test(lower)) {
+  if (/(?:>=|>|above|over|higher than|at least|breaks? above|hits?|reach(?:es)?|高于|超过|大于|涨到|突破|站上)/i.test(lower)) {
     return "above";
   }
   if (/(?:<=|<|below|under|lower than|less than|drops? below|跌破|低于|小于|少于)/i.test(lower)) {
@@ -189,8 +239,9 @@ export function extractCryptoPriceOracleSpec(input: {
     input.proposition,
     input.rules,
   ]);
-  if (!/(btc|bitcoin|eth|ethereum|sol|solana|doge|xrp|ada|bnb|link|avax|币|价格|price)/i.test(text)) return null;
+  if (!/(ORACLE_CRYPTO_SYMBOL|btc|bitcoin|eth|ethereum|sol|solana|doge|xrp|ada|bnb|link|avax|token|coin|ticker|price|reach|hit|above|below|over|under|币|代币|价格)/i.test(text)) return null;
   const explicitSymbol = text.match(/ORACLE_CRYPTO_SYMBOL:\s*([A-Za-z0-9-]+)/i)?.[1]?.toUpperCase();
+  const explicitCoinGeckoId = text.match(/ORACLE_COINGECKO_ID:\s*([A-Za-z0-9-]+)/i)?.[1]?.toLowerCase();
   const explicitCondition = text.match(/ORACLE_CONDITION:\s*(above|below)/i)?.[1]?.toLowerCase() as CryptoPriceCondition | undefined;
   const explicitTarget = text.match(/ORACLE_TARGET_USD:\s*([0-9.,]+)/i)?.[1];
   const symbol = explicitSymbol ?? detectSymbol(text);
@@ -203,23 +254,57 @@ export function extractCryptoPriceOracleSpec(input: {
         return Number.isFinite(parsed.getTime()) ? parsed : detectSettlementTime(text, input.now);
       })()
     : detectSettlementTime(text, input.now);
-  return { symbol, condition, targetUsd, settlementTime, source: "CoinGecko" };
+  return { symbol, coingeckoId: explicitCoinGeckoId, condition, targetUsd, settlementTime, source: "CoinGecko" };
 }
 
-export function cryptoPriceProtocolFromPrompt(
+export async function cryptoPriceProtocolFromPrompt(
   rawPrompt: string,
   language: ProtocolSpecV2["language"],
   now = new Date(),
-): ProtocolSpecV2 | null {
+): Promise<ProtocolSpecV2 | null> {
   const spec = extractCryptoPriceOracleSpec({ title: rawPrompt, now });
   if (!spec) return null;
+  const price = await checkCryptoPrice({ symbol: spec.symbol, coingeckoId: spec.coingeckoId });
+  if (!price.ok || !price.data || typeof price.data.priceUsd !== "number") {
+    console.warn("[crypto-price-oracle] asset price lookup failed during compile", {
+      symbol: spec.symbol,
+      coingeckoId: spec.coingeckoId ?? null,
+      error: price.error ?? "missing priceUsd",
+    });
+    return null;
+  }
+  const priceData = price.data as {
+    symbol?: string;
+    coingeckoId?: string;
+    assetName?: string;
+    marketCapRank?: number | null;
+    ambiguousSymbolMatches?: Array<{ id: string; symbol: string; name: string; marketCapRank: number | null }>;
+    priceUsd: number;
+    queriedAt?: string;
+    publicUrl?: string;
+  };
+  const resolvedSpec: CryptoPriceOracleSpec = {
+    ...spec,
+    symbol: String(priceData.symbol || spec.symbol).toUpperCase(),
+    coingeckoId: typeof priceData.coingeckoId === "string" ? priceData.coingeckoId : spec.coingeckoId,
+    assetName: typeof priceData.assetName === "string" ? priceData.assetName : undefined,
+    marketCapRank: typeof priceData.marketCapRank === "number" ? priceData.marketCapRank : null,
+    ambiguousAssetMatches: Array.isArray(priceData.ambiguousSymbolMatches) ? priceData.ambiguousSymbolMatches : [],
+    currentPriceUsd: priceData.priceUsd,
+    priceQueriedAt: typeof priceData.queriedAt === "string" ? priceData.queriedAt : new Date().toISOString(),
+    oracleUrl: typeof priceData.publicUrl === "string" ? priceData.publicUrl : undefined,
+  };
   const direction = spec.condition === "above" ? "above" : "below";
-  const title = `${spec.symbol} price ${direction} ${formatUsd(spec.targetUsd)}`;
-  const settlementIso = spec.settlementTime.toISOString();
+  const assetLabel = resolvedSpec.assetName
+    ? `${resolvedSpec.symbol} (${resolvedSpec.assetName})`
+    : resolvedSpec.symbol;
+  const title = `${resolvedSpec.symbol} price ${direction} ${formatUsd(resolvedSpec.targetUsd)}`;
+  const settlementIso = resolvedSpec.settlementTime.toISOString();
+  const currentPriceText = formatUsd(resolvedSpec.currentPriceUsd ?? 0);
   return {
     version: "2.0",
     title,
-    userFacingSummary: `${spec.symbol}/USD must be ${direction} ${formatUsd(spec.targetUsd)} at the locked settlement time, using CoinGecko spot price.`,
+    userFacingSummary: `${assetLabel}/USD must be ${direction} ${formatUsd(resolvedSpec.targetUsd)} at the locked settlement time, using CoinGecko spot price. Current setup price is ${currentPriceText}.`,
     rawPrompt,
     language,
     participantMode: "head_to_head",
@@ -227,9 +312,12 @@ export function cryptoPriceProtocolFromPrompt(
     evidenceProtocol: {
       mode: "public_oracle",
       requiredEvidence: ["No user-uploaded evidence is required. The result is resolved from CoinGecko public spot price."],
-      captureInstructions: ["At settlement time, the backend fetches the CoinGecko USD spot price and stores the snapshot in the judgment."],
+      captureInstructions: [
+        `Setup snapshot: ${assetLabel}/USD was ${currentPriceText} at ${resolvedSpec.priceQueriedAt}.`,
+        "At settlement time, the backend fetches the locked CoinGecko asset's USD spot price and stores the snapshot in the judgment.",
+      ],
       invalidEvidenceRules: ["Screenshots or self-reports do not override the public oracle snapshot."],
-      requiredMetadata: ["oracle_source", "symbol", "target_usd", "condition", "settlement_time"],
+      requiredMetadata: ["oracle_source", "coingecko_id", "symbol", "target_usd", "condition", "settlement_time"],
     },
     identityProtocol: {
       mode: "account_only",
@@ -255,19 +343,25 @@ export function cryptoPriceProtocolFromPrompt(
     },
     settlementProtocol: {
       mode: "auto_oracle",
-      winCondition: `${spec.symbol}/USD is ${direction} ${formatUsd(spec.targetUsd)} at ${settlementIso}. Creator wins if true; opponent wins if false.`,
+      winCondition: `${assetLabel}/USD is ${direction} ${formatUsd(resolvedSpec.targetUsd)} at ${settlementIso}. Creator wins if true; opponent wins if false.`,
       judgeInstructions: [
         "Resolve from CoinGecko simple price API. Do not use LLM inference for the price.",
         `ORACLE_SOURCE: CoinGecko`,
-        `ORACLE_CRYPTO_SYMBOL: ${spec.symbol}`,
-        `ORACLE_CONDITION: ${spec.condition}`,
-        `ORACLE_TARGET_USD: ${spec.targetUsd}`,
+        `ORACLE_CRYPTO_SYMBOL: ${resolvedSpec.symbol}`,
+        resolvedSpec.coingeckoId ? `ORACLE_COINGECKO_ID: ${resolvedSpec.coingeckoId}` : null,
+        resolvedSpec.assetName ? `ORACLE_ASSET_NAME: ${resolvedSpec.assetName}` : null,
+        `ORACLE_SETUP_PRICE_USD: ${resolvedSpec.currentPriceUsd}`,
+        `ORACLE_SETUP_QUERIED_AT: ${resolvedSpec.priceQueriedAt}`,
+        resolvedSpec.oracleUrl ? `ORACLE_PUBLIC_URL: ${resolvedSpec.oracleUrl}` : null,
+        `ORACLE_CONDITION: ${resolvedSpec.condition}`,
+        `ORACLE_TARGET_USD: ${resolvedSpec.targetUsd}`,
         `ORACLE_SETTLEMENT_TIME: ${settlementIso}`,
-      ],
+      ].filter((item): item is string => Boolean(item)),
       autoSettleConfidenceThreshold: 0.99,
       manualReviewTriggers: [
         "CoinGecko API is unavailable at settlement time.",
         "Symbol, target, condition, or settlement time is malformed.",
+        "The user disputes the selected CoinGecko asset id or ticker mapping.",
         "The challenge is judged before the locked settlement time.",
       ],
     },
@@ -303,7 +397,7 @@ export async function judgeCryptoPriceOracle(input: {
     };
   }
 
-  const price = await checkCryptoPrice({ symbol: input.spec.symbol });
+  const price = await checkCryptoPrice({ symbol: input.spec.symbol, coingeckoId: input.spec.coingeckoId });
   if (!price.ok || !price.data || typeof price.data.priceUsd !== "number") {
     return {
       status: "ready",
@@ -321,6 +415,9 @@ export async function judgeCryptoPriceOracle(input: {
   }
 
   const actual = price.data.priceUsd;
+  const assetName = typeof price.data.assetName === "string" ? price.data.assetName : input.spec.assetName;
+  const coingeckoId = typeof price.data.coingeckoId === "string" ? price.data.coingeckoId : input.spec.coingeckoId;
+  const assetLabel = assetName ? `${input.spec.symbol} (${assetName})` : input.spec.symbol;
   const conditionMet = input.spec.condition === "above"
     ? actual > input.spec.targetUsd
     : actual < input.spec.targetUsd;
@@ -336,7 +433,7 @@ export async function judgeCryptoPriceOracle(input: {
       blockingIssues: winnerId ? [] : ["No opponent participant exists to receive the NO-side win."],
       source: "oracle",
       reasoning:
-        `CoinGecko snapshot for ${input.spec.symbol}/USD at judgment time was ${formatUsd(actual)}. ` +
+        `CoinGecko snapshot for ${assetLabel}/USD${coingeckoId ? ` [${coingeckoId}]` : ""} at judgment time was ${formatUsd(actual)}. ` +
         `The locked condition was ${input.spec.condition} ${formatUsd(input.spec.targetUsd)}. ` +
         `The condition was ${conditionMet ? "true" : "false"}, so ${conditionMet ? "the creator/YES side wins" : "the opponent/NO side wins"}.`,
       providerCall: {

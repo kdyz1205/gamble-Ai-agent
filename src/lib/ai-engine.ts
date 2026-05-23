@@ -175,7 +175,7 @@ The user wants the platform to do the thinking for them. Don't force questions w
 
 TOOLS YOU CAN CALL:
 You have real tools available for verifying prediction-market propositions against ground truth. USE THEM when the user proposes a bet on an external real-world quantity:
-- "BTC hits 70k by Friday" / "ETH above 4000 next week" / "SOL price prediction" → call check_crypto_price with that symbol. Use the returned current price to sanity-check the threshold (is it already there? a 2x stretch? impossible?), then craft rules that reference the oracle (e.g. "settle by CoinGecko BTC/USD spot at 2026-04-30 00:00 UTC").
+- "BTC hits 70k by Friday" / "BEAT token reaches $2 today" / "SOL price prediction" → call check_crypto_price with that symbol. Use the returned current price and CoinGecko asset id to lock the oracle source, sanity-check the threshold (is it already there? a 2x stretch? impossible?), then craft rules that reference the oracle (e.g. "settle by CoinGecko BTC/USD spot at 2026-04-30 00:00 UTC").
 - "Will it rain in Seattle on April 30?" / "High temp above 30°C in Paris next Tuesday" → call check_weather_forecast with lat/lng + date.
 - If the tool fails or the market isn't resolvable externally (e.g. "who wins this private chess match"), skip tools — don't invent data.
 

@@ -27,6 +27,20 @@ export interface OracleAttachment {
   queriedAt: string;       // ISO timestamp
 }
 
+export interface CoinGeckoAssetMatch {
+  id: string;
+  symbol: string;
+  name: string;
+  marketCapRank: number | null;
+}
+
+export interface CoinGeckoResolvedAsset extends CoinGeckoAssetMatch {
+  requested: string;
+  resolvedBy: "static_map" | "explicit_id" | "search";
+  ambiguousSymbolMatches: CoinGeckoAssetMatch[];
+  publicUrl: string;
+}
+
 const COINGECKO_SYMBOL_MAP: Record<string, string> = {
   btc: "bitcoin",
   bitcoin: "bitcoin",
@@ -66,14 +80,146 @@ type PriceCacheEntry = { data: Record<string, unknown>; cachedAt: number };
 const priceCache = new Map<string, PriceCacheEntry>();
 const PRICE_CACHE_TTL_MS = 60_000;
 
+type SearchCacheEntry = { asset: CoinGeckoResolvedAsset; cachedAt: number };
+const searchCache = new Map<string, SearchCacheEntry>();
+const SEARCH_CACHE_TTL_MS = 10 * 60_000;
+
+const BLOCKED_TICKER_WORDS = new Set(["usd"]);
+
+function coingeckoUrl(id: string) {
+  return `https://www.coingecko.com/en/coins/${id}`;
+}
+
+function rankMarketCap(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function assetFromStaticMap(requested: string, id: string): CoinGeckoResolvedAsset {
+  return {
+    requested,
+    id,
+    symbol: requested.toUpperCase(),
+    name: id,
+    marketCapRank: null,
+    resolvedBy: "static_map",
+    ambiguousSymbolMatches: [],
+    publicUrl: coingeckoUrl(id),
+  };
+}
+
+function assetFromExplicitId(requested: string, id: string): CoinGeckoResolvedAsset {
+  return {
+    requested,
+    id,
+    symbol: requested.toUpperCase(),
+    name: id,
+    marketCapRank: null,
+    resolvedBy: "explicit_id",
+    ambiguousSymbolMatches: [],
+    publicUrl: coingeckoUrl(id),
+  };
+}
+
+function normalizeCoinGeckoCoin(value: unknown): CoinGeckoAssetMatch | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const coin = value as Record<string, unknown>;
+  const id = typeof coin.id === "string" ? coin.id.trim() : "";
+  const symbol = typeof coin.symbol === "string" ? coin.symbol.trim() : "";
+  const name = typeof coin.name === "string" ? coin.name.trim() : "";
+  if (!id || !symbol || !name) return null;
+  return {
+    id,
+    symbol,
+    name,
+    marketCapRank: rankMarketCap(coin.market_cap_rank),
+  };
+}
+
+function compareCoinGeckoCandidates(query: string) {
+  const q = query.trim().toLowerCase();
+  return (a: CoinGeckoAssetMatch, b: CoinGeckoAssetMatch) => {
+    const score = (item: CoinGeckoAssetMatch) => {
+      const id = item.id.toLowerCase();
+      const symbol = item.symbol.toLowerCase();
+      const name = item.name.toLowerCase();
+      if (symbol === q) return 0;
+      if (id === q) return 1;
+      if (name === q) return 2;
+      if (symbol.startsWith(q)) return 3;
+      if (id.startsWith(q) || name.startsWith(q)) return 4;
+      return 5;
+    };
+    const scoreDiff = score(a) - score(b);
+    if (scoreDiff !== 0) return scoreDiff;
+    const rankA = a.marketCapRank ?? Number.MAX_SAFE_INTEGER;
+    const rankB = b.marketCapRank ?? Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.id.localeCompare(b.id);
+  };
+}
+
+export async function resolveCoinGeckoAsset(args: {
+  query: string;
+  coingeckoId?: string | null;
+}): Promise<{ ok: true; asset: CoinGeckoResolvedAsset } | { ok: false; error: string }> {
+  const requested = args.query?.trim() || "";
+  const raw = requested.toLowerCase();
+  const explicitId = args.coingeckoId?.trim();
+  if (!requested && !explicitId) return { ok: false, error: "Missing crypto asset symbol or CoinGecko id" };
+  if (explicitId) return { ok: true, asset: assetFromExplicitId(requested || explicitId, explicitId) };
+  if (BLOCKED_TICKER_WORDS.has(raw)) return { ok: false, error: `"${requested}" is a quote currency, not a crypto asset ticker.` };
+
+  const staticId = COINGECKO_SYMBOL_MAP[raw];
+  if (staticId) return { ok: true, asset: assetFromStaticMap(requested, staticId) };
+
+  const cached = searchCache.get(raw);
+  if (cached && Date.now() - cached.cachedAt < SEARCH_CACHE_TTL_MS) {
+    return { ok: true, asset: cached.asset };
+  }
+
+  const url = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(requested)}`;
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 7000);
+    const res = await fetch(url, { signal: ac.signal, headers: { accept: "application/json" } });
+    clearTimeout(t);
+    if (res.status === 429) return { ok: false, error: "CoinGecko search rate limit (HTTP 429). Try again in ~30s." };
+    if (!res.ok) return { ok: false, error: `CoinGecko search HTTP ${res.status}` };
+    const body = (await res.json()) as { coins?: unknown[] };
+    const candidates = (body.coins ?? [])
+      .map(normalizeCoinGeckoCoin)
+      .filter((item): item is CoinGeckoAssetMatch => item !== null)
+      .sort(compareCoinGeckoCandidates(requested));
+    if (!candidates.length) return { ok: false, error: `CoinGecko could not find a token for "${requested}".` };
+
+    const selected = candidates[0];
+    const exactSymbolMatches = candidates
+      .filter((item) => item.symbol.toLowerCase() === raw)
+      .slice(0, 8);
+    const asset: CoinGeckoResolvedAsset = {
+      ...selected,
+      requested,
+      symbol: selected.symbol.toUpperCase(),
+      resolvedBy: "search",
+      ambiguousSymbolMatches: exactSymbolMatches.filter((item) => item.id !== selected.id),
+      publicUrl: coingeckoUrl(selected.id),
+    };
+    searchCache.set(raw, { asset, cachedAt: Date.now() });
+    return { ok: true, asset };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * CoinGecko — free tier, no key. Accepts common tickers (BTC, ETH, SOL…)
  * and returns current USD spot price. Cached 60s in-process.
  */
-export async function checkCryptoPrice(args: { symbol: string }): Promise<OracleToolResult> {
-  const raw = args.symbol?.trim().toLowerCase() || "";
-  const id = COINGECKO_SYMBOL_MAP[raw] ?? raw; // fall through to raw in case AI passed the coingecko id directly
-  if (!id) return { ok: false, source: "CoinGecko", error: "Missing symbol" };
+export async function checkCryptoPrice(args: { symbol: string; coingeckoId?: string | null }): Promise<OracleToolResult> {
+  const resolved = await resolveCoinGeckoAsset({ query: args.symbol, coingeckoId: args.coingeckoId });
+  if (!resolved.ok) return { ok: false, source: "CoinGecko", error: resolved.error };
+  const asset = resolved.asset;
+  const id = asset.id;
 
   // Cache hit — return immediately, refresh queriedAt so the UI shows "Now:".
   const cached = priceCache.get(id);
@@ -109,12 +255,17 @@ export async function checkCryptoPrice(args: { symbol: string }): Promise<Oracle
       return { ok: false, source: "CoinGecko", error: `Unknown symbol "${args.symbol}"` };
     }
     const data = {
-      symbol: args.symbol.toUpperCase(),
+      symbol: asset.symbol.toUpperCase(),
+      requestedSymbol: args.symbol.toUpperCase(),
       coingeckoId: id,
+      assetName: asset.name,
+      marketCapRank: asset.marketCapRank,
+      resolvedBy: asset.resolvedBy,
+      ambiguousSymbolMatches: asset.ambiguousSymbolMatches,
       priceUsd: row.usd,
       change24hPct: row.usd_24h_change ?? null,
       queriedAt: new Date().toISOString(),
-      publicUrl: `https://www.coingecko.com/en/coins/${id}`,
+      publicUrl: asset.publicUrl,
     };
     priceCache.set(id, { data, cachedAt: Date.now() });
     return { ok: true, source: "CoinGecko", data };
@@ -217,7 +368,7 @@ export const ORACLE_TOOLS: OpenAiTool[] = [
         properties: {
           symbol: {
             type: "string",
-            description: "Ticker symbol like BTC, ETH, SOL, DOGE, or a CoinGecko id.",
+            description: "Ticker symbol like BTC, ETH, SOL, DOGE, BEAT, or a CoinGecko id.",
           },
         },
         required: ["symbol"],
@@ -264,10 +415,10 @@ export async function executeOracleTool(name: string, args: unknown): Promise<Or
 export function toAttachment(r: OracleToolResult): OracleAttachment | null {
   if (!r.ok || !r.data) return null;
   if (r.source === "CoinGecko") {
-    const d = r.data as { symbol?: string; priceUsd?: number; publicUrl?: string; queriedAt?: string };
+    const d = r.data as { symbol?: string; assetName?: string; priceUsd?: number; publicUrl?: string; queriedAt?: string };
     return {
       source: "CoinGecko",
-      label: `${d.symbol}/USD spot price`,
+      label: `${d.symbol}${d.assetName ? ` (${d.assetName})` : ""}/USD spot price`,
       currentValue: typeof d.priceUsd === "number" ? formatUsd(d.priceUsd) : undefined,
       oracleUrl: d.publicUrl,
       queriedAt: d.queriedAt ?? new Date().toISOString(),
