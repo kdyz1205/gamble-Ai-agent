@@ -59,7 +59,14 @@ const REVIEW_RULES: Rule[] = [
 
 export function evaluateRuleSafety(input: string): RuleSafetyDecision {
   const text = input.trim();
-  const blocked = BLOCK_RULES.filter((rule) => rule.pattern.test(text));
+  const safetyText = text
+    .replace(/\b[A-Z][A-Z0-9-]{1,15}\s+(?:token|coin|ticker|price)\b/g, "[crypto_asset]")
+    .replace(/\b[A-Za-z][A-Za-z0-9-]{1,15}\s+(?:token|ticker|price)\b/gi, "[crypto_asset]")
+    .replace(/\b(?:token|coin|ticker)\s+[A-Z][A-Z0-9-]{1,15}\b/g, "[crypto_asset]")
+    .replace(/\bhit\s+(?=\$|\d|above|below|over|under|the\s+target|price\b)/gi, "reach ")
+    .replace(/\bhack\s+(?:an?\s+)?account\b/gi, "hack account")
+    .replace(/\bhold\s+(?:my|your|their|his|her|our)?\s*breath\b/gi, "hold breath");
+  const blocked = BLOCK_RULES.filter((rule) => rule.pattern.test(safetyText));
   if (blocked.length > 0) {
     return {
       allowed: false,
@@ -69,7 +76,7 @@ export function evaluateRuleSafety(input: string): RuleSafetyDecision {
     };
   }
 
-  const review = REVIEW_RULES.filter((rule) => rule.pattern.test(text));
+  const review = REVIEW_RULES.filter((rule) => rule.pattern.test(safetyText));
   if (review.length > 0) {
     return {
       allowed: false,

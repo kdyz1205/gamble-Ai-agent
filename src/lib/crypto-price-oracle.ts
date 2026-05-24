@@ -141,7 +141,8 @@ function detectTargetUsd(text: string): number | null {
     .filter((value): value is number => value !== null);
   if (matches.length === 0) return null;
   const plausible = matches.filter((value) => value >= 10 && value <= 10_000_000);
-  return plausible[0] ?? null;
+  const fractional = matches.filter((value) => value > 0 && value < 10 && !Number.isInteger(value));
+  return plausible[0] ?? fractional[0] ?? null;
 }
 
 function nextWeekday(now: Date, targetDay: number): Date {

@@ -23,7 +23,8 @@
     "e2e:real-video-robustness": "node scripts/e2e-real-video-robustness.mjs",
     "e2e:plank-video-settlement": "node scripts/e2e-plank-video-settlement.mjs",
     "smoke:payment-policy": "tsx scripts/smoke-payment-policy.ts",
-    "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts"
+    "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts",
+    "smoke:challenge-100": "tsx scripts/smoke-100-challenge-crack-matrix.ts"
   },
   "repository": {
     "type": "git",
