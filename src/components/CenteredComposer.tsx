@@ -24,19 +24,19 @@ const LANGUAGE_OPTIONS: Array<{
     value: "auto",
     shortLabel: "Auto",
     label: "Auto language",
-    status: "Auto language: detects English or Chinese from your sentence.",
+    status: "Auto detects EN/ZH.",
   },
   {
     value: "en",
     shortLabel: "English",
     label: "English",
-    status: "English mode: transcribe and generate the protocol in English.",
+    status: "English output.",
   },
   {
     value: "zh",
     shortLabel: "中文",
     label: "中文",
-    status: "中文模式：语音转写和挑战规则都会优先使用中文。",
+    status: "中文输出。",
   },
 ];
 

@@ -99,7 +99,7 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
 
         {/* AI's overall take — one-sentence summary */}
         {rich?.recommendationSummary && (
-          <p className="text-xs font-medium mb-4 leading-relaxed" style={{ color: NAVY_DIM }}>
+          <p className="line-clamp-2 text-xs font-medium mb-4 leading-relaxed" style={{ color: NAVY_DIM }}>
             <span style={{ color: PEACH_DARK }}>✨ </span>{rich.recommendationSummary}
           </p>
         )}
@@ -258,7 +258,7 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
             style={{ background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "16px" }}
           >
             <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: PEACH_DARK }}>📖 Rules</p>
-            <p className="text-sm font-medium leading-relaxed" style={{ color: NAVY }}>{d.rules}</p>
+            <p className="line-clamp-3 text-sm font-medium leading-relaxed" style={{ color: NAVY }}>{d.rules}</p>
           </div>
         )}
 
@@ -277,7 +277,7 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
             letterSpacing: "0.02em",
           }}
         >
-          🚀 Publish &amp; Get Link
+          Publish
         </motion.button>
       </div>
     </motion.div>

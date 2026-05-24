@@ -141,7 +141,7 @@ export default function RoomClient({
               {title}
             </h2>
             <p className="text-sm font-medium" style={{ color: NAVY_DIM }}>
-              Loading your challenge access...
+              Loading...
             </p>
           </motion.div>
         ) : (
@@ -155,7 +155,7 @@ export default function RoomClient({
               {title}
             </h2>
             <p className="text-sm font-medium mb-5" style={{ color: NAVY_DIM }}>
-              Sign in to view rules, accept the challenge contract, or submit evidence.
+              Sign in to continue.
             </p>
             <motion.button
               onClick={() => setShowAuth(true)}
@@ -168,7 +168,7 @@ export default function RoomClient({
                 boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
               }}
             >
-              Sign In to Continue
+              Sign in
             </motion.button>
           </motion.div>
         )}

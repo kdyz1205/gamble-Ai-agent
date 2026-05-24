@@ -291,10 +291,10 @@ export default function MarketsPage() {
                 Manage challenges
               </p>
               <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" style={{ color: NAVY }}>
-                Keep every challenge closeable, traceable, and easy to re-enter.
+                Your challenge board
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed" style={{ color: NAVY_DIM }}>
-                Your active challenges stay here. Empty challenges can be removed, accepted challenges can be cancelled before evidence, and locked challenges point you back to the room for review.
+                Close empty drafts, archive history, or re-enter any room.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center md:min-w-[320px]">
@@ -315,7 +315,7 @@ export default function MarketsPage() {
           {user && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: NAVY_FAINT }}>
               <p className="text-xs font-bold" style={{ color: NAVY_DIM }}>
-                Archive keeps evidence, verdict, and ledger history but removes clutter from the default board.
+                Archive hides clutter. History stays.
               </p>
               <button
                 type="button"
@@ -338,10 +338,10 @@ export default function MarketsPage() {
           }}
         >
           <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: PEACH_TEXT }}>
-            Match me with an open challenge
+            Quick match
           </p>
           <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
-            Let AI pair you with someone else&apos;s open challenge.
+            Join an open challenge.
           </p>
           <button
             onClick={tryMatchMe}

@@ -64,7 +64,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
         <h3 className="text-lg font-extrabold text-text-primary">{challenge.title}</h3>
 
         <div className="grid gap-2">
-          {ruleCards.slice(0, 5).map((card) => (
+          {ruleCards.slice(0, 3).map((card) => (
             <div
               key={card.label}
               className="px-3 py-2.5 rounded-xl text-xs leading-relaxed"
@@ -73,7 +73,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
               <span className="font-bold text-amber-400 text-[10px] uppercase tracking-wider block mb-1">
                 {card.label}
               </span>
-              <span className="text-amber-100">{card.value}</span>
+              <span className="line-clamp-2 text-amber-100">{card.value}</span>
             </div>
           ))}
         </div>
@@ -95,13 +95,17 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
 
         <div className="px-3 py-2.5 rounded-xl text-xs text-text-secondary space-y-2"
              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="font-black uppercase tracking-wider text-[10px] text-text-primary">Acceptance contract</p>
-          <ul className="space-y-1">
-            {contract.map((item) => (
-              <li key={item}>- {item}</li>
-            ))}
-          </ul>
           <p className="font-bold text-amber-300">{settlementSummary(challenge)}</p>
+          <details>
+            <summary className="cursor-pointer font-black uppercase tracking-wider text-[10px] text-text-primary">
+              Full terms
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {contract.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </details>
           <label className="flex items-start gap-2 font-bold text-text-primary cursor-pointer">
             <input
               type="checkbox"
@@ -109,7 +113,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
               onChange={(event) => setContractAccepted(event.target.checked)}
               className="mt-0.5"
             />
-            <span>I agree to the rules, evidence requirements, AI judging, dispute window, and credit settlement.</span>
+            <span>I accept rules, AI judging, disputes, and credits.</span>
           </label>
         </div>
 
@@ -125,7 +129,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
                 : "bg-gradient-to-r from-accent to-teal text-white shadow-lg shadow-accent/30"
             }`}
           >
-            {accepting ? "Locking stake..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Accept rules and lock ${challenge.stake} credits` : "Accept rules"}
+            {accepting ? "Locking..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Accept + lock ${challenge.stake}` : "Accept"}
           </motion.button>
 
           <motion.button

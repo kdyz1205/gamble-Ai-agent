@@ -283,7 +283,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   {c.creator.username}
                 </p>
                 <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>
-                  wants to challenge you
+                  challenged you
                 </p>
               </div>
               <span
@@ -300,10 +300,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
 
             <div className="mb-5 px-4 py-3" style={{ background: `${MINT}14`, border: `1px solid ${MINT}55`, borderRadius: "16px" }}>
               <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>
-                What you are joining
+                Quick read
               </p>
               <p className="text-sm font-semibold leading-relaxed" style={{ color: NAVY }}>
-                This is an AI-judged challenge between two people. Join only if you agree to the rules. Upload evidence when done. AI reviews the evidence and recommends a winner.
+                Accept rules. Submit proof. AI recommends the winner.
               </p>
             </div>
 
@@ -354,7 +354,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               {ruleCards.length > 0 && (
                 <details className="px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
                   <summary className="cursor-pointer text-xs font-black" style={{ color: NAVY }}>
-                    Full rule contract
+                    Full rules
                   </summary>
                   <div className="mt-3 grid gap-2">
                     {ruleCards.map((card) => (
@@ -385,7 +385,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   Location required
                 </p>
                 <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: NAVY }}>
-                  This nearby challenge requires a live location check before joining. Your exact location is used only to confirm eligibility.
+                  Location check required to join.
                 </p>
                 {locationMessage && (
                   <p
@@ -417,18 +417,23 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
 
             <div className="mb-5 px-4 py-3" style={{ background: CREAM, border: "1px solid #FFE0CC", borderRadius: "16px" }}>
               <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: PEACH_TEXT }}>
-                Acceptance contract
+                Accept
               </p>
-              <ul className="space-y-1.5 mb-3">
-                {contract.map((item) => (
-                  <li key={item} className="text-xs font-semibold leading-relaxed" style={{ color: NAVY }}>
-                    - {item}
-                  </li>
-                ))}
-              </ul>
               <p className="text-xs font-bold mb-3" style={{ color: PEACH_TEXT }}>
                 {settlementSummary(c)}
               </p>
+              <details className="mb-3">
+                <summary className="cursor-pointer text-xs font-black" style={{ color: PEACH_TEXT }}>
+                  Full terms
+                </summary>
+                <ul className="mt-2 space-y-1.5">
+                  {contract.map((item) => (
+                    <li key={item} className="text-xs font-semibold leading-relaxed" style={{ color: NAVY }}>
+                      - {item}
+                    </li>
+                  ))}
+                </ul>
+              </details>
               <label className="flex items-start gap-2 text-xs font-bold cursor-pointer" style={{ color: NAVY }}>
                 <input
                   type="checkbox"
@@ -436,7 +441,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   onChange={(event) => setContractAccepted(event.target.checked)}
                   className="mt-0.5"
                 />
-                <span>I agree to these rules, evidence requirements, AI judging, dispute window, and credit settlement.</span>
+                <span>I accept rules, AI judging, disputes, and credits.</span>
               </label>
             </div>
 
@@ -534,7 +539,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                     boxShadow: accepting || !contractAccepted ? "none" : `0 4px 14px 0 ${ORANGE_GLOW}`,
                   }}
                 >
-                  {accepting ? "Joining..." : c.stake > 0 ? `Accept rules - risk ${stakeLabel}` : "Accept rules and join"}
+                  {accepting ? "Joining..." : c.stake > 0 ? `Accept + lock ${stakeLabel}` : "Accept + join"}
                 </motion.button>
               )}
             </AnimatePresence>

@@ -109,9 +109,9 @@ function protocolLanguageLabel(language: LanguageMode | null | undefined) {
 }
 
 function protocolLanguageStatus(language: LanguageMode | null | undefined) {
-  if (language === "zh") return "中文版本：规则、证据要求和结算说明应优先用中文呈现。";
-  if (language === "en") return "English version: rules, evidence, and settlement copy should stay in English.";
-  return "Auto language: Axelrod used the prompt to choose the protocol language.";
+  if (language === "zh") return "Chinese";
+  if (language === "en") return "English";
+  return "Auto";
 }
 
 function requestBrowserLocation(timeoutMs = 3500): Promise<{
@@ -322,7 +322,7 @@ export default function Home() {
 
   const handleGenerate = useCallback(async (input: string, languageMode?: LanguageMode) => {
     if (!user) {
-      setError("Sign in to use your daily beta AI draft credits.");
+      setError("Sign in to use AI drafts.");
       setShowAuth(true);
       return;
     }
@@ -755,7 +755,7 @@ export default function Home() {
                   Turn any dare into a playable challenge.
                 </h1>
                 <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
-                  Say one sentence. The AI builds the rules, opponent flow, evidence, judging, disputes, and credit settlement.
+                  Say it. Axelrod builds rules, proof, verdict, payout.
                 </p>
                 <HeroMetricStrip />
                 <div className="mt-7">
@@ -795,7 +795,7 @@ export default function Home() {
           )}
 
           {appState === "generating" && (
-            <LoadingCard title="Generating executable challenge..." body={prompt} />
+            <LoadingCard title="Building challenge..." body={prompt} />
           )}
 
           {appState === "preview" && protocol && (
@@ -837,13 +837,13 @@ export default function Home() {
           )}
 
           {appState === "confirming" && (
-            <LoadingCard title="Creating invite, escrow, and challenge room..." body={protocol?.title || prompt} />
+            <LoadingCard title="Creating room..." body={protocol?.title || prompt} />
           )}
 
           {appState === "published" && protocol && shareLink && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
               <div className="text-center">
-                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>{publishedKind === "event" ? "Event is ready" : "Challenge is ready"}</h2>
+                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>{publishedKind === "event" ? "Event ready" : "Challenge ready"}</h2>
                 <p className="text-sm font-semibold" style={{ color: "#526078" }}>{protocol.title}</p>
               </div>
               <div className="flex items-center gap-2 p-2 bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "18px" }}>
@@ -898,10 +898,10 @@ function LaunchInviteCard({
         <div>
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Beta invite</p>
           <p className="text-sm font-bold" style={{ color: "#172033" }}>
-            Give a friend +10 pts. You get +10 pts when they join.
+            +10 pts each invite
           </p>
           <p className="mt-1 text-xs font-semibold" style={{ color: "#64748B" }}>
-            {invitedCount} joined from your link - {bonusEarned} pts earned
+            {invitedCount} joined - {bonusEarned} pts earned
           </p>
         </div>
         <button
@@ -958,17 +958,14 @@ function MoneyModeCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
           {cashAllowed ? "cash on" : "cash off"}
         </span>
       </div>
-      <p className="mt-3 text-xs font-semibold leading-relaxed" style={{ color: "#526078" }}>
-        US and unknown regions cannot use real-money stakes. Allowed regions are controlled server-side; credits remain playable everywhere.
-      </p>
     </section>
   );
 }
 
 function HeroMetricStrip() {
   const metrics = [
-    { label: "Beta reward", value: "+10 pts invite" },
-    { label: "Judge gate", value: "85% confidence" },
+    { label: "Invite", value: "+10 pts" },
+    { label: "Judge", value: "85% gate" },
     { label: "Flow", value: "prompt to payout" },
   ];
   return (
@@ -1009,22 +1006,19 @@ function PublishedLaunchKit({
     },
     {
       label: "Public post",
-      body: `I am testing Axelrod - an AI challenge host that turns dares into rules, evidence, judging, and credit settlement.\nTry this challenge: ${title}\n${shareLink}`,
+      body: `Try my Axelrod challenge: ${title}\n${shareLink}`,
     },
   ];
 
   return (
     <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Launch kit</p>
-          <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Send this challenge to 3 people</h3>
-          <p className="mt-1 text-sm font-semibold" style={{ color: "#64748B" }}>
-            Use a real invite sentence, not just a raw link. Each invite carries referral tracking.
-          </p>
+          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Share</p>
+          <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Send to 3 people</h3>
         </div>
         <span className="w-fit rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#ECFDF5", color: "#047857" }}>
-          GTM ready
+          tracked
         </span>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-3">
@@ -1037,7 +1031,7 @@ function PublishedLaunchKit({
             style={{ borderColor: "#E2E8F0" }}
           >
             <p className="text-sm font-black" style={{ color: "#172033" }}>{template.label}</p>
-            <p className="mt-2 line-clamp-4 text-xs font-semibold leading-relaxed" style={{ color: "#64748B" }}>
+            <p className="mt-2 line-clamp-2 text-xs font-semibold leading-relaxed" style={{ color: "#64748B" }}>
               {template.body}
             </p>
           </button>
@@ -1056,9 +1050,6 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
           Certified loops
-        </p>
-        <p className="hidden text-xs font-semibold sm:block" style={{ color: "#64748B" }}>
-          Pick a proven path first; review-only paths stay labeled instead of pretending to auto-settle.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -1080,9 +1071,8 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
                 {challengeLoopStatusLabel(item.status)}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-xs font-semibold" style={{ color: "#64748B" }}>{item.prompt}</p>
             <p className="mt-2 text-[11px] font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
-              {item.participantMode.replaceAll("_", " ")} · {item.evidenceMode.replaceAll("_", " ")}
+              {item.participantMode.replaceAll("_", " ")} / {item.evidenceMode.replaceAll("_", " ")}
             </p>
           </button>
         ))}
@@ -1102,11 +1092,8 @@ function LiveProofPanel() {
     <section className="overflow-hidden rounded-[28px] border bg-white/95 p-5 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 24px 70px rgba(15,23,42,0.09)" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Live protocol</p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight" style={{ color: "#172033" }}>Challenge radar is open</h2>
-          <p className="mt-2 text-sm font-semibold leading-relaxed" style={{ color: "#64748B" }}>
-            Create, invite, verify evidence, and settle credits from one guided flow.
-          </p>
+          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Flow</p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight" style={{ color: "#172033" }}>Prompt to payout</h2>
         </div>
         <div className="rounded-2xl border px-3 py-2 text-center" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
           <p className="text-lg font-black" style={{ color: "#10B981" }}>0.85</p>
@@ -1166,7 +1153,7 @@ function OpenChallengeStrip({
         <div>
           <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Join nearby</p>
           <p className="text-xs font-semibold" style={{ color: "#64748B" }}>
-            {message || "Open public challenges waiting for an opponent."}
+            {message || "Open challenges"}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -1200,7 +1187,7 @@ function OpenChallengeStrip({
           ))
         ) : challenges.length === 0 ? (
           <div className="rounded-[18px] border bg-white/95 px-4 py-4 text-sm font-semibold shadow-sm" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
-            No open public challenge is waiting right now.
+            No open challenges.
           </div>
         ) : (
           challenges.slice(0, 3).map((challenge) => {
@@ -1252,7 +1239,7 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
     <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent" style={{ borderColor: "#10B981", borderTopColor: "transparent" }} animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
       <p className="text-base font-extrabold" style={{ color: "#172033" }}>{title}</p>
-      <p className="text-sm font-medium mt-2 max-w-lg mx-auto px-4 py-2 bg-white border" style={{ color: "#526078", borderColor: "#E2E8F0", borderRadius: "999px" }}>{body}</p>
+      <p className="line-clamp-1 text-sm font-medium mt-2 max-w-lg mx-auto px-4 py-2 bg-white border" style={{ color: "#526078", borderColor: "#E2E8F0", borderRadius: "999px" }}>{body}</p>
     </motion.div>
   );
 }
@@ -1349,34 +1336,30 @@ function ChallengeSpecPreview({
   const challengePathText = [
     protocol.locationProtocol.mode.replace(/_/g, " "),
     protocol.evidenceProtocol.mode.replace(/_/g, " "),
-    protocol.identityProtocol.required ? "identity binding" : "account identity",
+    protocol.identityProtocol.required ? "identity" : "account",
     protocol.settlementProtocol.mode.replace(/_/g, " "),
     `confidence ${Math.round(protocol.settlementProtocol.autoSettleConfidenceThreshold * 100)}%`,
-    protocol.riskPolicy.allowed ? "settlement eligible if gates pass" : "blocked",
-  ].join(" -> ");
+    protocol.riskPolicy.allowed ? "settle if gates pass" : "blocked",
+  ].join(" / ");
   const languageLabel = protocolLanguageLabel(protocol.language);
   const languageStatus = protocolLanguageStatus(protocol.language);
   const inviteOptions: Array<{ value: "invite_link" | "nearby" | "same_device"; label: string; description: string }> = [
-    { value: "invite_link", label: "Invite link", description: "Send Jerry or another opponent a private join link." },
-    { value: "nearby", label: "Nearby discovery", description: "Make it public so nearby users can discover and join." },
-    { value: "same_device", label: "Same device invite", description: "Both people are together and one phone starts the flow." },
+    { value: "invite_link", label: "Invite link", description: "Private link." },
+    { value: "nearby", label: "Nearby", description: "Public radar." },
+    { value: "same_device", label: "Same device", description: "One phone." },
   ];
   const participationOptions: Array<{ value: "remote_async" | "remote_live" | "same_camera" | "in_person"; label: string; description: string }> = [
-    { value: "remote_async", label: "Remote async", description: "Each participant records and uploads separately." },
-    { value: "remote_live", label: "Remote live", description: "Both participants start around the same time." },
-    { value: "same_camera", label: "Same camera", description: "One phone records both participants in a single clip." },
-    { value: "in_person", label: "In person", description: "Participants meet and submit one shared or witnessed result." },
+    { value: "remote_async", label: "Async", description: "Separate uploads." },
+    { value: "remote_live", label: "Live", description: "Same time." },
+    { value: "same_camera", label: "Same camera", description: "One clip." },
+    { value: "in_person", label: "In person", description: "Together." },
   ];
   return (
-    <section className="bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "22px" }}>
+    <section className="bg-white border shadow-sm" aria-label={`Challenge preview, ${languageStatus}`} style={{ borderColor: "#E2E8F0", borderRadius: "22px" }}>
       <div className="p-5 border-b" style={{ borderColor: "#EEF2F7" }}>
-        <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "#047857" }}>Generated from: {prompt}</p>
+        <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "#047857" }}>Prompt</p>
+        <p className="mb-3 line-clamp-2 text-sm font-semibold" style={{ color: "#526078" }}>{prompt}</p>
         <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: "#172033" }}>{protocol.title}</h2>
-        <div className="mt-4 rounded-2xl border p-3" style={{ borderColor: "#D1FAE5", background: "#F0FDF4" }}>
-          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Protocol language</p>
-          <p className="mt-1 text-sm font-extrabold" style={{ color: "#172033" }}>{languageLabel}</p>
-          <p className="mt-1 text-xs font-semibold" style={{ color: "#526078" }}>{languageStatus}</p>
-        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Pill>language: {languageLabel}</Pill>
           <Pill>{protocol.participantMode.replace(/_/g, " ")}</Pill>
@@ -1390,45 +1373,52 @@ function ChallengeSpecPreview({
         </div>
       </div>
       <div className="grid gap-4 p-5 md:grid-cols-2">
-        <SpecBlock title="What you are playing" body={protocol.userFacingSummary} />
-        <SpecBlock title="Who can join" body={isSolo ? `Solo proof. No opponent required. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.` : `${protocol.participantMode.replace(/_/g, " ")}. Location mode: ${protocol.locationProtocol.mode.replace(/_/g, " ")}.`} />
-        <SpecBlock title="Identity verification" body={`${protocol.identityProtocol.required ? "Required" : "Optional"} via ${protocol.identityProtocol.mode.replace(/_/g, " ")}. Auto-settle requires ${Math.round(protocol.identityProtocol.autoSettlementRequiresIdentityConfidence * 100)}% identity confidence.`} />
-        <SpecBlock title="Evidence required" body={protocol.evidenceProtocol.requiredEvidence.join(" ")} />
-        <SpecBlock title="Capture instructions" body={protocol.evidenceProtocol.captureInstructions.join(" ")} />
-        <SpecBlock title="Winner logic" body={protocol.settlementProtocol.winCondition} />
-        <SpecBlock title="AI judging" body={protocol.settlementProtocol.judgeInstructions.join(" ")} />
-        <SpecBlock title="Manual review triggers" body={protocol.settlementProtocol.manualReviewTriggers.join(" ")} />
-        <SpecBlock title="Safety / risk" body={`${protocol.riskPolicy.riskLevel}. ${protocol.riskPolicy.blockedReason || protocol.riskPolicy.warnings.join(" ") || "No extra warning."}${protocol.riskPolicy.safeAlternative ? ` Safe alternative: ${protocol.riskPolicy.safeAlternative}` : ""}`} />
-        <SpecBlock title="AI cost tier" body={`${protocol.aiBudgetPolicy.estimatedCostTier}. Max vision frames: ${protocol.aiBudgetPolicy.maxVisionFrames}. Escalation: ${protocol.aiBudgetPolicy.allowEscalation ? "allowed" : "off"}.`} />
+        <SpecBlock title="Goal" body={protocol.userFacingSummary} />
+        <SpecBlock title="Players" body={isSolo ? "Solo proof. No opponent required." : `${protocol.participantMode.replace(/_/g, " ")} vs ${opponent}.`} />
+        <SpecBlock title="Proof" body={protocol.evidenceProtocol.requiredEvidence.join(" ")} />
+        <SpecBlock title="Win" body={protocol.settlementProtocol.winCondition} />
       </div>
+      <details className="mx-5 mb-5 rounded-2xl border bg-[#F8FAFC] p-4" style={{ borderColor: "#E2E8F0" }}>
+        <summary className="cursor-pointer text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
+          Details
+        </summary>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <SpecBlock title="Identity" body={`${protocol.identityProtocol.required ? "Required" : "Optional"} via ${protocol.identityProtocol.mode.replace(/_/g, " ")}. Gate: ${Math.round(protocol.identityProtocol.autoSettlementRequiresIdentityConfidence * 100)}%.`} />
+          <SpecBlock title="Capture" body={protocol.evidenceProtocol.captureInstructions.join(" ")} />
+          <SpecBlock title="AI judge" body={protocol.settlementProtocol.judgeInstructions.join(" ")} />
+          <SpecBlock title="Review" body={protocol.settlementProtocol.manualReviewTriggers.join(" ")} />
+          <SpecBlock title="Risk" body={`${protocol.riskPolicy.riskLevel}. ${protocol.riskPolicy.blockedReason || protocol.riskPolicy.warnings.join(" ") || "No extra warning."}${protocol.riskPolicy.safeAlternative ? ` Safe alternative: ${protocol.riskPolicy.safeAlternative}` : ""}`} />
+          <SpecBlock title="Cost" body={`${protocol.aiBudgetPolicy.estimatedCostTier}. Frames: ${protocol.aiBudgetPolicy.maxVisionFrames}. Escalation: ${protocol.aiBudgetPolicy.allowEscalation ? "on" : "off"}.`} />
+        </div>
+      </details>
       <div className="grid gap-5 px-5 pb-5">
         <OptionSection
           title="Invite mode"
-          subtitle={isSolo ? "Solo challenges can stay private; no opponent has to accept first." : "How the opponent finds or enters this challenge."}
+          subtitle=""
           value={inviteValue}
           options={inviteOptions}
           onSelect={(value) => onSelectInvite(value as "invite_link" | "nearby" | "same_device")}
         />
         <OptionSection
           title="Participation mode"
-          subtitle="How evidence is captured once the challenge is live."
+          subtitle=""
           value={participationValue}
           options={participationOptions}
           onSelect={(value) => onSelectParticipation(value as "remote_async" | "remote_live" | "same_camera" | "in_person")}
         />
         <OptionSection
           title="Visibility"
-          subtitle="Whether this is private by link or discoverable."
+          subtitle=""
           value={visibilityValue}
           options={[
-            { value: "private", label: "Private", description: "Only people with the invite can join." },
-            { value: "public", label: "Public / nearby", description: "Open to nearby discovery and public browsing." },
+            { value: "private", label: "Private", description: "Invite only." },
+            { value: "public", label: "Public / nearby", description: "Discoverable." },
           ]}
           onSelect={(value) => onSelectVisibility(value as "public" | "private")}
         />
         <div className="grid gap-2 rounded-2xl border p-4" style={{ borderColor: "#D1FAE5", background: "#F8FAFC" }}>
-          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#047857" }}>Selected challenge path</p>
-          <p className="text-sm font-bold" style={{ color: "#172033" }}>
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#047857" }}>Path</p>
+          <p className="line-clamp-2 text-sm font-bold" style={{ color: "#172033" }}>
             {challengePathText}
           </p>
         </div>
@@ -1454,7 +1444,7 @@ function OptionSection({
     <div>
       <div className="mb-2">
         <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "#047857" }}>{title}</p>
-        <p className="text-xs font-semibold" style={{ color: "#64748B" }}>{subtitle}</p>
+        {subtitle && <p className="text-xs font-semibold" style={{ color: "#64748B" }}>{subtitle}</p>}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {options.map((option) => {
@@ -1471,7 +1461,6 @@ function OptionSection({
               }}
             >
               <p className="text-sm font-extrabold" style={{ color: "#172033" }}>{option.label}</p>
-              <p className="text-xs font-medium mt-1" style={{ color: "#526078" }}>{option.description}</p>
             </button>
           );
         })}
@@ -1484,7 +1473,7 @@ function SpecBlock({ title, body }: { title: string; body: string }) {
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: "#64748B" }}>{title}</p>
-      <p className="text-sm font-semibold leading-relaxed" style={{ color: "#172033" }}>{body}</p>
+      <p className="line-clamp-3 text-sm font-semibold leading-relaxed" style={{ color: "#172033" }}>{body}</p>
     </div>
   );
 }

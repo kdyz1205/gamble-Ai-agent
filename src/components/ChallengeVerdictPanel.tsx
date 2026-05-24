@@ -657,7 +657,7 @@ export default function ChallengeVerdictPanel({
             <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The challenge</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
             <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              This is an AI-judged challenge between two people. Join only if you agree to the rules, upload evidence when done, and the AI reviews the evidence to recommend a winner.
+              Accept rules. Submit proof. AI recommends the winner.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -686,7 +686,7 @@ export default function ChallengeVerdictPanel({
               <div>
                 <p className="text-sm font-extrabold" style={{ color: "#7C2D12" }}>Waiting for opponent</p>
                 <p className="text-xs font-semibold mt-0.5" style={{ color: "#9A3412" }}>
-                  Send the invite or keep it public so someone can join. The challenge starts when the opponent accepts the rule contract.
+                  Share the invite. Starts after they accept.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -706,7 +706,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black"
                   style={{ background: "#FFFFFF", color: "#334155", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
-                  {copied ? "Invite copied" : "Copy invite link"}
+                  {copied ? "Copied" : "Copy link"}
                 </motion.button>
                 {canCloseEmpty && (
                   <motion.button
@@ -753,10 +753,10 @@ export default function ChallengeVerdictPanel({
                 <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>Manage challenge</p>
                 <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason && !canCancelRefund ? "#991B1B" : "#047857" }}>
                   {isArchived
-                    ? "This challenge is archived. It is hidden from your default board and public discovery, but audit/history stays intact."
+                    ? "Archived. History stays."
                     : canCancelRefund
-                    ? "Opponent has joined, but no evidence or judgment exists yet. You can cancel and refund all locked stakes."
-                    : closeLockReason || "No opponent, evidence, or judgment exists yet. You can close this challenge and refund the stake."}
+                    ? "No evidence yet. Cancel refunds locked stakes."
+                    : closeLockReason || "Empty challenge. You can close it."}
                 </p>
                 {manageNotice && (
                   <p className="mt-2 text-[11px] font-black" style={{ color: "#047857" }}>
@@ -823,10 +823,10 @@ export default function ChallengeVerdictPanel({
         <div className="space-y-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: "#047857" }}>
-              How this challenge works
+              Rules
             </p>
             <p className="text-xs font-semibold mt-1" style={{ color: "#64748B" }}>
-              The short version first. Full contract is below.
+              Short version first.
             </p>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -851,7 +851,7 @@ export default function ChallengeVerdictPanel({
               style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "16px" }}
             >
               <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>
-                Full rule contract
+                Full rules
               </summary>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {ruleCards.map((card) => (
@@ -871,14 +871,17 @@ export default function ChallengeVerdictPanel({
 
         {isOpenForOpponentStatus(challenge.status) && !isCreator && !me && (
           <div className="p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-            <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>Before joining</p>
-            <ul className="space-y-1.5">
-              {contractBullets.map((item) => (
-                <li key={item} className="text-xs font-semibold" style={{ color: "#334155", lineHeight: 1.5 }}>
-                  - {item}
-                </li>
-              ))}
-            </ul>
+            <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>Accept</p>
+            <details>
+              <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>Full terms</summary>
+              <ul className="mt-2 space-y-1.5">
+                {contractBullets.map((item) => (
+                  <li key={item} className="text-xs font-semibold" style={{ color: "#334155", lineHeight: 1.5 }}>
+                    - {item}
+                  </li>
+                ))}
+              </ul>
+            </details>
             <label className="flex items-start gap-2 mt-3 text-xs font-bold cursor-pointer" style={{ color: "#334155" }}>
               <input
                 type="checkbox"
@@ -886,7 +889,7 @@ export default function ChallengeVerdictPanel({
                 onChange={(event) => setAcceptContractChecked(event.target.checked)}
                 className="mt-0.5"
               />
-              <span>I accept this rule contract and understand the evidence, AI judging, dispute, and credit settlement terms.</span>
+              <span>I accept rules, AI judging, disputes, and credits.</span>
             </label>
             <motion.button
               type="button"
@@ -1047,7 +1050,7 @@ export default function ChallengeVerdictPanel({
               <div>
                 <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All evidence is in</p>
                 <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
-                  {isCreator ? "AI writes a recommendation. You confirm before credits settle." : "Waiting for the creator to start AI judgment."}
+                  {isCreator ? "Run AI, then confirm payout." : "Waiting for AI review."}
                 </p>
               </div>
             </div>
@@ -1096,7 +1099,7 @@ export default function ChallengeVerdictPanel({
                     boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "Analyzing…" : `Generate AI recommendation · ${TIER_COST[tier]} cr`}
+                  {busy ? "Analyzing..." : `Run AI - ${TIER_COST[tier]} cr`}
                 </motion.button>
                 <motion.button
                   type="button"
@@ -1107,7 +1110,7 @@ export default function ChallengeVerdictPanel({
                   className="w-full py-2.5 text-xs font-semibold disabled:opacity-40"
                   style={{ color: "#64748B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
-                  Run in background (recommended for long video)
+                  Background run
                 </motion.button>
                 {asyncHint && (
                   <motion.p
@@ -1134,7 +1137,7 @@ export default function ChallengeVerdictPanel({
           >
             <p className="text-sm font-bold" style={{ color: "#1E293B" }}>AI recommendation ready</p>
             <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              Not final yet. Confirm to settle credits, or leave for manual review.
+              Confirm to settle, or review.
             </p>
             {verdictMetrics.autoSettleEligible ? (
               <motion.button
@@ -1149,11 +1152,11 @@ export default function ChallengeVerdictPanel({
                   boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
                 }}
               >
-                {busy ? "Settling..." : "Confirm AI Recommendation & Settle"}
+                {busy ? "Settling..." : "Confirm + settle"}
               </motion.button>
             ) : (
               <div className="p-3 text-xs font-semibold" style={{ color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "14px" }}>
-                This verdict is not eligible for settlement. Run another AI pass or keep it in manual review.
+                Not eligible. Rejudge or review.
               </div>
             )}
 
@@ -1189,7 +1192,7 @@ export default function ChallengeVerdictPanel({
                   className="w-full py-3 rounded-xl text-sm font-black disabled:opacity-40"
                   style={{ color: "#1D4ED8", background: "#EFF6FF", border: "1px solid #BFDBFE" }}
                 >
-                  {busy ? "Rejudging..." : `Rejudge with selected model · ${TIER_COST[tier]} cr`}
+                  {busy ? "Rejudging..." : `Rejudge - ${TIER_COST[tier]} cr`}
                 </motion.button>
               </div>
             )}
@@ -1207,7 +1210,7 @@ export default function ChallengeVerdictPanel({
             <div>
               <p className="text-sm font-bold" style={{ color: "#1E293B" }}>Manual review</p>
               <p className="text-xs font-medium mt-1" style={{ color: "#64748B", lineHeight: 1.5 }}>
-                Use this when the AI verdict is unclear or wrong. The review action is audited before credits move.
+                Use when AI looks wrong.
               </p>
             </div>
             <textarea
