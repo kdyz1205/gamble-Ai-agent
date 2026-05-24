@@ -7,6 +7,9 @@ import prisma from "./db";
 import bcrypt from "bcryptjs";
 import { COSTS } from "./credits";
 
+export const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const AUTH_SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
+
 export const authOptions: NextAuthOptions = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   adapter: PrismaAdapter(prisma as any) as Adapter,
@@ -76,7 +79,18 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // Product rule: a signed-in user should stay signed in across browser
+    // closes/reopens like a normal consumer app, not be forced through Google
+    // OAuth every visit. NextAuth's hidden default is also 30d; keeping it
+    // explicit makes the behavior testable and harder to regress.
+    maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+    updateAge: AUTH_SESSION_UPDATE_AGE_SECONDS,
+  },
+  jwt: {
+    maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+  },
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google" && user.email) {

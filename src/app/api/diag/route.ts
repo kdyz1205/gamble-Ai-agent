@@ -14,6 +14,10 @@ import { getProviderById, DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { parseChallenge } from "@/lib/ai-engine";
 import prisma from "@/lib/db";
+import {
+  AUTH_SESSION_MAX_AGE_SECONDS,
+  AUTH_SESSION_UPDATE_AGE_SECONDS,
+} from "@/lib/auth-options";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -90,6 +94,9 @@ export async function GET(req: NextRequest) {
   const envSnapshot = {
     ORACLE_DEFAULT_PROVIDER: process.env.ORACLE_DEFAULT_PROVIDER || null,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || null,
+    hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+    authSessionMaxAgeDays: AUTH_SESSION_MAX_AGE_SECONDS / 60 / 60 / 24,
+    authSessionUpdateAgeHours: AUTH_SESSION_UPDATE_AGE_SECONDS / 60 / 60,
     hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
     hasGoogleClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
