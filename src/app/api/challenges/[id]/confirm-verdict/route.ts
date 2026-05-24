@@ -114,8 +114,9 @@ export async function POST(
       evidenceQuality: evidenceQuality as EvidenceQuality,
       recommendation: recommendation as VerdictRecommendation,
       blockingIssues: persistedBlockingIssues,
-      source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "fallback" : undefined,
+      source: typeof metrics.source === "string" ? metrics.source as "deterministic" | "vision_llm" | "llm" | "oracle" | "fallback" : undefined,
       videoMetrics: metrics.videoMetrics as never,
+      dataSourceTrace: metrics.dataSourceTrace as never,
     };
     const aiOnlyPolicy = evaluateAutoSettleEligibility(
       reconstructedResult,
