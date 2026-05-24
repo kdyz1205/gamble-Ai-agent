@@ -26,7 +26,8 @@
     "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts",
     "smoke:weather-oracle": "tsx scripts/smoke-weather-oracle.ts",
     "smoke:challenge-100": "tsx scripts/smoke-100-challenge-crack-matrix.ts",
-    "eval:llm-judgeability-140": "tsx scripts/eval-llm-judgeability-140.ts"
+    "eval:llm-judgeability-140": "tsx scripts/eval-llm-judgeability-140.ts",
+    "eval:diverse-judgeability-140": "tsx scripts/eval-diverse-judgeability-140.ts"
   },
   "repository": {
     "type": "git",
