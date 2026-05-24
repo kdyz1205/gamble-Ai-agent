@@ -154,15 +154,16 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     pickCard(cards, ["Evidence required"])?.value,
     pickCard(cards, ["Recording standard"])?.value,
   ]) || (challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "Required evidence");
+  const timeLimit = pickCard(cards, ["Time limit"])?.value;
   const deadlineLabel = formatChallengeDeadline(challenge.deadline);
-  const time = joinUnique([
-    pickCard(cards, ["Time limit"])?.value,
-    deadlineLabel,
-  ]) || challenge.proofWindow || "Before the challenge window closes";
-  const review = joinUnique([
-    pickCard(cards, ["Dispute window"])?.value,
-    pickCard(cards, ["Settlement"])?.value,
-  ]) || settlementSummary(challenge);
+  const time = timeLimit && deadlineLabel
+    ? joinSentences(timeLimit, deadlineLabel)
+    : timeLimit || deadlineLabel || challenge.proofWindow || "Before the challenge window closes";
+  const dispute = pickCard(cards, ["Dispute window"])?.value;
+  const settlement = pickCard(cards, ["Settlement"])?.value;
+  const review = dispute && settlement
+    ? joinSentences(dispute, settlement)
+    : dispute || settlement || settlementSummary(challenge);
 
   return [
     { label: "Match", value: goal },
