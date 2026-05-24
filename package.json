@@ -21,6 +21,7 @@
     "e2e:gps-checkin-settlement": "node scripts/e2e-gps-checkin-settlement.mjs",
     "e2e:study-streak-settlement": "node scripts/e2e-study-streak-settlement.mjs",
     "e2e:data-source-oracle-settlement": "node scripts/e2e-data-source-oracle-settlement.mjs",
+    "e2e:manual-review-resolution": "node scripts/e2e-manual-review-resolution.mjs",
     "e2e:real-video-robustness": "node scripts/e2e-real-video-robustness.mjs",
     "e2e:plank-video-settlement": "node scripts/e2e-plank-video-settlement.mjs",
     "smoke:payment-policy": "tsx scripts/smoke-payment-policy.ts",

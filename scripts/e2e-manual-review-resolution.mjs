@@ -229,6 +229,35 @@ try {
     latestJudgmentId: disputed.review.latestJudgmentId,
   };
 
+  const creatorQueue = await getJson(creator.jar, "/api/manual-review/queue?limit=20");
+  const opponentQueue = await getJson(opponent.jar, "/api/manual-review/queue?limit=20");
+  const creatorQueueItem = creatorQueue.items?.find((item) => item.challengeId === challengeId);
+  const opponentQueueItem = opponentQueue.items?.find((item) => item.challengeId === challengeId);
+  proof.manualQueue = {
+    creatorCount: creatorQueue.count,
+    opponentCount: opponentQueue.count,
+    creatorItem: creatorQueueItem
+      ? {
+          challengeId: creatorQueueItem.challengeId,
+          status: creatorQueueItem.status,
+          canResolve: creatorQueueItem.canResolve,
+          evidenceCount: creatorQueueItem.evidenceCount,
+          judgmentCount: creatorQueueItem.judgmentCount,
+          participantCount: creatorQueueItem.participantCount,
+          latestJudgmentId: creatorQueueItem.latestJudgment?.id ?? null,
+          stake: creatorQueueItem.stake,
+          stakeToken: creatorQueueItem.stakeToken,
+        }
+      : null,
+    opponentItem: opponentQueueItem
+      ? {
+          challengeId: opponentQueueItem.challengeId,
+          status: opponentQueueItem.status,
+          canResolve: opponentQueueItem.canResolve,
+        }
+      : null,
+  };
+
   const resolved = await postJson(creator.jar, `/api/challenges/${challengeId}/manual-resolve`, {
     outcome: "winner",
     winnerId: opponent.session.user.id,
@@ -242,6 +271,8 @@ try {
   });
 
   const finalChallenge = await getJson(creator.jar, `/api/challenges/${challengeId}`);
+  const creatorQueueAfterResolve = await getJson(creator.jar, "/api/manual-review/queue?limit=20");
+  const creatorQueueAfterItem = creatorQueueAfterResolve.items?.find((item) => item.challengeId === challengeId);
   const afterCreator = await getJson(creator.jar, "/api/credits");
   const afterOpponent = await getJson(opponent.jar, "/api/credits");
   const creatorTxs = afterCreator.transactions.filter((tx) => tx.challengeId === challengeId);
@@ -270,6 +301,10 @@ try {
     judgmentCount: finalChallenge.challenge.judgments?.length ?? 0,
     evidenceCount: finalChallenge.challenge.evidence?.length ?? 0,
   };
+  proof.manualQueueAfterResolve = {
+    count: creatorQueueAfterResolve.count,
+    challengeStillQueued: Boolean(creatorQueueAfterItem),
+  };
   proof.balancesAfter = {
     creator: afterCreator.credits,
     opponent: afterOpponent.credits,
@@ -284,6 +319,10 @@ try {
   requireCheck(proof, "both_evidence_submitted", finalChallenge.challenge.evidence.length === 2, finalChallenge.challenge.evidence.length);
   requireCheck(proof, "ai_judgment_created", Boolean(judged.judgment.id), proof.aiJudgment);
   requireCheck(proof, "dispute_reaches_disputed", disputed.challenge.status === "disputed", proof.dispute);
+  requireCheck(proof, "creator_queue_contains_review_item", Boolean(creatorQueueItem), proof.manualQueue);
+  requireCheck(proof, "creator_queue_can_resolve", creatorQueueItem?.canResolve === true, proof.manualQueue);
+  requireCheck(proof, "opponent_queue_read_only", opponentQueueItem?.canResolve === false, proof.manualQueue);
+  requireCheck(proof, "queue_item_has_counts", creatorQueueItem?.evidenceCount === 2 && creatorQueueItem?.judgmentCount >= 1 && creatorQueueItem?.participantCount === 2, proof.manualQueue);
   requireCheck(proof, "manual_final_settled", finalChallenge.challenge.status === "settled", proof.finalChallenge);
   requireCheck(proof, "latest_judgment_manual", latestJudgment?.method === "manual", proof.finalChallenge);
   requireCheck(proof, "manual_winner_is_opponent", latestJudgment?.winnerId === opponent.session.user.id, proof.finalChallenge);
@@ -294,6 +333,7 @@ try {
   requireCheck(proof, "loser_loss_row", Boolean(loserLossRow), proof.creditTx.creator);
   requireCheck(proof, "no_refund_rows", refundRows.length === 0, refundRows.map(txView));
   requireCheck(proof, "duplicate_manual_resolve_rejected", duplicateResolve.status === 409, proof.manualResolve);
+  requireCheck(proof, "resolved_item_leaves_manual_queue", !creatorQueueAfterItem, proof.manualQueueAfterResolve);
   requireCheck(proof, "winner_balance_math", afterOpponent.credits === beforeOpponent.credits + 1, {
     before: beforeOpponent.credits,
     after: afterOpponent.credits,
