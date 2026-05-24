@@ -227,6 +227,7 @@ export async function POST(
       source: result.source ?? "oracle",
       providerCall: providerCallAudit,
       videoMetrics: null,
+      dataSourceTrace: result.dataSourceTrace ?? null,
       autoSettleEligible: autoSettlePolicy.eligible,
       autoSettleBlockReason: autoSettlePolicy.reason,
       blockingIssues,
@@ -544,6 +545,7 @@ export async function POST(
     model: judgeModel,
     providerId,
     livenessPrompt: challenge.livenessPrompt,
+    protocol,
   });
   const isSoloProtocol = protocol?.participantMode === "solo";
   const requiresVision = challenge.evidenceType === "video" || bothHaveVideoUrl;
@@ -652,6 +654,7 @@ export async function POST(
     source: result.source ?? "llm",
     providerCall: providerCallAudit,
     videoMetrics: result.videoMetrics ?? null,
+    dataSourceTrace: result.dataSourceTrace ?? null,
     autoSettleEligible: autoSettlePolicy.eligible,
     autoSettleBlockReason: autoSettlePolicy.reason,
     blockingIssues,
@@ -670,6 +673,7 @@ export async function POST(
     source: string;
     providerCall: unknown;
     videoMetrics: unknown;
+    dataSourceTrace: unknown;
     autoSettleEligible: boolean;
     autoSettleBlockReason: string | null;
     blockingIssues: string[];

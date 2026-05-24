@@ -239,6 +239,7 @@ export async function executeChallengeJudgment(
       model: judgeModel,
       providerId,
       livenessPrompt: challenge.livenessPrompt,
+      protocol,
     });
   } catch (err) {
     // Refund the inference credits since no judgment will be produced.

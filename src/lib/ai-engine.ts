@@ -10,6 +10,9 @@ import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured } from "
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "./crypto-price-oracle";
 import { extractWeatherOracleSpec, judgeWeatherOracle } from "./weather-oracle";
+import { executeDataSourceAdapter, type DataSourceAdapterResult } from "./data-source-adapters";
+import { getDataSourceAdapter, resolveDataSourceForPrompt, type RegisteredDataSource } from "./data-source-registry";
+import type { ProtocolSpecV2 } from "./protocol-spec-v2";
 import {
   prepareParticipantVisuals,
   prepareParticipantVisualsFast,
@@ -126,7 +129,23 @@ export interface JudgmentResult {
   source?: "deterministic" | "vision_llm" | "llm" | "oracle" | "fallback";
   providerCall?: LlmCallMetadata;
   videoMetrics?: VideoJudgmentMetrics;
+  dataSourceTrace?: DataSourceJudgmentTrace;
 }
+
+export type DataSourceJudgmentTrace = {
+  sourceKey: string;
+  provider?: string;
+  status: DataSourceAdapterResult["status"];
+  fetchedAt: string;
+  url?: string;
+  httpStatus?: number;
+  requiredFields?: string[];
+  missingFields?: string[];
+  error?: string;
+  resolvedParams?: Record<string, unknown>;
+  paramCompiler?: LlmCallMetadata | null;
+  dataPreview?: unknown;
+};
 
 export interface VideoJudgmentParticipantMetrics {
   validRepCount: number | null;
@@ -474,6 +493,7 @@ export interface JudgeChallengeParams {
   providerId: string;
   /** Optional liveness prompt (not in schema today; accepted for forward compat). */
   livenessPrompt?: string | null;
+  protocol?: ProtocolSpecV2 | null;
 }
 
 /**
@@ -680,6 +700,394 @@ function applyObservedVideoGuards(
   return result;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function compactForPrompt(value: unknown, maxChars = 14_000): string {
+  const raw = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  if (!raw) return "";
+  return raw.length > maxChars
+    ? `${raw.slice(0, maxChars)}\n...TRUNCATED ${raw.length - maxChars} chars`
+    : raw;
+}
+
+function compactDataPreview(value: unknown): unknown {
+  const raw = compactForPrompt(value, 3_000);
+  if (!raw) return null;
+  if (raw.includes("...TRUNCATED")) return { truncated: true, preview: raw };
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function cleanDataSourceParamValue(value: string): string | number | boolean {
+  const cleaned = value.trim().replace(/^["']|["']$/g, "");
+  if (/^(true|false)$/i.test(cleaned)) return /^true$/i.test(cleaned);
+  if (/^-?\d+(?:\.\d+)?$/.test(cleaned)) return Number(cleaned);
+  return cleaned;
+}
+
+function dataSourceText(params: JudgeChallengeParams) {
+  const protocol = params.protocol;
+  return [
+    protocol?.rawPrompt,
+    protocol?.title,
+    protocol?.userFacingSummary,
+    protocol?.evidenceProtocol.mode,
+    ...(protocol?.evidenceProtocol.requiredEvidence ?? []),
+    ...(protocol?.evidenceProtocol.requiredMetadata ?? []),
+    protocol?.settlementProtocol.mode,
+    protocol?.settlementProtocol.winCondition,
+    ...(protocol?.settlementProtocol.judgeInstructions ?? []),
+    params.title,
+    params.description,
+    params.rules,
+    params.evidenceA?.description,
+    params.evidenceB?.description,
+    params.evidenceA?.metadata ? JSON.stringify(params.evidenceA.metadata) : null,
+    params.evidenceB?.metadata ? JSON.stringify(params.evidenceB.metadata) : null,
+  ].filter(Boolean).join("\n");
+}
+
+function metadataDataSourceKey(params: JudgeChallengeParams): string | null {
+  for (const evidence of [params.evidenceA, params.evidenceB]) {
+    const metadata = evidence?.metadata;
+    if (!metadata) continue;
+    for (const key of ["dataSourceKey", "sourceKey", "oracleSourceKey"]) {
+      const value = metadata[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return null;
+}
+
+function explicitDataSourceKey(text: string): string | null {
+  const match = text.match(/\bDATA_SOURCE_KEY\s*[:=]\s*([a-z0-9_:-]+)/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function parseDataSourceParamsFromText(text: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const line = text.split(/\r?\n/).find((item) =>
+    /^\s*(?:AI judging:\s*)?DATA_SOURCE_PARAMS\s*[:=]/i.test(item),
+  );
+  if (line) {
+    const jsonish = line.replace(/^\s*(?:AI judging:\s*)?DATA_SOURCE_PARAMS\s*[:=]\s*/i, "").trim();
+    const parsed = safeParseJson(jsonish);
+    const record = asRecord(parsed);
+    if (record) Object.assign(out, record);
+  }
+
+  for (const match of text.matchAll(/^\s*(?:AI judging:\s*)?DATA_SOURCE_PARAM_([a-z0-9_]+)\s*[:=]\s*(.+)$/gim)) {
+    out[match[1]] = cleanDataSourceParamValue(match[2]);
+  }
+  return out;
+}
+
+function explicitDataSourceParams(params: JudgeChallengeParams, source: RegisteredDataSource, text: string): Record<string, unknown> {
+  const out = parseDataSourceParamsFromText(text);
+  for (const evidence of [params.evidenceA, params.evidenceB]) {
+    const metadata = evidence?.metadata;
+    if (!metadata) continue;
+    for (const key of ["dataSourceParams", "adapterParams", "oracleParams"]) {
+      const record = asRecord(metadata[key]);
+      if (record) Object.assign(out, record);
+    }
+  }
+
+  for (const field of source.requiredFields) {
+    if (out[field] !== undefined && out[field] !== null && String(out[field]).trim() !== "") continue;
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = text.match(new RegExp(`(?:^|\\n)\\s*(?:AI judging:\\s*)?${escaped}\\s*[:=]\\s*([^\\n\\r;]+)`, "i"));
+    if (match?.[1]) out[field] = cleanDataSourceParamValue(match[1]);
+  }
+  return out;
+}
+
+function shouldTryDataSourceJudge(params: JudgeChallengeParams, text: string): boolean {
+  const protocol = params.protocol;
+  return Boolean(
+    explicitDataSourceKey(text) ||
+    metadataDataSourceKey(params) ||
+    params.evidencePolicy === "public_oracle" ||
+    params.evidencePolicy === "platform_metric" ||
+    protocol?.evidenceProtocol.mode === "public_oracle" ||
+    protocol?.evidenceProtocol.mode === "platform_metric" ||
+    protocol?.settlementProtocol.mode === "auto_oracle",
+  );
+}
+
+function resolveJudgeDataSource(params: JudgeChallengeParams): { source: RegisteredDataSource; text: string } | null {
+  const text = dataSourceText(params);
+  if (!shouldTryDataSourceJudge(params, text)) return null;
+  const key = metadataDataSourceKey(params) ?? explicitDataSourceKey(text);
+  const source = key ? getDataSourceAdapter(key) : resolveDataSourceForPrompt(text)?.source;
+  return source ? { source, text } : null;
+}
+
+function dataSourceDeadlineNotDue(params: JudgeChallengeParams): string | null {
+  if (!params.deadlineIso) return null;
+  const timestamp = Date.parse(params.deadlineIso);
+  if (!Number.isFinite(timestamp)) return null;
+  if (timestamp > Date.now() + 60_000) {
+    return `External data-source challenge is not ready until ${new Date(timestamp).toISOString()}.`;
+  }
+  return null;
+}
+
+function traceFromDataSourceResult(
+  result: DataSourceAdapterResult,
+  resolvedParams: Record<string, unknown>,
+  paramCompiler: LlmCallMetadata | null = null,
+): DataSourceJudgmentTrace {
+  return {
+    sourceKey: result.sourceKey,
+    provider: result.provider,
+    status: result.status,
+    fetchedAt: result.fetchedAt,
+    url: result.url,
+    httpStatus: result.httpStatus,
+    requiredFields: result.requiredFields,
+    missingFields: result.missingFields,
+    error: result.error,
+    resolvedParams,
+    paramCompiler,
+    dataPreview: compactDataPreview(result.data),
+  };
+}
+
+function dataSourceNeedsReview(reason: string, trace: DataSourceJudgmentTrace): JudgmentResult {
+  return {
+    winnerId: null,
+    reasoning: reason,
+    confidence: 0.4,
+    evidenceQuality: "unclear",
+    recommendation: "needs_review",
+    settlementRecommendation: "needs_review",
+    blockingIssues: [reason],
+    source: "oracle",
+    dataSourceTrace: trace,
+  };
+}
+
+async function compileMissingDataSourceParams(input: {
+  source: RegisteredDataSource;
+  challengeText: string;
+  params: Record<string, unknown>;
+  missingFields: string[];
+  providerId: string;
+  model: string;
+}): Promise<{ params: Record<string, unknown>; missingFields: string[]; metadata: LlmCallMetadata | null }> {
+  if (input.missingFields.length === 0) {
+    return { params: input.params, missingFields: [], metadata: null };
+  }
+  try {
+    const completion = await completeOraclePromptWithMetadata({
+      providerId: input.providerId,
+      model: input.model,
+      maxTokens: 700,
+      temperature: 0,
+      system:
+        "You convert a challenge into API adapter parameters. Return only JSON. Do not invent values that are not present in the challenge text; list them in missingFields instead.",
+      user: `Data source: ${input.source.sourceKey}
+Provider: ${input.source.provider}
+Required fields: ${input.source.requiredFields.join(", ")}
+Current params: ${JSON.stringify(input.params)}
+Missing fields: ${input.missingFields.join(", ")}
+
+Challenge text:
+${input.challengeText}
+
+Return JSON:
+{"params":{...},"missingFields":["field"],"confidence":0.0-1.0}`,
+    });
+    const parsed = asRecord(safeParseJson(completion.text));
+    const nextParams = asRecord(parsed?.params) ?? {};
+    const missingFields = Array.isArray(parsed?.missingFields)
+      ? parsed.missingFields.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : input.missingFields;
+    return {
+      params: { ...input.params, ...nextParams },
+      missingFields,
+      metadata: completion.metadata,
+    };
+  } catch {
+    return {
+      params: input.params,
+      missingFields: input.missingFields,
+      metadata: null,
+    };
+  }
+}
+
+async function tryDataSourceBackedJudge(params: JudgeChallengeParams): Promise<JudgmentResult | null> {
+  const resolved = resolveJudgeDataSource(params);
+  if (!resolved) return null;
+
+  const notDueReason = dataSourceDeadlineNotDue(params);
+  const initialParams = explicitDataSourceParams(params, resolved.source, resolved.text);
+  if (notDueReason) {
+    return dataSourceNeedsReview(notDueReason, {
+      sourceKey: resolved.source.sourceKey,
+      provider: resolved.source.provider,
+      status: "manual_review",
+      fetchedAt: new Date().toISOString(),
+      requiredFields: resolved.source.requiredFields,
+      resolvedParams: initialParams,
+      error: notDueReason,
+      paramCompiler: null,
+    });
+  }
+
+  let dryRun = await executeDataSourceAdapter({
+    sourceKey: resolved.source.sourceKey,
+    params: initialParams,
+    dryRun: true,
+  });
+  let resolvedParams = initialParams;
+  let paramCompiler: LlmCallMetadata | null = null;
+  if (dryRun.status === "requires_params" && dryRun.missingFields?.length) {
+    const compiled = await compileMissingDataSourceParams({
+      source: resolved.source,
+      challengeText: resolved.text,
+      params: initialParams,
+      missingFields: dryRun.missingFields,
+      providerId: params.providerId,
+      model: params.model,
+    });
+    resolvedParams = compiled.params;
+    paramCompiler = compiled.metadata;
+    dryRun = await executeDataSourceAdapter({
+      sourceKey: resolved.source.sourceKey,
+      params: resolvedParams,
+      dryRun: true,
+    });
+  }
+
+  if (!dryRun.ok) {
+    return dataSourceNeedsReview(
+      dryRun.error || `Data-source router ${resolved.source.sourceKey} could not prepare a fetch.`,
+      traceFromDataSourceResult(dryRun, resolvedParams, paramCompiler),
+    );
+  }
+
+  const adapter = await executeDataSourceAdapter({
+    sourceKey: resolved.source.sourceKey,
+    params: resolvedParams,
+    dryRun: false,
+  });
+  const trace = traceFromDataSourceResult(adapter, resolvedParams, paramCompiler);
+  if (!adapter.ok) {
+    return dataSourceNeedsReview(
+      adapter.error || `Data-source router ${resolved.source.sourceKey} failed to fetch usable data.`,
+      trace,
+    );
+  }
+
+  try {
+    const completion = await completeOraclePromptWithMetadata({
+      providerId: params.providerId,
+      model: params.model,
+      maxTokens: 1200,
+      temperature: 0,
+      system: `You are a data-source-backed oracle judge for a credits challenge.
+
+Use ONLY the challenge rules and the returned API/router data. Do not rely on memory.
+Map Participant A to the creator/proposition-true side unless the rules explicitly say otherwise.
+Map Participant B to the opponent/proposition-false side when an opponent exists.
+Use settle_winner only when the API data directly answers the locked win condition, confidence >= 0.85, and there are no blocking issues.
+Return ONLY JSON.`,
+      user: `Challenge title: ${params.title}
+Description: ${params.description || "(none)"}
+Rules: ${params.rules || params.title}
+Deadline: ${params.deadlineIso || "(none)"}
+Participant A id: ${params.participantAId}
+Participant B id: ${params.participantBId || "(solo/no opponent)"}
+
+Data source:
+${JSON.stringify({
+  sourceKey: resolved.source.sourceKey,
+  provider: resolved.source.provider,
+  endpoint: resolved.source.endpoint,
+  fetchedAt: adapter.fetchedAt,
+  url: adapter.url,
+  params: resolvedParams,
+}, null, 2)}
+
+Returned data:
+${compactForPrompt(adapter.data)}
+
+Return JSON:
+{
+  "analysis": "how the API data maps to the win condition",
+  "winner": "A" | "B" | null,
+  "reasoning": "plain-language verdict",
+  "confidence": 0.0-1.0,
+  "evidenceQuality": "good" | "unclear" | "insufficient" | "invalid",
+  "recommendation": "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner",
+  "blockingIssues": []
+}`,
+    });
+    const parsed = asRecord(safeParseJson(completion.text));
+    if (!parsed) {
+      return dataSourceNeedsReview("Data-source judge returned no valid JSON verdict.", {
+        ...trace,
+        paramCompiler,
+      });
+    }
+    const winner = parsed?.winner;
+    if (winner !== "A" && winner !== "B" && winner !== null) {
+      return dataSourceNeedsReview("Data-source judge returned an invalid winner schema.", {
+        ...trace,
+        paramCompiler,
+      });
+    }
+    const confidence = typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
+      ? Math.max(0, Math.min(1, parsed.confidence))
+      : 0.4;
+    const winnerId =
+      winner === "A" ? params.participantAId :
+      winner === "B" ? params.participantBId :
+      null;
+    const recommendation = coerceRecommendation(parsed.recommendation) ??
+      (winnerId && confidence >= 0.85 ? "settle_winner" : "needs_review");
+    const evidenceQuality = ["good", "unclear", "insufficient", "invalid"].includes(String(parsed.evidenceQuality))
+      ? parsed.evidenceQuality as JudgmentResult["evidenceQuality"]
+      : (recommendation === "settle_winner" ? "good" : "unclear");
+    const issues = Array.isArray(parsed.blockingIssues)
+      ? parsed.blockingIssues.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    const reasoning = typeof parsed.reasoning === "string" && parsed.reasoning.trim()
+      ? parsed.reasoning.trim()
+      : "Data-source-backed judge reviewed the returned API data.";
+    const analysis = typeof parsed.analysis === "string" && parsed.analysis.trim()
+      ? `\n\n(Analysis: ${parsed.analysis.trim()})`
+      : "";
+    return {
+      winnerId,
+      reasoning: `${reasoning}${analysis}`,
+      confidence,
+      evidenceQuality,
+      recommendation,
+      settlementRecommendation: recommendation,
+      blockingIssues: issues,
+      source: "oracle",
+      providerCall: completion.metadata,
+      dataSourceTrace: trace,
+    };
+  } catch (error) {
+    return dataSourceNeedsReview(
+      `Data-source router fetched data, but the selected AI judge could not produce a valid verdict: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
+      trace,
+    );
+  }
+}
+
 function tryDeterministicObjectiveJudge(params: JudgeChallengeParams): JudgmentResult | null {
   if (!params.evidenceA) return null;
 
@@ -823,6 +1231,8 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
       source: "oracle",
     };
   }
+  const dataSourceVerdict = await tryDataSourceBackedJudge(params);
+  if (dataSourceVerdict) return dataSourceVerdict;
   const hasSharedSameCameraFlag = (evidence: JudgeEvidencePayload | null | undefined) =>
     evidence?.metadata?.sharedSameCamera === true || evidence?.metadata?.captureMode === "one_phone_same_camera";
 

@@ -287,7 +287,10 @@ function evidenceResult(
     ].join("\n"));
     if (!sourceMatch) {
       issues.push("Protocol requires an external data source, but no runtime data-source adapter matched it.");
-    } else if (!sourceMatch.autoSettlementGate.allowed) {
+    } else if (
+      !sourceMatch.autoSettlementGate.allowed &&
+      !(result?.source === "oracle" && result.dataSourceTrace?.status === "live")
+    ) {
       issues.push(sourceMatch.autoSettlementGate.reason);
     }
     if (result?.source !== "oracle" && mode === "public_oracle") {

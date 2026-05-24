@@ -396,6 +396,10 @@ Rules:
 - Mass crowd challenges should use participantMode="mass_crowd" and settlementProtocol.mode="leaderboard"; they should not look like a normal 1v1 challenge.
 - Crypto price challenges must be public-oracle protocols: lock the selected CoinGecko asset id, target USD price, condition, settlement time, setup-time price snapshot, and use settlementProtocol.mode="auto_oracle".
 - Weather rain/temperature challenges must be public-oracle protocols: lock Open-Meteo location latitude/longitude, date, metric, target, condition, setup-time weather snapshot, and use settlementProtocol.mode="auto_oracle".
+- For any external/public data-source challenge, include machine-readable judge instructions when possible:
+  DATA_SOURCE_KEY: <registered source key>
+  DATA_SOURCE_PARAMS: {"required_field":"locked value"}
+  If a required adapter field is unknown, list it in evidenceProtocol.requiredMetadata and manualReviewTriggers instead of inventing it.
 - Auto-settle requires protocol, identity, evidence, outcome, risk, and confidence gates. Default confidence threshold is 0.85.
 - Payment policy is supplied in Context.paymentPolicy. If cashStakeAllowed is not true, do not propose real-money stakes, cash payouts, USDC/ETH stakes, or Stripe-funded wager balances; use internal credits/points only and explain the jurisdiction restriction in riskPolicy.restrictions when the user asked for cash.
 - If cashStakeAllowed is true, you may describe the challenge as cash-compatible, but still require protocol/evidence/identity/risk gates and do not bypass manual review triggers for high stakes.`;

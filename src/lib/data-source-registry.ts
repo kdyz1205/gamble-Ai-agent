@@ -204,8 +204,8 @@ function gateFor(source: RegisteredDataSource): DataSourceMatch["autoSettlementG
   }
   if (source.connectionStatus === "live_fetch_connected") {
     return {
-      allowed: false,
-      reason: `${source.provider} raw fetch adapter is connected, but no verified outcome evaluator exists yet; manual review is required before settlement.`,
+      allowed: true,
+      reason: `${source.provider} live fetch is connected; auto-settlement is allowed only when the router fetch succeeds, the selected AI judge explains the result from returned data, and protocol gates pass.`,
     };
   }
   return {
@@ -228,7 +228,7 @@ export function implementedDataSourceAdapters() {
 
 export function canAutoSettleWithDataSource(sourceKey: string) {
   const source = getDataSourceAdapter(sourceKey);
-  return Boolean(source?.autoSettleAllowed);
+  return Boolean(source?.autoSettleAllowed || source?.connectionStatus === "live_fetch_connected");
 }
 
 export function resolveDataSourceForPrompt(prompt: string): DataSourceMatch | null {

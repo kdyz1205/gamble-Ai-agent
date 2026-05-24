@@ -768,6 +768,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   source?: string;
   providerCall?: unknown;
   videoMetrics?: unknown;
+  dataSourceTrace?: unknown;
   verdict: {
     status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
     winnerId: string | null;
@@ -780,6 +781,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
     source?: string;
     providerCall?: unknown;
     videoMetrics?: unknown;
+    dataSourceTrace?: unknown;
   };
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
