@@ -283,22 +283,40 @@ try {
   );
   requireCheck(
     proof,
-    "first_rejudge_policy_blocks_hard_protocol_failure",
-    firstRejudgePlan?.action === "manual_review" &&
+    "first_protocol_gates_pass",
+    firstVerdict?.protocolCompliance?.passed === true &&
+      firstVerdict?.identityResult?.passed === true &&
+      firstVerdict?.evidenceResult?.passed === true &&
+      firstVerdict?.settlementEligibility?.eligible === true &&
+      !hasBlockingIssue(firstVerdict, "ProtocolSpecV2 is missing"),
+    {
+      protocolCompliance: firstVerdict?.protocolCompliance,
+      identityResult: firstVerdict?.identityResult,
+      evidenceResult: firstVerdict?.evidenceResult,
+      settlementEligibility: firstVerdict?.settlementEligibility,
+      blockingIssues: firstVerdict?.blockingIssues,
+    },
+  );
+  requireCheck(
+    proof,
+    "first_rejudge_policy_skips_when_settlement_eligible",
+    firstRejudgePlan?.action === "none" &&
       firstRejudgePlan?.shouldRunRejudge === false &&
-      firstRejudgePlan?.reason === "hard_protocol_identity_or_evidence_failure",
+      firstRejudgePlan?.reason === "verdict_already_eligible_for_settlement",
     firstRejudgePlan,
   );
   requireCheck(
     proof,
-    "protocol_gate_blocks_auto_settle",
-    firstVerdict?.autoSettleEligible === false &&
-      firstVerdict?.settlementEligibility?.eligible === false &&
-      hasBlockingIssue(firstVerdict, "ProtocolSpecV2 is missing"),
+    "first_verdict_is_auto_settle_eligible_but_not_settled",
+    firstVerdict?.autoSettleEligible === true &&
+      firstVerdict?.recommendation === "settle_winner" &&
+      first.status === "ai_verdict_ready" &&
+      afterFirst.challenge.status !== "settled",
     {
       autoSettleEligible: firstVerdict?.autoSettleEligible,
-      settlementEligibility: firstVerdict?.settlementEligibility,
-      blockingIssues: firstVerdict?.blockingIssues,
+      recommendation: firstVerdict?.recommendation,
+      firstStatus: first.status,
+      afterFirstStatus: afterFirst.challenge.status,
     },
   );
   requireCheck(
