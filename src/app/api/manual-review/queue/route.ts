@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
         challengeId: challenge.id,
         title: challenge.title,
         status: challenge.status,
+        stake: challenge.stake,
+        stakeToken: challenge.stakeToken,
         updatedAt: challenge.updatedAt,
         createdAt: challenge.createdAt,
         creator: challenge.creator,

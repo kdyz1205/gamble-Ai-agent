@@ -187,9 +187,9 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
   manual_review: {
     status: "runtime_backed",
     summary: "Manual review has dispute, queue, policy, and resolve APIs with audited winner/refund/void outcomes.",
-    evidence: ["src/lib/manual-review-policy.ts", "src/app/api/manual-review/queue/route.ts", "src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts", "scripts/smoke-manual-review-policy.ts"],
-    missing: ["No reviewer assignment, SLA, appeal flow, browser dashboard, or latest production dispute -> resolve ledger proof."],
-    nextProof: "Build manual review queue and run dispute -> resolve -> ledger proof.",
+    evidence: ["src/lib/manual-review-policy.ts", "src/app/api/manual-review/queue/route.ts", "src/app/manual-review/page.tsx", "src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts", "scripts/smoke-manual-review-policy.ts"],
+    missing: ["No reviewer assignment, SLA, appeal flow, or latest production dispute -> resolve ledger proof."],
+    nextProof: "Run dispute -> manual-review queue -> resolve -> ledger proof in production-equivalent E2E.",
   },
 };
 

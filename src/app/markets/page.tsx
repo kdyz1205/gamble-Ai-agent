@@ -273,6 +273,13 @@ export default function MarketsPage() {
             {loading ? "Refreshing" : "Refresh"}
           </button>
           <Link
+            href="/manual-review"
+            className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
+            style={{ color: ROSE_TEXT, background: ROSE_BG, border: "1px solid #FDA4AF", borderRadius: "9999px" }}
+          >
+            Review
+          </Link>
+          <Link
             href="/"
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{ color: PEACH_TEXT, background: CREAM, border: "1px solid #FFE0CC", borderRadius: "9999px" }}

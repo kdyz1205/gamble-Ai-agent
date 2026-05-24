@@ -855,6 +855,57 @@ export async function manualResolveChallenge(id: string, data: {
   });
 }
 
+export interface ManualReviewQueueItem {
+  challengeId: string;
+  title: string;
+  status: string;
+  stake: number;
+  stakeToken: string;
+  updatedAt: string;
+  createdAt: string;
+  creator: { id: string; username: string; image: string | null };
+  participants: Array<{
+    id: string;
+    userId: string;
+    role: string;
+    status: string;
+    username: string;
+    image: string | null;
+  }>;
+  evidenceCount: number;
+  judgmentCount: number;
+  participantCount: number;
+  latestEvidence: Array<{
+    id: string;
+    userId: string;
+    type: string;
+    createdAt: string;
+  }>;
+  latestJudgment: null | {
+    id: string;
+    winnerId: string | null;
+    winnerName: string | null;
+    confidence: number | null;
+    method: string;
+    aiModel: string | null;
+    createdAt: string;
+  };
+  canResolve: boolean;
+  resolveUrl: string;
+  disputeUrl: string;
+}
+
+export async function getManualReviewQueue(params?: { limit?: number }): Promise<{
+  items: ManualReviewQueueItem[];
+  count: number;
+  statuses: string[];
+}> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  return apiFetch(`/manual-review/queue${suffix}`);
+}
+
 /* ── AI Parse & Tweak ── */
 
 export interface StakeOption {
