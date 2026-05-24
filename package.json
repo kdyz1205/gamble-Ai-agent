@@ -39,6 +39,7 @@
     "smoke:identity-evidence-gates": "tsx scripts/smoke-identity-evidence-gates.ts",
     "smoke:manual-review-policy": "tsx scripts/smoke-manual-review-policy.ts",
     "smoke:rejudge-escalation": "tsx scripts/smoke-rejudge-escalation.ts",
+    "smoke:legacy-protocol": "tsx scripts/smoke-legacy-protocol.ts",
     "smoke:challenge-100": "tsx scripts/smoke-100-challenge-crack-matrix.ts",
     "eval:llm-judgeability-140": "tsx scripts/eval-llm-judgeability-140.ts",
     "eval:diverse-judgeability-140": "tsx scripts/eval-diverse-judgeability-140.ts",

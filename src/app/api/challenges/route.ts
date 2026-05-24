@@ -9,6 +9,7 @@ import { generateLivenessPhrase } from "@/lib/liveness";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { createChallengeEventFromProtocol, isEventProtocol } from "@/lib/challenge-events";
 import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { legacyProtocolSpecFromRequest } from "@/lib/legacy-protocol";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 import { parseChallengeDeadline } from "@/lib/challenge-time";
 
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
       maxParticipants,
     } = body;
 
-    const protocolSpec = protocolFromRequest(body as Record<string, unknown>);
+    let protocolSpec = protocolFromRequest(body as Record<string, unknown>);
     if (protocolSpec && !protocolSpec.riskPolicy.allowed) {
       return Response.json(
         {
@@ -211,6 +212,25 @@ export async function POST(req: NextRequest) {
     const resolvedMaxParticipants = maxParticipantsForProtocol(protocolSpec, maxParticipants);
 
     if (!resolvedTitle) return Response.json({ error: "title is required" }, { status: 400 });
+    if (!protocolSpec) {
+      protocolSpec = legacyProtocolSpecFromRequest({
+        rawPrompt: (body as Record<string, unknown>).rawPrompt,
+        title: resolvedTitle,
+        description: resolvedDescription,
+        proposition: resolvedProposition,
+        type: resolvedType,
+        rules: resolvedRules,
+        evidenceType: resolvedEvidenceType,
+        settlementMode: resolvedSettlementMode,
+        stake,
+        isPublic: resolvedIsPublic,
+        visibility: resolvedVisibility,
+        discoveryLat,
+        discoveryLng,
+        deadline: deadline || eventTime || joinWindow || proofWindow,
+        aiReview,
+      });
+    }
     const safety = evaluateRuleSafety([
       resolvedTitle,
       resolvedDescription,
