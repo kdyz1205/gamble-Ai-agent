@@ -9,8 +9,8 @@ export const metadata: Metadata = {
   description:
     "Turn real-world challenges into playable, provable games with rules, evidence, AI judging, and credits.",
   icons: {
-    icon: "/brand/axelrod-avatar-logo.svg",
-    apple: "/brand/axelrod-avatar-logo.svg",
+    icon: "/brand/axelrod-face-logo.png",
+    apple: "/brand/axelrod-face-logo-180.png",
   },
 };
 

@@ -5,78 +5,11 @@ type BrandMarkProps = {
 
 export default function BrandMark({ className = "h-9 w-9", label = "Axelrod" }: BrandMarkProps) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label={label}
-      focusable="false"
-    >
-      <circle cx="32" cy="32" r="30" fill="#ECFDF5" />
-      <circle cx="32" cy="32" r="29" fill="none" stroke="#A7F3D0" strokeWidth="2" />
-      <path
-        d="M14 31c1.5-12 9.7-20 22.6-19.2 9.6.6 15.7 6.5 16.2 15.3-5.5-5-12.1-7.4-19.7-7.1-8.8.3-15.2 4.2-19.1 11z"
-        fill="#111827"
-      />
-      <path
-        d="M17 28c4.4-8.2 11.5-12.6 21.2-12.1 5 .2 9.2 1.8 12.7 4.8-3.9-.4-7.5.2-10.7 1.9-2.6 1.4-4.8 3.3-6.7 5.7-4.7-3.1-10.2-3.2-16.5-.3z"
-        fill="#1F2937"
-      />
-      <path
-        d="M18.3 32.5c.4-4.6 3.3-8 8.2-10.2 6.2-2.8 14.2-1.6 19.3 2.6 2.2 1.8 3.4 4.3 3.6 7.4.5 8.8-5.7 16.8-14.9 18-9.9 1.2-17.1-5.7-16.2-17.8z"
-        fill="#FED7AA"
-      />
-      <path
-        d="M20.4 33.1c3.6-2.4 7.4-3.6 11.2-3.5 6.8.2 12.3 3.6 16.8 10.3-2.1 5.3-7 9.5-13.8 10.4-9.8 1.1-16.9-5.7-16-17.6.6.1 1.2.2 1.8.4z"
-        fill="#FDBA74"
-        opacity=".33"
-      />
-      <path
-        d="M20.1 29.8c1.8-5.7 6.6-8.8 14.4-9.4 7.2-.6 12.2 1.8 15.1 7.1-4.4-2.2-8.7-3.1-12.9-2.8-6.7.5-12.2 2.2-16.6 5.1z"
-        fill="#111827"
-      />
-      <path
-        d="M23.5 34.7c2.4-1.1 4.9-1.1 7.4-.1"
-        stroke="#172033"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M37 34.8c2.3-1 4.6-1 7 .1"
-        stroke="#172033"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M33.2 35.4c-1 2.8-1.4 5-.8 6.6.3.8 1.1 1.2 2.2 1.2"
-        stroke="#9A3412"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity=".45"
-      />
-      <path
-        d="M28 46.5c3.1 1.5 6.2 1.5 9.3 0"
-        stroke="#991B1B"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        fill="none"
-        opacity=".75"
-      />
-      <path
-        d="M13.6 31c3.1-4 7.8-6.2 14.1-6.6 5.4-.3 10.7.9 15.8 3.6-4.7-5.7-11.4-8.1-20-7.2-5.2 2-8.5 5.4-9.9 10.2z"
-        fill="#0B1220"
-        opacity=".86"
-      />
-      <path
-        d="M41 13c5.8 2.1 9.6 6 11.3 11.9"
-        stroke="#10B981"
-        strokeWidth="2"
-        strokeLinecap="round"
-        opacity=".55"
-      />
-    </svg>
+    <img
+      src="/brand/axelrod-face-logo-180.png"
+      alt={label}
+      className={`${className} rounded-full object-cover`}
+      draggable={false}
+    />
   );
 }
