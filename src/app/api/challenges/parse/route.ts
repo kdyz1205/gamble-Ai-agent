@@ -154,6 +154,7 @@ export async function POST(req: NextRequest) {
       creditsUsed: 0,
       creditsRemaining: balance,
       dailyQuota: compiled.dailyQuota,
+      agentGraph: compiled.agentGraph,
       txHash: null,
       freeMode: true,
     });

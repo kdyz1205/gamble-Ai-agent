@@ -16,6 +16,7 @@ import { cryptoPriceProtocolFromPrompt } from "@/lib/crypto-price-oracle";
 import { weatherProtocolFromPrompt } from "@/lib/weather-oracle";
 import { applyDataSourceGateToProtocol } from "@/lib/data-source-registry";
 import { parseChallengeDeadline, stripDeadlineArtifacts } from "@/lib/challenge-time";
+import { routeCompiledProtocol } from "@/lib/agent/agent-graph";
 
 export type CompileProtocolSource = "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback";
 
@@ -551,6 +552,12 @@ export async function compileProtocolForUser(input: {
       externalApiCharged: false,
       providerCall: null,
       dailyQuota: await getDailyAiQuotaStatus(input.userId),
+      agentGraph: routeCompiledProtocol(protocol, {
+        source: input.route ?? "/api/challenges/compile",
+        compileSource: "safety_prefilter",
+        providerId: "safety_prefilter",
+        model: "rule-safety",
+      }),
     };
   }
 
@@ -570,6 +577,12 @@ export async function compileProtocolForUser(input: {
       externalApiCharged: false,
       providerCall: null,
       dailyQuota: await getDailyAiQuotaStatus(input.userId),
+      agentGraph: routeCompiledProtocol(deterministicOracleProtocol, {
+        source: input.route ?? "/api/challenges/compile",
+        compileSource: "deterministic_oracle",
+        providerId: "deterministic_oracle",
+        model: "crypto-price-v1",
+      }),
     };
   }
 
@@ -589,6 +602,12 @@ export async function compileProtocolForUser(input: {
       externalApiCharged: false,
       providerCall: null,
       dailyQuota: await getDailyAiQuotaStatus(input.userId),
+      agentGraph: routeCompiledProtocol(deterministicWeatherProtocol, {
+        source: input.route ?? "/api/challenges/compile",
+        compileSource: "deterministic_oracle",
+        providerId: "deterministic_oracle",
+        model: "weather-open-meteo-v1",
+      }),
     };
   }
 
@@ -666,6 +685,13 @@ export async function compileProtocolForUser(input: {
       providerCall: completion.metadata,
       fallbackReason: fallbackReason ?? undefined,
       dailyQuota: quota.status,
+      agentGraph: routeCompiledProtocol(repairedProtocol, {
+        source: input.route ?? "/api/challenges/compile",
+        compileSource: fallbackReason ? "fallback" : "llm",
+        providerId: provider.id,
+        model: selectedModel,
+        fallbackReason,
+      }),
     };
   } catch (error) {
     await refundDailyAiQuota(input.userId, "spec").catch(() => null);

@@ -239,6 +239,7 @@ export async function POST(req: NextRequest) {
         draftState: nextDraftState,
         llmCall: summarizeProviderCall(compiled.providerCall),
         dailyQuota: compiled.dailyQuota,
+        agentGraph: compiled.agentGraph,
       });
     } catch (err) {
       const status = err instanceof CompileRequestError ? err.status : 500;

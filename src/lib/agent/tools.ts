@@ -234,6 +234,7 @@ async function compileProtocolTool(ctx: ToolContext, args: Record<string, unknow
       externalApiCharged: compiled.externalApiCharged,
       providerCall: compiled.providerCall,
       dailyQuota: compiled.dailyQuota,
+      agentGraph: compiled.agentGraph,
       draftPatch,
     },
   };

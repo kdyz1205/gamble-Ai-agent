@@ -20,6 +20,7 @@ import { logAiUsage } from "@/lib/ai-usage-log";
 import { completeOraclePromptWithMetadata, type LlmCallMetadata } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
+import { routeAgentTool, routeAgentTurn } from "./agent-graph";
 import { executeAgentTool } from "./tools";
 import {
   emptyDraftState,
@@ -131,6 +132,13 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
       toolArgs: null,
       draftState,
       llmCall,
+      agentGraph: routeAgentTurn({
+        source: "/api/agent/respond",
+        message: input.message,
+        action: "ask_followup",
+        toolName: null,
+        draftState,
+      }),
     };
   }
 
@@ -161,6 +169,13 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   let finalPatch = validated.draftPatch;
   let finalDraftState = newDraftState;
   let groundedLlmCall: ReturnType<typeof summarizeLlmCall> | undefined;
+  let agentGraph = routeAgentTurn({
+    source: "/api/agent/respond",
+    message: input.message,
+    action: validated.agentAction,
+    toolName: validated.toolName,
+    draftState: newDraftState,
+  });
 
   if (validated.toolName) {
     const result = await executeAgentTool(
@@ -198,6 +213,14 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     // tool), do a grounded 2nd turn so the reply reflects real data. For
     // clean `call_tool` responses we trust the first reply (usually a short
     // "doing it now…" placeholder before the client renders toolResult).
+    agentGraph = routeAgentTool(validated.toolName, {
+      source: "/api/agent/respond",
+      draftState: finalDraftState,
+      toolOk: result.ok,
+      toolError: result.ok ? null : result.error ?? "tool_failed",
+      resultStatus: extractToolResultStatus(result.data),
+    });
+
     const firstReplyWasUngrounded = validated.agentAction !== "call_tool";
     if (firstReplyWasUngrounded) {
       const grounded = await groundedReplyTurn({
@@ -236,6 +259,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     toolError,
     llmCall,
     groundedLlmCall,
+    agentGraph,
   };
 }
 
@@ -320,6 +344,13 @@ function extractDraftPatchFromToolResult(data: unknown): Partial<DraftState> | n
 }
 
 /** Merge safety notes by union — never lose a redirect. */
+function extractToolResultStatus(data: unknown): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const record = data as Record<string, unknown>;
+  const status = record.status ?? record.finalStatus;
+  return typeof status === "string" ? status : null;
+}
+
 function mergeSafetyNotes(prev: string[], next: unknown): string[] {
   const a = Array.isArray(prev) ? prev : [];
   const b = Array.isArray(next) ? next.filter((x): x is string => typeof x === "string") : [];

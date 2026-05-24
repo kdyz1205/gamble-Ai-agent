@@ -35,6 +35,7 @@ import {
   type VerdictStatus,
 } from "@/lib/judgment-policy";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
+import { routeJudgmentOutcome } from "@/lib/agent/agent-graph";
 
 /**
  * POST /api/challenges/[id]/judge
@@ -235,6 +236,15 @@ export async function POST(
       identityResult: protocolGates.identityResult,
       evidenceResult: protocolGates.evidenceResult,
       settlementEligibility: protocolGates.settlementEligibility,
+      agentGraph: routeJudgmentOutcome({
+        source: "/api/challenges/[id]/judge",
+        verdictStatus,
+        winnerId: result.winnerId,
+        confidence: result.confidence,
+        recommendation,
+        autoSettleEligible: autoSettlePolicy.eligible,
+        blockingIssues,
+      }),
     };
 
     if (!autoSettlePolicy.eligible) {
@@ -662,6 +672,15 @@ export async function POST(
     identityResult: protocolGates.identityResult,
     evidenceResult: protocolGates.evidenceResult,
     settlementEligibility: protocolGates.settlementEligibility,
+    agentGraph: routeJudgmentOutcome({
+      source: "/api/challenges/[id]/judge",
+      verdictStatus,
+      winnerId: result.winnerId,
+      confidence: result.confidence,
+      recommendation,
+      autoSettleEligible: autoSettlePolicy.eligible,
+      blockingIssues,
+    }),
   } satisfies {
     status: VerdictStatus;
     winnerId: string | null;
@@ -681,6 +700,7 @@ export async function POST(
     identityResult: unknown;
     evidenceResult: unknown;
     settlementEligibility: unknown;
+    agentGraph: unknown;
   };
 
   if (!shouldAutoSettle) {

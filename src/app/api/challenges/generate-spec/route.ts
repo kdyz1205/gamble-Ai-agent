@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       externalApiCharged: compiled.externalApiCharged,
       providerCall: compiled.providerCall,
       dailyQuota: compiled.dailyQuota,
+      agentGraph: compiled.agentGraph,
     });
   } catch (error) {
     const status = error instanceof CompileRequestError ? error.status : 502;

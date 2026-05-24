@@ -1,5 +1,6 @@
 import type { DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import type { ProtocolPreviewV2, ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import type { AgentGraphTrace } from "./agent-graph";
 
 /**
  * Agent Orchestrator — shared types.
@@ -105,6 +106,7 @@ export interface RawAgentResponse {
 export interface AgentResponse extends RawAgentResponse {
   draftState: DraftState;         // merged state after applying draftPatch
   toolResult?: unknown;           // result of executing toolName (if any). Shape varies per tool.
+  agentGraph?: AgentGraphTrace;
   toolError?: string;             // present when the tool call failed — orchestrator can surface this.
 }
 export interface AgentLlmCallSummary {
@@ -120,4 +122,5 @@ export interface AgentResponse {
   llmCall?: AgentLlmCallSummary;
   groundedLlmCall?: AgentLlmCallSummary;
   dailyQuota?: DailyAiQuotaStatus;
+  agentGraph?: AgentGraphTrace;
 }

@@ -1,4 +1,5 @@
 import type { ProtocolPreviewV2, ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import type { AgentGraphTrace } from "@/lib/agent/agent-graph";
 
 export type { ProtocolPreviewV2, ProtocolSpecV2 };
 
@@ -499,6 +500,7 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   providerCall?: unknown;
   fallbackReason?: string;
   dailyQuota?: DailyAiQuotaStatus;
+  agentGraph?: AgentGraphTrace;
 }> {
   return apiFetch("/challenges/generate-spec", {
     method: "POST",
@@ -522,6 +524,7 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   providerCall?: unknown;
   fallbackReason?: string;
   dailyQuota?: DailyAiQuotaStatus;
+  agentGraph?: AgentGraphTrace;
 }> {
   return apiFetch("/challenges/compile", {
     method: "POST",
@@ -769,6 +772,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerCall?: unknown;
   videoMetrics?: unknown;
   dataSourceTrace?: unknown;
+  agentGraph?: AgentGraphTrace;
   verdict: {
     status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
     winnerId: string | null;
@@ -782,6 +786,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
     providerCall?: unknown;
     videoMetrics?: unknown;
     dataSourceTrace?: unknown;
+    agentGraph?: AgentGraphTrace;
   };
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
@@ -971,6 +976,7 @@ export interface AgentResponse {
     durationMs?: number | null;
   };
   dailyQuota?: DailyAiQuotaStatus;
+  agentGraph?: AgentGraphTrace;
 }
 
 export function emptyAgentDraftState(): AgentDraftState {
