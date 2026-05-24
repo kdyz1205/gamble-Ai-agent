@@ -120,6 +120,23 @@ function requireCheck(proof, name, passed, detail) {
   if (!passed) throw new Error(`E2E check failed: ${name}`);
 }
 
+function responseVerdict(response) {
+  return response?.verdict ?? response ?? {};
+}
+
+function responseProviderCall(response) {
+  return response?.providerCall ?? response?.verdict?.providerCall ?? null;
+}
+
+function responseRejudgePlan(response) {
+  return response?.rejudgePlan ?? response?.verdict?.rejudgePlan ?? null;
+}
+
+function hasBlockingIssue(verdict, needle) {
+  return Array.isArray(verdict?.blockingIssues) &&
+    verdict.blockingIssues.some((issue) => String(issue).toLowerCase().includes(needle.toLowerCase()));
+}
+
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = {
   base,
@@ -197,24 +214,36 @@ try {
   const creatorTxs = creatorCredits.transactions.filter((tx) => tx.challengeId === challengeId);
   const judgeRows = creatorTxs.filter((tx) => tx.type === "ai_judge");
   const refundRows = creatorTxs.filter((tx) => tx.type === "refund");
+  const firstVerdict = responseVerdict(first);
+  const secondVerdict = responseVerdict(second);
+  const firstProviderCall = responseProviderCall(first);
+  const secondProviderCall = responseProviderCall(second);
+  const firstRejudgePlan = responseRejudgePlan(first);
+  const secondRejudgePlan = responseRejudgePlan(second);
 
   proof.firstJudgment = {
     id: first.judgment.id,
     source: first.source,
     model: first.model,
+    tierId: first.tierId,
     status: first.status,
     creditsUsed: first.creditsUsed,
     creditsRefunded: first.creditsRefunded ?? 0,
-    providerCall: first.providerCall ?? first.verdict?.providerCall ?? null,
+    providerCall: firstProviderCall,
+    rejudgePlan: firstRejudgePlan,
+    agentGraph: firstVerdict.agentGraph ?? null,
   };
   proof.secondJudgment = {
     id: second.judgment.id,
     source: second.source,
     model: second.model,
+    tierId: second.tierId,
     status: second.status,
     creditsUsed: second.creditsUsed,
     creditsRefunded: second.creditsRefunded ?? 0,
-    providerCall: second.providerCall ?? second.verdict?.providerCall ?? null,
+    providerCall: secondProviderCall,
+    rejudgePlan: secondRejudgePlan,
+    agentGraph: secondVerdict.agentGraph ?? null,
   };
   proof.finalChallengeStatus = afterSecond.challenge.status;
   proof.creditTx = creatorTxs.map(txView);
@@ -222,8 +251,6 @@ try {
   requireCheck(proof, "second_judgment_created", afterSecond.challenge.judgments.length === 2, afterSecond.challenge.judgments.map((j) => j.id));
   requireCheck(proof, "second_is_new_judgment", first.judgment.id !== second.judgment.id, { first: first.judgment.id, second: second.judgment.id });
   requireCheck(proof, "second_not_fallback", second.source !== "fallback", second);
-  const firstProviderCall = first.providerCall ?? first.verdict?.providerCall ?? null;
-  const secondProviderCall = second.providerCall ?? second.verdict?.providerCall ?? null;
   requireCheck(proof, "first_provider_call_recorded", Boolean(firstProviderCall), firstProviderCall);
   requireCheck(proof, "first_provider_call_used_api", firstProviderCall?.usedApi === true, firstProviderCall);
   requireCheck(proof, "first_provider_call_http_200", firstProviderCall?.httpStatus === 200 || firstProviderCall?.httpStatus == null, firstProviderCall);
@@ -232,10 +259,56 @@ try {
   requireCheck(proof, "second_provider_call_used_api", secondProviderCall?.usedApi === true, secondProviderCall);
   requireCheck(proof, "second_provider_call_http_200", secondProviderCall?.httpStatus === 200 || secondProviderCall?.httpStatus == null, secondProviderCall);
   requireCheck(proof, "second_provider_response_id_present", typeof secondProviderCall?.responseId === "string" && secondProviderCall.responseId.length > 0, secondProviderCall);
+  requireCheck(proof, "second_uses_stronger_model", /gpt-4o/i.test(`${second.model} ${secondProviderCall?.model ?? ""}`), {
+    model: second.model,
+    providerModel: secondProviderCall?.model,
+  });
+  requireCheck(proof, "second_cost_more_than_first", Number(second.creditsUsed) > Number(first.creditsUsed), {
+    firstCreditsUsed: first.creditsUsed,
+    secondCreditsUsed: second.creditsUsed,
+  });
   requireCheck(proof, "still_not_settled_without_confirm", afterSecond.challenge.status !== "settled", afterSecond.challenge.status);
   requireCheck(proof, "two_ai_judge_rows", judgeRows.length === 2, judgeRows.map(txView));
-  requireCheck(proof, "first_cost_spent", judgeRows.some((tx) => tx.amount === -1), judgeRows.map(txView));
-  requireCheck(proof, "second_cost_spent", judgeRows.some((tx) => tx.amount === -5), judgeRows.map(txView));
+  requireCheck(
+    proof,
+    "first_cost_matches_response",
+    judgeRows.some((tx) => tx.amount === -Number(first.creditsUsed) && /^Judge:/.test(String(tx.description ?? ""))),
+    { creditsUsed: first.creditsUsed, rows: judgeRows.map(txView) },
+  );
+  requireCheck(
+    proof,
+    "second_cost_matches_response",
+    judgeRows.some((tx) => tx.amount === -Number(second.creditsUsed) && /^Rejudge:/.test(String(tx.description ?? ""))),
+    { creditsUsed: second.creditsUsed, rows: judgeRows.map(txView) },
+  );
+  requireCheck(
+    proof,
+    "first_rejudge_policy_blocks_hard_protocol_failure",
+    firstRejudgePlan?.action === "manual_review" &&
+      firstRejudgePlan?.shouldRunRejudge === false &&
+      firstRejudgePlan?.reason === "hard_protocol_identity_or_evidence_failure",
+    firstRejudgePlan,
+  );
+  requireCheck(
+    proof,
+    "protocol_gate_blocks_auto_settle",
+    firstVerdict?.autoSettleEligible === false &&
+      firstVerdict?.settlementEligibility?.eligible === false &&
+      hasBlockingIssue(firstVerdict, "ProtocolSpecV2 is missing"),
+    {
+      autoSettleEligible: firstVerdict?.autoSettleEligible,
+      settlementEligibility: firstVerdict?.settlementEligibility,
+      blockingIssues: firstVerdict?.blockingIssues,
+    },
+  );
+  requireCheck(
+    proof,
+    "second_rejudge_policy_stops_after_attempt",
+    secondRejudgePlan?.action === "manual_review" &&
+      secondRejudgePlan?.shouldRunRejudge === false &&
+      ["max_rejudge_attempts_reached", "hard_protocol_identity_or_evidence_failure"].includes(secondRejudgePlan?.reason),
+    secondRejudgePlan,
+  );
   requireCheck(
     proof,
     "provider_neutral_tier_labels",
