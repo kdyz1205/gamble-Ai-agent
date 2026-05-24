@@ -9,6 +9,7 @@ import {
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured } from "./llm-providers";
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "./crypto-price-oracle";
+import { extractWeatherOracleSpec, judgeWeatherOracle } from "./weather-oracle";
 import {
   prepareParticipantVisuals,
   prepareParticipantVisualsFast,
@@ -783,6 +784,30 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   if (cryptoOracleSpec) {
     const oracle = await judgeCryptoPriceOracle({
       spec: cryptoOracleSpec,
+      participantAId,
+      participantBId,
+    });
+    if (oracle.status === "ready") return oracle.result;
+    return {
+      winnerId: null,
+      reasoning: oracle.reason,
+      confidence: 0.4,
+      evidenceQuality: "unclear",
+      recommendation: "needs_review",
+      settlementRecommendation: "needs_review",
+      blockingIssues: [oracle.reason],
+      source: "oracle",
+    };
+  }
+  const weatherOracleSpec = extractWeatherOracleSpec({
+    title,
+    description: params.description,
+    rules,
+    deadlineIso: params.deadlineIso,
+  });
+  if (weatherOracleSpec) {
+    const oracle = await judgeWeatherOracle({
+      spec: weatherOracleSpec,
       participantAId,
       participantBId,
     });

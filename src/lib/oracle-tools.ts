@@ -41,6 +41,15 @@ export interface CoinGeckoResolvedAsset extends CoinGeckoAssetMatch {
   publicUrl: string;
 }
 
+export interface WeatherLocation {
+  name: string;
+  country?: string | null;
+  admin1?: string | null;
+  latitude: number;
+  longitude: number;
+  timezone?: string | null;
+}
+
 const COINGECKO_SYMBOL_MAP: Record<string, string> = {
   btc: "bitcoin",
   bitcoin: "bitcoin",
@@ -83,6 +92,10 @@ const PRICE_CACHE_TTL_MS = 60_000;
 type SearchCacheEntry = { asset: CoinGeckoResolvedAsset; cachedAt: number };
 const searchCache = new Map<string, SearchCacheEntry>();
 const SEARCH_CACHE_TTL_MS = 10 * 60_000;
+
+type WeatherLocationCacheEntry = { location: WeatherLocation; cachedAt: number };
+const weatherLocationCache = new Map<string, WeatherLocationCacheEntry>();
+const WEATHER_LOCATION_CACHE_TTL_MS = 24 * 60 * 60_000;
 
 const BLOCKED_TICKER_WORDS = new Set(["usd"]);
 
@@ -282,6 +295,41 @@ export async function checkCryptoPrice(args: { symbol: string; coingeckoId?: str
   }
 }
 
+export async function resolveWeatherLocation(query: string): Promise<{ ok: true; location: WeatherLocation } | { ok: false; error: string }> {
+  const q = query.trim();
+  if (!q) return { ok: false, error: "Missing weather location" };
+  const cached = weatherLocationCache.get(q.toLowerCase());
+  if (cached && Date.now() - cached.cachedAt < WEATHER_LOCATION_CACHE_TTL_MS) {
+    return { ok: true, location: cached.location };
+  }
+
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 7000);
+    const res = await fetch(url, { signal: ac.signal, headers: { accept: "application/json" } });
+    clearTimeout(t);
+    if (!res.ok) return { ok: false, error: `Open-Meteo geocoding HTTP ${res.status}` };
+    const body = (await res.json()) as { results?: Array<Record<string, unknown>> };
+    const first = body.results?.[0];
+    if (!first || typeof first.latitude !== "number" || typeof first.longitude !== "number" || typeof first.name !== "string") {
+      return { ok: false, error: `Open-Meteo could not find location "${q}".` };
+    }
+    const location: WeatherLocation = {
+      name: first.name,
+      country: typeof first.country === "string" ? first.country : null,
+      admin1: typeof first.admin1 === "string" ? first.admin1 : null,
+      latitude: first.latitude,
+      longitude: first.longitude,
+      timezone: typeof first.timezone === "string" ? first.timezone : null,
+    };
+    weatherLocationCache.set(q.toLowerCase(), { location, cachedAt: Date.now() });
+    return { ok: true, location };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Open-Meteo — free, no key, generous rate limits.
  * For weather prediction markets: "Will it rain in Seattle on April 30?"
@@ -295,6 +343,8 @@ export async function checkWeatherForecast(args: {
   if (typeof latitude !== "number" || typeof longitude !== "number") {
     return { ok: false, source: "Open-Meteo", error: "latitude and longitude are required numbers" };
   }
+  const today = new Date().toISOString().slice(0, 10);
+  const useArchive = Boolean(date && date < today);
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
@@ -302,7 +352,10 @@ export async function checkWeatherForecast(args: {
     timezone: "auto",
     ...(date ? { start_date: date, end_date: date } : {}),
   });
-  const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+  const baseUrl = useArchive
+    ? "https://archive-api.open-meteo.com/v1/archive"
+    : "https://api.open-meteo.com/v1/forecast";
+  const url = `${baseUrl}?${params.toString()}`;
   try {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), 7000);
@@ -333,6 +386,8 @@ export async function checkWeatherForecast(args: {
           weatherCode: body.daily!.weathercode?.[i] ?? null,
         })),
         queriedAt: new Date().toISOString(),
+        requestedDate: date ?? null,
+        mode: useArchive ? "archive" : "forecast",
         publicUrl: `https://www.open-meteo.com/en/docs`,
       },
     };

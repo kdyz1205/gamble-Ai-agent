@@ -5,6 +5,7 @@ import { generateChallengeSpec } from "../src/lib/challenge-spec";
 import { cryptoPriceProtocolFromPrompt, extractCryptoPriceOracleSpec } from "../src/lib/crypto-price-oracle";
 import { protocolPreview, protocolSpecFromChallengeSpec } from "../src/lib/protocol-spec-v2";
 import { evaluateRuleSafety } from "../src/lib/rule-safety";
+import { weatherProtocolFromPrompt } from "../src/lib/weather-oracle";
 
 type Expected =
   | "vision"
@@ -157,6 +158,10 @@ function categoryFor(expected: Expected, protocolMode: string | null, safetyAllo
   return "protocol_generated";
 }
 
+function looksLikeWeatherOraclePrompt(prompt: string) {
+  return /\brain|raining|precipitation|temperature|temp|high|low|weather\b/i.test(prompt);
+}
+
 async function evaluateCase(testCase: Case) {
   const safety = evaluateRuleSafety(testCase.prompt);
   const shouldBlock = testCase.expected === "blocked" || testCase.expected === "review";
@@ -198,6 +203,20 @@ async function evaluateCase(testCase: Case) {
     };
   }
 
+  if (testCase.expected === "public_oracle" && looksLikeWeatherOraclePrompt(testCase.prompt)) {
+    const liveProtocol = await weatherProtocolFromPrompt(testCase.prompt, "en", new Date("2026-05-23T12:00:00.000Z"));
+    return {
+      ...testCase,
+      pass: Boolean(liveProtocol),
+      support: liveProtocol ? "auto_oracle" : "needs_oracle_adapter",
+      safetyCategory: safety.category,
+      protocolMode: liveProtocol?.settlementProtocol.mode ?? null,
+      evidenceMode: liveProtocol?.evidenceProtocol.mode ?? "public_oracle",
+      issue: liveProtocol ? null : "Weather oracle compiler did not lock location/date/metric/target.",
+      lockedLocation: liveProtocol?.settlementProtocol.judgeInstructions.find((line) => line.startsWith("ORACLE_WEATHER_LOCATION:")) ?? null,
+    };
+  }
+
   const spec = generateChallengeSpec(testCase.prompt);
   const protocol = protocolSpecFromChallengeSpec(spec, testCase.prompt, { language: languageFor(testCase.prompt) });
   const parsed = protocol ? protocolPreview(protocol) : null;
@@ -225,7 +244,7 @@ function toMarkdown(results: Array<Awaited<ReturnType<typeof evaluateCase>>>) {
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
-    "This is a no-paid-LLM coverage run. It validates the local safety gate, deterministic crypto oracle parser/resolver for the BEAT fixture, and deterministic fallback protocol generation. It does not prove arbitrary real-world video judgment.",
+    "This is a no-paid-LLM coverage run. It validates the local safety gate, deterministic crypto and weather oracle compilers, and deterministic fallback protocol generation. It does not prove arbitrary real-world video judgment.",
     "",
     "## Summary",
     "",

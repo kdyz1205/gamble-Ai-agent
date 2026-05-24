@@ -17,6 +17,7 @@ import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { logAiUsage } from "@/lib/ai-usage-log";
 import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "@/lib/crypto-price-oracle";
+import { extractWeatherOracleSpec, judgeWeatherOracle } from "@/lib/weather-oracle";
 import {
   combineAutoSettlePolicyWithProtocolGates,
   evaluateProtocolJudgmentGates,
@@ -103,6 +104,14 @@ export async function POST(
     rules: challenge.rules,
     deadlineIso: challenge.deadline?.toISOString() ?? null,
   });
+  const weatherOracleSpec = extractWeatherOracleSpec({
+    protocol,
+    title: challenge.title,
+    description: challenge.description,
+    proposition: challenge.proposition,
+    rules: challenge.rules,
+    deadlineIso: challenge.deadline?.toISOString() ?? null,
+  });
   const publicOracleJudgeStatuses = new Set<string>([
     ChallengeStatus.evidence_window_open,
     ChallengeStatus.creator_submitted,
@@ -110,7 +119,7 @@ export async function POST(
     ChallengeStatus.ai_reviewing,
     ChallengeStatus.judging,
   ]);
-  const canJudgePublicOracle = Boolean(cryptoOracleSpec) && publicOracleJudgeStatuses.has(challenge.status);
+  const canJudgePublicOracle = Boolean(cryptoOracleSpec || weatherOracleSpec) && publicOracleJudgeStatuses.has(challenge.status);
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
   if (isTerminalStatus(challenge.status)) {
     return Response.json({ error: "Terminal challenges cannot be rejudged after settlement/refund/void." }, { status: 409 });
@@ -127,12 +136,18 @@ export async function POST(
   const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
   if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
 
-  if (cryptoOracleSpec && !isRejudge) {
-    const oracle = await judgeCryptoPriceOracle({
-      spec: cryptoOracleSpec,
-      participantAId: creator.userId,
-      participantBId: opponent?.userId ?? null,
-    });
+  if ((cryptoOracleSpec || weatherOracleSpec) && !isRejudge) {
+    const oracle = cryptoOracleSpec
+      ? await judgeCryptoPriceOracle({
+          spec: cryptoOracleSpec,
+          participantAId: creator.userId,
+          participantBId: opponent?.userId ?? null,
+        })
+      : await judgeWeatherOracle({
+          spec: weatherOracleSpec!,
+          participantAId: creator.userId,
+          participantBId: opponent?.userId ?? null,
+        });
     if (oracle.status === "not_due") {
       return Response.json({
         error: oracle.reason,
@@ -169,7 +184,10 @@ export async function POST(
       ? autoSettlePolicy.blockingIssues
       : blockingIssuesForJudgment(result, judgmentPolicyOptions);
     const { evidenceQuality, recommendation } = effectiveJudgmentVerdictFields(result, autoSettlePolicy);
-    const effectiveAiModelLabel = "Oracle - CoinGecko simple-price";
+    const effectiveAiModelLabel = cryptoOracleSpec
+      ? "Oracle - CoinGecko simple-price"
+      : "Oracle - Open-Meteo daily-weather";
+    const effectiveOracleName = cryptoOracleSpec ? "CoinGecko oracle" : "Open-Meteo oracle";
     const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
     await logAiUsage({
       userId: user.userId,
@@ -352,7 +370,7 @@ export async function POST(
     await prisma.activityEvent.create({
       data: {
         type: "challenge_settled",
-        message: `"${challenge.title}" resolved by CoinGecko oracle; ${winnerName} wins${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}.`,
+        message: `"${challenge.title}" resolved by ${effectiveOracleName}; ${winnerName} wins${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}.`,
         userId: result.winnerId,
         challengeId: id,
       },
@@ -570,7 +588,7 @@ export async function POST(
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
       : result.source === "oracle"
-        ? "Oracle - CoinGecko simple-price"
+        ? `Oracle - ${result.providerCall?.providerLabel ?? "public oracle"} ${result.providerCall?.model ?? ""}`.trim()
       : result.source === "fallback"
         ? "Fallback - no-settlement-v1"
         : aiModelLabel;

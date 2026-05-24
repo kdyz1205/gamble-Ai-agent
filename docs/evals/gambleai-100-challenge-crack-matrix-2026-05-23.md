@@ -1,20 +1,20 @@
 # GambleAI 100 Challenge Crack Matrix
 
-Generated: 2026-05-23T23:56:53.338Z
+Generated: 2026-05-24T02:34:11.558Z
 
-This is a no-paid-LLM coverage run. It validates the local safety gate, deterministic crypto oracle parser/resolver for the BEAT fixture, and deterministic fallback protocol generation. It does not prove arbitrary real-world video judgment.
+This is a no-paid-LLM coverage run. It validates the local safety gate, deterministic crypto and weather oracle compilers, and deterministic fallback protocol generation. It does not prove arbitrary real-world video judgment.
 
 ## Summary
 
 - Total cases: 100
 - Passed coverage checks: 100
 - Failed coverage checks: 0
-- auto_oracle: 10
+- auto_oracle: 12
 - blocked: 10
 - location_protocol: 10
 - manual_or_review: 10
 - mass_event_protocol: 5
-- needs_oracle_adapter: 5
+- needs_oracle_adapter: 3
 - protocol_generated: 20
 - review: 5
 - vision_gated: 25
@@ -88,8 +88,8 @@ This is a no-paid-LLM coverage run. It validates the local safety gate, determin
 | 63 | crypto_oracle | auto_oracle | yes | XRP below 1.50 by tomorrow 8pm. | clock deadline |  |
 | 64 | crypto_oracle | auto_oracle | yes | USDC stays above $0.99 today. | stablecoin oracle |  |
 | 65 | crypto_oracle | auto_oracle | yes | AVAX breaks above $80 next week. | break above |  |
-| 66 | public_oracle | needs_oracle_adapter | yes | Will it rain in Seattle tomorrow? | weather oracle intended |  |
-| 67 | public_oracle | needs_oracle_adapter | yes | Temperature in Phoenix over 100F this weekend. | weather threshold |  |
+| 66 | public_oracle | auto_oracle | yes | Will it rain in Seattle tomorrow? | weather oracle intended |  |
+| 67 | public_oracle | auto_oracle | yes | Temperature in Phoenix over 100F this weekend. | weather threshold |  |
 | 68 | public_oracle | needs_oracle_adapter | yes | Will Apple stock close above $250 next Friday? | market oracle not implemented |  |
 | 69 | public_oracle | needs_oracle_adapter | yes | Will Lakers win their next game? | sports oracle not deterministic |  |
 | 70 | public_oracle | needs_oracle_adapter | yes | Will the S&P 500 close green today? | market oracle not deterministic |  |

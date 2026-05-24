@@ -13,6 +13,7 @@ import { generateChallengeSpec } from "@/lib/challenge-spec";
 import { protocolPreview, parseProtocolSpecV2, protocolSpecFromChallengeSpec, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
 import { cryptoPriceProtocolFromPrompt } from "@/lib/crypto-price-oracle";
+import { weatherProtocolFromPrompt } from "@/lib/weather-oracle";
 
 export type CompileProtocolSource = "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback";
 
@@ -389,6 +390,7 @@ Rules:
 - Nearby or walk-by challenges should use locationProtocol.mode="nearby_discovery" or "walk_to_join", approximate public privacy, and a conservative radius.
 - Mass crowd challenges should use participantMode="mass_crowd" and settlementProtocol.mode="leaderboard"; they should not look like a normal 1v1 challenge.
 - Crypto price challenges must be public-oracle protocols: lock the selected CoinGecko asset id, target USD price, condition, settlement time, setup-time price snapshot, and use settlementProtocol.mode="auto_oracle".
+- Weather rain/temperature challenges must be public-oracle protocols: lock Open-Meteo location latitude/longitude, date, metric, target, condition, setup-time weather snapshot, and use settlementProtocol.mode="auto_oracle".
 - Auto-settle requires protocol, identity, evidence, outcome, risk, and confidence gates. Default confidence threshold is 0.85.
 - Payment policy is supplied in Context.paymentPolicy. If cashStakeAllowed is not true, do not propose real-money stakes, cash payouts, USDC/ETH stakes, or Stripe-funded wager balances; use internal credits/points only and explain the jurisdiction restriction in riskPolicy.restrictions when the user asked for cash.
 - If cashStakeAllowed is true, you may describe the challenge as cash-compatible, but still require protocol/evidence/identity/risk gates and do not bypass manual review triggers for high stakes.`;
@@ -446,6 +448,25 @@ export async function compileProtocolForUser(input: {
       source: "deterministic_oracle" as const,
       providerId: "deterministic_oracle",
       model: "crypto-price-v1",
+      externalApiCharged: false,
+      providerCall: null,
+      dailyQuota: await getDailyAiQuotaStatus(input.userId),
+    };
+  }
+
+  const deterministicWeatherProtocol = await weatherProtocolFromPrompt(inputText, language);
+  if (deterministicWeatherProtocol) {
+    console.log("[compile-protocol] deterministic weather oracle protocol", {
+      userId: input.userId,
+      title: deterministicWeatherProtocol.title,
+    });
+    return {
+      rawPrompt: inputText,
+      protocol: deterministicWeatherProtocol,
+      preview: protocolPreview(deterministicWeatherProtocol),
+      source: "deterministic_oracle" as const,
+      providerId: "deterministic_oracle",
+      model: "weather-open-meteo-v1",
       externalApiCharged: false,
       providerCall: null,
       dailyQuota: await getDailyAiQuotaStatus(input.userId),
