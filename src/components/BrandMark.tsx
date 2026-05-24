@@ -6,9 +6,9 @@ type BrandMarkProps = {
 export default function BrandMark({ className = "h-9 w-9", label = "Axelrod" }: BrandMarkProps) {
   return (
     <img
-      src="/brand/axelrod-face-logo-180.png"
+      src="/brand/axelrod-mark-180.png"
       alt={label}
-      className={`${className} rounded-full object-cover`}
+      className={`${className} object-contain`}
       draggable={false}
     />
   );
