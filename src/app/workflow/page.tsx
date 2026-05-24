@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  AGENT_READINESS,
   AGENT_GRAPH_REGISTRY,
   agentGraphCatalog,
   routeAgentTool,
@@ -194,8 +195,23 @@ function toneClass(tone: string) {
   return "border-sky-200 bg-sky-50 text-sky-950";
 }
 
+function readinessClass(status: string) {
+  if (status === "production_proven") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "runtime_backed") return "border-sky-200 bg-sky-50 text-sky-800";
+  if (status === "partial") return "border-orange-200 bg-orange-50 text-orange-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function readinessLabel(status: string) {
+  if (status === "production_proven") return "production proven";
+  if (status === "runtime_backed") return "runtime backed";
+  if (status === "partial") return "partial";
+  return "graph only";
+}
+
 function NodePill({ id, index }: { id: AgentNodeId; index?: number }) {
   const node = nodeById.get(id);
+  const readiness = AGENT_READINESS[id];
   return (
     <div className="min-w-[160px] flex-1 rounded-[20px] border border-white/80 bg-white/80 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
       <div className="mb-3 flex items-center gap-2">
@@ -209,6 +225,9 @@ function NodePill({ id, index }: { id: AgentNodeId; index?: number }) {
         </span>
       </div>
       <div className="text-sm font-extrabold text-slate-950">{node?.label ?? id}</div>
+      <div className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${readinessClass(readiness.status)}`}>
+        {readinessLabel(readiness.status)}
+      </div>
       <div className="mt-2 text-xs font-semibold leading-5 text-slate-600">{node?.output.slice(0, 2).join(" + ")}</div>
     </div>
   );
@@ -276,13 +295,16 @@ export default function WorkflowPage() {
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
             <div>
               <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-                Axelrod agent graph
+                Axelrod agent graph, not a completion claim
               </div>
               <h1 className="mt-3 max-w-4xl text-4xl font-black leading-tight text-slate-950 sm:text-6xl">
                 Prompt in. Protocol, evidence, verdict, payout out.
               </h1>
+              <p className="mt-5 max-w-3xl text-base font-bold leading-7 text-slate-600">
+                This page shows the current routing system and the honest implementation state. Green agents have production proof, blue agents have executable routes/tools, orange agents still need real E2E proof or missing product surfaces.
+              </p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="rounded-[18px] border border-slate-200 bg-white p-4">
                 <div className="text-3xl font-black text-slate-950">{catalog.nodes.length}</div>
                 <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500">agents</div>
@@ -291,12 +313,24 @@ export default function WorkflowPage() {
                 <div className="text-3xl font-black text-slate-950">{catalog.edges.length}</div>
                 <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500">calls</div>
               </div>
-              <div className="rounded-[18px] border border-slate-200 bg-white p-4">
-                <div className="text-3xl font-black text-slate-950">1</div>
-                <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500">source</div>
+              <div className="rounded-[18px] border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-3xl font-black text-emerald-800">{catalog.readinessSummary.production_proven}</div>
+                <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-emerald-700">proven</div>
+              </div>
+              <div className="rounded-[18px] border border-orange-200 bg-orange-50 p-4">
+                <div className="text-3xl font-black text-orange-800">{catalog.readinessSummary.partial}</div>
+                <div className="text-xs font-extrabold uppercase tracking-[0.12em] text-orange-700">partial</div>
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="mb-8 rounded-[28px] border border-orange-200 bg-orange-50/90 p-5 text-orange-950 shadow-[0_12px_36px_rgba(15,23,42,0.04)]">
+          <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-orange-700">current truth</div>
+          <h2 className="mt-2 text-2xl font-black">The graph exists. Several agents are still not fully finished.</h2>
+          <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-orange-900">
+            Fully finished means: independent runtime behavior, production or production-equivalent E2E proof, and no hidden manual assumption for that agent. The main unfinished blockers are real-world identity verification, arbitrary real phone video judging, automatic rejudge escalation, and a complete manual-review operator flow.
+          </p>
         </section>
 
         <section className="mb-8 grid gap-4 lg:grid-cols-4">
@@ -349,7 +383,16 @@ export default function WorkflowPage() {
                   {node.id.replaceAll("_", " ")}
                 </div>
                 <h3 className="mt-2 text-lg font-black text-slate-950">{node.label}</h3>
+                <div className={`mt-3 inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em] ${readinessClass(AGENT_READINESS[node.id].status)}`}>
+                  {readinessLabel(AGENT_READINESS[node.id].status)}
+                </div>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{node.responsibility}</p>
+                <p className="mt-2 text-xs font-bold leading-5 text-slate-500">{AGENT_READINESS[node.id].summary}</p>
+                {AGENT_READINESS[node.id].missing.length ? (
+                  <div className="mt-3 rounded-[14px] bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-600">
+                    Missing: {AGENT_READINESS[node.id].missing[0]}
+                  </div>
+                ) : null}
                 <div className="mt-3 text-xs font-bold text-slate-500">
                   Calls: {node.canCall.length ? node.canCall.map((id) => id.replaceAll("_", " ")).join(", ") : "terminal"}
                 </div>

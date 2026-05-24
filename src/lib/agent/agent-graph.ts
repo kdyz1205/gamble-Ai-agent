@@ -47,6 +47,152 @@ export type AgentGraphTrace = {
   createdAt: string;
 };
 
+export type AgentReadinessStatus = "production_proven" | "runtime_backed" | "partial" | "graph_only";
+
+export type AgentReadiness = {
+  status: AgentReadinessStatus;
+  summary: string;
+  evidence: string[];
+  missing: string[];
+  nextProof: string;
+};
+
+export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
+  conversation_host: {
+    status: "runtime_backed",
+    summary: "Backed by the agent respond route and orchestrator, but not a separate autonomous process.",
+    evidence: ["src/app/api/agent/respond/route.ts", "src/lib/agent/orchestrator.ts"],
+    missing: ["No multi-step autonomous loop beyond the current tool call + grounded reply turn."],
+    nextProof: "Run a browser/API flow where one message compiles, publishes, and reports the graph trace.",
+  },
+  intent_router: {
+    status: "partial",
+    summary: "The LLM/orchestrator can choose actions/tools, but there is no independent deterministic router service yet.",
+    evidence: ["src/lib/agent/orchestrator.ts", "src/lib/agent/system-prompt.ts"],
+    missing: ["No standalone intent classifier contract or E2E confusion matrix."],
+    nextProof: "Add an intent-router smoke suite covering compile, publish, join, evidence, judge, discovery, and support prompts.",
+  },
+  rule_safety: {
+    status: "partial",
+    summary: "Safety prefilter and riskPolicy exist, but it is not yet a complete policy engine with adversarial coverage.",
+    evidence: ["src/lib/protocol-compiler.ts", "ProtocolSpecV2.riskPolicy"],
+    missing: ["No broad red-team suite for unsafe/illegal/non-consensual/chance-money prompts."],
+    nextProof: "Add safety fixture tests that prove blocked, redirected, manual-review, and allowed cases.",
+  },
+  data_source_router: {
+    status: "partial",
+    summary: "Registry and oracle routing exist; many source families are cataloged but not all are live adapters.",
+    evidence: ["src/lib/data-source-registry.ts", "src/app/api/data-sources/[sourceKey]/run/route.ts"],
+    missing: ["Not every cataloged data source can fetch live production data with credentials and settlement proof."],
+    nextProof: "Run live adapter probes for the sources used by the next 20 public-oracle challenge prompts.",
+  },
+  protocol_compiler: {
+    status: "runtime_backed",
+    summary: "Compile route returns ProtocolSpecV2 and graph traces from real provider or deterministic fallback paths.",
+    evidence: ["src/app/api/challenges/compile/route.ts", "src/lib/protocol-compiler.ts"],
+    missing: ["No production proof that every weird prompt compiles into the correct participant/evidence/settlement mode."],
+    nextProof: "Run production-equivalent compile fixtures for solo, pet, head-to-head, public-oracle, location, and mass-event prompts.",
+  },
+  identity_protocol: {
+    status: "partial",
+    summary: "Protocol and binding structures exist, but real-world visual identity/liveness verification is not fully proven.",
+    evidence: ["prisma/schema.prisma:ParticipantBinding", "src/app/api/challenges/[id]/bindings/issue/route.ts"],
+    missing: ["No stable real phone video proof for liveness phrase + left/right identity binding."],
+    nextProof: "Run same-camera real video E2E where identity must pass before judgment can settle.",
+  },
+  evidence_protocol: {
+    status: "runtime_backed",
+    summary: "Evidence requirements are compiled and stored; upload routes enforce key protocol fields in several modes.",
+    evidence: ["ProtocolSpecV2.evidenceProtocol", "src/app/api/challenges/[id]/evidence/route.ts"],
+    missing: ["Not every evidence mode has a complete guided capture UI and production E2E."],
+    nextProof: "Run mode-specific E2E for same-camera video, separate video, screenshot, GPS, and public oracle.",
+  },
+  challenge_creator: {
+    status: "production_proven",
+    summary: "Challenge creation from protocol is backed by API/tool code and has been exercised in production E2E paths.",
+    evidence: ["src/app/api/challenges/route.ts", "src/lib/agent/tools.ts:createChallengeTool"],
+    missing: ["Mass-crowd event path still has separate maturity requirements."],
+    nextProof: "Keep no-regression coverage for create -> join -> evidence -> judge -> settle.",
+  },
+  challenge_discovery: {
+    status: "runtime_backed",
+    summary: "Nearby/open discovery routes exist and sort/filter challenges; production robustness still depends on location UX.",
+    evidence: ["src/app/api/challenges/discover/route.ts", "src/app/api/map/challenges/route.ts", "src/app/radar/page.tsx"],
+    missing: ["No full two-device nearby location proof in the latest run."],
+    nextProof: "Run two-account nearby challenge creation and join from current GPS snapshots.",
+  },
+  join_contract: {
+    status: "runtime_backed",
+    summary: "Accept route and join page require explicit rule acceptance before joining.",
+    evidence: ["src/app/join/[id]/page.tsx", "src/app/api/challenges/[id]/accept/route.ts"],
+    missing: ["Needs repeated browser proof for invite-link and nearby-discovery joins after UI changes."],
+    nextProof: "Run incognito join-link E2E: open /join/:id, accept rules, verify evidence_window_open.",
+  },
+  location_gate: {
+    status: "partial",
+    summary: "Location eligibility route exists, but location protocol is not enforced across every create/join path.",
+    evidence: ["src/app/api/challenges/[id]/check-location-eligibility/route.ts", "src/app/api/map/ping/route.ts"],
+    missing: ["No universal enforcement for walk-to-join/same-place-required challenges."],
+    nextProof: "Create walk-to-join challenge and prove outside-radius reject plus inside-radius accept.",
+  },
+  recording_session: {
+    status: "partial",
+    summary: "Recording sessions can be created and referenced, but guided browser capture is not complete enough.",
+    evidence: ["src/app/api/challenges/[id]/recording-session/start/route.ts", "prisma/schema.prisma:RecordingSession"],
+    missing: ["Black-screen recording/camera fallback and full guided same-camera flow still need browser/device proof."],
+    nextProof: "Run mobile browser recording session: camera opens, captures, uploads, and stores recordingSessionId.",
+  },
+  evidence_intake: {
+    status: "production_proven",
+    summary: "Evidence upload/storage path is backed by routes, Blob handling, cleanup, and production video fixture proof.",
+    evidence: ["src/app/api/challenges/[id]/evidence/route.ts", "src/app/api/uploads/evidence-presign/route.ts"],
+    missing: ["Arbitrary real phone media robustness still needs the next E2E suite."],
+    nextProof: "Run real-video robustness suite without labels and with unclear/invalid cases.",
+  },
+  evidence_identity_verifier: {
+    status: "partial",
+    summary: "Verification route and EvidenceCheck fields exist, but identity/evidence validation is not fully autonomous.",
+    evidence: ["src/app/api/challenges/[id]/evidence/[evidenceId]/verify-identity/route.ts", "prisma/schema.prisma:EvidenceCheck"],
+    missing: ["No proven automatic liveness/position/QR detection gate on real videos."],
+    nextProof: "Add and pass identity verifier E2E with pass, unclear, wrong-side, and missing-phrase clips.",
+  },
+  outcome_judge: {
+    status: "runtime_backed",
+    summary: "Text, oracle, and vision judge paths exist; fixture video settlement is proven, arbitrary real phone video is not.",
+    evidence: ["src/app/api/challenges/[id]/judge/route.ts", "src/lib/ai-engine.ts"],
+    missing: ["No reliable proof that arbitrary real push-up videos are counted correctly across bad angles/light/crops."],
+    nextProof: "Pass e2e-real-video-robustness with source=vision_llm and no visible answer labels.",
+  },
+  settlement_gate: {
+    status: "production_proven",
+    summary: "Settlement now depends on recommendation, confidence, evidence quality, and protocol gates before credits move.",
+    evidence: ["src/lib/judgment-policy.ts", "src/lib/protocol-judgment-policy.ts", "src/app/api/challenges/[id]/judge/route.ts"],
+    missing: ["Needs regression tests around every failure state and rejudge branch."],
+    nextProof: "Run no-settle tests for low confidence, bad evidence, identity failure, and missing winnerId.",
+  },
+  credit_settlement: {
+    status: "production_proven",
+    summary: "Ledger settlement/refund helpers exist and production proof has shown winnerSettled=true for controlled paths.",
+    evidence: ["src/lib/credits.ts:settleChallenge", "src/app/api/challenges/[id]/confirm-verdict/route.ts"],
+    missing: ["Still needs broad idempotency/retry tests across manual resolve, cancel, confirm, and judge routes."],
+    nextProof: "Run duplicate-confirm and retry settlement tests that prove no double payout.",
+  },
+  rejudge_escalation: {
+    status: "partial",
+    summary: "Rejudge request flags and graph routing exist, but automatic multi-model escalation is not completed.",
+    evidence: ["src/app/api/challenges/[id]/judge/route.ts rejudge flags", "src/lib/agent/agent-graph.ts"],
+    missing: ["No automatic fallback chain across selected providers/models after an inconclusive verdict."],
+    nextProof: "Implement and prove confidence-low -> stronger model -> settle/manual-review routing.",
+  },
+  manual_review: {
+    status: "partial",
+    summary: "Manual-review states/routes exist, but there is no complete operator queue/dashboard workflow.",
+    evidence: ["src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts"],
+    missing: ["No reviewer assignment, queue UI, SLA, appeal flow, or audit dashboard."],
+    nextProof: "Build manual review queue and run dispute -> resolve -> ledger proof.",
+  },
+};
+
 export const AGENT_GRAPH_REGISTRY: AgentGraphNode[] = [
   {
     id: "conversation_host",
@@ -291,13 +437,31 @@ function usesOracleEvidence(protocol: ProtocolSpecV2) {
 }
 
 export function agentGraphCatalog() {
+  const readinessSummary = agentReadinessSummary();
   return {
     graphVersion: "agent-graph-v1" as const,
-    nodes: AGENT_GRAPH_REGISTRY,
+    nodes: AGENT_GRAPH_REGISTRY.map((node) => ({
+      ...node,
+      readiness: AGENT_READINESS[node.id],
+    })),
     edges: AGENT_GRAPH_REGISTRY.flatMap((node) =>
       node.canCall.map((target) => ({ from: node.id, to: target })),
     ),
+    readinessSummary,
   };
+}
+
+export function agentReadinessSummary() {
+  const initial: Record<AgentReadinessStatus, number> = {
+    production_proven: 0,
+    runtime_backed: 0,
+    partial: 0,
+    graph_only: 0,
+  };
+  return Object.values(AGENT_READINESS).reduce((acc, readiness) => {
+    acc[readiness.status] += 1;
+    return acc;
+  }, initial);
 }
 
 export function routeCompiledProtocol(

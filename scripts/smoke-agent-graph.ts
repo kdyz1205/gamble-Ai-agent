@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  AGENT_READINESS,
   agentGraphCatalog,
   routeAgentTool,
   routeCompiledProtocol,
@@ -78,6 +79,10 @@ function includesInOrder(route: AgentNodeId[], expected: AgentNodeId[]) {
 
 const catalog = agentGraphCatalog();
 assert.ok(catalog.nodes.length >= 18, "agent graph should expose the product agent registry");
+assert.equal(catalog.nodes.length, Object.keys(AGENT_READINESS).length, "every graph node must have a readiness entry");
+assert.ok(catalog.readinessSummary.production_proven > 0, "some agents should have production proof");
+assert.ok(catalog.readinessSummary.partial > 0, "unfinished agents must stay visible instead of being overclaimed");
+assert.notEqual(catalog.readinessSummary.production_proven, catalog.nodes.length, "do not mark every agent production-proven without E2E proof");
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "credit_settlement"));
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "rejudge_escalation"));
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "manual_review"));
@@ -155,6 +160,7 @@ console.log(JSON.stringify({
   graphVersion: catalog.graphVersion,
   nodeCount: catalog.nodes.length,
   edgeCount: catalog.edges.length,
+  readinessSummary: catalog.readinessSummary,
   compileRoute: compileTrace.route,
   blockedCurrentAgent: blockedTrace.currentAgent,
   settleCurrentAgent: settleTrace.currentAgent,
