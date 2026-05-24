@@ -5,12 +5,12 @@ This proof verifies that a public data-source challenge can use the live router/
 ## Proof Run
 
 - Production URL: https://gamble-ai-agent.vercel.app
-- Challenge ID: `cmpjdd7vf000904l55qghfo2y`
-- Challenge URL: https://gamble-ai-agent.vercel.app/challenge/cmpjdd7vf000904l55qghfo2y
-- Join URL: https://gamble-ai-agent.vercel.app/join/cmpjdd7vf000904l55qghfo2y
-- Evidence IDs: `cmpjddau4000004juijm2lvmk`, `cmpjddb76000404jugpf5l0uy`
-- Judgment ID: `cmpjddhk5000204lai02qexbf`
-- Proof run commit: `c7ec97d98487903826ae6fd43f29672092a0463d`
+- Challenge ID: `cmpjdly4b000904jvgf4zn7l9`
+- Challenge URL: https://gamble-ai-agent.vercel.app/challenge/cmpjdly4b000904jvgf4zn7l9
+- Join URL: https://gamble-ai-agent.vercel.app/join/cmpjdly4b000904jvgf4zn7l9
+- Evidence IDs: `cmpjdlzhf000004jxmd1dq7bw`, `cmpjdlzuj000404jxps4ipygv`
+- Judgment ID: `cmpjdm386000l04jv8agn97qs`
+- Proof run commit: `9438388c3966895d8bf936d4bbcb0a8417cb1d57`
 - Docs/current commit: see the Git commit that adds this proof note and E2E script.
 
 ## Scenario
@@ -22,6 +22,7 @@ This proof verifies that a public data-source challenge can use the live router/
 - Data source params: `{ "package": "react" }`
 - Router URL: `https://registry.npmjs.org/react`
 - Router result: live HTTP `200`
+- Router fetched at: `2026-05-24T06:08:08.035Z`
 - Judge model: `Oracle - OpenAI gpt-4o-mini`
 
 ## Result
