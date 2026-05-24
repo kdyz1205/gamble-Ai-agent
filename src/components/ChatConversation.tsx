@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
+import BrandMark from "@/components/BrandMark";
 
 /**
  * Axelrod chat thread. Each Turn is either a plain user message, a plain
@@ -49,7 +50,7 @@ function AIAvatar({ animate }: { animate: boolean }) {
       transition={animate ? { duration: 3, repeat: Infinity, ease: "easeInOut" } : { duration: 0 }}
       aria-label="Axelrod AI"
     >
-      <span className="text-[10px] font-black" aria-hidden>XR</span>
+      <BrandMark className="h-7 w-7" label="Axelrod AI" />
     </motion.div>
   );
 }

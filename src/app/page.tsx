@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import CenteredComposer from "@/components/CenteredComposer";
 import AuthModal from "@/components/AuthModal";
+import BrandMark from "@/components/BrandMark";
 import * as api from "@/lib/api-client";
 import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
@@ -660,9 +661,7 @@ export default function Home() {
     <div className="relative min-h-screen flex flex-col" onClick={() => showProfile && setShowProfile(false)}>
       <header className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
         <button onClick={reset} className="flex items-center gap-2 text-base font-black tracking-tight" style={{ color: "#172033" }}>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl border bg-white text-xs shadow-sm" style={{ borderColor: "#D1FAE5", color: "#047857" }}>
-            XR
-          </span>
+          <BrandMark className="h-9 w-9" />
           <span>Axelrod</span>
         </button>
         <div className="flex items-center gap-2 sm:gap-3">

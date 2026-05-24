@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
+import BrandMark from "@/components/BrandMark";
 
 interface Props {
   open: boolean;
@@ -212,7 +213,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <span className="text-2xl font-black">XR</span>
+                        <BrandMark className="h-16 w-16" label="Axelrod ready" />
                       </motion.div>
                       <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
                         You&apos;re in! Let&apos;s play
@@ -235,7 +236,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
                     }}
                   >
-                    <span className="text-2xl font-black" style={{ color: PEACH_TEXT }}>XR</span>
+                    <BrandMark className="h-14 w-14" />
                   </motion.div>
 
                   <AnimatePresence mode="wait">

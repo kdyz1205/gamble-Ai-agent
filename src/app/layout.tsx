@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: "Axelrod - AI Referee for Real-World Challenges",
   description:
     "Turn real-world challenges into playable, provable games with rules, evidence, AI judging, and credits.",
+  icons: {
+    icon: "/brand/axelrod-avatar-logo.svg",
+    apple: "/brand/axelrod-avatar-logo.svg",
+  },
 };
 
 export const viewport: Viewport = {
