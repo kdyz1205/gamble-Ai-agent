@@ -700,6 +700,82 @@ function applyObservedVideoGuards(
   return result;
 }
 
+function finiteNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function participantVideoMetricsAreSettlementGrade(metrics: VideoJudgmentParticipantMetrics | undefined): boolean {
+  if (!metrics) return false;
+  if (metrics.fullDurationCovered !== true) return false;
+  if (metrics.livenessPhraseVisible !== true) return false;
+  if (metrics.fullBodyVisible !== true) return false;
+  if (metrics.continuousAttemptLikely !== true) return false;
+  if (metrics.videoTooShort === true) return false;
+  if (metrics.suspectedEditingOrLoop === true) return false;
+  if ((metrics.antiCheatFlags ?? []).length > 0) return false;
+  if (metrics.reasonForManualReview) return false;
+  if (metrics.unclearReason) return false;
+  return true;
+}
+
+function videoMetricsSupportWinner(
+  winner: "A" | "B" | null,
+  videoMetrics: VideoJudgmentMetrics | undefined,
+): boolean {
+  if (!winner || !videoMetrics?.participantA || !videoMetrics.participantB) return false;
+  const winnerMetrics = winner === "A" ? videoMetrics.participantA : videoMetrics.participantB;
+  const loserMetrics = winner === "A" ? videoMetrics.participantB : videoMetrics.participantA;
+
+  const winnerReps = finiteNumber(winnerMetrics.validRepCount);
+  const loserReps = finiteNumber(loserMetrics.validRepCount);
+  if (winnerReps !== null && loserReps !== null && winnerReps > loserReps) return true;
+
+  const winnerHold = finiteNumber(winnerMetrics.holdDurationSec);
+  const loserHold = finiteNumber(loserMetrics.holdDurationSec);
+  if (winnerHold !== null && loserHold !== null && winnerHold > loserHold) return true;
+
+  return false;
+}
+
+function reconcileStructuredVideoVerdict(
+  result: {
+    winner: "A" | "B" | null;
+    confidence: number;
+    videoMetrics?: VideoJudgmentMetrics;
+    blockingIssues?: string[];
+    recommendation?: JudgmentResult["recommendation"];
+    evidenceQuality?: JudgmentResult["evidenceQuality"];
+  },
+) {
+  if (!result.winner || result.confidence < 0.85) return result;
+  if ((result.blockingIssues ?? []).length > 0) return result;
+  if (!participantVideoMetricsAreSettlementGrade(result.videoMetrics?.participantA)) return result;
+  if (!participantVideoMetricsAreSettlementGrade(result.videoMetrics?.participantB)) return result;
+  if (!videoMetricsSupportWinner(result.winner, result.videoMetrics)) return result;
+
+  if (result.evidenceQuality !== "good" || result.recommendation !== "settle_winner") {
+    console.warn("[judgeChallenge] reconciled internally inconsistent vision verdict", {
+      winner: result.winner,
+      confidence: result.confidence,
+      evidenceQuality: result.evidenceQuality ?? null,
+      recommendation: result.recommendation ?? null,
+      participantA: {
+        validRepCount: result.videoMetrics?.participantA?.validRepCount ?? null,
+        holdDurationSec: result.videoMetrics?.participantA?.holdDurationSec ?? null,
+      },
+      participantB: {
+        validRepCount: result.videoMetrics?.participantB?.validRepCount ?? null,
+        holdDurationSec: result.videoMetrics?.participantB?.holdDurationSec ?? null,
+      },
+    });
+  }
+
+  result.evidenceQuality = "good";
+  result.recommendation = "settle_winner";
+  result.blockingIssues = [];
+  return result;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -1379,6 +1455,7 @@ CONFIDENCE SCALE (be calibrated — stakes are real):
 
 Settlement recommendation rule:
 - Use "settle_winner" only when confidence >= 0.85, evidenceQuality is "good", winner is not null, and blockingIssues is empty.
+- Keep the settlement fields internally consistent: when winner is not null, confidence >= 0.85, both participants pass liveness/full-body/duration/continuity checks, and the winner's videoMetrics score is strictly higher, evidenceQuality MUST be "good", recommendation MUST be "settle_winner", and blockingIssues MUST be [].
 - Do not use "settle_winner" when either participant's submitted video is not the required action at all (for example standing, unrelated, not in push-up position, or no push-up setup in a push-up challenge). A participant who stays in a visible push-up top/plank position with no completed reps can be a valid 0-rep attempt; do not mark that invalid solely because the count is zero.
 - Use "needs_review" when a winner may exist but any material uncertainty remains.
 - Use "invalid_evidence" when the evidence cannot prove the required action/outcome.
@@ -1583,6 +1660,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       evidenceA,
       evidenceB,
     }) as typeof parsedResult;
+    parsedResult = reconcileStructuredVideoVerdict(parsedResult) as typeof parsedResult;
     const winnerId =
       parsedResult.winner === "A" ? participantAId :
       parsedResult.winner === "B" && !soloMode ? participantBId :
