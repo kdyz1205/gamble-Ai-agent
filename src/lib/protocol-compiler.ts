@@ -15,6 +15,7 @@ import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
 import { cryptoPriceProtocolFromPrompt } from "@/lib/crypto-price-oracle";
 import { weatherProtocolFromPrompt } from "@/lib/weather-oracle";
 import { applyDataSourceGateToProtocol } from "@/lib/data-source-registry";
+import { parseChallengeDeadline, stripDeadlineArtifacts } from "@/lib/challenge-time";
 
 export type CompileProtocolSource = "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback";
 
@@ -290,10 +291,23 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       requiredQrOrCode: visionEvidence,
     });
   }
+  const rawDeadline = protocol.timingProtocol.deadline?.trim() || "48 hours";
+  const parsedDeadline = parseChallengeDeadline(rawDeadline, { fallbackHours: 48 });
+  const rawAbsoluteDeadline = new Date(rawDeadline);
+  const normalizedDeadline =
+    Number.isFinite(rawAbsoluteDeadline.getTime()) || /^(none|no deadline|open|open ended|open-ended|n\/a|null)$/i.test(rawDeadline)
+      ? parsedDeadline?.toISOString() ?? "48 hours"
+      : rawDeadline;
+  const endCondition = stripDeadlineArtifacts(protocol.timingProtocol.endCondition) || "When the attempt ends.";
 
   return {
     ...protocol,
     participantMode,
+    timingProtocol: {
+      ...protocol.timingProtocol,
+      endCondition,
+      deadline: normalizedDeadline,
+    },
     identityProtocol: {
       ...protocol.identityProtocol,
       required: protocol.identityProtocol.required || visionEvidence,
@@ -339,6 +353,7 @@ function repairRandomProtocolIfGeneric(protocol: ProtocolSpecV2, language: Proto
 }
 
 function compileSystemPrompt() {
+  const nowIso = new Date().toISOString();
   return `You are Axelrod, an AI challenge protocol compiler.
 
 You do not generate only a title or casual rules. You compile a natural-language challenge idea into ProtocolSpecV2 JSON.
@@ -386,6 +401,7 @@ Return ONLY valid JSON with this exact top-level shape:
 }
 
 Rules:
+- Current server time is ${nowIso}. Never use placeholder or past absolute dates such as 2023-12-31. If the user does not give a real future date, use a relative deadline like "24 hours" or "48 hours".
 - If the user asks for a random challenge, invent one concrete safe challenge.
 - Distinguish the counterparty from the evidence subject. "I bet my cat can finish the food under one minute" is a solo threshold/completion claim: the cat is the subject, not an opponent. Use participantMode="solo" unless the user names a counterparty ("I bet Jerry that my cat..."), compares two participants ("my cat vs Jerry's cat"), or asks nearby/public users to join.
 - For solo claims, do not add an opponent participant binding. Use creator-only identity, evidence from the creator, and a pass/fail outcome. Do not make the user invite someone just to prove their own/pet's action.

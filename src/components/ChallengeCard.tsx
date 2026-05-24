@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import type { ChallengeData } from "@/lib/api-client";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
+import { formatChallengeDeadline } from "@/lib/challenge-time";
 
 export interface Challenge {
   id: string;
@@ -26,9 +27,7 @@ export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
   else if (isEvidenceWindowStatus(c.status)) status = "live";
   else if (isOpenForOpponentStatus(c.status)) status = "open";
 
-  const deadlineStr = c.deadline
-    ? new Date(c.deadline).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-    : "—";
+  const deadlineStr = formatChallengeDeadline(c.deadline, { includePrefix: false }) ?? "-";
 
   return {
     id: c.id,

@@ -12,6 +12,7 @@ import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ParticleBackground from "@/components/ParticleBackground";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
+import { formatChallengeDeadline } from "@/lib/challenge-time";
 
 /* ── Helpers ── */
 function evidenceBlobPathname(challengeId: string, filename: string): string {
@@ -714,6 +715,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const verdictRow = challenge.judgments?.[0] ?? null;
   const creatorEvidence = challenge.evidence.find(e => e.userId === creator?.user.id);
   const opponentEvidence = challenge.evidence.find(e => e.userId === opponent?.user.id);
+  const deadlineLabel = formatChallengeDeadline(challenge.deadline);
 
   return (
     <div className="min-h-screen relative" style={{ background: "#06060f" }}>
@@ -808,10 +810,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           )}
           <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted">
             <span>Evidence: {challenge.evidenceType.replace(/_/g, " ")}</span>
-            {challenge.deadline && (
+            {deadlineLabel && (
               <>
                 <span className="text-text-muted/30">|</span>
-                <span>Deadline: {new Date(challenge.deadline).toLocaleDateString()}</span>
+                <span>{deadlineLabel}</span>
               </>
             )}
           </div>

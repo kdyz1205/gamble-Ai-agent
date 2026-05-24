@@ -10,6 +10,7 @@ import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { createChallengeEventFromProtocol, isEventProtocol } from "@/lib/challenge-events";
 import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
+import { parseChallengeDeadline } from "@/lib/challenge-time";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -244,23 +245,8 @@ export async function POST(req: NextRequest) {
       creatorStakeTxId = result.txId;
     }
 
-    let deadlineDate: Date | null = null;
     const deadlineSource = deadline || protocolSpec?.timingProtocol.deadline;
-    if (deadlineSource) {
-      const absoluteDeadline = new Date(String(deadlineSource));
-      const hoursMatch = String(deadlineSource).match(/(\d+)\s*hour/i);
-      const daysMatch  = String(deadlineSource).match(/(\d+)\s*day/i);
-      const weeksMatch = String(deadlineSource).match(/(\d+)\s*week/i);
-      const minsMatch  = String(deadlineSource).match(/(\d+)\s*min/i);
-
-      deadlineDate = new Date();
-      if (Number.isFinite(absoluteDeadline.getTime())) deadlineDate = absoluteDeadline;
-      else if (hoursMatch) deadlineDate.setHours(deadlineDate.getHours() + parseInt(hoursMatch[1]));
-      else if (daysMatch) deadlineDate.setDate(deadlineDate.getDate() + parseInt(daysMatch[1]));
-      else if (weeksMatch) deadlineDate.setDate(deadlineDate.getDate() + parseInt(weeksMatch[1]) * 7);
-      else if (minsMatch) deadlineDate.setMinutes(deadlineDate.getMinutes() + parseInt(minsMatch[1]));
-      else deadlineDate.setHours(deadlineDate.getHours() + 48);
-    }
+    const deadlineDate = parseChallengeDeadline(deadlineSource);
 
     let challenge: { id: string; title: string } | null = null;
     const evidenceDescriptor = [

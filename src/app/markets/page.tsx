@@ -7,6 +7,7 @@ import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 import { isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
+import { formatChallengeDeadline } from "@/lib/challenge-time";
 
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
@@ -56,9 +57,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
 };
 
 function formatDeadline(value: string | null) {
-  if (!value) return "No deadline";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return formatChallengeDeadline(value) ?? "No deadline";
 }
 
 function hasOtherParticipant(market: ChallengeData, userId?: string) {

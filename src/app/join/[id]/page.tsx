@@ -7,6 +7,7 @@ import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import { acceptanceContract, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { formatChallengeDeadline } from "@/lib/challenge-time";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 interface Challenge {
@@ -225,6 +226,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const compactRules = compactChallengeRules(c);
   const contract = acceptanceContract(c);
   const locationGateRequired = needsLocationGate(c);
+  const deadlineLabel = formatChallengeDeadline(c.deadline);
 
   return (
     <div className="min-h-screen relative">
@@ -445,13 +447,13 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               </label>
             </div>
 
-            {c.deadline && (
+            {deadlineLabel && (
               <div className="mb-5 px-4 py-2.5" style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
                 <p className="text-[11px] font-bold uppercase tracking-wider mb-0.5" style={{ color: NAVY_DIM }}>
                   Deadline
                 </p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>
-                  {new Date(c.deadline).toLocaleString()}
+                  {deadlineLabel}
                 </p>
               </div>
             )}

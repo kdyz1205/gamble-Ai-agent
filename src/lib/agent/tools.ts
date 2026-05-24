@@ -25,6 +25,7 @@ import { evaluateAutoSettleEligibility, requiresHoldDurationWinnerFromText, requ
 import { combineAutoSettlePolicyWithProtocolGates, evaluateProtocolJudgmentGates } from "@/lib/protocol-judgment-policy";
 import { parseProtocolSpecV2, protocolPreview, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken } from "@/lib/payment-policy";
+import { parseChallengeDeadline } from "@/lib/challenge-time";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { generateLivenessPhrase } from "@/lib/liveness";
 import {
@@ -290,8 +291,7 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
     };
   }
 
-  // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
-  const deadline = parseTimeWindowToDate(timeWindow);
+  const deadline = parseChallengeDeadline(timeWindow);
   const protocolSpec = canonicalProtocol ?? buildProtocolFromAgentDraft({
       title,
       proposition,
@@ -464,21 +464,6 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
       },
     },
   };
-}
-
-function parseTimeWindowToDate(tw: string): Date {
-  const s = tw.toLowerCase();
-  const now = Date.now();
-  const hr = /(\d+)\s*hour/i.exec(s);
-  const min = /(\d+)\s*(min|minute)/i.exec(s);
-  const day = /(\d+)\s*day/i.exec(s);
-  const week = /(\d+)\s*week/i.exec(s);
-  let addMs = 24 * 60 * 60 * 1000;
-  if (hr) addMs = Number(hr[1]) * 60 * 60 * 1000;
-  else if (min) addMs = Number(min[1]) * 60 * 1000;
-  else if (day) addMs = Number(day[1]) * 24 * 60 * 60 * 1000;
-  else if (week) addMs = Number(week[1]) * 7 * 24 * 60 * 60 * 1000;
-  return new Date(now + addMs);
 }
 
 function inferTypeFromTitle(title: string): string {

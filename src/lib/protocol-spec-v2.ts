@@ -210,7 +210,7 @@ export function protocolSpecFromChallengeSpec(
     timingProtocol: {
       startCondition: spec.start_condition,
       endCondition: spec.end_condition,
-      deadline: spec.dispute_window || "24 hours",
+      deadline: "48 hours",
       tieBreaker: spec.scoring_method,
       allowedAttempts: spec.allowed_attempts,
     },
@@ -332,7 +332,7 @@ export function protocolToLegacyChallengeFields(protocol: ProtocolSpecV2) {
     evidenceType: protocol.evidenceProtocol.mode,
     settlementMode: protocol.settlementProtocol.mode,
     fallbackRule: protocol.settlementProtocol.manualReviewTriggers.join(" "),
-    disputeWindow: protocol.timingProtocol.deadline,
+    disputeWindow: "24 hours after verdict",
     isPublic: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) || protocol.participantMode === "mass_crowd",
     visibility: ["nearby_discovery", "walk_to_join", "mass_local_event"].includes(protocol.locationProtocol.mode) ? "public" : "invite_only",
   };
@@ -386,7 +386,7 @@ export function challengeSpecFromProtocol(protocol: ProtocolSpecV2): ChallengeSp
     allowed_attempts: protocol.timingProtocol.allowedAttempts,
     anti_cheat_rules: protocol.evidenceProtocol.invalidEvidenceRules,
     ai_judging_method: protocol.settlementProtocol.judgeInstructions.join(" "),
-    dispute_window: protocol.timingProtocol.deadline,
+    dispute_window: "24 hours after verdict",
     fallback_manual_review: protocol.settlementProtocol.manualReviewTriggers.join(" "),
     payout_rule: protocol.settlementProtocol.mode === "blocked"
       ? "No payout. This challenge cannot settle while blocked."

@@ -1,7 +1,10 @@
+import { cleanDeadlineArtifactsForDisplay, formatChallengeDeadline, stripDeadlineArtifacts } from "@/lib/challenge-time";
+
 type ChallengeLike = {
   title: string;
   rules?: string | null;
   evidenceType?: string | null;
+  deadline?: string | Date | null;
   stake?: number | null;
   stakeToken?: string | null;
   disputeWindow?: string | null;
@@ -52,6 +55,18 @@ function normalizeRuleValue(raw: string) {
   return raw.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function cleanRuleDisplayValue(raw: string, label: string) {
+  const withoutDeadline = label === "Time limit"
+    ? stripDeadlineArtifacts(raw)
+    : cleanDeadlineArtifactsForDisplay(raw);
+  const withoutSettlement = label === "Time limit"
+    ? withoutDeadline.replace(/\bNo stake\.?\s*(?:The result is recorded without moving credits\.?)?/i, "")
+    : withoutDeadline;
+  return withoutSettlement
+    .replace(/\bDeadline passed\b\s*\.?\s*\bDeadline passed\b/g, "Deadline passed")
+    .trim();
+}
+
 function pickCard(cards: ChallengeRuleCard[], labels: string[]) {
   return labels
     .map((label) => cards.find((card) => card.label === label))
@@ -93,9 +108,10 @@ export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard
     const match = line.match(/^([^:]+):\s*(.+)$/);
     if (!match) continue;
     const label = RULE_LABELS[normalizeRuleKey(match[1])];
-    const value = match[2]?.trim();
+    if (!label) continue;
+    const value = cleanRuleDisplayValue(match[2] ?? "", label);
     const normalizedValue = value ? normalizeRuleValue(value) : "";
-    if (!label || !value || seen.has(label) || seenValues.has(normalizedValue)) continue;
+    if (!value || seen.has(label) || seenValues.has(normalizedValue)) continue;
     cards.push({ label, value });
     seen.add(label);
     seenValues.add(normalizedValue);
@@ -138,7 +154,11 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     pickCard(cards, ["Evidence required"])?.value,
     pickCard(cards, ["Recording standard"])?.value,
   ]) || (challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "Required evidence");
-  const time = pickCard(cards, ["Time limit"])?.value || challenge.proofWindow || "Before the challenge window closes";
+  const deadlineLabel = formatChallengeDeadline(challenge.deadline);
+  const time = joinUnique([
+    pickCard(cards, ["Time limit"])?.value,
+    deadlineLabel,
+  ]) || challenge.proofWindow || "Before the challenge window closes";
   const review = joinUnique([
     pickCard(cards, ["Dispute window"])?.value,
     pickCard(cards, ["Settlement"])?.value,
