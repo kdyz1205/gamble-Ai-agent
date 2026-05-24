@@ -70,6 +70,7 @@ scratch/
 
 # local browser / verification artifacts
 .chrome-shot-profile/
+.fastembed_cache/
 /data/
 *cookies*.txt
 auth-test-env.txt

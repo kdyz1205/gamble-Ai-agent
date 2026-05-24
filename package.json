@@ -25,6 +25,7 @@
     "smoke:payment-policy": "tsx scripts/smoke-payment-policy.ts",
     "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts",
     "smoke:weather-oracle": "tsx scripts/smoke-weather-oracle.ts",
+    "smoke:data-source-registry": "tsx scripts/smoke-data-source-registry.ts",
     "smoke:challenge-100": "tsx scripts/smoke-100-challenge-crack-matrix.ts",
     "eval:llm-judgeability-140": "tsx scripts/eval-llm-judgeability-140.ts",
     "eval:diverse-judgeability-140": "tsx scripts/eval-diverse-judgeability-140.ts",

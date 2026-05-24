@@ -1,6 +1,6 @@
 # GambleAI 100 New Topic Data Source Catalog
 
-Generated: 2026-05-24T03:52:43.792Z
+Generated: 2026-05-24T04:11:55.778Z
 
 This catalog is intentionally separate from the diverse 140 judgeability eval. It adds 100 new topics with explicit data sources. The script validates exactly 100 topics, unique topic keys, unique prompts, unique source keys, no exact overlap with the prior diverse 140 prompts/categories, and no missing provider/endpoint/docs/required fields.
 

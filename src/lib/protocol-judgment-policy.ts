@@ -1,6 +1,7 @@
 import type { JudgmentResult, VideoJudgmentParticipantMetrics } from "@/lib/ai-engine";
 import type { AutoSettlePolicyResult } from "@/lib/judgment-policy";
 import type { ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { resolveDataSourceForPrompt } from "@/lib/data-source-registry";
 
 type ParticipantLike = {
   userId: string;
@@ -277,6 +278,18 @@ function evidenceResult(
 
   const mode = protocol.evidenceProtocol.mode;
   if (mode === "public_oracle" || mode === "platform_metric") {
+    const sourceMatch = resolveDataSourceForPrompt([
+      protocol.rawPrompt,
+      protocol.title,
+      protocol.userFacingSummary,
+      protocol.settlementProtocol.winCondition,
+      ...protocol.settlementProtocol.judgeInstructions,
+    ].join("\n"));
+    if (!sourceMatch) {
+      issues.push("Protocol requires an external data source, but no runtime data-source adapter matched it.");
+    } else if (!sourceMatch.autoSettlementGate.allowed) {
+      issues.push(sourceMatch.autoSettlementGate.reason);
+    }
     if (result?.source !== "oracle" && mode === "public_oracle") {
       issues.push("Protocol requires a public oracle verdict, but the result did not come from an oracle source.");
     }

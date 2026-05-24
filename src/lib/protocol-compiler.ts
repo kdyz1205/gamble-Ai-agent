@@ -14,6 +14,7 @@ import { protocolPreview, parseProtocolSpecV2, protocolSpecFromChallengeSpec, ty
 import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
 import { cryptoPriceProtocolFromPrompt } from "@/lib/crypto-price-oracle";
 import { weatherProtocolFromPrompt } from "@/lib/weather-oracle";
+import { applyDataSourceGateToProtocol } from "@/lib/data-source-registry";
 
 export type CompileProtocolSource = "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback";
 
@@ -146,7 +147,7 @@ function fallbackProtocolFromPrompt(
   const settlement = objectRecord(record?.settlementProtocol);
   const risk = objectRecord(record?.riskPolicy);
 
-  return normalizeCompiledProtocol({
+  return finalizeCompiledProtocol({
     ...protocol,
     title: safeString(record?.title) ?? protocol.title,
     userFacingSummary: safeString(record?.userFacingSummary) ?? protocol.userFacingSummary,
@@ -224,7 +225,7 @@ function concreteRandomProtocol(rawPrompt: string, language: ProtocolSpecV2["lan
     ? "生成一个安全的双人平板支撑挑战，需要连续视频证据。"
     : "Create a safe two-person plank hold challenge with continuous video evidence.";
   const protocol = protocolSpecFromChallengeSpec(generateChallengeSpec(seedPrompt), rawPrompt, { language });
-  return normalizeCompiledProtocol({
+  return finalizeCompiledProtocol({
     ...protocol,
     rawPrompt,
     language,
@@ -321,6 +322,10 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
         : 0,
     },
   };
+}
+
+function finalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
+  return applyDataSourceGateToProtocol(normalizeCompiledProtocol(protocol));
 }
 
 function repairRandomProtocolIfGeneric(protocol: ProtocolSpecV2, language: ProtocolSpecV2["language"]) {
@@ -514,7 +519,7 @@ export async function compileProtocolForUser(input: {
         language,
       });
       if (protocol) {
-        const normalized = normalizeCompiledProtocol(protocol);
+        const normalized = finalizeCompiledProtocol(protocol);
         const repaired = repairRandomProtocolIfGeneric(normalized, language);
         normalizedProtocol = repaired.protocol;
         if (repaired.repaired) {
