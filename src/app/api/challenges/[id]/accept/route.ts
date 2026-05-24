@@ -59,8 +59,19 @@ Generate ONE shared task both players will race to answer correctly. Example: "W
   }
 }
 
-function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
-  return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+function joiningRoleFor(protocol: ProtocolSpecV2 | null) {
+  return protocol?.participantMode === "small_group" ||
+    protocol?.participantMode === "team_vs_team" ||
+    protocol?.participantMode === "mass_crowd" ||
+    protocol?.participantMode === "public_market"
+    ? "participant"
+    : "opponent";
+}
+
+function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: string) {
+  return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ??
+    protocol?.identityProtocol.participantBindings.find((binding) => binding.role === "participant")?.expectedPosition ??
+    null;
 }
 
 export async function POST(
@@ -111,6 +122,7 @@ export async function POST(
   if (existing) return Response.json({ error: "You are already in this challenge" }, { status: 400 });
   if (challenge.participants.length >= challenge.maxParticipants) return Response.json({ error: "Challenge is full" }, { status: 400 });
   const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+  const joiningRole = joiningRoleFor(protocol);
   const locationGate = evaluateLocationEligibility(challenge, locationSnapshot, protocol);
   if (locationGate.required && hasLocationFields && !locationSnapshot) {
     return Response.json({ error: "lat must be in [-90,90] and lng in [-180,180]" }, { status: 400 });
@@ -163,7 +175,7 @@ export async function POST(
         data: {
           challengeId: challenge.id,
           userId: user.userId,
-          role: "opponent",
+          role: joiningRole,
           status: "accepted",
         },
       });
@@ -175,17 +187,17 @@ export async function POST(
             challengeId: challenge.id,
             userId: user.userId,
             participantId: p.id,
-            role: "opponent",
+            role: joiningRole,
             displayName: user.username,
-            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            expectedPosition: expectedPositionFor(protocol, joiningRole),
             livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
             bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
           },
           update: {
             participantId: p.id,
-            role: "opponent",
+            role: joiningRole,
             displayName: user.username,
-            expectedPosition: expectedPositionFor(protocol, "opponent"),
+            expectedPosition: expectedPositionFor(protocol, joiningRole),
             livenessCode: protocol.identityProtocol.required ? generateLivenessPhrase() : null,
             bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
             identityConfidence: null,

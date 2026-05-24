@@ -95,6 +95,33 @@ function livenessPhraseFor(protocol: ProtocolSpecV2 | null) {
   return phrases[0];
 }
 
+function requestedMaxParticipants(value: unknown) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 5000) : null;
+}
+
+function countFromPrompt(rawPrompt: string | null | undefined) {
+  const text = String(rawPrompt ?? "");
+  const match = text.match(/\b([0-9][0-9,]{0,8})\s*(?:people|persons|participants|players|users|competitors)\b/i)
+    ?? text.match(/([0-9][0-9,]{0,8})\s*(?:\u4e2a\u4eba|\u4eba|\u540d|\u4f4d|\u53c2\u4e0e\u8005|\u73a9\u5bb6|\u7528\u6237)/);
+  const parsed = match?.[1] ? Number(match[1].replace(/,/g, "")) : null;
+  return parsed && Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 5000) : null;
+}
+
+function maxParticipantsForProtocol(protocol: ProtocolSpecV2 | null, bodyValue: unknown) {
+  if (!protocol) return 2;
+  if (protocol.participantMode === "solo") return 1;
+  if (protocol.participantMode === "head_to_head") return 2;
+  const requested = requestedMaxParticipants(bodyValue);
+  if (requested) return requested;
+  const promptCount = countFromPrompt(protocol.rawPrompt);
+  if (protocol.participantMode === "small_group") return promptCount && promptCount >= 3 ? promptCount : 8;
+  if (protocol.participantMode === "team_vs_team") return promptCount && promptCount >= 4 ? promptCount : 10;
+  if (protocol.participantMode === "public_market") return promptCount && promptCount >= 2 ? promptCount : 100;
+  if (protocol.participantMode === "mass_crowd") return promptCount && promptCount >= 50 ? promptCount : 5000;
+  return 2;
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -128,6 +155,7 @@ export async function POST(req: NextRequest) {
       compilerProviderId,
       compilerModel,
       providerCall,
+      maxParticipants,
     } = body;
 
     const protocolSpec = protocolFromRequest(body as Record<string, unknown>);
@@ -180,6 +208,7 @@ export async function POST(req: NextRequest) {
       typeof compilerModel === "string" && compilerModel.trim()
         ? compilerModel.trim()
         : null;
+    const resolvedMaxParticipants = maxParticipantsForProtocol(protocolSpec, maxParticipants);
 
     if (!resolvedTitle) return Response.json({ error: "title is required" }, { status: 400 });
     const safety = evaluateRuleSafety([
@@ -292,6 +321,7 @@ export async function POST(req: NextRequest) {
             aiReview,
             isPublic: resolvedIsPublic,
             visibility: resolvedVisibility,
+            maxParticipants: resolvedMaxParticipants,
             protocolVersion: protocolSpec?.version ?? "2.0",
             participantMode: protocolSpec?.participantMode ?? null,
             outcomeType: protocolSpec?.outcomeType ?? null,

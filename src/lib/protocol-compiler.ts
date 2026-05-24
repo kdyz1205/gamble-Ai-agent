@@ -196,13 +196,86 @@ function hasExplicitCounterparty(rawPrompt: string) {
   return false;
 }
 
-function looksLikeSoloClaim(rawPrompt: string) {
+function _looksLikeSoloClaim(rawPrompt: string) {
   const text = rawPrompt.toLowerCase();
   if (hasExplicitCounterparty(rawPrompt)) return false;
   if (/\b(i|we|my|our)\b.{0,80}\b(can|will|finish|complete|do|hold|eat|make|solve|run|arrive|stay|last)\b/.test(text)) return true;
   if (/\b(my|our)\s+(cat|dog|pet|kid|robot|team|car|bike)\b/.test(text)) return true;
   if (/(我|我的|我们|我们的).{0,30}(能|可以|会|完成|吃完|做到|坚持|到达|跑完)/.test(rawPrompt)) return true;
   return false;
+}
+
+type ParticipantMode = ProtocolSpecV2["participantMode"];
+
+function promptRequestedParticipantCount(rawPrompt: string): number | null {
+  const patterns = [
+    /\b([0-9][0-9,]{0,8})\s*(?:people|persons|participants|players|users|competitors)\b/i,
+    /([0-9][0-9,]{0,8})\s*(?:\u4e2a\u4eba|\u4eba|\u540d|\u4f4d|\u53c2\u4e0e\u8005|\u73a9\u5bb6|\u7528\u6237)/,
+  ];
+  for (const pattern of patterns) {
+    const raw = rawPrompt.match(pattern)?.[1];
+    if (!raw) continue;
+    const parsed = Number(raw.replace(/,/g, ""));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  const text = rawPrompt.toLowerCase();
+  if (/\b(thousand|thousands)\b|\u51e0\u5343|\u4e0a\u5343/.test(text)) return 1000;
+  if (/\b(hundred|hundreds)\b|\u51e0\u767e|\u4e0a\u767e/.test(text)) return 100;
+  return null;
+}
+
+function promptWantsPublicMarket(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  return /\b(prediction market|public market|open market|market for|anyone can bet|everyone can bet|public betting pool)\b/.test(text) ||
+    /(\u9884\u6d4b\u5e02\u573a|\u516c\u5f00\u5e02\u573a|\u516c\u5f00\u4e0b\u6ce8|\u6240\u6709\u4eba.{0,8}\u4e0b\u6ce8|\u5927\u5bb6.{0,8}\u4e0b\u6ce8)/.test(rawPrompt);
+}
+
+function promptWantsMassCrowd(rawPrompt: string) {
+  const count = promptRequestedParticipantCount(rawPrompt);
+  const text = rawPrompt.toLowerCase();
+  return Boolean(count && count >= 50) ||
+    /\b(mass|crowd|large event|leaderboard|tournament|thousands of|hundreds of)\b/.test(text) ||
+    /(\u5927\u578b|\u5927\u89c4\u6a21|\u6392\u884c\u699c|\u6bd4\u8d5b|\u9526\u6807\u8d5b|\u51e0\u767e\u4eba|\u51e0\u5343\u4eba|\u4e0a\u5343\u4eba)/.test(rawPrompt);
+}
+
+function promptWantsSmallGroup(rawPrompt: string) {
+  const count = promptRequestedParticipantCount(rawPrompt);
+  const text = rawPrompt.toLowerCase();
+  if (count && count >= 3 && count < 50) return true;
+  return /\b(group|party|friends|classmates|coworkers|nearby people|people nearby|everyone here|all of us|ktv)\b/.test(text) ||
+    /(\u591a\u4eba|\u4e00\u7fa4|\u51e0\u4e2a\u4eba|\u670b\u53cb\u4eec|\u5927\u5bb6|\u65c1\u8fb9\u7684\u4eba|\u9644\u8fd1\u7684\u4eba|\u8def\u4eba|\u6211\u4eec\u51e0\u4e2a|KTV)/i.test(rawPrompt);
+}
+
+function promptHasCounterparty(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  if (/\b(vs\.?|versus|against|opponent|rival|challenger)\b/.test(text)) return true;
+  if (/\b(challenge|battle|compete with|compete against)\s+(?!my\b|our\b|the\b|this\b|that\b|a\b|an\b|someone\b|anyone\b)[a-z][\w-]*\b/.test(text)) return true;
+  if (/\b(who|whose|which of us)\b.*\b(faster|more|most|longer|better|wins?|winner)\b/.test(text)) return true;
+  if (/\b(faster|more|most|longer|better)\s+than\b/.test(text)) return true;
+  if (/\b(beat|outlast|defeat)\s+(?!my\b|our\b|the\b|this\b|that\b|a\b|an\b)/.test(text)) return true;
+  if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:my|our|the|this|that|his|her|their)\b/.test(text)) return true;
+  if (/(\u8ddf|\u548c|\u4e0e|\u5bf9\u6218|\u6311\u6218).{0,18}(\u670b\u53cb|\u5bf9\u624b|\u522b\u4eba|\u4ed6|\u5979|jer|jerry|alex)/i.test(rawPrompt)) return true;
+  if (/(\u8c01|\u54ea\u4e00\u65b9|\u54ea\u4e2a).{0,18}(\u66f4|\u5148|\u8d62|\u591a|\u5feb|\u4e45)/.test(rawPrompt)) return true;
+  return false;
+}
+
+function promptLooksLikeSoloClaim(rawPrompt: string) {
+  const text = rawPrompt.toLowerCase();
+  if (promptHasCounterparty(rawPrompt) || promptWantsSmallGroup(rawPrompt) || promptWantsMassCrowd(rawPrompt)) return false;
+  if (/\b(self|solo|personal|alone|by myself|for myself)\b/.test(text) || /(\u81ea\u5df1|\u4e2a\u4eba|\u5355\u4eba|\u500b\u4eba|\u55ae\u4eba|\u6253\u5361)/.test(rawPrompt)) return true;
+  if (/\b(i|we|my|our)\b.{0,80}\b(can|will|finish|complete|do|hold|eat|make|solve|run|arrive|stay|last)\b/.test(text)) return true;
+  if (/\b(my|our)\s+(cat|dog|pet|kid|robot|team|car|bike)\b/.test(text)) return true;
+  if (/(\u6211|\u6211\u7684|\u6211\u4eec|\u6211\u4eec\u7684).{0,30}(\u80fd|\u53ef\u4ee5|\u4f1a|\u5b8c\u6210|\u5403\u5b8c|\u505a\u5230|\u575a\u6301|\u5230\u8fbe|\u8dd1\u5b8c)/.test(rawPrompt)) return true;
+  return false;
+}
+
+export function inferParticipantModeFromPrompt(rawPrompt: string, currentMode?: ParticipantMode): ParticipantMode {
+  if (promptWantsPublicMarket(rawPrompt)) return "public_market";
+  if (promptWantsMassCrowd(rawPrompt)) return "mass_crowd";
+  if (promptWantsSmallGroup(rawPrompt)) return "small_group";
+  if (promptLooksLikeSoloClaim(rawPrompt)) return "solo";
+  if (promptHasCounterparty(rawPrompt)) return "head_to_head";
+  return currentMode ?? "head_to_head";
 }
 
 function looksLikeRandomChallengePrompt(rawPrompt: string) {
@@ -237,11 +310,7 @@ function concreteRandomProtocol(rawPrompt: string, language: ProtocolSpecV2["lan
 }
 
 function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
-  const inferredSolo =
-    protocol.participantMode !== "public_market" &&
-    protocol.participantMode !== "mass_crowd" &&
-    looksLikeSoloClaim(protocol.rawPrompt);
-  const participantMode = inferredSolo ? "solo" : protocol.participantMode;
+  const participantMode = inferParticipantModeFromPrompt(protocol.rawPrompt, protocol.participantMode);
   const evidenceMode =
     participantMode === "solo" && protocol.evidenceProtocol.mode === "same_camera_video"
       ? "separate_video"
@@ -287,6 +356,25 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     participantBindings.unshift({
       role: "creator",
       label: "Creator",
+      expectedPosition: "any",
+      requiredQrOrCode: visionEvidence,
+    });
+  }
+  if (participantMode === "head_to_head" && !participantBindings.some((binding) => binding.role === "opponent")) {
+    participantBindings.push({
+      role: "opponent",
+      label: "Opponent",
+      expectedPosition: sameCamera ? "right" : "any",
+      requiredQrOrCode: visionEvidence,
+    });
+  }
+  if (
+    (participantMode === "small_group" || participantMode === "team_vs_team" || participantMode === "mass_crowd" || participantMode === "public_market") &&
+    !participantBindings.some((binding) => binding.role === "participant")
+  ) {
+    participantBindings.push({
+      role: "participant",
+      label: participantMode === "public_market" ? "Market participant" : "Participant",
       expectedPosition: "any",
       requiredQrOrCode: visionEvidence,
     });
@@ -403,6 +491,12 @@ Return ONLY valid JSON with this exact top-level shape:
 Rules:
 - Current server time is ${nowIso}. Never use placeholder or past absolute dates such as 2023-12-31. If the user does not give a real future date, use a relative deadline like "24 hours" or "48 hours".
 - If the user asks for a random challenge, invent one concrete safe challenge.
+- Choose participantMode from intent, not from a default template:
+  - solo: creator proves a claim about themself, their pet, their object, their habit, or a pass/fail task; no opponent invite is required.
+  - head_to_head: exactly two sides or one named counterparty such as "Jerry", "my friend", "vs", "against", or "who is faster".
+  - small_group: nearby people, friends, KTV/party/class/group prompts, or 3-49 participants.
+  - mass_crowd: leaderboard/tournament/event prompts, hundreds/thousands of people, or 50+ participants.
+  - public_market: an explicitly open prediction market where many people can take sides.
 - Distinguish the counterparty from the evidence subject. "I bet my cat can finish the food under one minute" is a solo threshold/completion claim: the cat is the subject, not an opponent. Use participantMode="solo" unless the user names a counterparty ("I bet Jerry that my cat..."), compares two participants ("my cat vs Jerry's cat"), or asks nearby/public users to join.
 - For solo claims, do not add an opponent participant binding. Use creator-only identity, evidence from the creator, and a pass/fail outcome. Do not make the user invite someone just to prove their own/pet's action.
 - If the user bets another person that a solo subject will or will not satisfy a claim, use participantMode="head_to_head": the other person is the counterparty, not the subject in the video.
