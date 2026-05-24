@@ -5,6 +5,12 @@ import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 type VerificationDecision = "passed" | "needs_review" | "invalid";
 
 type JsonRecord = Record<string, unknown>;
+type ParticipantBindingInput = {
+  bindingStatus: string;
+  expectedPosition: string | null;
+  livenessCode: string | null;
+  identityConfidence: number | null;
+} | null;
 
 export type ProtocolEvidenceVerificationResult = {
   challengeId: string;
@@ -30,6 +36,16 @@ export type ProtocolEvidenceVerificationResult = {
   blockingIssues: string[];
 };
 
+export type ProtocolEvidencePayloadVerificationInput = {
+  protocol: ProtocolSpecV2 | null;
+  binding: ParticipantBindingInput;
+  challengeLivenessPrompt: string | null;
+  type: string;
+  url: string | null;
+  description: string | null;
+  metadata: JsonRecord;
+};
+
 function parseJsonObject(value: string | null | undefined): JsonRecord {
   if (!value) return {};
   try {
@@ -53,6 +69,13 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function stringArrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => typeof item === "string" ? item.trim() : "")
+    .filter(Boolean);
+}
+
 function numberValue(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -65,6 +88,10 @@ function haystack(description: string | null, metadata: JsonRecord) {
     stringValue(metadata.challengeLivenessPhrase),
     stringValue(metadata.phrase),
     stringValue(metadata.identityCode),
+    ...stringArrayValue(metadata.detectedLivenessCodes),
+    ...stringArrayValue(metadata.detectedLivenessPhrases),
+    ...stringArrayValue(metadata.visibleCodes),
+    ...stringArrayValue(metadata.spokenPhrases),
   ].filter(Boolean).join("\n").toLowerCase();
 }
 
@@ -92,14 +119,20 @@ function evidenceModeAcceptsType(mode: ProtocolSpecV2["evidenceProtocol"]["mode"
   return false;
 }
 
+function observedPositionFromMetadata(metadata: JsonRecord): string | null {
+  const value =
+    stringValue(metadata.observedPosition) ??
+    stringValue(metadata.participantPosition) ??
+    stringValue(metadata.position);
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized === "left" || normalized === "right" || normalized === "center" || normalized === "any") return normalized;
+  return null;
+}
+
 function evaluateIdentity(input: {
   protocol: ProtocolSpecV2 | null;
-  binding: {
-    bindingStatus: string;
-    expectedPosition: string | null;
-    livenessCode: string | null;
-    identityConfidence: number | null;
-  } | null;
+  binding: ParticipantBindingInput;
   challengeLivenessPrompt: string | null;
   description: string | null;
   metadata: JsonRecord;
@@ -140,10 +173,28 @@ function evaluateIdentity(input: {
     stringValue(input.metadata.challengeLivenessPhrase) ||
     stringValue(input.metadata.identityCode)
   );
-  const livenessDetected = bindingCodeDetected || challengePromptDetected || metadataLivenessProvided;
+  const exactLivenessDetected = bindingCodeDetected || challengePromptDetected;
+  const livenessDetected = exactLivenessDetected || metadataLivenessProvided;
 
-  if (!livenessDetected) {
-    issues.push("Required liveness code or phrase was not found in evidence metadata/description.");
+  if (!exactLivenessDetected) {
+    if (metadataLivenessProvided) {
+      issues.push("Visual verification required: metadata mentions liveness, but the exact assigned liveness code was not confirmed.");
+    } else {
+      issues.push("Visual verification required: exact liveness code was not confirmed in evidence metadata/description.");
+    }
+  }
+
+  const expectedPosition = input.binding?.expectedPosition ?? null;
+  const observedPosition = observedPositionFromMetadata(input.metadata);
+  const positionRequired =
+    protocol.evidenceProtocol.mode === "same_camera_video" ||
+    protocol.identityProtocol.mode === "left_right_assignment";
+  if (positionRequired && expectedPosition && expectedPosition !== "any") {
+    if (!observedPosition) {
+      issues.push(`Visual verification required: observed position was not provided; expected ${expectedPosition}.`);
+    } else if (observedPosition !== expectedPosition) {
+      issues.push(`Observed position ${observedPosition} does not match expected ${expectedPosition}.`);
+    }
   }
 
   const threshold = protocol.identityProtocol.autoSettlementRequiresIdentityConfidence || 0.85;
@@ -152,9 +203,11 @@ function evaluateIdentity(input: {
     ? storedConfidence ?? 1
     : bindingCodeDetected
       ? 0.95
-      : challengePromptDetected || metadataLivenessProvided
+      : challengePromptDetected
         ? threshold
-        : 0;
+        : metadataLivenessProvided
+          ? 0.5
+          : 0;
 
   if (confidence < threshold) {
     issues.push(`Identity confidence ${Math.round(confidence * 100)}% is below ${Math.round(threshold * 100)}%.`);
@@ -209,6 +262,8 @@ function evaluateEvidence(input: {
   if (sizeBytes !== null && sizeBytes <= 0) issues.push("Uploaded evidence file size is zero.");
   if (input.metadata.videoTooShort === true) issues.push("Evidence metadata marks the video as too short.");
   if (input.metadata.suspectedEditingOrLoop === true) issues.push("Evidence metadata flags editing, static frames, or looping.");
+  if (input.metadata.fullBodyVisible === false) issues.push("Evidence metadata marks full body as not visible.");
+  if (input.metadata.continuousAttemptLikely === false) issues.push("Evidence metadata marks the attempt as discontinuous.");
 
   const confidence = issues.length === 0 ? 1 : 0;
   return {
@@ -226,6 +281,36 @@ function decisionFor(identityPassed: boolean, evidencePassed: boolean, blockingI
     return "invalid";
   }
   return "needs_review";
+}
+
+export function evaluateProtocolEvidencePayload(
+  input: ProtocolEvidencePayloadVerificationInput,
+): Omit<ProtocolEvidenceVerificationResult, "challengeId" | "evidenceId" | "userId"> {
+  const identityCheck = evaluateIdentity({
+    protocol: input.protocol,
+    binding: input.binding,
+    challengeLivenessPrompt: input.challengeLivenessPrompt,
+    description: input.description,
+    metadata: input.metadata,
+  });
+  const evidenceCheck = evaluateEvidence({
+    protocol: input.protocol,
+    type: input.type,
+    url: input.url,
+    description: input.description,
+    metadata: input.metadata,
+  });
+  const blockingIssues = uniqueIssues([
+    ...identityCheck.blockingIssues,
+    ...evidenceCheck.blockingIssues,
+  ]);
+  const decision = decisionFor(identityCheck.passed, evidenceCheck.passed, blockingIssues);
+  return {
+    decision,
+    identityCheck,
+    evidenceCheck,
+    blockingIssues,
+  };
 }
 
 export async function verifyEvidenceAgainstProtocol(evidenceId: string): Promise<ProtocolEvidenceVerificationResult> {
@@ -250,25 +335,16 @@ export async function verifyEvidenceAgainstProtocol(evidenceId: string): Promise
   const metadata = parseJsonObject(evidence.metadata);
   const binding = evidence.challenge.participantBindings.find((item) => item.userId === evidence.userId) ?? null;
   const participant = evidence.challenge.participants.find((item) => item.userId === evidence.userId) ?? null;
-  const identityCheck = evaluateIdentity({
+  const evaluated = evaluateProtocolEvidencePayload({
     protocol,
     binding,
     challengeLivenessPrompt: evidence.challenge.livenessPrompt,
-    description: evidence.description,
-    metadata,
-  });
-  const evidenceCheck = evaluateEvidence({
-    protocol,
     type: evidence.type,
     url: evidence.url,
     description: evidence.description,
     metadata,
   });
-  const blockingIssues = uniqueIssues([
-    ...identityCheck.blockingIssues,
-    ...evidenceCheck.blockingIssues,
-  ]);
-  const decision = decisionFor(identityCheck.passed, evidenceCheck.passed, blockingIssues);
+  const { identityCheck, evidenceCheck, blockingIssues, decision } = evaluated;
 
   await prisma.evidenceCheck.upsert({
     where: { evidenceId },
@@ -322,4 +398,3 @@ export async function verifyEvidenceAgainstProtocol(evidenceId: string): Promise
     blockingIssues,
   };
 }
-

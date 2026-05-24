@@ -110,6 +110,14 @@ function parsedBlockingIssues(value: string | null): string[] {
     .filter(Boolean);
 }
 
+function isSoftVisualPrecheckIssue(issue: string) {
+  return /visual verification required|exact liveness code was not confirmed|observed position was not provided|identity confidence .* below/i.test(issue);
+}
+
+function visionResultCanResolveSoftPrecheck(result: JudgmentResult | null | undefined) {
+  return result?.source === "vision_llm" && Boolean(result.videoMetrics);
+}
+
 function acceptedParticipants(participants: ParticipantLike[]) {
   return participants.filter((participant) =>
     participant.status ? participant.status === "accepted" : participant.role !== "spectator",
@@ -304,6 +312,8 @@ function evidenceResult(
   }
 
   const requiredParticipants = acceptedParticipants(participants).filter((participant) => participant.role !== "spectator");
+  const videoLike = mode === "same_camera_video" || mode === "separate_video" || mode === "live_host_video" || mode === "photo";
+  const visionCanResolvePrecheck = videoLike && visionResultCanResolveSoftPrecheck(result);
   for (const participant of requiredParticipants) {
     const submitted = evidence.find((item) => item.userId === participant.userId);
     if (!submitted) {
@@ -317,10 +327,13 @@ function evidenceResult(
   }
 
   for (const check of evidenceChecks) {
-    issues.push(...parsedBlockingIssues(check.blockingIssues).map((issue) => `Evidence check: ${issue}`));
+    const checkIssues = parsedBlockingIssues(check.blockingIssues);
+    for (const issue of checkIssues) {
+      if (check.decision === "needs_review" && visionCanResolvePrecheck && isSoftVisualPrecheckIssue(issue)) continue;
+      issues.push(`Evidence check: ${issue}`);
+    }
   }
 
-  const videoLike = mode === "same_camera_video" || mode === "separate_video" || mode === "live_host_video" || mode === "photo";
   if (videoLike) {
     if (result?.source !== "vision_llm") issues.push("Protocol requires visual evidence, but a vision judge did not produce the verdict.");
     issues.push(...videoEvidenceIssues(result?.videoMetrics?.participantA, "Participant A"));
