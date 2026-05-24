@@ -3,6 +3,7 @@ import {
   type AdapterStatus,
   type DataSourceTopic,
 } from "@/lib/data-source-catalog";
+import { LIVE_FETCH_DATA_SOURCE_KEY_SET } from "@/lib/data-source-adapter-keys";
 import type { ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 export type DataSourceResolutionMethod = DataSourceTopic["resolutionMethod"];
@@ -18,6 +19,14 @@ export type RegisteredDataSource = {
   resolutionMethod: DataSourceResolutionMethod;
   requiredFields: string[];
   autoSettleAllowed: boolean;
+  connectionStatus:
+    | "auto_settle_implemented"
+    | "live_fetch_connected"
+    | "oauth_required"
+    | "api_key_required"
+    | "provider_contract_required"
+    | "document_ai_required"
+    | "adapter_scaffolded";
   accuracyModel: "deterministic_api" | "user_authorized_api" | "document_extraction" | "manual_review";
   limitation: string;
 };
@@ -44,6 +53,7 @@ const CORE_IMPLEMENTED_SOURCES: RegisteredDataSource[] = [
     resolutionMethod: "public_api_oracle",
     requiredFields: ["coingecko_id", "symbol", "target_usd", "condition", "settlement_time"],
     autoSettleAllowed: true,
+    connectionStatus: "auto_settle_implemented",
     accuracyModel: "deterministic_api",
     limitation: "Only deterministic after the asset id, target, condition, and settlement time are locked.",
   },
@@ -58,6 +68,7 @@ const CORE_IMPLEMENTED_SOURCES: RegisteredDataSource[] = [
     resolutionMethod: "public_api_oracle",
     requiredFields: ["latitude", "longitude", "date", "metric", "target_value", "condition"],
     autoSettleAllowed: true,
+    connectionStatus: "auto_settle_implemented",
     accuracyModel: "deterministic_api",
     limitation: "Weather forecasts can change before settlement; final judgment must use the locked date/location metric snapshot.",
   },
@@ -86,14 +97,34 @@ function registeredFromCatalog(topic: DataSourceTopic): RegisteredDataSource {
     resolutionMethod,
     requiredFields: topic.dataSource.requiredFields,
     autoSettleAllowed: adapterStatus === "implemented" && resolutionMethod === "public_api_oracle",
+    connectionStatus: connectionStatusFor(topic),
     accuracyModel,
     limitation: limitationFor(topic),
   };
 }
 
+function connectionStatusFor(topic: DataSourceTopic): RegisteredDataSource["connectionStatus"] {
+  if (topic.dataSource.adapterStatus === "implemented" && topic.resolutionMethod === "public_api_oracle") {
+    return "auto_settle_implemented";
+  }
+  if (LIVE_FETCH_DATA_SOURCE_KEY_SET.has(topic.dataSource.sourceKey)) return "live_fetch_connected";
+  if (topic.resolutionMethod === "oauth_user_api") return "oauth_required";
+  if (topic.resolutionMethod === "document_ocr") return "document_ai_required";
+  if (/operator-specific|contract|required|platform export|partner API/i.test(`${topic.dataSource.endpoint} ${topic.dataSource.docsUrl}`)) {
+    return "provider_contract_required";
+  }
+  if (/(api key|developer\.|portal|aviationstack|tomtom|wmata|wsdot|nrel|eia|fred|etherscan|covalent|reservoir|twitch|spotify|tmdb|open states|electricity maps)/i.test(`${topic.dataSource.provider} ${topic.dataSource.endpoint} ${topic.dataSource.docsUrl}`)) {
+    return "api_key_required";
+  }
+  return "adapter_scaffolded";
+}
+
 function limitationFor(topic: DataSourceTopic): string {
   if (topic.dataSource.adapterStatus === "implemented") {
     return "Implemented adapter can auto-settle only when all required fields are locked and the provider returns a fresh usable response.";
+  }
+  if (LIVE_FETCH_DATA_SOURCE_KEY_SET.has(topic.dataSource.sourceKey)) {
+    return "Raw live fetch is connected, but an outcome-specific evaluator is still required before automatic settlement can be enabled.";
   }
   if (topic.resolutionMethod === "oauth_user_api") {
     return "Requires the user to connect and authorize their account before any data can be fetched or judged.";
@@ -171,6 +202,12 @@ function gateFor(source: RegisteredDataSource): DataSourceMatch["autoSettlementG
       reason: `${source.provider} requires user OAuth/account authorization before judging; no auto-settlement until that adapter exists and the user connects it.`,
     };
   }
+  if (source.connectionStatus === "live_fetch_connected") {
+    return {
+      allowed: false,
+      reason: `${source.provider} raw fetch adapter is connected, but no verified outcome evaluator exists yet; manual review is required before settlement.`,
+    };
+  }
   return {
     allowed: false,
     reason: `${source.provider} is identified, but adapterStatus=${source.adapterStatus}; no auto-settlement until a runtime adapter is implemented and verified.`,
@@ -226,6 +263,7 @@ export function summarizeDataSourceCoverage() {
     acc.total = (acc.total ?? 0) + 1;
     acc[`adapterStatus:${source.adapterStatus}`] = (acc[`adapterStatus:${source.adapterStatus}`] ?? 0) + 1;
     acc[`resolutionMethod:${source.resolutionMethod}`] = (acc[`resolutionMethod:${source.resolutionMethod}`] ?? 0) + 1;
+    acc[`connectionStatus:${source.connectionStatus}`] = (acc[`connectionStatus:${source.connectionStatus}`] ?? 0) + 1;
     if (source.autoSettleAllowed) acc.autoSettleAllowed = (acc.autoSettleAllowed ?? 0) + 1;
     return acc;
   }, {});
