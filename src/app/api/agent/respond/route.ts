@@ -25,6 +25,7 @@ import { refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "
 import { getProviderById } from "@/lib/llm-providers";
 import { parseProtocolSpecV2, protocolPreview } from "@/lib/protocol-spec-v2";
 import { CompileRequestError, compileProtocolForUser } from "@/lib/protocol-compiler";
+import { classifyAgentIntent, detectInputLanguage } from "@/lib/agent/intent-router";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -113,12 +114,6 @@ function sanitizeLocationSnapshot(raw: unknown): { lat: number; lng: number } | 
   return { lat, lng };
 }
 
-function detectLanguage(input: string): "en" | "zh" | "auto" {
-  if (/[\u3400-\u9fff]/.test(input)) return "zh";
-  if (/[A-Za-z]/.test(input)) return "en";
-  return "auto";
-}
-
 function shouldDirectCompile(message: string, draftState: DraftState) {
   if (draftState.protocol) return false;
   const text = message.trim().toLowerCase();
@@ -173,17 +168,19 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
   }
 
-  if (shouldDirectCompile(message, draftState)) {
+  const intent = classifyAgentIntent(message, draftState);
+  if (intent.directCompile || shouldDirectCompile(message, draftState)) {
     try {
       const compiled = await compileProtocolForUser({
         userId: user.userId,
         inputText: message,
         providerId: providerId ?? undefined,
         model: model ?? undefined,
-        language: detectLanguage(message),
+        language: detectInputLanguage(message),
         context: {
           surface: "agent_chat",
           flow: "direct_protocol_compile",
+          intent,
           locationSnapshot: locationSnapshot ?? undefined,
         },
         route: "/api/agent/respond/direct-compile",

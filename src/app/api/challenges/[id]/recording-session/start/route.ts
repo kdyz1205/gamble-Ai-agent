@@ -2,8 +2,11 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { parseProtocolSpecV2, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
-
-type RecordingMode = "same_camera_video" | "separate_video" | "live_host_video";
+import {
+  buildPreRollInstructions,
+  buildRecordingSessionProtocolJson,
+  recordingModeForProtocol,
+} from "@/lib/recording-session-protocol";
 
 function parseStoredProtocol(raw: string | null | undefined): ProtocolSpecV2 | null {
   if (!raw) return null;
@@ -12,32 +15,6 @@ function parseStoredProtocol(raw: string | null | undefined): ProtocolSpecV2 | n
   } catch {
     return null;
   }
-}
-
-function isRecordingMode(value: unknown): value is RecordingMode {
-  return value === "same_camera_video" || value === "separate_video" || value === "live_host_video";
-}
-
-function preRollInstructions(protocol: ProtocolSpecV2, mode: RecordingMode) {
-  const base = [
-    ...protocol.evidenceProtocol.captureInstructions,
-    ...protocol.evidenceProtocol.requiredEvidence.map((item) => `Required evidence: ${item}`),
-  ];
-  if (mode === "same_camera_video") {
-    return [
-      "Creator stands left. Opponent stands right.",
-      "Each participant says or shows their own liveness code.",
-      "Keep both full bodies visible before, during, and after the attempt.",
-      "Start after the countdown and do not cut the recording.",
-      ...base,
-    ];
-  }
-  return [
-    "Show your face and participant identity before starting.",
-    "Say or show your liveness code if one is assigned.",
-    "Keep the full attempt visible and continuous.",
-    ...base,
-  ];
 }
 
 export async function POST(
@@ -70,8 +47,8 @@ export async function POST(
     return Response.json({ error: "Challenge has no ProtocolSpecV2; recording session cannot start" }, { status: 409 });
   }
 
-  const requestedMode = isRecordingMode(body.mode) ? body.mode : protocol.evidenceProtocol.mode;
-  if (!isRecordingMode(requestedMode)) {
+  const requestedMode = recordingModeForProtocol(protocol, body.mode);
+  if (!requestedMode) {
     return Response.json({ error: `Protocol evidence mode ${protocol.evidenceProtocol.mode} is not a recording mode` }, { status: 400 });
   }
 
@@ -88,7 +65,7 @@ export async function POST(
     };
   });
 
-  const protocolJson = JSON.stringify({
+  const protocolJson = buildRecordingSessionProtocolJson({
     protocol,
     mode: requestedMode,
     participantBindings,
@@ -108,7 +85,7 @@ export async function POST(
   return Response.json({
     recordingSessionId: session.id,
     mode: requestedMode,
-    preRollInstructions: preRollInstructions(protocol, requestedMode),
+    preRollInstructions: buildPreRollInstructions(protocol, requestedMode),
     startCountdown: 3,
     startCondition: protocol.timingProtocol.startCondition,
     endCondition: protocol.timingProtocol.endCondition,

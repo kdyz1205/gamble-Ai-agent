@@ -4,20 +4,16 @@ import { getAuthUser, unauthorized } from "@/lib/auth";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { settleChallenge } from "@/lib/credits";
 import { ChallengeStatus, type ChallengeStatus as ChallengeStatusValue } from "@/lib/enums";
-import { assertChallengeTransition, isTerminalStatus } from "@/lib/challenge-state-machine";
+import { assertChallengeTransition } from "@/lib/challenge-state-machine";
 import { cleanupChallengeFrameBlobs } from "@/lib/media/blob-cleanup";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
+import {
+  evaluateManualResolutionPolicy,
+  MANUAL_RESOLUTION_STATUSES,
+  type ManualOutcome,
+} from "@/lib/manual-review-policy";
 
 export const runtime = "nodejs";
-
-type ManualOutcome = "winner" | "refund" | "void";
-
-const MANUAL_RESOLUTION_STATUSES: readonly ChallengeStatusValue[] = [
-  ChallengeStatus.manual_review_required,
-  ChallengeStatus.disputed,
-  ChallengeStatus.ai_inconclusive,
-  ChallengeStatus.dispute_window_open,
-];
 
 function challengeDetailInclude() {
   return {
@@ -70,10 +66,6 @@ export async function POST(
   const body = await readBody(req);
 
   try {
-    if (!body.outcome) {
-      return Response.json({ error: "outcome must be winner, refund, or void" }, { status: 400 });
-    }
-
     const challenge = await prisma.challenge.findUnique({
       where: { id },
       include: {
@@ -84,51 +76,28 @@ export async function POST(
     });
 
     if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
-    if (challenge.creatorId !== user.userId) {
-      return Response.json({ error: "Only the creator can resolve manual review in this MVP" }, { status: 403 });
-    }
 
     const status = challenge.status as ChallengeStatusValue;
-    if (isTerminalStatus(status)) {
-      return Response.json({ error: `Challenge is already terminal (status=${status})` }, { status: 409 });
-    }
-    if (!MANUAL_RESOLUTION_STATUSES.includes(status)) {
-      return Response.json(
-        { error: `Manual resolution requires manual-review/disputed status (status=${status})` },
-        { status: 409 },
-      );
-    }
 
     const acceptedParticipants = challenge.participants.filter((participant) => participant.status === "accepted");
-    if (acceptedParticipants.length === 0) {
-      return Response.json({ error: "No accepted participants to resolve" }, { status: 409 });
-    }
-
-    let winnerId: string | null = null;
-    if (body.outcome === "winner") {
-      const winner = acceptedParticipants.find((participant) => participant.userId === body.winnerId);
-      if (!winner) {
-        return Response.json({ error: "winnerId must be an accepted participant" }, { status: 400 });
-      }
-      winnerId = winner.userId;
-    }
-
-    if (body.outcome === "void" && challenge.stake > 0) {
-      return Response.json(
-        { error: "Staked challenges cannot be voided without refunding locked credits" },
-        { status: 400 },
-      );
-    }
 
     const existingSettlementRows = await prisma.creditTx.count({
       where: { challengeId: id, type: { in: ["win", "loss", "refund"] } },
     });
-    if (existingSettlementRows > 0) {
-      return Response.json(
-        { error: "Settlement rows already exist for this challenge; refusing duplicate manual settlement" },
-        { status: 409 },
-      );
+    const policy = evaluateManualResolutionPolicy({
+      status,
+      creatorId: challenge.creatorId,
+      actorUserId: user.userId,
+      outcome: body.outcome,
+      winnerId: body.winnerId,
+      stake: challenge.stake,
+      participants: challenge.participants,
+      existingSettlementRows,
+    });
+    if (!policy.allowed) {
+      return Response.json({ error: policy.error }, { status: policy.status ?? 400 });
     }
+    const winnerId = policy.winnerId;
 
     assertChallengeTransition(status, ChallengeStatus.finalized);
     const claim = await prisma.challenge.updateMany({

@@ -66,23 +66,23 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run a browser/API flow where one message compiles, publishes, and reports the graph trace.",
   },
   intent_router: {
-    status: "partial",
-    summary: "The LLM/orchestrator can choose actions/tools, but there is no independent deterministic router service yet.",
-    evidence: ["src/lib/agent/orchestrator.ts", "src/lib/agent/system-prompt.ts"],
-    missing: ["No standalone intent classifier contract or E2E confusion matrix."],
-    nextProof: "Add an intent-router smoke suite covering compile, publish, join, evidence, judge, discovery, and support prompts.",
+    status: "runtime_backed",
+    summary: "A standalone intent router classifies compile, join, evidence, judge, discovery, and support turns before the LLM/tool layer.",
+    evidence: ["src/lib/agent/intent-router.ts", "src/app/api/agent/respond/route.ts", "scripts/smoke-agent-intent-router.ts"],
+    missing: ["No production confusion-matrix run over real user prompts and multilingual voice transcripts."],
+    nextProof: "Run production prompt replay for compile, publish, join, evidence, judge, discovery, and support prompts with expected routes.",
   },
   rule_safety: {
-    status: "partial",
-    summary: "Safety prefilter and riskPolicy exist, but it is not yet a complete policy engine with adversarial coverage.",
-    evidence: ["src/lib/protocol-compiler.ts", "ProtocolSpecV2.riskPolicy"],
-    missing: ["No broad red-team suite for unsafe/illegal/non-consensual/chance-money prompts."],
-    nextProof: "Add safety fixture tests that prove blocked, redirected, manual-review, and allowed cases.",
+    status: "runtime_backed",
+    summary: "Rule safety has a standalone prefilter with blocked/review/allowed fixture coverage before protocol compilation.",
+    evidence: ["src/lib/rule-safety.ts", "src/lib/protocol-compiler.ts", "scripts/smoke-rule-safety.ts"],
+    missing: ["No large adversarial multilingual red-team run in production telemetry."],
+    nextProof: "Run a broader prompt replay with unsafe, legal-region cash, safe alternatives, and multilingual edge cases.",
   },
   data_source_router: {
-    status: "partial",
-    summary: "Registry and oracle routing exist; many source families are cataloged but not all are live adapters.",
-    evidence: ["src/lib/data-source-registry.ts", "src/app/api/data-sources/[sourceKey]/run/route.ts"],
+    status: "runtime_backed",
+    summary: "Registry, dry-run runners, live-fetch adapter scaffolds, and judge oracle routing are executable before manual review fallback.",
+    evidence: ["src/lib/data-source-registry.ts", "src/app/api/data-sources/[sourceKey]/run/route.ts", "scripts/smoke-data-source-registry.ts", "scripts/smoke-data-source-judge-router.ts"],
     missing: ["Not every cataloged data source can fetch live production data with credentials and settlement proof."],
     nextProof: "Run live adapter probes for the sources used by the next 20 public-oracle challenge prompts.",
   },
@@ -129,16 +129,16 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run incognito join-link E2E: open /join/:id, accept rules, verify evidence_window_open.",
   },
   location_gate: {
-    status: "partial",
-    summary: "Location eligibility route exists, but location protocol is not enforced across every create/join path.",
-    evidence: ["src/app/api/challenges/[id]/check-location-eligibility/route.ts", "src/app/api/map/ping/route.ts"],
-    missing: ["No universal enforcement for walk-to-join/same-place-required challenges."],
+    status: "runtime_backed",
+    summary: "Location eligibility is a shared gate used by join routes/tools and supports outside-radius rejection plus inside-radius acceptance.",
+    evidence: ["src/lib/location-eligibility.ts", "src/app/api/challenges/[id]/check-location-eligibility/route.ts", "src/app/api/map/ping/route.ts", "scripts/smoke-location-gate.ts"],
+    missing: ["No latest two-device production proof for walk-to-join/same-place-required challenges."],
     nextProof: "Create walk-to-join challenge and prove outside-radius reject plus inside-radius accept.",
   },
   recording_session: {
-    status: "partial",
-    summary: "Recording sessions can be created and referenced, but guided browser capture is not complete enough.",
-    evidence: ["src/app/api/challenges/[id]/recording-session/start/route.ts", "prisma/schema.prisma:RecordingSession"],
+    status: "runtime_backed",
+    summary: "Recording sessions persist capture protocol, participant bindings, liveness instructions, and mode-specific pre-roll guidance.",
+    evidence: ["src/lib/recording-session-protocol.ts", "src/app/api/challenges/[id]/recording-session/start/route.ts", "prisma/schema.prisma:RecordingSession", "scripts/smoke-recording-session.ts"],
     missing: ["Black-screen recording/camera fallback and full guided same-camera flow still need browser/device proof."],
     nextProof: "Run mobile browser recording session: camera opens, captures, uploads, and stores recordingSessionId.",
   },
@@ -178,17 +178,17 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run duplicate-confirm and retry settlement tests that prove no double payout.",
   },
   rejudge_escalation: {
-    status: "partial",
-    summary: "Rejudge request flags and graph routing exist, but automatic multi-model escalation is not completed.",
-    evidence: ["src/app/api/challenges/[id]/judge/route.ts rejudge flags", "src/lib/agent/agent-graph.ts"],
-    missing: ["No automatic fallback chain across selected providers/models after an inconclusive verdict."],
-    nextProof: "Implement and prove confidence-low -> stronger model -> settle/manual-review routing.",
+    status: "runtime_backed",
+    summary: "Rejudge escalation has a policy engine that routes low-confidence/model-failed verdicts to stronger models or manual review without blind paid retries.",
+    evidence: ["src/lib/rejudge-escalation.ts", "src/app/api/challenges/[id]/judge/route.ts rejudge routing", "scripts/smoke-rejudge-escalation.ts"],
+    missing: ["No production E2E proving a disputed real challenge rejudges on the next model and then settles or enters manual review."],
+    nextProof: "Run production rejudge E2E: inconclusive verdict -> explicit rejudge -> stronger model -> settled/manual_review_required with audit trace.",
   },
   manual_review: {
-    status: "partial",
-    summary: "Manual-review states/routes exist, but there is no complete operator queue/dashboard workflow.",
-    evidence: ["src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts"],
-    missing: ["No reviewer assignment, queue UI, SLA, appeal flow, or audit dashboard."],
+    status: "runtime_backed",
+    summary: "Manual review has dispute, queue, policy, and resolve APIs with audited winner/refund/void outcomes.",
+    evidence: ["src/lib/manual-review-policy.ts", "src/app/api/manual-review/queue/route.ts", "src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts", "scripts/smoke-manual-review-policy.ts"],
+    missing: ["No reviewer assignment, SLA, appeal flow, browser dashboard, or latest production dispute -> resolve ledger proof."],
     nextProof: "Build manual review queue and run dispute -> resolve -> ledger proof.",
   },
 };
@@ -626,6 +626,7 @@ export function routeJudgmentOutcome(input: {
   recommendation?: string | null;
   autoSettleEligible?: boolean | null;
   blockingIssues?: string[];
+  rejudgePlan?: unknown;
 }): AgentGraphTrace {
   const eligible = input.autoSettleEligible === true;
   const route: AgentNodeId[] = [
@@ -650,6 +651,7 @@ export function routeJudgmentOutcome(input: {
       winnerId: input.winnerId ?? null,
       autoSettleEligible: eligible,
       blockingIssues: input.blockingIssues ?? [],
+      rejudgePlan: input.rejudgePlan ?? null,
     },
   });
 }

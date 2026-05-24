@@ -753,6 +753,21 @@ export async function verifyEvidenceIdentity(id: string, evidenceId: string): Pr
   return apiFetch(`/challenges/${id}/evidence/${evidenceId}/verify-identity`, { method: "POST" });
 }
 
+export interface RejudgeEscalationPlan {
+  agent: "rejudge_escalation";
+  action: "none" | "retry_stronger_model" | "try_alternate_provider" | "manual_review";
+  shouldRunRejudge: boolean;
+  reason: string;
+  nextProviderId: string | null;
+  nextModel: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  allowEscalation: boolean;
+  requiresExplicitRequest: boolean;
+  blockingIssues: string[];
+  notes: string[];
+}
+
 export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerId?: string;
   model?: string;
@@ -772,6 +787,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   providerCall?: unknown;
   videoMetrics?: unknown;
   dataSourceTrace?: unknown;
+  rejudgePlan?: RejudgeEscalationPlan;
   agentGraph?: AgentGraphTrace;
   verdict: {
     status: "ai_verdict_ready" | "ai_inconclusive" | "manual_review_required" | "settled";
@@ -786,6 +802,7 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
     providerCall?: unknown;
     videoMetrics?: unknown;
     dataSourceTrace?: unknown;
+    rejudgePlan?: RejudgeEscalationPlan;
     agentGraph?: AgentGraphTrace;
   };
   judgment: unknown;

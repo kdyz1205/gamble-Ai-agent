@@ -1,6 +1,6 @@
 # GambleAI 100 Challenge Crack Matrix
 
-Generated: 2026-05-24T02:34:11.558Z
+Generated: 2026-05-24T19:16:11.110Z
 
 This is a no-paid-LLM coverage run. It validates the local safety gate, deterministic crypto and weather oracle compilers, and deterministic fallback protocol generation. It does not prove arbitrary real-world video judgment.
 

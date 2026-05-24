@@ -279,6 +279,7 @@ export function buildJudgmentMetricsJson(
     autoSettlePolicy: AutoSettlePolicyResult;
     status: VerdictStatus;
     protocolGates?: ProtocolJudgmentGateResult;
+    rejudgePlan?: unknown;
   },
 ): string {
   const effectiveRecommendation = params.autoSettlePolicy.eligible
@@ -308,6 +309,7 @@ export function buildJudgmentMetricsJson(
     identityResult: params.protocolGates?.identityResult ?? null,
     evidenceResult: params.protocolGates?.evidenceResult ?? null,
     settlementEligibility: params.protocolGates?.settlementEligibility ?? null,
+    rejudgePlan: params.rejudgePlan ?? null,
   });
 }
 

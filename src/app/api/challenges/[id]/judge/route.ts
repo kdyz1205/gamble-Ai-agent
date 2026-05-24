@@ -2,7 +2,7 @@ import { after, NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
-import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, configuredProviders, getProviderById } from "@/lib/llm-providers";
 import { addCredits, getCredits, settleChallenge, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { spendDailyAiQuota, refundDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { ChallengeStatus } from "@/lib/enums";
@@ -36,6 +36,77 @@ import {
 } from "@/lib/judgment-policy";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 import { routeJudgmentOutcome } from "@/lib/agent/agent-graph";
+import { planRejudgeEscalation, type RejudgeEscalationPlan } from "@/lib/rejudge-escalation";
+
+function safeMetricsJson(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function stringField(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function numberField(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function evidenceQualityField(value: unknown): EvidenceQuality | null {
+  return value === "good" || value === "unclear" || value === "insufficient" || value === "invalid"
+    ? value
+    : null;
+}
+
+function recommendationField(value: unknown): VerdictRecommendation | null {
+  return value === "settle_winner" || value === "needs_review" || value === "invalid_evidence" || value === "tie_or_no_winner"
+    ? value
+    : null;
+}
+
+function providerCallField(metrics: Record<string, unknown>) {
+  const providerCall = metrics.providerCall;
+  return providerCall && typeof providerCall === "object" && !Array.isArray(providerCall)
+    ? providerCall as Record<string, unknown>
+    : {};
+}
+
+function previousVerdictPlanInput(judgment: {
+  winnerId: string | null;
+  confidence: number | null;
+  metricsJson: string | null;
+  aiModel: string | null;
+} | null | undefined) {
+  if (!judgment) return null;
+  const metrics = safeMetricsJson(judgment.metricsJson);
+  const providerCall = providerCallField(metrics);
+  return {
+    verdict: {
+      status: stringField(metrics.status),
+      winnerId: judgment.winnerId,
+      confidence: numberField(metrics.confidence) ?? judgment.confidence,
+      evidenceQuality: evidenceQualityField(metrics.evidenceQuality),
+      recommendation: recommendationField(metrics.recommendation ?? metrics.settlementRecommendation),
+      source: stringField(metrics.source),
+      autoSettleEligible: typeof metrics.autoSettleEligible === "boolean" ? metrics.autoSettleEligible : null,
+      blockingIssues: stringArray(metrics.blockingIssues),
+    },
+    providerId: stringField(providerCall.providerId),
+    model: stringField(providerCall.model) ?? stringField(metrics.model) ?? judgment.aiModel,
+  };
+}
 
 /**
  * POST /api/challenges/[id]/judge
@@ -70,7 +141,7 @@ export async function POST(
     if (typeof body?.reason === "string") rejudgeReason = body.reason.trim().slice(0, 500);
   } catch { /* default to the Light tier */ }
 
-  const cost = TIER_MULTIPLIER[tierId];
+  let cost = TIER_MULTIPLIER[tierId];
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
@@ -83,6 +154,10 @@ export async function POST(
       evidenceChecks: true,
       participantBindings: true,
       protocol: true,
+      judgments: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       _count: { select: { judgments: true } },
     },
   });
@@ -411,6 +486,61 @@ export async function POST(
     evidenceType.includes("video") ||
     challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video");
   const quotaKind = isVideoJudgment ? "video_judge" : "judge";
+  const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
+  const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
+  const bothHaveVideoUrl =
+    evidenceA?.type === "video" &&
+    evidenceB?.type === "video" &&
+    Boolean(String(evidenceA?.url ?? "").trim()) &&
+    Boolean(String(evidenceB?.url ?? "").trim());
+  const configuredProviderIds = configuredProviders().map((provider) => provider.id);
+  const previousRejudgeInput = isRejudge ? previousVerdictPlanInput(challenge.judgments[0]) : null;
+  const preRunRejudgePlan = previousRejudgeInput
+    ? planRejudgeEscalation({
+        verdict: previousRejudgeInput.verdict,
+        currentProviderId: previousRejudgeInput.providerId,
+        currentModel: previousRejudgeInput.model,
+        needsVision: isVideoJudgment,
+        attemptCount: challenge._count.judgments,
+        allowEscalation: protocol?.aiBudgetPolicy.allowEscalation !== false,
+        configuredProviderIds,
+      })
+    : null;
+  if (isRejudge && preRunRejudgePlan && !preRunRejudgePlan.shouldRunRejudge && !providerIdOverride && !modelOverride) {
+    assertChallengeTransition(challenge.status, ChallengeStatus.manual_review_required);
+    await prisma.challenge.update({
+      where: { id },
+      data: { status: ChallengeStatus.manual_review_required },
+    });
+    await appendAuditLog({
+      action: "judgment.rejudge_blocked",
+      actorUserId: user.userId,
+      challengeId: id,
+      payload: {
+        previousStatus: challenge.status,
+        reason: rejudgeReason || "Rejudge blocked by escalation policy.",
+        rejudgePlan: preRunRejudgePlan,
+      },
+    });
+    return Response.json(
+      {
+        error: "Rejudge is not useful for this verdict; manual review is required.",
+        rejudgePlan: preRunRejudgePlan,
+        challenge: { id, status: ChallengeStatus.manual_review_required },
+      },
+      { status: 409 },
+    );
+  }
+  if (isRejudge && preRunRejudgePlan?.nextProviderId && !providerIdOverride) {
+    providerIdOverride = preRunRejudgePlan.nextProviderId;
+  }
+  if (isRejudge && preRunRejudgePlan?.nextModel && !modelOverride) {
+    modelOverride = preRunRejudgePlan.nextModel;
+  }
+  if (isRejudge && preRunRejudgePlan?.shouldRunRejudge && tierId < 3) {
+    tierId = 3;
+    cost = TIER_MULTIPLIER[tierId];
+  }
 
   let inferenceSpendCharged = false;
   if (!isFreeChallenge) {
@@ -466,12 +596,11 @@ export async function POST(
         tierId,
         providerId: providerIdOverride ?? null,
         model: modelOverride ?? null,
+        rejudgePlan: preRunRejudgePlan,
       },
     });
   }
 
-  const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
-  const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
   const parseFrames = (raw: string | null | undefined): string[] | null => {
     if (!raw) return null;
     try {
@@ -495,11 +624,6 @@ export async function POST(
 
   const aiModel = getAiModel(tierId);
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
-  const bothHaveVideoUrl =
-    evidenceA?.type === "video" &&
-    evidenceB?.type === "video" &&
-    Boolean(String(evidenceA?.url ?? "").trim()) &&
-    Boolean(String(evidenceB?.url ?? "").trim());
   const googleVisionReady =
     Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
   const providerId =
@@ -596,6 +720,24 @@ export async function POST(
     ? autoSettlePolicy.blockingIssues
     : blockingIssuesForJudgment(result, judgmentPolicyOptions);
   const { evidenceQuality, recommendation } = effectiveJudgmentVerdictFields(result, autoSettlePolicy);
+  const rejudgePlan: RejudgeEscalationPlan = planRejudgeEscalation({
+    verdict: {
+      status: verdictStatus,
+      winnerId: result.winnerId,
+      confidence: result.confidence,
+      evidenceQuality,
+      recommendation,
+      source: result.source ?? "llm",
+      autoSettleEligible: autoSettlePolicy.eligible,
+      blockingIssues,
+    },
+    currentProviderId: providerId,
+    currentModel: judgeModel,
+    needsVision: requiresVision,
+    attemptCount: challenge._count.judgments + 1,
+    allowEscalation: protocol?.aiBudgetPolicy.allowEscalation !== false,
+    configuredProviderIds,
+  });
   const effectiveAiModelLabel =
     result.source === "deterministic"
       ? "Deterministic · objective-answer-v1"
@@ -647,6 +789,7 @@ export async function POST(
         autoSettlePolicy,
         status: verdictStatus,
         protocolGates,
+        rejudgePlan,
       }),
     },
     include: { winner: { select: { id: true, username: true } } },
@@ -672,6 +815,7 @@ export async function POST(
     identityResult: protocolGates.identityResult,
     evidenceResult: protocolGates.evidenceResult,
     settlementEligibility: protocolGates.settlementEligibility,
+    rejudgePlan,
     agentGraph: routeJudgmentOutcome({
       source: "/api/challenges/[id]/judge",
       verdictStatus,
@@ -680,6 +824,7 @@ export async function POST(
       recommendation,
       autoSettleEligible: autoSettlePolicy.eligible,
       blockingIssues,
+      rejudgePlan,
     }),
   } satisfies {
     status: VerdictStatus;
@@ -700,6 +845,7 @@ export async function POST(
     identityResult: unknown;
     evidenceResult: unknown;
     settlementEligibility: unknown;
+    rejudgePlan: RejudgeEscalationPlan;
     agentGraph: unknown;
   };
 
@@ -733,6 +879,7 @@ export async function POST(
         autoSettleBlockReason: autoSettlePolicy.reason,
         rejudge: isRejudge,
         rejudgeReason: rejudgeReason || null,
+        rejudgePlan,
         inferenceRefunded,
         reasoning: result.reasoning?.slice(0, 500),
       },
@@ -861,6 +1008,7 @@ export async function POST(
       settlementEligibility: protocolGates.settlementEligibility,
       rejudge: isRejudge,
       rejudgeReason: rejudgeReason || null,
+      rejudgePlan,
       inferenceRefunded,
       reasoning: result.reasoning?.slice(0, 500),
     },
