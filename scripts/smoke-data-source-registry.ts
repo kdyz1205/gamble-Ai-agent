@@ -11,6 +11,7 @@ import {
 import {
   applyDataSourceGateToProtocol,
   canAutoSettleWithDataSource,
+  canRunProtocolGatedDataSource,
   getDataSourceAdapter,
   implementedDataSourceAdapters,
   listDataSourceAdapters,
@@ -30,24 +31,30 @@ function assertCatalogShape(topics: DataSourceTopic[]) {
     assert.deepEqual(source.requiredFields, topic.dataSource.requiredFields);
     assert.equal(
       canAutoSettleWithDataSource(topic.dataSource.sourceKey),
+      topic.dataSource.adapterStatus === "implemented" && topic.resolutionMethod === "public_api_oracle",
+      `proven auto-settle gate mismatch for ${topic.dataSource.sourceKey}`,
+    );
+    assert.equal(
+      canRunProtocolGatedDataSource(topic.dataSource.sourceKey),
       (topic.dataSource.adapterStatus === "implemented" && topic.resolutionMethod === "public_api_oracle") ||
         LIVE_FETCH_DATA_SOURCE_KEYS.includes(topic.dataSource.sourceKey as typeof LIVE_FETCH_DATA_SOURCE_KEYS[number]),
-      `auto-settle gate mismatch for ${topic.dataSource.sourceKey}`,
+      `protocol-gated oracle gate mismatch for ${topic.dataSource.sourceKey}`,
     );
   }
 }
 
-function example(prompt: string, expectedSourceKey: string, expectedAutoSettle: boolean) {
+function example(prompt: string, expectedSourceKey: string, expectedProtocolGate: boolean) {
   const match = resolveDataSourceForPrompt(prompt);
   assert.ok(match, `expected data-source match for ${prompt}`);
   assert.equal(match.source.sourceKey, expectedSourceKey);
-  assert.equal(match.autoSettlementGate.allowed, expectedAutoSettle, prompt);
+  assert.equal(match.autoSettlementGate.allowed, expectedProtocolGate, prompt);
   return {
     prompt,
     sourceKey: match.source.sourceKey,
     provider: match.source.provider,
     adapterStatus: match.source.adapterStatus,
-    autoSettleAllowed: match.autoSettlementGate.allowed,
+    autoSettleProven: canAutoSettleWithDataSource(match.source.sourceKey),
+    protocolGateAllowed: match.autoSettlementGate.allowed,
     reason: match.autoSettlementGate.reason,
   };
 }

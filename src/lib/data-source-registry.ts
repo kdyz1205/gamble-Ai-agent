@@ -205,7 +205,7 @@ function gateFor(source: RegisteredDataSource): DataSourceMatch["autoSettlementG
   if (source.connectionStatus === "live_fetch_connected") {
     return {
       allowed: true,
-      reason: `${source.provider} live fetch is connected; auto-settlement is allowed only when the router fetch succeeds, the selected AI judge explains the result from returned data, and protocol gates pass.`,
+      reason: `${source.provider} live fetch is connected; it can run a protocol-gated oracle review, but automatic settlement still requires a successful fetch, an outcome-specific judge result, and all protocol gates.`,
     };
   }
   return {
@@ -227,6 +227,11 @@ export function implementedDataSourceAdapters() {
 }
 
 export function canAutoSettleWithDataSource(sourceKey: string) {
+  const source = getDataSourceAdapter(sourceKey);
+  return Boolean(source?.autoSettleAllowed);
+}
+
+export function canRunProtocolGatedDataSource(sourceKey: string) {
   const source = getDataSourceAdapter(sourceKey);
   return Boolean(source?.autoSettleAllowed || source?.connectionStatus === "live_fetch_connected");
 }
@@ -265,6 +270,9 @@ export function summarizeDataSourceCoverage() {
     acc[`resolutionMethod:${source.resolutionMethod}`] = (acc[`resolutionMethod:${source.resolutionMethod}`] ?? 0) + 1;
     acc[`connectionStatus:${source.connectionStatus}`] = (acc[`connectionStatus:${source.connectionStatus}`] ?? 0) + 1;
     if (source.autoSettleAllowed) acc.autoSettleAllowed = (acc.autoSettleAllowed ?? 0) + 1;
+    if (source.autoSettleAllowed || source.connectionStatus === "live_fetch_connected") {
+      acc.protocolGateAllowed = (acc.protocolGateAllowed ?? 0) + 1;
+    }
     return acc;
   }, {});
 }

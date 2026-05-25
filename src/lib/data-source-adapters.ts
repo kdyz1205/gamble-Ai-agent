@@ -292,6 +292,7 @@ export function dataSourceAdapterCatalog() {
     connectionStatus: source.connectionStatus,
     adapterStatus: source.adapterStatus,
     autoSettleAllowed: source.autoSettleAllowed,
+    protocolGateAllowed: Boolean(source.autoSettleAllowed || source.connectionStatus === "live_fetch_connected"),
     settlementReadiness: settlementReadiness(source),
     hasLiveFetch: Boolean(LIVE_ADAPTERS[source.sourceKey]),
     requiredFields: source.requiredFields,

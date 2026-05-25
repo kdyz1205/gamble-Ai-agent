@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
-import { acceptanceContract, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { acceptanceContract, challengeUsesChineseCopy, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 import { formatChallengeDeadline } from "@/lib/challenge-time";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
@@ -225,8 +225,12 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const ruleCards = parseChallengeRules(c);
   const compactRules = compactChallengeRules(c);
   const contract = acceptanceContract(c);
+  const zhCopy = challengeUsesChineseCopy(c);
   const locationGateRequired = needsLocationGate(c);
-  const deadlineLabel = formatChallengeDeadline(c.deadline);
+  const rawDeadlineLabel = formatChallengeDeadline(c.deadline, { includePrefix: !zhCopy });
+  const deadlineLabel = zhCopy && rawDeadlineLabel
+    ? rawDeadlineLabel === "Deadline passed" ? "已过期" : `截止 ${rawDeadlineLabel}`
+    : rawDeadlineLabel;
 
   return (
     <div className="min-h-screen relative">
@@ -285,7 +289,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   {c.creator.username}
                 </p>
                 <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>
-                  challenged you
+                  {zhCopy ? "邀请你挑战" : "challenged you"}
                 </p>
               </div>
               <span
@@ -302,10 +306,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
 
             <div className="mb-5 px-4 py-3" style={{ background: `${MINT}14`, border: `1px solid ${MINT}55`, borderRadius: "16px" }}>
               <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>
-                Quick read
+                {zhCopy ? "快速了解" : "Quick read"}
               </p>
               <p className="text-sm font-semibold leading-relaxed" style={{ color: NAVY }}>
-                Accept rules. Submit proof. AI recommends the winner.
+                {zhCopy ? "同意规则，提交证据，AI 给出判定建议。" : "Accept rules. Submit proof. AI recommends the winner."}
               </p>
             </div>
 
@@ -319,7 +323,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 }}
               >
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>
-                  Stake
+                  {zhCopy ? "积分" : "Stake"}
                 </p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>
                   {stakeLabel}
@@ -330,7 +334,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 style={{ background: `${MINT}14`, border: `1px solid ${MINT}33`, borderRadius: "16px" }}
               >
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>
-                  Evidence
+                  {zhCopy ? "证据" : "Evidence"}
                 </p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>
                   {c.evidenceType.replace(/_/g, " ")}
@@ -356,7 +360,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               {ruleCards.length > 0 && (
                 <details className="px-4 py-3" style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
                   <summary className="cursor-pointer text-xs font-black" style={{ color: NAVY }}>
-                    Full rules
+                    {zhCopy ? "完整规则" : "Full rules"}
                   </summary>
                   <div className="mt-3 grid gap-2">
                     {ruleCards.map((card) => (
@@ -384,10 +388,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 }}
               >
                 <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>
-                  Location required
+                  {zhCopy ? "需要位置" : "Location required"}
                 </p>
                 <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: NAVY }}>
-                  Location check required to join.
+                  {zhCopy ? "加入前需要位置验证。" : "Location check required to join."}
                 </p>
                 {locationMessage && (
                   <p
@@ -409,24 +413,24 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   }}
                 >
                   {locationStatus === "checking"
-                    ? "Checking..."
+                    ? zhCopy ? "验证中..." : "Checking..."
                     : locationStatus === "ready"
-                      ? "Location verified"
-                      : "Check location"}
+                      ? zhCopy ? "位置已验证" : "Location verified"
+                      : zhCopy ? "验证位置" : "Check location"}
                 </button>
               </div>
             )}
 
             <div className="mb-5 px-4 py-3" style={{ background: CREAM, border: "1px solid #FFE0CC", borderRadius: "16px" }}>
               <p className="text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: PEACH_TEXT }}>
-                Accept
+                {zhCopy ? "接受" : "Accept"}
               </p>
               <p className="text-xs font-bold mb-3" style={{ color: PEACH_TEXT }}>
                 {settlementSummary(c)}
               </p>
               <details className="mb-3">
-                <summary className="cursor-pointer text-xs font-black" style={{ color: PEACH_TEXT }}>
-                  Full terms
+              <summary className="cursor-pointer text-xs font-black" style={{ color: PEACH_TEXT }}>
+                  {zhCopy ? "完整条款" : "Full terms"}
                 </summary>
                 <ul className="mt-2 space-y-1.5">
                   {contract.map((item) => (
@@ -443,14 +447,14 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   onChange={(event) => setContractAccepted(event.target.checked)}
                   className="mt-0.5"
                 />
-                <span>I accept rules, AI judging, disputes, and credits.</span>
+                <span>{zhCopy ? "我同意规则、AI 判定、争议处理和积分结算。" : "I accept rules, AI judging, disputes, and credits."}</span>
               </label>
             </div>
 
             {deadlineLabel && (
               <div className="mb-5 px-4 py-2.5" style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}>
                 <p className="text-[11px] font-bold uppercase tracking-wider mb-0.5" style={{ color: NAVY_DIM }}>
-                  Deadline
+                  {zhCopy ? "截止时间" : "Deadline"}
                 </p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>
                   {deadlineLabel}
@@ -473,10 +477,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   animate={{ opacity: 1, scale: 1 }}
                 >
                   <p className="text-lg font-extrabold mb-1" style={{ color: MINT_TEXT }}>
-                    You are in.
+                    {zhCopy ? "你已加入。" : "You are in."}
                   </p>
                   <p className="text-sm font-medium" style={{ color: MINT_TEXT, opacity: 0.85 }}>
-                    Submit your evidence before the deadline.
+                    {zhCopy ? "请在截止前提交证据。" : "Submit your evidence before the deadline."}
                   </p>
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                     <Link
@@ -489,7 +493,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                         borderRadius: "9999px",
                       }}
                     >
-                      Go to the challenge
+                      {zhCopy ? "进入挑战" : "Go to the challenge"}
                     </Link>
                   </motion.div>
                 </motion.div>
@@ -501,12 +505,12 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 >
                   <p className="text-sm font-bold" style={{ color: NAVY_DIM }}>
                     {isEvidenceWindowStatus(c.status)
-                      ? "Challenge is live. Go submit evidence."
+                      ? zhCopy ? "挑战已开始，请提交证据。" : "Challenge is live. Go submit evidence."
                       : isAiReviewStatus(c.status)
-                        ? "AI is reviewing."
+                        ? zhCopy ? "AI 正在复核。" : "AI is reviewing."
                         : c.status === "settled"
-                          ? "Already settled."
-                          : "This challenge is no longer open."}
+                          ? zhCopy ? "已结算。" : "Already settled."
+                          : zhCopy ? "这个挑战已不再开放。" : "This challenge is no longer open."}
                   </p>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
                     <Link
@@ -514,14 +518,14 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                       className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
                     >
-                      Open challenge room
+                      {zhCopy ? "打开挑战房间" : "Open challenge room"}
                     </Link>
                     <Link
                       href="/markets"
                       className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
                     >
-                      Back to manager
+                      {zhCopy ? "返回管理页" : "Back to manager"}
                     </Link>
                   </div>
                 </motion.div>
@@ -541,7 +545,11 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                     boxShadow: accepting || !contractAccepted ? "none" : `0 4px 14px 0 ${ORANGE_GLOW}`,
                   }}
                 >
-                  {accepting ? "Joining..." : c.stake > 0 ? `Accept + lock ${stakeLabel}` : "Accept + join"}
+                  {accepting
+                    ? zhCopy ? "加入中..." : "Joining..."
+                    : c.stake > 0
+                      ? zhCopy ? `接受并托管 ${stakeLabel}` : `Accept + lock ${stakeLabel}`
+                      : zhCopy ? "接受并加入" : "Accept + join"}
                 </motion.button>
               )}
             </AnimatePresence>

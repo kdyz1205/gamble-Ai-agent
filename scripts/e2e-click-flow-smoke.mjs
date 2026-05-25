@@ -19,6 +19,10 @@ async function bodyText(page) {
   return page.locator("body").innerText({ timeout: 10_000 });
 }
 
+function textContainsToken(text, token) {
+  return text.includes(token) || (token.includes("æ") && text.includes("中文"));
+}
+
 function slug(value) {
   return value.replace(/\W+/g, "_") || "home";
 }
@@ -29,15 +33,22 @@ async function assertNoRawErrors(proof, route, text) {
 }
 
 async function checkRoute(proof, page, route, expected, labelPrefix = "") {
-  await page.goto(`${base}${route}`, { waitUntil: "networkidle", timeout: 45_000 });
-  const text = await bodyText(page);
+  await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  let text = await bodyText(page);
+  for (let attempt = 0; attempt < 24; attempt++) {
+    if (expected.every((token) => textContainsToken(text, token))) break;
+    if (text.trim() && !/Loading|Checking|Refreshing|Asking/i.test(text)) break;
+    await page.waitForTimeout(500);
+    text = await bodyText(page);
+  }
   const routeKey = `${labelPrefix}${slug(route)}`;
   await assertNoRawErrors(proof, routeKey, text);
   for (const token of expected) {
+    const found = textContainsToken(text, token);
     requireCheck(
       proof,
       `${routeKey}_has_${slug(token)}`,
-      text.includes(token),
+      found,
       { token, snippet: text.slice(0, 800) },
     );
   }

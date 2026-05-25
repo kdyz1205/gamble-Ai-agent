@@ -1,6 +1,6 @@
 import { judgeChallenge, type JudgmentResult } from "../src/lib/ai-engine";
 import { parseChallengeDeadline } from "../src/lib/challenge-time";
-import { canAutoSettleWithDataSource, resolveDataSourceForPrompt } from "../src/lib/data-source-registry";
+import { canRunProtocolGatedDataSource, resolveDataSourceForPrompt } from "../src/lib/data-source-registry";
 import { executeDataSourceAdapter } from "../src/lib/data-source-adapters";
 import type { ProtocolSpecV2 } from "../src/lib/protocol-spec-v2";
 
@@ -80,9 +80,9 @@ const match = resolveDataSourceForPrompt(prompt);
 assert(match, "Registry should resolve npm_registry_package");
 assert(match.source.sourceKey === "npm_registry_package", "Registry should resolve npm_registry_package");
 assert(match.autoSettlementGate.allowed, "Live-fetch data source should be eligible for protocol-gated auto settlement");
-assert(canAutoSettleWithDataSource("npm_registry_package"), "canAutoSettleWithDataSource should allow live-fetch router sources");
+assert(canRunProtocolGatedDataSource("npm_registry_package"), "canRunProtocolGatedDataSource should allow live-fetch router sources");
 const resolvedSourceKey = match.source.sourceKey;
-const gateAllowed = match.autoSettlementGate.allowed;
+const protocolGateAllowed = match.autoSettlementGate.allowed;
 
 async function main() {
   const now = new Date("2026-05-25T07:00:00.000Z");
@@ -170,7 +170,7 @@ async function main() {
   console.log(JSON.stringify({
     ok: true,
     sourceKey: resolvedSourceKey,
-    gateAllowed,
+    protocolGateAllowed,
     dryRunUrl: dryRun.url,
     verdictSource: verdict.source,
     verdictRecommendation: verdict.recommendation,

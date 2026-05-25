@@ -8,7 +8,7 @@ import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
-import { acceptanceContract, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { acceptanceContract, challengeUsesChineseCopy, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 import {
   isAiReviewStatus,
   isEvidenceWindowStatus,
@@ -195,6 +195,37 @@ function managementLockReason(challenge: ChallengeDetail, isCreator: boolean) {
     return `Status "${lifecycleStatusLabel(challenge.status)}" is past the empty-challenge close window.`;
   }
   return null;
+}
+
+function localizedStatusLabel(status: string, zh: boolean) {
+  if (!zh) return lifecycleStatusLabel(status);
+  const labels: Record<string, string> = {
+    draft: "草稿",
+    generated_spec: "规则已生成",
+    creator_confirmed: "创建者已确认",
+    waiting_for_opponent: "等待对手",
+    open: "等待对手",
+    opponent_accepted: "对手已接受",
+    escrow_locked: "积分已托管",
+    evidence_window_open: "提交证据中",
+    creator_submitted: "创建者已提交",
+    opponent_submitted: "对手已提交",
+    ai_reviewing: "AI 复核中",
+    ai_verdict_ready: "AI 判定已出",
+    dispute_window_open: "争议期",
+    finalized: "已确认",
+    settled: "已结算",
+    refunded: "已退款",
+    cancelled: "已取消",
+    expired: "已过期",
+    manual_review_required: "需要人工复核",
+    disputed: "争议中",
+    ai_inconclusive: "AI 未能判定",
+    evidence_invalid: "证据无效",
+    evidence_missing: "缺少证据",
+    voided: "已作废",
+  };
+  return labels[status] ?? lifecycleStatusLabel(status);
 }
 
 function canCancelAndRefundBeforeEvidence(challenge: ChallengeDetail, isCreator: boolean) {
@@ -629,6 +660,7 @@ export default function ChallengeVerdictPanel({
   const ruleCards = parseChallengeRules(challenge);
   const compactRules = compactChallengeRules(challenge);
   const contractBullets = acceptanceContract(challenge);
+  const zhCopy = challengeUsesChineseCopy(challenge);
   const closeLockReason = managementLockReason(challenge, isCreator);
   const canCloseEmpty = !closeLockReason;
   const canCancelRefund = canCancelAndRefundBeforeEvidence(challenge, isCreator);
@@ -654,10 +686,10 @@ export default function ChallengeVerdictPanel({
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The challenge</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>{zhCopy ? "挑战" : "The challenge"}</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
             <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              Accept rules. Submit proof. AI recommends the winner.
+              {zhCopy ? "同意规则，提交证据，AI 给出判定建议。" : "Accept rules. Submit proof. AI recommends the winner."}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -667,10 +699,10 @@ export default function ChallengeVerdictPanel({
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
             >
-              {lifecycleStatusLabel(challenge.status)}
+              {localizedStatusLabel(challenge.status, zhCopy)}
             </motion.span>
             {challenge.stake > 0 && (
-              <span className="text-xs font-bold text-amber-400">{challenge.stake} credits at stake</span>
+              <span className="text-xs font-bold text-amber-400">{zhCopy ? `${challenge.stake} credits 已托管` : `${challenge.stake} credits at stake`}</span>
             )}
           </div>
         </div>
@@ -684,9 +716,9 @@ export default function ChallengeVerdictPanel({
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-extrabold" style={{ color: "#7C2D12" }}>Waiting for opponent</p>
-                <p className="text-xs font-semibold mt-0.5" style={{ color: "#9A3412" }}>
-                  Share the invite. Starts after they accept.
+              <p className="text-sm font-extrabold" style={{ color: "#7C2D12" }}>{zhCopy ? "等待对手" : "Waiting for opponent"}</p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: "#9A3412" }}>
+                  {zhCopy ? "分享邀请，对方接受后开始。" : "Share the invite. Starts after they accept."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -697,7 +729,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black"
                   style={{ background: "#FED7AA", color: "#7C2D12", borderRadius: "9999px", boxShadow: "0 4px 14px rgba(251,146,60,0.25)" }}
                 >
-                  Share to friend
+                  {zhCopy ? "分享给朋友" : "Share to friend"}
                 </motion.button>
                 <motion.button
                   type="button"
@@ -706,7 +738,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black"
                   style={{ background: "#FFFFFF", color: "#334155", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
-                  {copied ? "Copied" : "Copy link"}
+                  {copied ? (zhCopy ? "已复制" : "Copied") : (zhCopy ? "复制链接" : "Copy link")}
                 </motion.button>
                 {canCloseEmpty && (
                   <motion.button
@@ -717,13 +749,13 @@ export default function ChallengeVerdictPanel({
                     className="px-4 py-2 text-xs font-black disabled:opacity-50"
                     style={{ background: "#FFFFFF", color: "#991B1B", border: "1px solid #FECACA", borderRadius: "9999px" }}
                   >
-                    Close challenge
+                    {zhCopy ? "关闭挑战" : "Close challenge"}
                   </motion.button>
                 )}
               </div>
             </div>
             <p className="text-[11px] font-bold" style={{ color: "#9A3412" }}>
-              Escrow: {settlementSummary(challenge)}
+              {zhCopy ? "托管：" : "Escrow: "}{settlementSummary(challenge)}
             </p>
             <div className="flex flex-col gap-1">
               <input
@@ -750,13 +782,21 @@ export default function ChallengeVerdictPanel({
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>Manage challenge</p>
+                <p className="text-sm font-extrabold" style={{ color: "#1E293B" }}>{zhCopy ? "管理挑战" : "Manage challenge"}</p>
                 <p className="text-xs font-semibold mt-0.5" style={{ color: closeLockReason && !canCancelRefund ? "#991B1B" : "#047857" }}>
-                  {isArchived
-                    ? "Archived. History stays."
-                    : canCancelRefund
-                    ? "No evidence yet. Cancel refunds locked stakes."
-                    : closeLockReason || "Empty challenge. You can close it."}
+                  {zhCopy
+                    ? isArchived
+                      ? "已归档，历史保留。"
+                      : canCancelRefund
+                        ? "还没有证据，可以取消并退回托管积分。"
+                        : closeLockReason
+                          ? "当前不能删除；请使用归档、复核、退款或作废流程。"
+                          : "空挑战，可以关闭。"
+                    : isArchived
+                      ? "Archived. History stays."
+                      : canCancelRefund
+                        ? "No evidence yet. Cancel refunds locked stakes."
+                        : closeLockReason || "Empty challenge. You can close it."}
                 </p>
                 {manageNotice && (
                   <p className="mt-2 text-[11px] font-black" style={{ color: "#047857" }}>
@@ -773,7 +813,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black disabled:opacity-50"
                   style={{ background: "#A7F3D0", color: "#065F46", border: "1px solid #6EE7B7", borderRadius: "9999px" }}
                 >
-                  Restore
+                  {zhCopy ? "恢复" : "Restore"}
                 </motion.button>
               ) : canCancelRefund ? (
                 <motion.button
@@ -784,7 +824,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black disabled:opacity-50"
                   style={{ background: "#FED7AA", color: "#7C2D12", border: "1px solid #FDBA74", borderRadius: "9999px" }}
                 >
-                  Cancel and refund
+                  {zhCopy ? "取消并退款" : "Cancel and refund"}
                 </motion.button>
               ) : canCloseEmpty ? (
                 <motion.button
@@ -795,7 +835,7 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black disabled:opacity-50"
                   style={{ background: "#FECACA", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: "9999px" }}
                 >
-                  Close empty challenge
+                  {zhCopy ? "关闭空挑战" : "Close empty challenge"}
                 </motion.button>
               ) : canArchiveInstead ? (
                 <motion.button
@@ -806,14 +846,14 @@ export default function ChallengeVerdictPanel({
                   className="px-4 py-2 text-xs font-black disabled:opacity-50"
                   style={{ background: "#F1F5F9", color: "#334155", border: "1px solid #CBD5E1", borderRadius: "9999px" }}
                 >
-                  Archive
+                  {zhCopy ? "归档" : "Archive"}
                 </motion.button>
               ) : (
                 <span
                   className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider"
                   style={{ background: "#F1F5F9", color: "#64748B", borderRadius: "9999px" }}
                 >
-                  Locked
+                  {zhCopy ? "已锁定" : "Locked"}
                 </span>
               )}
             </div>
@@ -823,10 +863,10 @@ export default function ChallengeVerdictPanel({
         <div className="space-y-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: "#047857" }}>
-              Rules
+              {zhCopy ? "规则" : "Rules"}
             </p>
             <p className="text-xs font-semibold mt-1" style={{ color: "#64748B" }}>
-              Short version first.
+              {zhCopy ? "先看简版。" : "Short version first."}
             </p>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -851,7 +891,7 @@ export default function ChallengeVerdictPanel({
               style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "16px" }}
             >
               <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>
-                Full rules
+                {zhCopy ? "完整规则" : "Full rules"}
               </summary>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {ruleCards.map((card) => (
@@ -871,9 +911,9 @@ export default function ChallengeVerdictPanel({
 
         {isOpenForOpponentStatus(challenge.status) && !isCreator && !me && (
           <div className="p-4" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-            <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>Accept</p>
+            <p className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "#047857" }}>{zhCopy ? "接受" : "Accept"}</p>
             <details>
-              <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>Full terms</summary>
+              <summary className="cursor-pointer text-xs font-black" style={{ color: "#334155" }}>{zhCopy ? "完整条款" : "Full terms"}</summary>
               <ul className="mt-2 space-y-1.5">
                 {contractBullets.map((item) => (
                   <li key={item} className="text-xs font-semibold" style={{ color: "#334155", lineHeight: 1.5 }}>
@@ -889,7 +929,7 @@ export default function ChallengeVerdictPanel({
                 onChange={(event) => setAcceptContractChecked(event.target.checked)}
                 className="mt-0.5"
               />
-              <span>I accept rules, AI judging, disputes, and credits.</span>
+              <span>{zhCopy ? "我同意规则、AI 判定、争议处理和积分结算。" : "I accept rules, AI judging, disputes, and credits."}</span>
             </label>
             <motion.button
               type="button"
@@ -899,7 +939,7 @@ export default function ChallengeVerdictPanel({
               className="mt-3 w-full py-3 text-sm font-black disabled:opacity-40"
               style={{ background: "#A7F3D0", color: "#065F46", borderRadius: "9999px" }}
             >
-              {acceptingChallenge ? "Joining..." : "Accept rules and join"}
+              {acceptingChallenge ? (zhCopy ? "加入中..." : "Joining...") : (zhCopy ? "接受规则并加入" : "Accept rules and join")}
             </motion.button>
           </div>
         )}
@@ -927,7 +967,9 @@ export default function ChallengeVerdictPanel({
                 >
                   {p.done ? "✓" : i + 1}
                 </motion.span>
-                <span className={`text-[11px] font-bold ${p.done ? "text-success" : "text-text-muted"}`}>{p.label}</span>
+                <span className={`text-[11px] font-bold ${p.done ? "text-success" : "text-text-muted"}`}>
+                  {zhCopy ? (p.key === "match" ? "对手" : p.key === "ev" ? "证据" : "AI 判定") : p.label}
+                </span>
               </motion.div>
               {i < phases.length - 1 && (
                 <div className="hidden sm:block w-6 h-px" style={{
@@ -969,10 +1011,12 @@ export default function ChallengeVerdictPanel({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold truncate" style={{ color: "#1E293B" }}>
                     {p.user.username}
-                    {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
+                    {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>{zhCopy ? "（你）" : "(you)"}</span>}
                   </p>
                   <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    {isCreator ? "Creator" : "Opponent"} · {ev ? "Evidence in" : "Waiting"}
+                    {zhCopy
+                      ? `${isCreator ? "创建者" : "对手"} · ${ev ? "已提交证据" : "等待中"}`
+                      : `${isCreator ? "Creator" : "Opponent"} · ${ev ? "Evidence in" : "Waiting"}`}
                   </p>
                   {ev && (
                     <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
@@ -1048,9 +1092,11 @@ export default function ChallengeVerdictPanel({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All evidence is in</p>
+                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{zhCopy ? "证据已提交" : "All evidence is in"}</p>
                 <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
-                  {isCreator ? "Run AI, then confirm payout." : "Waiting for AI review."}
+                  {zhCopy
+                    ? isCreator ? "运行 AI，然后确认结果。" : "等待 AI 复核。"
+                    : isCreator ? "Run AI, then confirm payout." : "Waiting for AI review."}
                 </p>
               </div>
             </div>
@@ -1539,7 +1585,7 @@ export default function ChallengeVerdictPanel({
                 className="w-full py-2.5 text-sm font-bold transition-colors"
                 style={{ color: "#334155", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
               >
-                Share result
+                {zhCopy ? "分享结果" : "Share result"}
               </motion.button>
             </div>
           </motion.div>
@@ -1559,7 +1605,7 @@ export default function ChallengeVerdictPanel({
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            {copied ? "Copied" : "Copy invite link"}
+            {copied ? (zhCopy ? "已复制" : "Copied") : (zhCopy ? "复制邀请链接" : "Copy invite link")}
           </motion.button>
           <motion.button
             type="button"
@@ -1573,7 +1619,7 @@ export default function ChallengeVerdictPanel({
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            Refresh
+            {zhCopy ? "刷新" : "Refresh"}
           </motion.button>
         </div>
       </div>

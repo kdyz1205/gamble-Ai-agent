@@ -108,13 +108,15 @@ function joinSentencesForLanguage(first: string, second: string, zh: boolean) {
   return `${a}。${b}`;
 }
 
-function compactDeadlineLabel(timeLimit: string | undefined, deadlineLabel: string | null) {
+function compactDeadlineLabel(timeLimit: string | undefined, deadlineLabel: string | null, zh = false) {
   if (!deadlineLabel) return null;
   // Old AI drafts sometimes stored placeholder absolute dates that are now in the past.
   // If we already have a human-readable time rule, keep the compact card focused on that
   // instead of appending a confusing "Deadline passed" artifact.
   if (timeLimit && deadlineLabel === "Deadline passed") return null;
-  return deadlineLabel;
+  if (!zh) return deadlineLabel;
+  if (deadlineLabel === "Deadline passed") return "已过期";
+  return `截止 ${deadlineLabel}`;
 }
 
 function usesChineseCopy(challenge: ChallengeLike) {
@@ -126,6 +128,10 @@ function usesChineseCopy(challenge: ChallengeLike) {
   ].filter(Boolean).join("\n"));
 }
 
+export function challengeUsesChineseCopy(challenge: ChallengeLike) {
+  return usesChineseCopy(challenge);
+}
+
 function compactSettlementSummary(challenge: ChallengeLike) {
   const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
   const zh = usesChineseCopy(challenge);
@@ -135,7 +141,7 @@ function compactSettlementSummary(challenge: ChallengeLike) {
     : `${stake} ${challenge.stakeToken || "credits"} escrowed. Winner gets the pool.`;
 }
 
-export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
+function buildChallengeRuleCards(challenge: ChallengeLike): ChallengeRuleCard[] {
   const cards: ChallengeRuleCard[] = [];
   const seen = new Set<string>();
   const seenValues = new Set<string>();
@@ -167,11 +173,16 @@ export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard
   }
   if (!seen.has("Settlement")) {
     const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
+    const zh = usesChineseCopy(challenge);
     cards.push({
       label: "Settlement",
       value: stake > 0
-        ? `${stake} ${challenge.stakeToken || "credits"} per player is escrowed before play. Winner receives the internal credit pool after verdict confirmation.`
-        : "No stake. The result is recorded without moving credits.",
+        ? zh
+          ? `每人赛前托管 ${stake} ${challenge.stakeToken || "credits"}。判定确认后，赢家获得积分奖池。`
+          : `${stake} ${challenge.stakeToken || "credits"} per player is escrowed before play. Winner receives the internal credit pool after verdict confirmation.`
+        : zh
+          ? "无积分押注。结果只记录，不移动积分。"
+          : "No stake. The result is recorded without moving credits.",
     });
   }
 
@@ -182,8 +193,36 @@ export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard
   });
 }
 
+const RULE_LABELS_ZH: Record<string, string> = {
+  Goal: "目标",
+  "Win condition": "胜利条件",
+  "Evidence required": "证据要求",
+  "Recording standard": "录制要求",
+  Start: "开始",
+  "Time limit": "时间限制",
+  "Timing method": "计时方式",
+  "Valid action": "有效动作",
+  Scoring: "计分",
+  Attempts: "次数",
+  "Dispute window": "争议期",
+  Settlement: "结算",
+  Safety: "安全",
+};
+
+function localizeRuleCards(cards: ChallengeRuleCard[], zh: boolean) {
+  if (!zh) return cards;
+  return cards.map((card) => ({
+    ...card,
+    label: RULE_LABELS_ZH[card.label] ?? card.label,
+  }));
+}
+
+export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
+  return localizeRuleCards(buildChallengeRuleCards(challenge), usesChineseCopy(challenge));
+}
+
 export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
-  const cards = parseChallengeRules(challenge);
+  const cards = buildChallengeRuleCards(challenge);
   const zh = usesChineseCopy(challenge);
   const goal = pickCard(cards, ["Goal"])?.value || challenge.title;
   const win = pickCard(cards, ["Scoring", "Win condition"])?.value || goal;
@@ -192,7 +231,8 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     pickCard(cards, ["Recording standard"])?.value,
   ]) || (challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "Required evidence");
   const timeLimit = pickCard(cards, ["Time limit"])?.value;
-  const deadlineLabel = compactDeadlineLabel(timeLimit, formatChallengeDeadline(challenge.deadline));
+  const rawDeadlineLabel = formatChallengeDeadline(challenge.deadline, { includePrefix: !zh });
+  const deadlineLabel = compactDeadlineLabel(timeLimit, rawDeadlineLabel, zh);
   const time = timeLimit && deadlineLabel
     ? joinSentencesForLanguage(timeLimit, deadlineLabel, zh)
     : timeLimit || deadlineLabel || challenge.proofWindow || "Before the challenge window closes";
@@ -212,6 +252,20 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
 
 export function acceptanceContract(challenge: ChallengeLike): string[] {
   const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
+  const zh = usesChineseCopy(challenge);
+  if (zh) {
+    return [
+      "我同意上方显示的规则和胜利条件。",
+      `我同意提交符合录制要求的${challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "必要"}证据。`,
+      "我同意 AI 给出判定建议；低置信度或有争议时进入人工复核。",
+      challenge.disputeWindow
+        ? `我理解争议期为 ${challenge.disputeWindow}。`
+        : "我理解必须在最终结算前提出争议。",
+      stake > 0
+        ? `我同意加入时托管 ${stake} ${challenge.stakeToken || "credits"}。`
+        : "我理解这个挑战没有积分押注。",
+    ];
+  }
   return [
     "I agree to the rules and win condition shown above.",
     `I agree to submit ${challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "required"} evidence that matches the recording standard.`,
