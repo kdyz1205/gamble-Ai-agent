@@ -648,6 +648,7 @@ try {
       providerCall: judged.providerCall ?? judged.verdict?.providerCall ?? null,
       videoMetrics: judged.videoMetrics,
     };
+    const providerCall = judged.providerCall ?? judged.verdict?.providerCall ?? null;
     caseProof.finalStatus = finalChallenge.challenge.status;
     caseProof.creditTx = {
       creator: creatorTxs.map(txView),
@@ -655,17 +656,22 @@ try {
       refundRows: refundRows.map(txView),
     };
 
+    requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
+    requireCheck(caseProof, "provider_call_recorded", Boolean(providerCall), providerCall);
+    requireCheck(caseProof, "provider_call_used_api", providerCall?.usedApi === true, providerCall);
+    requireCheck(caseProof, "provider_call_kind_vision", providerCall?.requestKind === "vision", providerCall);
+    requireCheck(caseProof, "provider_call_http_200", providerCall?.httpStatus === 200 || providerCall?.httpStatus == null, providerCall);
+    requireCheck(caseProof, "provider_image_count_positive", Number(providerCall?.imageCount ?? 0) > 0, providerCall);
+    if (judgeProvider === "openai") {
+      requireCheck(caseProof, "provider_response_id_present", typeof providerCall?.responseId === "string" && providerCall.responseId.length > 0, providerCall);
+    }
+    requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
+    requireCheck(caseProof, "frames_inspected_positive", Number(judged.videoMetrics?.framesInspected ?? 0) > 0, judged.videoMetrics);
+    if (caseDef.id === "no_visible_role_label") {
+      requireCheck(caseProof, "no_visible_role_label_fixture_used", /no_label/i.test(fixtureSource), caseProof.videoSources);
+    }
+
     if (caseDef.expect === "settled") {
-      requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
-      const providerCall = judged.providerCall ?? judged.verdict?.providerCall ?? null;
-      requireCheck(caseProof, "provider_call_recorded", Boolean(providerCall), providerCall);
-      requireCheck(caseProof, "provider_call_used_api", providerCall?.usedApi === true, providerCall);
-      requireCheck(caseProof, "provider_call_kind_vision", providerCall?.requestKind === "vision", providerCall);
-      requireCheck(caseProof, "provider_call_http_200", providerCall?.httpStatus === 200 || providerCall?.httpStatus == null, providerCall);
-      if (judgeProvider === "openai") {
-        requireCheck(caseProof, "provider_response_id_present", typeof providerCall?.responseId === "string" && providerCall.responseId.length > 0, providerCall);
-      }
-      requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
       requireCheck(caseProof, "settled_expected", finalChallenge.challenge.status === "settled", finalChallenge.challenge.status);
       requireCheck(caseProof, "winner_present", Boolean(judged.winnerId), caseProof.judgment);
       requireCheck(caseProof, "confidence_high", judged.confidence >= 0.85, judged.confidence);
@@ -683,8 +689,6 @@ try {
         requireCheck(caseProof, "settled_case_no_refunds", refundRows.length === 0, caseProof.creditTx);
       }
     } else {
-      requireCheck(caseProof, "judge_source_is_vision", judged.source === "vision_llm", caseProof.judgment);
-      requireCheck(caseProof, "video_metrics_present", Boolean(judged.videoMetrics?.participantA && judged.videoMetrics?.participantB), judged.videoMetrics);
       if (caseDef.metricExpectation === "non_pushup_invalid") {
         const opponentNotes = [
           ...(judged.videoMetrics?.participantB?.invalidRepNotes ?? []),
