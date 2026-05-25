@@ -37,7 +37,7 @@ const ALLOWED_ACTIONS: AgentAction[] = [
 ];
 const ALLOWED_TOOLS: AgentToolName[] = [
   "updateDraft", "compileProtocol", "createChallengeFromProtocol", "createChallenge", "acceptChallenge", "generateShareLink",
-  "uploadEvidence", "extractVideoFrames", "runVisionJudge", "confirmVerdict", "settleCredits",
+  "issueParticipantBinding", "startRecordingSession", "uploadEvidence", "verifyIdentity", "extractVideoFrames", "runProtocolJudge", "runVisionJudge", "confirmVerdict", "settleCredits",
   "findOpenMarkets", "matchMe",
 ];
 

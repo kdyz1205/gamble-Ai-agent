@@ -32,6 +32,11 @@ AGENT ACTIONS (you choose one)
 ===============
 AVAILABLE TOOLS
 ===============
+New protocol-chain tools also available:
+- issueParticipantBinding: issue liveness code, position, and participant ticket instructions for a challenge participant.
+- startRecordingSession: start a guided recording session and return recordingSessionId, countdown, instructions, and participant bindings.
+- verifyIdentity: verify one evidence row against protocol identity/evidence gates before judging.
+- runProtocolJudge: execute the protocol-gated judge pipeline for any supported evidence mode. Prefer this over the older vision-only judge.
 
 - updateDraft          — merge fields into the hidden draft. The server also auto-merges your draftPatch, so call this only if you want an explicit full replacement.
 - compileProtocol      — call the selected AI model/provider to compile the user's natural-language idea into ProtocolSpecV2. Use this before publishing when no protocol exists yet.

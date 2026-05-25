@@ -12,6 +12,7 @@
  * Nothing here mutates user balances directly — it all goes through
  * credits.ts atomic helpers.
  */
+import { createHash, randomBytes } from "crypto";
 import prisma from "@/lib/db";
 import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
@@ -28,6 +29,11 @@ import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken } from "@/lib/
 import { parseChallengeDeadline } from "@/lib/challenge-time";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { generateLivenessPhrase } from "@/lib/liveness";
+import {
+  buildPreRollInstructions,
+  buildRecordingSessionProtocolJson,
+  recordingModeForProtocol,
+} from "@/lib/recording-session-protocol";
 import {
   EVIDENCE_WINDOW_STATUSES,
   OPEN_FOR_OPPONENT_STATUSES,
@@ -74,6 +80,25 @@ function stringArray(value: unknown): string[] {
 
 function expectedPositionFor(protocol: ProtocolSpecV2 | null, role: "creator" | "opponent") {
   return protocol?.identityProtocol.participantBindings.find((binding) => binding.role === role)?.expectedPosition ?? null;
+}
+
+function expectedPositionForAnyRole(protocol: ProtocolSpecV2, role: string) {
+  const normalizedRole = role === "creator" || role === "opponent" || role === "host" ? role : "participant";
+  return protocol.identityProtocol.participantBindings.find((binding) => binding.role === normalizedRole)?.expectedPosition ?? "any";
+}
+
+function hashParticipantTicket(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function bindingInstructionsFor(protocol: ProtocolSpecV2, expectedPosition: string | null, livenessCode: string | null, qrToken: string) {
+  return [
+    ...protocol.evidenceProtocol.captureInstructions,
+    expectedPosition && expectedPosition !== "any" ? `Stand on the ${expectedPosition} side before the attempt starts.` : "Keep your face and body visible before the attempt starts.",
+    livenessCode ? `Say or show this liveness code at the start: ${livenessCode}.` : "Use your signed-in account identity.",
+    `Show this participant ticket if requested: ${qrToken}.`,
+    "Do not cut, edit, replace, or obscure the evidence.",
+  ];
 }
 
 function recordingSessionRequired(protocol: ProtocolSpecV2 | null) {
@@ -480,6 +505,87 @@ function inferTypeFromTitle(title: string): string {
 
 /* ─────────────────────────────────────────────── */
 
+async function issueParticipantBindingTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const challengeId = String(args.challengeId ?? "").trim();
+  if (!challengeId) return { ok: false, error: "challengeId required" };
+
+  const requestedUserId =
+    typeof args.userId === "string" && args.userId.trim() ? args.userId.trim() : ctx.userId;
+  const requestedParticipantId =
+    typeof args.participantId === "string" && args.participantId.trim() ? args.participantId.trim() : null;
+
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: {
+      protocol: true,
+      participants: { include: { user: { select: { id: true, username: true } } } },
+    },
+  });
+  if (!challenge) return { ok: false, error: "Challenge not found" };
+
+  const requesterParticipant = challenge.participants.find((participant) => participant.userId === ctx.userId);
+  if (!requesterParticipant && challenge.creatorId !== ctx.userId) {
+    return { ok: false, error: "Only participants can issue binding instructions" };
+  }
+  if (requestedUserId !== ctx.userId && challenge.creatorId !== ctx.userId) {
+    return { ok: false, error: "Only the creator can issue binding instructions for another participant" };
+  }
+
+  const targetParticipant = requestedParticipantId
+    ? challenge.participants.find((participant) => participant.id === requestedParticipantId)
+    : challenge.participants.find((participant) => participant.userId === requestedUserId);
+  if (!targetParticipant) return { ok: false, error: "Target participant is not in this challenge" };
+
+  const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+  if (!protocol) return { ok: false, error: "Challenge has no ProtocolSpecV2; identity binding cannot be issued" };
+
+  const expectedPosition = expectedPositionForAnyRole(protocol, targetParticipant.role);
+  const livenessCode = protocol.identityProtocol.required ? generateLivenessPhrase() : null;
+  const qrToken = `GMB-${randomBytes(5).toString("hex").toUpperCase()}`;
+  const binding = await prisma.participantBinding.upsert({
+    where: { challengeId_userId: { challengeId, userId: targetParticipant.userId } },
+    create: {
+      challengeId,
+      userId: targetParticipant.userId,
+      participantId: targetParticipant.id,
+      role: targetParticipant.role,
+      displayName: targetParticipant.user.username,
+      expectedPosition,
+      livenessCode,
+      qrTokenHash: hashParticipantTicket(qrToken),
+      bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+    },
+    update: {
+      participantId: targetParticipant.id,
+      role: targetParticipant.role,
+      displayName: targetParticipant.user.username,
+      expectedPosition,
+      livenessCode,
+      qrTokenHash: hashParticipantTicket(qrToken),
+      bindingStatus: protocol.identityProtocol.required ? "pending" : "verified",
+      identityConfidence: null,
+      identityCheckJson: null,
+      verifiedAt: null,
+    },
+  });
+
+  return {
+    ok: true,
+    data: {
+      challengeId,
+      bindingId: binding.id,
+      targetUserId: targetParticipant.userId,
+      role: targetParticipant.role,
+      expectedPosition,
+      livenessCode,
+      qrToken,
+      instructions: bindingInstructionsFor(protocol, expectedPosition, livenessCode, qrToken),
+    },
+  };
+}
+
+/* protocol identity binding tool */
+
 async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
@@ -641,6 +747,80 @@ async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknow
 }
 
 /* ─────────────────────────────────────────────── */
+
+async function startRecordingSessionTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const challengeId = String(args.challengeId ?? "").trim();
+  if (!challengeId) return { ok: false, error: "challengeId required" };
+
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: {
+      protocol: true,
+      participants: { include: { user: { select: { id: true, username: true } } } },
+      participantBindings: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!challenge) return { ok: false, error: "Challenge not found" };
+
+  const requesterParticipant = challenge.participants.find((participant) => participant.userId === ctx.userId);
+  if (!requesterParticipant) {
+    return { ok: false, error: "Only accepted participants can start a recording session" };
+  }
+
+  const protocol = parseStoredProtocol(challenge.protocol?.specJson);
+  if (!protocol) return { ok: false, error: "Challenge has no ProtocolSpecV2; recording session cannot start" };
+
+  const requestedMode = recordingModeForProtocol(protocol, args.mode);
+  if (!requestedMode) {
+    return { ok: false, error: `Protocol evidence mode ${protocol.evidenceProtocol.mode} is not a recording mode` };
+  }
+
+  const participantBindings = challenge.participantBindings.map((binding) => {
+    const participant = challenge.participants.find((item) => item.userId === binding.userId);
+    return {
+      userId: binding.userId,
+      displayName: binding.displayName || participant?.user.username || "Participant",
+      expectedPosition: binding.expectedPosition,
+      livenessCode: binding.livenessCode,
+      qrToken: binding.qrTokenHash ? "issued" : null,
+      role: binding.role,
+      bindingStatus: binding.bindingStatus,
+    };
+  });
+
+  const protocolJson = buildRecordingSessionProtocolJson({
+    protocol,
+    mode: requestedMode,
+    participantBindings,
+    startedByUserId: ctx.userId,
+  });
+
+  const session = await prisma.recordingSession.create({
+    data: {
+      challengeId,
+      createdByUserId: ctx.userId,
+      mode: requestedMode,
+      protocolJson,
+      status: "started",
+    },
+  });
+
+  return {
+    ok: true,
+    data: {
+      challengeId,
+      recordingSessionId: session.id,
+      mode: requestedMode,
+      preRollInstructions: buildPreRollInstructions(protocol, requestedMode),
+      startCountdown: 3,
+      startCondition: protocol.timingProtocol.startCondition,
+      endCondition: protocol.timingProtocol.endCondition,
+      participantBindings,
+    },
+  };
+}
+
+/* recording session tool */
 
 async function generateShareLinkTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
@@ -874,6 +1054,87 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
 }
 
 /* ─────────────────────────────────────────────── */
+
+async function verifyIdentityTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const challengeId = String(args.challengeId ?? "").trim();
+  const evidenceId = String(args.evidenceId ?? "").trim();
+  if (!challengeId) return { ok: false, error: "challengeId required" };
+  if (!evidenceId) return { ok: false, error: "evidenceId required" };
+
+  const evidence = await prisma.evidence.findUnique({
+    where: { id: evidenceId },
+    include: {
+      challenge: {
+        select: {
+          id: true,
+          creatorId: true,
+          participants: {
+            select: {
+              userId: true,
+              role: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!evidence || evidence.challengeId !== challengeId) {
+    return { ok: false, error: "Evidence not found" };
+  }
+
+  const isParticipant = evidence.challenge.participants.some((participant) => participant.userId === ctx.userId);
+  const canVerify = evidence.userId === ctx.userId || evidence.challenge.creatorId === ctx.userId || isParticipant;
+  if (!canVerify) return { ok: false, error: "Only challenge participants can verify evidence" };
+
+  try {
+    const result = await verifyEvidenceAgainstProtocol(evidenceId);
+    return { ok: true, data: result };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Evidence verification failed" };
+  }
+}
+
+/* evidence verification tool */
+
+async function runProtocolJudgeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
+  const challengeId = String(args.challengeId ?? "").trim();
+  if (!challengeId) return { ok: false, error: "challengeId required" };
+
+  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+  if (!challenge) return { ok: false, error: "Challenge not found" };
+  if (challenge.creatorId !== ctx.userId) return { ok: false, error: "Only the creator can run judgment" };
+
+  const result = await executeChallengeJudgment(challengeId, 1, {
+    providerId: typeof args.providerId === "string" ? args.providerId : ctx.providerId ?? undefined,
+    model: typeof args.model === "string" ? args.model : ctx.model ?? undefined,
+  });
+  if (!result.ok) {
+    if ("skipped" in result && result.skipped) return { ok: false, error: result.reason };
+    return { ok: false, error: "error" in result ? result.error : "judge failed" };
+  }
+
+  const metrics = readMetricsJson(result.judgment.metricsJson);
+  return {
+    ok: true,
+    data: {
+      challengeId,
+      judgmentId: result.judgment.id,
+      winnerId: result.judgment.winnerId,
+      confidence: result.judgment.confidence,
+      aiModel: result.judgment.aiModel,
+      reasoning: (result.judgment.reasoning ?? "").slice(0, 500),
+      status: typeof metrics.status === "string" ? metrics.status : null,
+      recommendation: metrics.recommendation ?? metrics.settlementRecommendation ?? null,
+      evidenceQuality: metrics.evidenceQuality ?? null,
+      blockingIssues: metrics.blockingIssues ?? [],
+      settlementEligibility: metrics.settlementEligibility ?? null,
+      settlementResult: result.settlementResult,
+    },
+  };
+}
+
+/* protocol judge tool */
 
 async function runVisionJudgeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
@@ -1177,9 +1438,13 @@ export async function executeAgentTool(
     case "compileProtocol":     return compileProtocolTool(ctx, args);
     case "createChallengeFromProtocol":
     case "createChallenge":    return createChallengeTool(ctx, args);
+    case "issueParticipantBinding": return issueParticipantBindingTool(ctx, args);
     case "acceptChallenge":    return acceptChallengeTool(ctx, args);
+    case "startRecordingSession": return startRecordingSessionTool(ctx, args);
     case "generateShareLink":  return generateShareLinkTool(ctx, args);
     case "uploadEvidence":     return uploadEvidenceTool(ctx, args);
+    case "verifyIdentity":     return verifyIdentityTool(ctx, args);
+    case "runProtocolJudge":   return runProtocolJudgeTool(ctx, args);
     case "runVisionJudge":     return runVisionJudgeTool(ctx, args);
     case "confirmVerdict":     return confirmVerdictTool(ctx, args);
     case "findOpenMarkets":    return findOpenMarketsTool(ctx, args);

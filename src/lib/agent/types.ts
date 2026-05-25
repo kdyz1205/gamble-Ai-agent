@@ -83,10 +83,14 @@ export type AgentToolName =
   | "compileProtocol"      // call the selected AI compiler and return ProtocolSpecV2 without publishing
   | "createChallengeFromProtocol" // persist Challenge from canonical ProtocolSpecV2
   | "createChallenge"      // persist Challenge row + charge creator stake (atomic)
+  | "issueParticipantBinding" // issue liveness/position/QR instructions for one participant
   | "acceptChallenge"      // opponent seat (returns 409 if full, refunds on race)
+  | "startRecordingSession" // freeze guided same-camera / live-host capture instructions
   | "generateShareLink"    // just construct the /join/[id] URL
   | "uploadEvidence"       // record text evidence; video upload still goes through Blob presign separately
+  | "verifyIdentity"       // verify one evidence row against protocol identity/evidence gates
   | "extractVideoFrames"   // trigger the already-running pre-extract on an evidence row (no-op if already done)
+  | "runProtocolJudge"     // execute the protocol-gated judge path for any supported evidence mode
   | "runVisionJudge"       // executeChallengeJudgment — real OpenAI vision call on extracted frames
   | "confirmVerdict"       // creator confirmation → settleCredits → settled status
   | "settleCredits"        // internal — tools above already call credits helpers; exposed for completeness

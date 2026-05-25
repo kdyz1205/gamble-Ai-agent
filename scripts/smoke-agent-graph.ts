@@ -131,6 +131,27 @@ const visionToolTrace = routeAgentTool("runVisionJudge", {
 });
 assert.ok(includesInOrder(visionToolTrace.route, ["evidence_identity_verifier", "outcome_judge", "settlement_gate"]));
 
+const recordingToolTrace = routeAgentTool("startRecordingSession", {
+  source: "smoke",
+  toolOk: true,
+  resultStatus: "started",
+});
+assert.ok(includesInOrder(recordingToolTrace.route, ["identity_protocol", "recording_session"]));
+
+const verifyToolTrace = routeAgentTool("verifyIdentity", {
+  source: "smoke",
+  toolOk: true,
+  resultStatus: "passed",
+});
+assert.ok(includesInOrder(verifyToolTrace.route, ["evidence_identity_verifier", "settlement_gate"]));
+
+const protocolJudgeToolTrace = routeAgentTool("runProtocolJudge", {
+  source: "smoke",
+  toolOk: true,
+  resultStatus: "settled",
+});
+assert.ok(includesInOrder(protocolJudgeToolTrace.route, ["evidence_identity_verifier", "outcome_judge", "settlement_gate"]));
+
 const settleTrace = routeJudgmentOutcome({
   source: "smoke",
   verdictStatus: "ai_verdict_ready",

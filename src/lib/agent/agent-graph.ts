@@ -558,9 +558,17 @@ export function routeAgentTool(
       routeId: "create_challenge",
       route: ["conversation_host", "intent_router", "protocol_compiler", "identity_protocol", "evidence_protocol", "challenge_creator"],
     },
+    issueParticipantBinding: {
+      routeId: "issue_participant_binding",
+      route: ["conversation_host", "identity_protocol", "join_contract"],
+    },
     acceptChallenge: {
       routeId: "accept_challenge",
       route: ["conversation_host", "intent_router", "join_contract", "location_gate"],
+    },
+    startRecordingSession: {
+      routeId: "start_recording_session",
+      route: ["conversation_host", "identity_protocol", "recording_session"],
     },
     generateShareLink: {
       routeId: "generate_share_link",
@@ -570,9 +578,17 @@ export function routeAgentTool(
       routeId: "upload_evidence",
       route: ["conversation_host", "evidence_intake", "evidence_identity_verifier"],
     },
+    verifyIdentity: {
+      routeId: "verify_identity",
+      route: ["conversation_host", "evidence_identity_verifier", "settlement_gate"],
+    },
     extractVideoFrames: {
       routeId: "extract_video_frames",
       route: ["conversation_host", "evidence_intake", "evidence_identity_verifier"],
+    },
+    runProtocolJudge: {
+      routeId: "run_protocol_judge",
+      route: ["conversation_host", "evidence_identity_verifier", "outcome_judge", "settlement_gate"],
     },
     runVisionJudge: {
       routeId: "run_vision_judge",

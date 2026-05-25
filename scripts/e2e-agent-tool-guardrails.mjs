@@ -281,9 +281,28 @@ try {
     proof.bindings,
   );
 
-  const recording = await postJson(creator.jar, `/api/challenges/${challengeId}/recording-session/start`, {
-    mode: "same_camera_video",
-  });
+  const issuedBinding = await callAgentTool(
+    opponent.jar,
+    `Issue my participant binding instructions for challenge ${challengeId}.`,
+    "issueParticipantBinding",
+  );
+  proof.agentBinding = issuedBinding.toolResult;
+  requireCheck(
+    proof,
+    "agent_issue_binding_returned_identity_instructions",
+    Boolean(issuedBinding.toolResult.bindingId) &&
+      issuedBinding.toolResult.targetUserId === opponent.session.user.id &&
+      Array.isArray(issuedBinding.toolResult.instructions) &&
+      issuedBinding.toolResult.instructions.length > 0,
+    proof.agentBinding,
+  );
+
+  const recordingViaAgent = await callAgentTool(
+    creator.jar,
+    `Start a same-camera recording session for challenge ${challengeId}. Mode same_camera_video.`,
+    "startRecordingSession",
+  );
+  const recording = recordingViaAgent.toolResult;
   const creatorCode = bindingCode(recording.participantBindings, "creator");
   const opponentCode = bindingCode(recording.participantBindings, "opponent");
   proof.recording = {
@@ -291,7 +310,12 @@ try {
     bindingCount: recording.participantBindings.length,
     mode: recording.mode,
   };
-  requireCheck(proof, "recording_session_started", Boolean(recording.recordingSessionId) && recording.mode === "same_camera_video", proof.recording);
+  requireCheck(
+    proof,
+    "agent_start_recording_session_started",
+    Boolean(recording.recordingSessionId) && recording.mode === "same_camera_video",
+    proof.recording,
+  );
 
   const uploadMessage = [
     `Submit my same-camera video evidence for challenge ${challengeId}.`,
@@ -308,6 +332,19 @@ try {
     "agent_upload_created_passed_evidence_checks",
     uploaded.toolResult.verification?.length === 2 && uploaded.toolResult.verification.every((item) => item.decision === "passed"),
     proof.upload,
+  );
+
+  const verified = await callAgentTool(
+    creator.jar,
+    `Verify identity for challenge ${challengeId} and evidenceId ${uploaded.toolResult.evidenceIds[0]}.`,
+    "verifyIdentity",
+  );
+  proof.agentVerifyIdentity = verified.toolResult;
+  requireCheck(
+    proof,
+    "agent_verify_identity_passed",
+    verified.toolResult.decision === "passed",
+    proof.agentVerifyIdentity,
   );
 
   const finalChallenge = await getJson(creator.jar, `/api/challenges/${challengeId}`);
