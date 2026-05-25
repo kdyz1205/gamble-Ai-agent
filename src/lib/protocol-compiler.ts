@@ -10,7 +10,7 @@ import {
   resolveTierProvider,
 } from "@/lib/llm-providers";
 import { generateChallengeSpec } from "@/lib/challenge-spec";
-import { protocolPreview, parseProtocolSpecV2, protocolSpecFromChallengeSpec, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { protocolPreview, parseProtocolSpecV2, protocolSpecV2ValidationIssues, protocolSpecFromChallengeSpec, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 import { evaluateRuleSafety, type RuleSafetyDecision } from "@/lib/rule-safety";
 import { cryptoPriceProtocolFromPrompt } from "@/lib/crypto-price-oracle";
 import { weatherProtocolFromPrompt } from "@/lib/weather-oracle";
@@ -659,7 +659,13 @@ export async function compileProtocolForUser(input: {
           fallbackReason = "LLM returned a generic random-challenge title; repaired to a concrete playable protocol";
         }
       } else {
-        fallbackReason = "LLM response did not match ProtocolSpecV2";
+        const issues = protocolSpecV2ValidationIssues({
+          ...(objectRecord(parsed) ?? {}),
+          version: "2.0",
+          rawPrompt: inputText,
+          language,
+        });
+        fallbackReason = `LLM response did not match ProtocolSpecV2: ${issues.slice(0, 4).join("; ") || "unknown validation issue"}`;
       }
     } catch (err) {
       fallbackReason = err instanceof Error ? err.message : "LLM did not return valid protocol JSON";

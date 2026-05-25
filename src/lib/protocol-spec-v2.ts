@@ -552,44 +552,58 @@ export function protocolSpecFromChallengeSpec(
   };
 }
 
+function normalizedProtocolIssues(input: unknown): string[] {
+  const normalized = normalizeProtocolCandidate(input);
+  if (!normalized) return ["Could not normalize candidate into ProtocolSpecV2 shape"];
+  const candidate = normalized as Partial<ProtocolSpecV2>;
+  const issues: string[] = [];
+  if (candidate.version !== "2.0") issues.push("version must be 2.0");
+  if (typeof candidate.title !== "string" || !candidate.title.trim()) issues.push("title is required");
+  if (typeof candidate.userFacingSummary !== "string" || !candidate.userFacingSummary.trim()) issues.push("userFacingSummary is required");
+  if (typeof candidate.rawPrompt !== "string") issues.push("rawPrompt must be a string");
+  if (candidate.language !== "en" && candidate.language !== "zh" && candidate.language !== "auto") issues.push("language is invalid");
+  if (!candidate.participantMode || !PARTICIPANT_MODES.includes(candidate.participantMode)) issues.push("participantMode is invalid");
+  if (!candidate.outcomeType || !OUTCOME_TYPES.includes(candidate.outcomeType)) issues.push("outcomeType is invalid");
+
+  const evidence = candidate.evidenceProtocol;
+  if (!evidence || !EVIDENCE_MODES.includes(evidence.mode)) issues.push("evidenceProtocol.mode is invalid");
+  if (!evidence || !Array.isArray(evidence.requiredEvidence) || !Array.isArray(evidence.captureInstructions) || !Array.isArray(evidence.invalidEvidenceRules) || !Array.isArray(evidence.requiredMetadata)) issues.push("evidenceProtocol arrays are required");
+
+  const identity = candidate.identityProtocol;
+  if (!identity || !IDENTITY_MODES.includes(identity.mode)) issues.push("identityProtocol.mode is invalid");
+  if (!identity || typeof identity.required !== "boolean") issues.push("identityProtocol.required must be boolean");
+  if (!identity || !Array.isArray(identity.participantBindings)) issues.push("identityProtocol.participantBindings must be an array");
+  if (!identity || typeof identity.autoSettlementRequiresIdentityConfidence !== "number" || !Number.isFinite(identity.autoSettlementRequiresIdentityConfidence)) issues.push("identityProtocol.autoSettlementRequiresIdentityConfidence must be numeric");
+
+  const location = candidate.locationProtocol;
+  if (!location || !LOCATION_MODES.includes(location.mode) || !LOCATION_PRIVACY.includes(location.locationPrivacy)) issues.push("locationProtocol is invalid");
+
+  const timing = candidate.timingProtocol;
+  if (!timing || typeof timing.startCondition !== "string" || typeof timing.endCondition !== "string" || typeof timing.deadline !== "string" || typeof timing.allowedAttempts !== "string") issues.push("timingProtocol strings are required");
+
+  const settlement = candidate.settlementProtocol;
+  if (!settlement || !SETTLEMENT_MODES.includes(settlement.mode)) issues.push("settlementProtocol.mode is invalid");
+  if (!settlement || typeof settlement.winCondition !== "string" || !Array.isArray(settlement.judgeInstructions) || !Array.isArray(settlement.manualReviewTriggers)) issues.push("settlementProtocol fields are required");
+  if (!settlement || typeof settlement.autoSettleConfidenceThreshold !== "number" || !Number.isFinite(settlement.autoSettleConfidenceThreshold)) issues.push("settlementProtocol.autoSettleConfidenceThreshold must be numeric");
+
+  const risk = candidate.riskPolicy;
+  if (!risk || !RISK_LEVELS.includes(risk.riskLevel) || typeof risk.allowed !== "boolean" || !Array.isArray(risk.warnings) || !Array.isArray(risk.restrictions)) issues.push("riskPolicy is invalid");
+
+  const budget = candidate.aiBudgetPolicy;
+  if (!budget || typeof budget.compileMaxTokens !== "number" || typeof budget.judgeMaxTokens !== "number" || typeof budget.maxVisionFrames !== "number" || typeof budget.allowEscalation !== "boolean" || !COST_TIERS.includes(budget.estimatedCostTier)) issues.push("aiBudgetPolicy is invalid");
+
+  return issues;
+}
+
+export function protocolSpecV2ValidationIssues(input: unknown): string[] {
+  return normalizedProtocolIssues(input);
+}
+
 export function parseProtocolSpecV2(input: unknown): ProtocolSpecV2 | null {
+  if (normalizedProtocolIssues(input).length) return null;
   const normalized = normalizeProtocolCandidate(input);
   if (!normalized) return null;
   const candidate = normalized as Partial<ProtocolSpecV2>;
-  if (candidate.version !== "2.0") return null;
-  if (typeof candidate.title !== "string" || !candidate.title.trim()) return null;
-  if (typeof candidate.userFacingSummary !== "string" || !candidate.userFacingSummary.trim()) return null;
-  if (typeof candidate.rawPrompt !== "string") return null;
-  if (candidate.language !== "en" && candidate.language !== "zh" && candidate.language !== "auto") return null;
-  if (!candidate.participantMode || !PARTICIPANT_MODES.includes(candidate.participantMode)) return null;
-  if (!candidate.outcomeType || !OUTCOME_TYPES.includes(candidate.outcomeType)) return null;
-
-  const evidence = candidate.evidenceProtocol;
-  if (!evidence || !EVIDENCE_MODES.includes(evidence.mode)) return null;
-  if (!Array.isArray(evidence.requiredEvidence) || !Array.isArray(evidence.captureInstructions) || !Array.isArray(evidence.invalidEvidenceRules) || !Array.isArray(evidence.requiredMetadata)) return null;
-
-  const identity = candidate.identityProtocol;
-  if (!identity || !IDENTITY_MODES.includes(identity.mode)) return null;
-  if (typeof identity.required !== "boolean") return null;
-  if (!Array.isArray(identity.participantBindings)) return null;
-  if (typeof identity.autoSettlementRequiresIdentityConfidence !== "number" || !Number.isFinite(identity.autoSettlementRequiresIdentityConfidence)) return null;
-
-  const location = candidate.locationProtocol;
-  if (!location || !LOCATION_MODES.includes(location.mode) || !LOCATION_PRIVACY.includes(location.locationPrivacy)) return null;
-
-  const timing = candidate.timingProtocol;
-  if (!timing || typeof timing.startCondition !== "string" || typeof timing.endCondition !== "string" || typeof timing.deadline !== "string" || typeof timing.allowedAttempts !== "string") return null;
-
-  const settlement = candidate.settlementProtocol;
-  if (!settlement || !SETTLEMENT_MODES.includes(settlement.mode)) return null;
-  if (typeof settlement.winCondition !== "string" || !Array.isArray(settlement.judgeInstructions) || !Array.isArray(settlement.manualReviewTriggers)) return null;
-  if (typeof settlement.autoSettleConfidenceThreshold !== "number" || !Number.isFinite(settlement.autoSettleConfidenceThreshold)) return null;
-
-  const risk = candidate.riskPolicy;
-  if (!risk || !RISK_LEVELS.includes(risk.riskLevel) || typeof risk.allowed !== "boolean" || !Array.isArray(risk.warnings) || !Array.isArray(risk.restrictions)) return null;
-
-  const budget = candidate.aiBudgetPolicy;
-  if (!budget || typeof budget.compileMaxTokens !== "number" || typeof budget.judgeMaxTokens !== "number" || typeof budget.maxVisionFrames !== "number" || typeof budget.allowEscalation !== "boolean" || !COST_TIERS.includes(budget.estimatedCostTier)) return null;
 
   return candidate as ProtocolSpecV2;
 }
