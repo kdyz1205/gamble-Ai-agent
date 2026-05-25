@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - name: Prove rule safety prefilter
         run: npm run e2e:rule-safety-production
+      - name: Prove data-source oracle settlement
+        run: npm run e2e:data-source-oracle-settlement
       - name: Prove compiler intent matrix
         run: npm run e2e:protocol-compile-matrix
       - name: Prove agent compile-to-publish chain

@@ -80,11 +80,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Broaden the production prompt replay with Chinese, slang, legal-region cash policy, safe alternatives, and jailbreak-style edge cases.",
   },
   data_source_router: {
-    status: "runtime_backed",
-    summary: "Registry, dry-run runners, live-fetch adapter scaffolds, and judge oracle routing are executable before manual review fallback.",
-    evidence: ["src/lib/data-source-registry.ts", "src/app/api/data-sources/[sourceKey]/run/route.ts", "scripts/smoke-data-source-registry.ts", "scripts/smoke-data-source-judge-router.ts"],
-    missing: ["Not every cataloged data source can fetch live production data with credentials and settlement proof."],
-    nextProof: "Run live adapter probes for the sources used by the next 20 public-oracle challenge prompts.",
+    status: "production_proven",
+    summary: "Production oracle E2E proves live npm Registry fetching can route into an oracle verdict, produce a winner, confirm settlement, and write stake/loss/win ledger rows.",
+    evidence: ["src/lib/data-source-registry.ts", "src/app/api/data-sources/[sourceKey]/run/route.ts", "scripts/smoke-data-source-registry.ts", "scripts/smoke-data-source-judge-router.ts", "scripts/e2e-data-source-oracle-settlement.mjs", ".github/workflows/production-agent-protocol-chain.yml"],
+    missing: ["Only implemented public adapters are production-proven; many cataloged or future sources still need OAuth, API keys, provider contracts, document AI, or manual review before auto-settlement."],
+    nextProof: "Broaden production oracle probes across crypto, weather, npm, GitHub, and one user-authorized source with adapter-specific settlement assertions.",
   },
   protocol_compiler: {
     status: "production_proven",
