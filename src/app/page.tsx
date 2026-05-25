@@ -12,7 +12,7 @@ import * as api from "@/lib/api-client";
 import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
-import { HOMEPAGE_CHALLENGE_LOOPS, challengeLoopStatusLabel } from "@/lib/challenge-loop-catalog";
+import { HOMEPAGE_CHALLENGE_LOOPS } from "@/lib/challenge-loop-catalog";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
@@ -747,17 +747,17 @@ export default function Home() {
           {appState === "idle" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
               <section className="min-w-0">
-                <div className="mb-5 inline-flex items-center gap-2 rounded-full border bg-white/90 px-3 py-2 shadow-sm" style={{ borderColor: "#D1FAE5" }}>
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-white/90 px-3 py-2 shadow-sm" style={{ borderColor: "#D1FAE5" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
                   <span className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>AI challenge host</span>
                 </div>
                 <h1 className="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" style={{ color: "#172033", lineHeight: 1.02 }}>
-                  Turn any dare into a playable challenge.
+                  Any challenge, one sentence.
                 </h1>
-                <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
-                  Say it. Axelrod builds rules, proof, verdict, payout.
+                <p className="mt-4 max-w-xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
+                  Axelrod turns it into rules, proof, and a verdict.
                 </p>
-                <HeroMetricStrip />
+                <HeroSignalBar />
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
@@ -962,22 +962,22 @@ function MoneyModeCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
   );
 }
 
-function HeroMetricStrip() {
+function HeroSignalBar() {
   const metrics = [
-    { label: "Invite", value: "+10 pts" },
-    { label: "Judge", value: "85% gate" },
-    { label: "Flow", value: "prompt to payout" },
+    { label: "Prompt", value: "1 sentence" },
+    { label: "Rules", value: "AI compiled" },
+    { label: "Settle", value: "85% gate" },
   ];
   return (
-    <div className="mt-5 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3">
+    <div className="mt-5 flex max-w-2xl flex-wrap gap-2">
       {metrics.map((metric) => (
         <div
           key={metric.label}
-          className="rounded-[18px] border bg-white/80 px-4 py-3 shadow-sm"
+          className="inline-flex items-center gap-2 rounded-full border bg-white/80 px-3 py-2 shadow-sm"
           style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 26px rgba(15,23,42,0.04)" }}
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.13em]" style={{ color: "#64748B" }}>{metric.label}</p>
-          <p className="mt-1 text-sm font-black" style={{ color: "#172033" }}>{metric.value}</p>
+          <span className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "#64748B" }}>{metric.label}</span>
+          <span className="text-xs font-black" style={{ color: "#172033" }}>{metric.value}</span>
         </div>
       ))}
     </div>
@@ -1045,79 +1045,69 @@ function PublishedLaunchKit({
 }
 
 function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
+  const visible = HOMEPAGE_CHALLENGE_LOOPS.slice(0, 4);
+  const hidden = HOMEPAGE_CHALLENGE_LOOPS.slice(4);
   return (
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
-          Certified loops
+          Proven loops
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {HOMEPAGE_CHALLENGE_LOOPS.map((item) => (
+      <div className="flex flex-wrap gap-2">
+        {visible.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onPick(item.prompt)}
-            className="group rounded-[18px] border bg-white/90 px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
+            className="group rounded-full border bg-white/90 px-4 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
             style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 28px rgba(15,23,42,0.04)" }}
           >
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</p>
-              <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase" style={{
-                borderColor: item.status === "production_proven" ? "#A7F3D0" : item.status === "fixture_proven" ? "#FED7AA" : "#E2E8F0",
-                color: item.status === "production_proven" ? "#047857" : item.status === "fixture_proven" ? "#9A3412" : "#64748B",
-                background: item.status === "production_proven" ? "#ECFDF5" : item.status === "fixture_proven" ? "#FFF7ED" : "#F8FAFC",
-              }}>
-                {challengeLoopStatusLabel(item.status)}
-              </span>
-            </div>
-            <p className="mt-2 text-[11px] font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
-              {item.participantMode.replaceAll("_", " ")} / {item.evidenceMode.replaceAll("_", " ")}
-            </p>
+            <span className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</span>
           </button>
         ))}
       </div>
+      {hidden.length > 0 && (
+        <details className="mt-3 w-fit">
+          <summary className="cursor-pointer rounded-full border bg-white/70 px-4 py-2 text-xs font-black uppercase tracking-wide" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
+            More loops
+          </summary>
+          <div className="mt-2 flex max-w-2xl flex-wrap gap-2">
+            {hidden.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onPick(item.prompt)}
+                className="rounded-full border bg-white/90 px-4 py-2 text-sm font-extrabold shadow-sm transition hover:bg-white active:scale-[0.99]"
+                style={{ borderColor: "#E2E8F0", color: "#172033" }}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
     </section>
   );
 }
 
 function LiveProofPanel() {
-  const steps = [
-    { label: "Prompt", value: "one sentence" },
-    { label: "Protocol", value: "rules + safety" },
-    { label: "Evidence", value: "video/photo/GPS" },
-    { label: "Verdict", value: "AI + review" },
-  ];
   return (
-    <section className="overflow-hidden rounded-[28px] border bg-white/95 p-5 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 24px 70px rgba(15,23,42,0.09)" }}>
+    <section className="overflow-hidden rounded-[24px] border bg-white/95 p-5 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 24px 70px rgba(15,23,42,0.08)" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Flow</p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight" style={{ color: "#172033" }}>Prompt to payout</h2>
+          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Live gates</p>
+          <h2 className="mt-2 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Rules first. Payout last.</h2>
         </div>
-        <div className="rounded-2xl border px-3 py-2 text-center" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
-          <p className="text-lg font-black" style={{ color: "#10B981" }}>0.85</p>
-          <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>auto gate</p>
-        </div>
+        <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#ECFDF5", color: "#047857" }}>0.85 gate</span>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        {steps.map((step) => (
-          <div key={step.label} className="rounded-[16px] border p-3" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
-            <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>{step.label}</p>
-            <p className="mt-1 text-sm font-extrabold" style={{ color: "#172033" }}>{step.value}</p>
+      <div className="mt-4 grid gap-2">
+        {["AI compiles the protocol.", "Evidence must match the rules.", "Credits settle only after verdict gates pass."].map((line) => (
+          <div key={line} className="rounded-2xl border px-3 py-2 text-sm font-bold" style={{ borderColor: "#E2E8F0", background: "#F8FAFC", color: "#172033" }}>
+            {line}
           </div>
         ))}
-      </div>
-
-      <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#D1FAE5", background: "#ECFDF5" }}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-black" style={{ color: "#064E3B" }}>Push-up challenge</p>
-            <p className="mt-1 text-xs font-bold" style={{ color: "#047857" }}>same camera - liveness phrase - winner payout</p>
-          </div>
-          <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFFFFF", color: "#047857" }}>ready</span>
-        </div>
       </div>
     </section>
   );
