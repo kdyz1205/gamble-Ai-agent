@@ -1,0 +1,30 @@
+name: Production Protocol Compile Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Comma-separated case keys to run; empty runs all."
+        required: false
+        default: ""
+  schedule:
+    - cron: "23 12 * * 2"
+
+jobs:
+  protocol-compile-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_BASE_URL: https://gamble-ai-agent.vercel.app
+      E2E_COMPILE_PROVIDER: openai
+      E2E_COMPILE_MODEL: gpt-4o-mini
+      E2E_COMMIT_SHA: ${{ github.sha }}
+      RUN_COMPILE_MATRIX_CASES: ${{ github.event.inputs.cases }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e:protocol-compile-matrix

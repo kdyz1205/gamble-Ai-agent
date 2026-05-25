@@ -168,7 +168,7 @@ try {
   requireCheck(
     proof,
     "compile_called_selected_provider_model",
-    ["llm", "fallback"].includes(compiled.source) &&
+    compiled.source === "llm" &&
       compiled.providerId === providerId &&
       compiled.model === model &&
       compiled.providerCall?.usedApi === true &&

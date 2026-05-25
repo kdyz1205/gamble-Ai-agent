@@ -163,6 +163,7 @@ async function openAiCompatibleCompleteWithMetadata(
 ): Promise<LlmCallResult> {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const startedAt = Date.now();
+  const responseFormat = baseUrl.includes("api.openai.com") ? "json_object" : null;
   const { res, errorText } = await fetchWithLlmRetry(
     url,
     {
@@ -174,6 +175,7 @@ async function openAiCompatibleCompleteWithMetadata(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
+        ...(responseFormat ? { response_format: { type: responseFormat } } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -210,6 +212,7 @@ async function openAiCompatibleCompleteWithMetadata(
       responseId: data.id ?? null,
       responseModel: data.model ?? null,
       durationMs: elapsedMs(startedAt),
+      responseFormat,
       inputTokens: data.usage?.prompt_tokens ?? null,
       outputTokens: data.usage?.completion_tokens ?? null,
       totalTokens: data.usage?.total_tokens ?? null,

@@ -85,6 +85,264 @@ const SETTLEMENT_MODES: ProtocolSpecV2["settlementProtocol"]["mode"][] = ["auto_
 const RISK_LEVELS: ProtocolSpecV2["riskPolicy"]["riskLevel"][] = ["safe", "medium", "high", "blocked"];
 const COST_TIERS: ProtocolSpecV2["aiBudgetPolicy"]["estimatedCostTier"][] = ["low", "medium", "high"];
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function stringValue(value: unknown, fallback = "") {
+  return nonEmptyString(value) ?? fallback;
+}
+
+function stringArrayValue(value: unknown, fallback: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    const out = value.map((item) => String(item).trim()).filter(Boolean);
+    return out.length ? out : fallback;
+  }
+  const text = nonEmptyString(value);
+  return text ? [text] : fallback;
+}
+
+function numberValue(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (/^(true|yes|required|1)$/i.test(value.trim())) return true;
+    if (/^(false|no|optional|0)$/i.test(value.trim())) return false;
+  }
+  return fallback;
+}
+
+function normalizedEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  aliases: Record<string, T>,
+  fallback?: T,
+): T | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback ?? null;
+  const normalized = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  if ((allowed as readonly string[]).includes(normalized)) return normalized as T;
+  return aliases[normalized] ?? fallback ?? null;
+}
+
+function normalizeBindings(value: unknown): ProtocolSpecV2["identityProtocol"]["participantBindings"] {
+  const raw = Array.isArray(value) ? value : [];
+  const bindings = raw.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    const role = normalizedEnum(
+      record.role,
+      ["creator", "opponent", "participant", "host"] as const,
+      {
+        player_a: "creator",
+        participant_a: "creator",
+        side_a: "creator",
+        player_b: "opponent",
+        participant_b: "opponent",
+        side_b: "opponent",
+        challenger: "creator",
+        challenged: "opponent",
+        subject: "participant",
+      },
+    );
+    if (!role) return [];
+    return [{
+      role,
+      label: stringValue(record.label, role === "creator" ? "Creator" : role === "opponent" ? "Opponent" : "Participant"),
+      expectedPosition: normalizedEnum(
+        record.expectedPosition,
+        ["left", "right", "center", "any"] as const,
+        { none: "any", either: "any", unknown: "any" },
+        "any",
+      ) ?? "any",
+      ...(nonEmptyString(record.requiredPhrase) ? { requiredPhrase: nonEmptyString(record.requiredPhrase) ?? undefined } : {}),
+      requiredQrOrCode: booleanValue(record.requiredQrOrCode, false),
+    }];
+  });
+  if (!bindings.some((binding) => binding.role === "creator")) {
+    bindings.unshift({ role: "creator", label: "Creator", expectedPosition: "any", requiredQrOrCode: false });
+  }
+  return bindings;
+}
+
+function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
+  const candidate = asRecord(input);
+  if (!candidate) return null;
+
+  const title = nonEmptyString(candidate.title) ?? nonEmptyString(candidate.challenge_title);
+  const summary = nonEmptyString(candidate.userFacingSummary) ?? nonEmptyString(candidate.summary) ?? nonEmptyString(candidate.description) ?? nonEmptyString(candidate.objective);
+  if (!title || !summary) return null;
+
+  const evidence = asRecord(candidate.evidenceProtocol);
+  const identity = asRecord(candidate.identityProtocol);
+  const location = asRecord(candidate.locationProtocol);
+  const timing = asRecord(candidate.timingProtocol);
+  const settlement = asRecord(candidate.settlementProtocol);
+  const risk = asRecord(candidate.riskPolicy);
+  const budget = asRecord(candidate.aiBudgetPolicy);
+  if (!evidence || !identity || !location || !timing || !settlement || !risk || !budget) return null;
+
+  const evidenceMode = normalizedEnum(evidence.mode, EVIDENCE_MODES, {
+    video: "separate_video",
+    camera: "separate_video",
+    camera_video: "separate_video",
+    uploaded_video: "separate_video",
+    separate: "separate_video",
+    one_phone: "same_camera_video",
+    shared_video: "same_camera_video",
+    same_camera: "same_camera_video",
+    same_device: "same_camera_video",
+    live_video: "live_host_video",
+    image: "photo",
+    picture: "photo",
+    text: "witness",
+    self_report: "witness",
+    oracle: "public_oracle",
+    public_data: "public_oracle",
+    data_source: "public_oracle",
+    app_metric: "platform_metric",
+  });
+  const identityMode = normalizedEnum(identity.mode, IDENTITY_MODES, {
+    none: "account_only",
+    account: "account_only",
+    liveness: "liveness_phrase",
+    phrase: "liveness_phrase",
+    left_right: "left_right_assignment",
+    same_camera: "left_right_assignment",
+    qr: "qr_participant_card",
+    qr_code: "qr_participant_card",
+    manual: "manual_identity_review",
+  });
+  const locationMode = normalizedEnum(location.mode, LOCATION_MODES, {
+    no_location: "none",
+    nearby: "nearby_discovery",
+    walk_by: "walk_to_join",
+    walkby: "walk_to_join",
+    same_place: "same_place_required",
+    geofence: "geo_fenced_zone",
+    mass_event: "mass_local_event",
+  });
+  const settlementMode = normalizedEnum(settlement.mode, SETTLEMENT_MODES, {
+    oracle: "auto_oracle",
+    ai_text: "auto_ai_text",
+    text_ai: "auto_ai_text",
+    ai_vision: "auto_ai_vision",
+    vision_ai: "auto_ai_vision",
+    auto_ai: "auto_ai_vision",
+    manual: "manual_review",
+    human_review: "manual_review",
+    blocked_by_policy: "blocked",
+  });
+  if (!evidenceMode || !identityMode || !locationMode || !settlementMode) return null;
+
+  return {
+    version: "2.0",
+    title,
+    userFacingSummary: summary,
+    rawPrompt: stringValue(candidate.rawPrompt),
+    language: normalizedEnum(candidate.language, ["en", "zh", "auto"] as const, { chinese: "zh", english: "en" }, "auto") ?? "auto",
+    participantMode: normalizedEnum(candidate.participantMode, PARTICIPANT_MODES, {
+      one_person: "solo",
+      single: "solo",
+      self: "solo",
+      pet: "solo",
+      two_player: "head_to_head",
+      two_person: "head_to_head",
+      one_vs_one: "head_to_head",
+      "1v1": "head_to_head",
+      group: "small_group",
+      teams: "team_vs_team",
+      crowd: "mass_crowd",
+      event: "mass_crowd",
+      market: "public_market",
+      prediction_market: "public_market",
+    }, "head_to_head") ?? "head_to_head",
+    outcomeType: normalizedEnum(candidate.outcomeType, OUTCOME_TYPES, {
+      fastest: "speed",
+      reps: "count",
+      rep_count: "count",
+      pass_fail: "completion",
+      boolean: "yes_no",
+      leaderboard: "ranking",
+      subjective: "quality_score",
+      price_prediction: "prediction",
+      checkin: "location_checkin",
+      check_in: "location_checkin",
+      duration: "survival_duration",
+    }, "custom") ?? "custom",
+    evidenceProtocol: {
+      mode: evidenceMode,
+      requiredEvidence: stringArrayValue(evidence.requiredEvidence, ["Submit evidence that directly proves the challenge outcome."]),
+      captureInstructions: stringArrayValue(evidence.captureInstructions, ["Capture the full attempt clearly and continuously."]),
+      invalidEvidenceRules: stringArrayValue(evidence.invalidEvidenceRules, ["Edited, unclear, reused, unsafe, or non-consensual evidence is invalid."]),
+      requiredMetadata: stringArrayValue(evidence.requiredMetadata, ["created_at"]),
+    },
+    identityProtocol: {
+      mode: identityMode,
+      required: booleanValue(identity.required, evidenceMode.includes("video") || evidenceMode === "photo"),
+      participantBindings: normalizeBindings(identity.participantBindings),
+      autoSettlementRequiresIdentityConfidence: numberValue(identity.autoSettlementRequiresIdentityConfidence, 0.85),
+    },
+    locationProtocol: {
+      mode: locationMode,
+      ...(location.joinRadiusMeters !== undefined ? { joinRadiusMeters: numberValue(location.joinRadiusMeters, 500) } : {}),
+      ...(location.challengeRadiusMeters !== undefined ? { challengeRadiusMeters: numberValue(location.challengeRadiusMeters, 500) } : {}),
+      requiresLiveLocation: booleanValue(location.requiresLiveLocation, locationMode !== "none"),
+      requiresCoPresence: booleanValue(location.requiresCoPresence, locationMode === "same_place_required"),
+      locationPrivacy: normalizedEnum(location.locationPrivacy, LOCATION_PRIVACY, {
+        private: "hidden",
+        approximate_public: "approximate",
+        precise_live: "precise_live_only",
+        precise_until_end: "precise_until_challenge_ends",
+      }, locationMode === "none" ? "hidden" : "approximate") ?? "hidden",
+    },
+    timingProtocol: {
+      startCondition: stringValue(timing.startCondition, "Challenge starts after all required participants accept."),
+      endCondition: stringValue(timing.endCondition, "Challenge ends when the protocol objective is completed or the deadline expires."),
+      deadline: stringValue(timing.deadline, "48 hours"),
+      tieBreaker: stringValue(timing.tieBreaker, settlement.winCondition ? String(settlement.winCondition) : "Manual review decides ties."),
+      allowedAttempts: stringValue(timing.allowedAttempts, "One official attempt unless the protocol says otherwise."),
+    },
+    settlementProtocol: {
+      mode: settlementMode,
+      winCondition: stringValue(settlement.winCondition, summary),
+      judgeInstructions: stringArrayValue(settlement.judgeInstructions, ["Compare submitted evidence against the win condition."]),
+      autoSettleConfidenceThreshold: numberValue(settlement.autoSettleConfidenceThreshold, 0.85),
+      manualReviewTriggers: stringArrayValue(settlement.manualReviewTriggers, ["Confidence below threshold or evidence/identity is unclear."]),
+    },
+    riskPolicy: {
+      riskLevel: normalizedEnum(risk.riskLevel, RISK_LEVELS, { low: "safe", moderate: "medium", unsafe: "high", disallowed: "blocked" }, "safe") ?? "safe",
+      allowed: booleanValue(risk.allowed, true),
+      warnings: stringArrayValue(risk.warnings, []),
+      restrictions: stringArrayValue(risk.restrictions, []),
+      ...(nonEmptyString(risk.safeAlternative) ? { safeAlternative: nonEmptyString(risk.safeAlternative) ?? undefined } : {}),
+      ...(nonEmptyString(risk.blockedReason) ? { blockedReason: nonEmptyString(risk.blockedReason) ?? undefined } : {}),
+    },
+    aiBudgetPolicy: {
+      compileMaxTokens: numberValue(budget.compileMaxTokens, 1800),
+      judgeMaxTokens: numberValue(budget.judgeMaxTokens, evidenceMode.includes("video") ? 2200 : 1200),
+      maxVisionFrames: numberValue(budget.maxVisionFrames, evidenceMode.includes("video") || evidenceMode === "photo" ? 12 : 0),
+      allowEscalation: booleanValue(budget.allowEscalation, false),
+      estimatedCostTier: normalizedEnum(budget.estimatedCostTier, COST_TIERS, { cheap: "low", light: "low", normal: "medium", expensive: "high" }, "low") ?? "low",
+      ...(budget.requireHumanReviewAboveStake !== undefined ? { requireHumanReviewAboveStake: numberValue(budget.requireHumanReviewAboveStake, 20) } : {}),
+    },
+  };
+}
+
 function detectLanguage(input: string): ProtocolSpecV2["language"] {
   if (/[\u3400-\u9fff]/.test(input)) return "zh";
   if (/[A-Za-z]/.test(input)) return "en";
@@ -247,8 +505,9 @@ export function protocolSpecFromChallengeSpec(
 }
 
 export function parseProtocolSpecV2(input: unknown): ProtocolSpecV2 | null {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
-  const candidate = input as Partial<ProtocolSpecV2>;
+  const normalized = normalizeProtocolCandidate(input);
+  if (!normalized) return null;
+  const candidate = normalized as Partial<ProtocolSpecV2>;
   if (candidate.version !== "2.0") return null;
   if (typeof candidate.title !== "string" || !candidate.title.trim()) return null;
   if (typeof candidate.userFacingSummary !== "string" || !candidate.userFacingSummary.trim()) return null;
