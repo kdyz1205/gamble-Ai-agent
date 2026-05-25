@@ -907,9 +907,19 @@ async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown
   const metadataFor = (targetUserId: string) => {
     const next: Record<string, unknown> = { ...metadataRecord };
     if (sharedSameCamera) {
+      const targetParticipant = activeParticipants.find((participant) => participant.userId === targetUserId);
+      const observedPosition =
+        targetParticipant?.role === "creator"
+          ? metadataRecord.creatorObservedPosition
+          : targetParticipant?.role === "opponent"
+            ? metadataRecord.opponentObservedPosition
+            : null;
       next.sharedSameCamera = true;
       next.sharedUploadedBy = ctx.userId;
       next.sharedEvidenceFor = targetUserId;
+      if (!next.observedPosition && typeof observedPosition === "string") {
+        next.observedPosition = observedPosition;
+      }
       next.identityGuidance = "Creator/Participant A should be on the left and opponent/Participant B on the right when possible.";
     }
     if (recordingSessionId) next.recordingSessionId = recordingSessionId;

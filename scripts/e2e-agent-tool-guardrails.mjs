@@ -322,7 +322,7 @@ try {
     `recordingSessionId is ${recording.recordingSessionId}.`,
     `video URL is https://example.com/agent-same-camera-${stamp}.mp4.`,
     `Description: Shared same-camera proof. Creator code: ${creatorCode}. Opponent code: ${opponentCode}. Both participants are visible.`,
-    "metadata sharedSameCamera true and fileSizeBytes 12345.",
+    'metadata JSON is {"sharedSameCamera":true,"fileSizeBytes":12345,"creatorObservedPosition":"left","opponentObservedPosition":"right"}.',
   ].join("\n");
   const uploaded = await callAgentTool(creator.jar, uploadMessage, "uploadEvidence");
   proof.upload = uploaded.toolResult;

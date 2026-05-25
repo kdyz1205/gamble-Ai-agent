@@ -130,9 +130,19 @@ export async function POST(
     const metadataFor = (targetUserId: string) => {
       const next: Record<string, unknown> = { ...metadataRecord };
       if (sharedSameCamera) {
+        const targetParticipant = activeParticipants.find((participant: { userId: string; role: string }) => participant.userId === targetUserId);
+        const observedPosition =
+          targetParticipant?.role === "creator"
+            ? metadataRecord.creatorObservedPosition
+            : targetParticipant?.role === "opponent"
+              ? metadataRecord.opponentObservedPosition
+              : null;
         next.sharedSameCamera = true;
         next.sharedUploadedBy = user.userId;
         next.sharedEvidenceFor = targetUserId;
+        if (!next.observedPosition && typeof observedPosition === "string") {
+          next.observedPosition = observedPosition;
+        }
         next.identityGuidance = "Creator/Participant A should be on the left and opponent/Participant B on the right when possible.";
       }
       if (submittedRecordingSessionId) {
