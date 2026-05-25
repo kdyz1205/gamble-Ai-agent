@@ -614,6 +614,7 @@ export default function Home() {
 
   const copyLink = useCallback(() => {
     if (!shareLink) return;
+    const zhCopy = protocol?.language === "zh";
     const showCopied = (message: string) => {
       setCopied(true);
       setCopyNotice(message);
@@ -621,28 +622,29 @@ export default function Home() {
     };
 
     if (!navigator.clipboard?.writeText) {
-      showCopied("Clipboard is blocked here. Use the visible join link.");
+      showCopied(zhCopy ? "剪贴板被浏览器阻止。请手动复制上面的邀请链接。" : "Clipboard is blocked here. Use the visible join link.");
       return;
     }
 
     navigator.clipboard.writeText(shareLink)
-      .then(() => showCopied("Join link copied."))
-      .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
-  }, [shareLink]);
+      .then(() => showCopied(zhCopy ? "邀请链接已复制。" : "Join link copied."))
+      .catch(() => showCopied(zhCopy ? "剪贴板被浏览器阻止。请手动复制上面的邀请链接。" : "Clipboard is blocked here. Use the visible join link."));
+  }, [protocol?.language, shareLink]);
 
   const copyLaunchText = useCallback((text: string, label: string) => {
+    const zhCopy = protocol?.language === "zh";
     const done = (message: string) => {
       setLaunchNotice(message);
       setTimeout(() => setLaunchNotice(""), 2200);
     };
     if (!navigator.clipboard?.writeText) {
-      done("Clipboard is blocked. Use the visible text.");
+      done(zhCopy ? "剪贴板被浏览器阻止。请手动复制模板文字。" : "Clipboard is blocked. Use the visible text.");
       return;
     }
     navigator.clipboard.writeText(text)
-      .then(() => done(`${label} copied.`))
-      .catch(() => done("Clipboard is blocked. Use the visible text."));
-  }, []);
+      .then(() => done(zhCopy ? `${label}已复制。` : `${label} copied.`))
+      .catch(() => done(zhCopy ? "剪贴板被浏览器阻止。请手动复制模板文字。" : "Clipboard is blocked. Use the visible text."));
+  }, [protocol?.language]);
 
   const copyPersonalInvite = useCallback(() => {
     if (!personalInviteLink) return;
@@ -661,7 +663,8 @@ export default function Home() {
 
   const sharePublishedChallenge = useCallback(async () => {
     if (!shareLink || !protocol) return;
-    const text = `Join my AI-judged challenge: ${protocol.title}`;
+    const zhCopy = protocol.language === "zh";
+    const text = zhCopy ? `来加入我的 AI 判定挑战：${protocol.title}` : `Join my AI-judged challenge: ${protocol.title}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: protocol.title, text, url: shareLink });
@@ -860,13 +863,15 @@ export default function Home() {
           {appState === "published" && protocol && shareLink && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
               <div className="text-center">
-                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>{publishedKind === "event" ? "Event ready" : "Challenge ready"}</h2>
+                <h2 className="text-3xl font-extrabold mb-2" style={{ color: "#172033" }}>
+                  {protocol.language === "zh" ? (publishedKind === "event" ? "活动已创建" : "挑战已创建") : (publishedKind === "event" ? "Event ready" : "Challenge ready")}
+                </h2>
                 <p className="text-sm font-semibold" style={{ color: "#526078" }}>{protocol.title}</p>
               </div>
               <div className="flex items-center gap-2 p-2 bg-white border shadow-sm" style={{ borderColor: "#E2E8F0", borderRadius: "18px" }}>
                 <input readOnly value={shareLink} className="flex-1 bg-transparent px-3 py-2 text-sm font-semibold focus:outline-none truncate" style={{ color: "#172033" }} />
                 <button onClick={copyLink} className="px-4 py-2 text-sm font-bold rounded-full" style={{ background: copied ? "#A7F3D0" : "#10B981", color: copied ? "#064E3B" : "#FFFFFF" }}>
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? (protocol.language === "zh" ? "已复制" : "Copied") : (protocol.language === "zh" ? "复制" : "Copy")}
                 </button>
               </div>
               {copyNotice && (
@@ -879,12 +884,15 @@ export default function Home() {
                 shareLink={shareLink}
                 notice={launchNotice}
                 onCopy={copyLaunchText}
+                zhCopy={protocol.language === "zh"}
               />
               <div className="grid gap-2 sm:grid-cols-4">
-                <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>{publishedKind === "event" ? "Event lobby" : "Challenge room"}</button>
-                <button type="button" onClick={sharePublishedChallenge} className="py-3 text-sm font-bold rounded-full" style={{ background: "#A7F3D0", color: "#065F46" }}>Share now</button>
-                <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>Challenge board</button>
-                <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>New challenge</button>
+                <button type="button" onClick={() => { if (publishedId) window.location.href = publishedKind === "event" ? `/events/${publishedId}` : `/challenge/${publishedId}`; }} className="py-3 text-sm font-bold rounded-full" style={{ background: "#10B981", color: "#FFFFFF" }}>
+                  {protocol.language === "zh" ? (publishedKind === "event" ? "活动大厅" : "挑战房间") : (publishedKind === "event" ? "Event lobby" : "Challenge room")}
+                </button>
+                <button type="button" onClick={sharePublishedChallenge} className="py-3 text-sm font-bold rounded-full" style={{ background: "#A7F3D0", color: "#065F46" }}>{protocol.language === "zh" ? "立即分享" : "Share now"}</button>
+                <button type="button" onClick={() => { window.location.href = "/markets"; }} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#047857", borderColor: "#D1FAE5" }}>{protocol.language === "zh" ? "挑战管理" : "Challenge board"}</button>
+                <button onClick={reset} className="py-3 text-sm font-bold rounded-full bg-white border" style={{ color: "#172033", borderColor: "#E2E8F0" }}>{protocol.language === "zh" ? "新挑战" : "New challenge"}</button>
               </div>
             </motion.div>
           )}
@@ -1002,36 +1010,57 @@ function PublishedLaunchKit({
   shareLink,
   notice,
   onCopy,
+  zhCopy = false,
 }: {
   title: string;
   shareLink: string;
   notice: string;
   onCopy: (text: string, label: string) => void;
+  zhCopy?: boolean;
 }) {
-  const templates = [
-    {
-      label: "Friend DM",
-      body: `I made an AI-judged challenge for us: ${title}\nJoin here: ${shareLink}\nWinner gets the credits after evidence review.`,
-    },
-    {
-      label: "Group chat",
-      body: `Challenge is live: ${title}\nJoin, accept the rules, submit evidence, and let the AI recommend the winner.\n${shareLink}`,
-    },
-    {
-      label: "Public post",
-      body: `Try my Axelrod challenge: ${title}\n${shareLink}`,
-    },
-  ];
+  const templates = zhCopy
+    ? [
+        {
+          label: "私信朋友",
+          body: `我发起了一个 AI 判定挑战：${title}\n从这里加入：${shareLink}\n同意规则、提交证据后，AI 会推荐赢家。`,
+        },
+        {
+          label: "群聊",
+          body: `挑战已创建：${title}\n加入后先确认规则，再提交证据，AI 会给出判定建议。\n${shareLink}`,
+        },
+        {
+          label: "公开发布",
+          body: `来试试我的 Axelrod 挑战：${title}\n${shareLink}`,
+        },
+      ]
+    : [
+        {
+          label: "Friend DM",
+          body: `I made an AI-judged challenge for us: ${title}\nJoin here: ${shareLink}\nWinner gets the credits after evidence review.`,
+        },
+        {
+          label: "Group chat",
+          body: `Challenge is live: ${title}\nJoin, accept the rules, submit evidence, and let the AI recommend the winner.\n${shareLink}`,
+        },
+        {
+          label: "Public post",
+          body: `Try my Axelrod challenge: ${title}\n${shareLink}`,
+        },
+      ];
 
   return (
     <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>Share</p>
-          <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Send to 3 people</h3>
+          <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>
+            {zhCopy ? "分享" : "Share"}
+          </p>
+          <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: "#172033" }}>
+            {zhCopy ? "发给 3 个朋友" : "Send to 3 people"}
+          </h3>
         </div>
         <span className="w-fit rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#ECFDF5", color: "#047857" }}>
-          tracked
+          {zhCopy ? "已追踪" : "tracked"}
         </span>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-3">

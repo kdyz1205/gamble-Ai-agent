@@ -6,7 +6,9 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
-import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
+import { challengeUsesChineseCopy } from "@/lib/challenge-display";
+import { formatChallengeDeadline } from "@/lib/challenge-time";
+import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus, statusLabel } from "@/lib/challenge-state-machine";
 
 // Axelrod status palette — canonical pastels
 const STATUS_COLOR: Record<string, string> = {
@@ -31,17 +33,48 @@ const CREAM = "#FFEDD5";       // orange-100 soft fill
 
 type Tab = "all" | "open" | "live" | "settled";
 
+const STATUS_LABEL_ZH: Record<string, string> = {
+  draft: "草稿",
+  generated_spec: "规则已生成",
+  creator_confirmed: "已确认",
+  waiting_for_opponent: "等对手",
+  open: "等对手",
+  opponent_accepted: "已接受",
+  escrow_locked: "已托管",
+  evidence_window_open: "交证据",
+  creator_submitted: "创建者已交",
+  opponent_submitted: "对手已交",
+  ai_reviewing: "AI 复核",
+  ai_verdict_ready: "待确认",
+  dispute_window_open: "争议期",
+  finalized: "已确认",
+  settled: "已结算",
+  refunded: "已退款",
+  cancelled: "已取消",
+  expired: "已过期",
+  manual_review_required: "人工复核",
+  disputed: "争议中",
+  ai_inconclusive: "AI 未判定",
+  evidence_invalid: "证据无效",
+  evidence_missing: "缺证据",
+  voided: "已作废",
+};
+
 export default function MePage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const user = session?.user as { id?: string; username?: string; name?: string; email?: string; credits?: number } | undefined;
 
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
+  const [browserZh, setBrowserZh] = useState(false);
 
   const loadMine = () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setMessage(null);
     api.listChallenges({ mine: true, limit: 50 })
@@ -57,11 +90,47 @@ export default function MePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  useEffect(() => {
+    setBrowserZh(/^zh/i.test(navigator.language));
+  }, []);
+
+  const zhCopy =
+    markets.some((market) => challengeUsesChineseCopy(market)) ||
+    browserZh;
+  const labels = {
+    refresh: zhCopy ? "刷新" : "Refresh",
+    refreshing: zhCopy ? "刷新中" : "Refreshing",
+    manager: zhCopy ? "管理" : "Manager",
+    newChallenge: zhCopy ? "+ 新挑战" : "+ New",
+    balance: zhCopy ? "余额" : "Balance",
+    active: zhCopy ? "进行中" : "Active",
+    settled: zhCopy ? "已结算" : "Settled",
+    staked: zhCopy ? "托管" : "Staked",
+    yourChallenges: zhCopy ? "我的挑战" : "Your challenges",
+    total: zhCopy ? "个" : "total",
+    noHistory: zhCopy ? "还没有挑战。从首页输入一句话创建。" : "No challenges yet. Create one from the composer.",
+    createFirst: zhCopy ? "创建第一个挑战" : "Create your first challenge",
+    checkingSession: zhCopy ? "正在恢复登录状态..." : "Checking your session...",
+    signInProfile: zhCopy ? "登录后查看你的资料。" : "Sign in to view your profile.",
+    goHome: zhCopy ? "回到首页" : "Go home",
+  };
+
+  if (sessionStatus === "loading") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <motion.div className="w-7 h-7 rounded-full border-[3px] border-t-transparent"
+          style={{ borderColor: PEACH, borderTopColor: "transparent" }}
+          animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
+        <p className="text-sm font-semibold" style={{ color: NAVY_DIM }}>{labels.checkingSession}</p>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-sm" style={{ color: NAVY_DIM }}>Sign in to view your profile.</p>
-        <Link href="/" className="text-xs font-semibold underline" style={{ color: PEACH_DARK }}>Go home</Link>
+        <p className="text-sm" style={{ color: NAVY_DIM }}>{labels.signInProfile}</p>
+        <Link href="/" className="text-xs font-semibold underline" style={{ color: PEACH_DARK }}>{labels.goHome}</Link>
       </div>
     );
   }
@@ -91,15 +160,15 @@ export default function MePage() {
             className="text-xs font-bold px-3 py-2 disabled:opacity-50"
             style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
           >
-            Refresh
+            {loading ? labels.refreshing : labels.refresh}
           </button>
           <Link href="/markets" className="text-xs font-bold px-3 py-2"
             style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
-            Manager
+            {labels.manager}
           </Link>
           <Link href="/" className="text-xs font-bold px-4 py-2"
             style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-            + New
+            {labels.newChallenge}
           </Link>
         </div>
       </header>
@@ -122,7 +191,7 @@ export default function MePage() {
           {/* Balance */}
           <div className="flex items-center justify-between py-3 px-4 mb-4"
             style={{ background: CREAM, borderRadius: "20px" }}>
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Balance</span>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>{labels.balance}</span>
             <span className="text-2xl font-extrabold" style={{ color: PEACH_TEXT }}>
               {credits}
               <span className="text-xs font-bold ml-1" style={{ color: NAVY_DIM }}>cr</span>
@@ -131,16 +200,16 @@ export default function MePage() {
 
           {/* Stats grid */}
           <div className="grid grid-cols-3 gap-2">
-            <StatCard label="Active" value={openCount} tint="#5FC9B4" />
-            <StatCard label="Settled" value={settledCount} tint="#6BCF8E" />
-            <StatCard label="Staked" value={totalStaked} suffix="cr" tint="#B8A6E0" />
+            <StatCard label={labels.active} value={openCount} tint="#5FC9B4" />
+            <StatCard label={labels.settled} value={settledCount} tint="#6BCF8E" />
+            <StatCard label={labels.staked} value={totalStaked} suffix="cr" tint="#B8A6E0" />
           </div>
         </div>
 
         {/* Markets section */}
         <div className="mb-3 flex items-center justify-between px-1">
-          <h2 className="text-base font-bold" style={{ color: NAVY }}>Your challenges</h2>
-          <span className="text-xs font-semibold" style={{ color: NAVY_DIM }}>{markets.length} total</span>
+          <h2 className="text-base font-bold" style={{ color: NAVY }}>{labels.yourChallenges}</h2>
+          <span className="text-xs font-semibold" style={{ color: NAVY_DIM }}>{markets.length} {labels.total}</span>
         </div>
         {message && (
           <p className="mb-3 rounded-2xl border bg-white px-4 py-3 text-xs font-bold" style={{ color: NAVY_DIM, borderColor: NAVY_FAINT }}>
@@ -161,7 +230,7 @@ export default function MePage() {
                 boxShadow: tab === t ? `0 4px 14px 0 ${ORANGE_GLOW}` : "none",
                 backdropFilter: tab === t ? undefined : "blur(8px)",
               }}>
-              {t}
+              {zhCopy ? ({ all: "全部", open: "待加入", live: "进行中", settled: "已结束" } as Record<Tab, string>)[t] : t}
             </button>
           ))}
         </div>
@@ -177,12 +246,12 @@ export default function MePage() {
           <div className="text-center py-12 px-6 shadow-sm"
             style={{ background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "20px" }}>
             <p className="text-sm mb-4" style={{ color: NAVY_DIM }}>
-              {tab === "all" ? "No challenges yet. Create one from the composer." : `No ${tab} challenges right now.`}
+              {tab === "all" ? labels.noHistory : zhCopy ? "这里暂时没有挑战。" : `No ${tab} challenges right now.`}
             </p>
             {tab === "all" && (
               <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold"
                 style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-                Create your first challenge
+                {labels.createFirst}
               </Link>
             )}
           </div>
@@ -199,10 +268,12 @@ export default function MePage() {
                       <h3 className="text-sm font-bold truncate" style={{ color: NAVY }}>{m.title}</h3>
                       <div className="flex items-center gap-2 mt-1.5 text-xs font-medium" style={{ color: NAVY_DIM }}>
                         <span>{m.type}</span>
-                        <span>·</span>
-                        <span>{m.stake > 0 ? `${m.stake} cr` : "Free"}</span>
-                        <span>·</span>
-                        <span>{m.participants?.length || 0} joined</span>
+                        <span>/</span>
+                        <span>{m.stake > 0 ? `${m.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "Free"}</span>
+                        <span>/</span>
+                        <span>{m.participants?.length || 0} {zhCopy ? "人" : "joined"}</span>
+                        <span>/</span>
+                        <span>{formatChallengeDeadline(m.deadline, { includePrefix: !zhCopy }) ?? (zhCopy ? "无截止" : "No deadline")}</span>
                       </div>
                     </div>
                     <span className="flex-shrink-0 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
@@ -211,7 +282,7 @@ export default function MePage() {
                         background: STATUS_COLOR[m.status] || "#E2E8F0",
                         borderRadius: "9999px",
                       }}>
-                      {m.status}
+                      {zhCopy ? STATUS_LABEL_ZH[m.status] ?? m.status.replace(/_/g, " ") : statusLabel(m.status)}
                     </span>
                   </div>
                 </Link>

@@ -142,10 +142,10 @@ function participantVideoMetrics(videoMetrics: Record<string, unknown> | null, k
     : null;
 }
 
-function metricBool(value: unknown) {
-  if (value === true) return "Yes";
-  if (value === false) return "No";
-  return "Unknown";
+function metricBool(value: unknown, zhCopy = false) {
+  if (value === true) return zhCopy ? "是" : "Yes";
+  if (value === false) return zhCopy ? "否" : "No";
+  return zhCopy ? "未知" : "Unknown";
 }
 
 function metricCount(value: unknown) {
@@ -272,6 +272,7 @@ export default function ChallengeVerdictPanel({
   const [manualReason, setManualReason] = useState("");
   const [manualWinnerId, setManualWinnerId] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentZhCopy = () => challenge ? challengeUsesChineseCopy(challenge) : false;
 
   const refresh = useCallback(async () => {
     if (!challengeId) return;
@@ -329,7 +330,8 @@ export default function ChallengeVerdictPanel({
     if (!challenge) return;
     const cost = TIER_COST[tier];
     if (credits < cost) {
-      setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
+      const zh = currentZhCopy();
+      setVerdictErr(zh ? `需要 ${cost} 积分才能运行 ${TIER_LABEL[tier]}。你现在有 ${credits}。` : `Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
     }
     setBusy(true);
@@ -343,7 +345,7 @@ export default function ChallengeVerdictPanel({
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "AI verdict failed");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "AI 判定失败。" : "AI verdict failed");
     } finally {
       setBusy(false);
     }
@@ -365,7 +367,7 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
-      setAsyncHint("AI is analyzing evidence (video frames + vision)...");
+      setAsyncHint(currentZhCopy() ? "AI 正在分析证据（视频帧 + 视觉模型）..." : "AI is analyzing evidence (video frames + vision)...");
 
       // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
       // Replaces the old 2s-forever loop that at 1000 concurrent waiters did
@@ -383,7 +385,7 @@ export default function ChallengeVerdictPanel({
         if (Date.now() - pollStart > MAX_TOTAL_MS) {
           setBusy(false);
           setAsyncHint("");
-          setVerdictErr("Verdict is taking longer than expected — please reload to check status.");
+          setVerdictErr(currentZhCopy() ? "判定时间比预期更久，请刷新查看状态。" : "Verdict is taking longer than expected. Please reload to check status.");
           return;
         }
         const delay = BACKOFF_SEQUENCE[Math.min(attempt, BACKOFF_SEQUENCE.length - 1)];
@@ -397,7 +399,7 @@ export default function ChallengeVerdictPanel({
               cancelled = true;
               setBusy(false);
               setAsyncHint("");
-              if (j.status === "failed") setVerdictErr(j.error || "Background verdict failed");
+              if (j.status === "failed") setVerdictErr(j.error || (currentZhCopy() ? "后台判定失败。" : "Background verdict failed"));
               await refresh();
               onCreditsMayChange();
               return;
@@ -416,7 +418,7 @@ export default function ChallengeVerdictPanel({
       if (pollRef.current) clearInterval(pollRef.current);
       scheduleNext();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not start background verdict");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "无法启动后台判定。" : "Could not start background verdict");
       setBusy(false);
     }
   };
@@ -430,7 +432,7 @@ export default function ChallengeVerdictPanel({
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not confirm AI recommendation");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "无法确认 AI 判定。" : "Could not confirm AI recommendation");
     } finally {
       setBusy(false);
     }
@@ -442,11 +444,11 @@ export default function ChallengeVerdictPanel({
     setVerdictErr("");
     try {
       await api.disputeChallenge(challenge.id, {
-        reason: manualReason || "Participant requested manual review of the AI verdict.",
+        reason: manualReason || (currentZhCopy() ? "参与者认为 AI 判定需要人工复核。" : "Participant requested manual review of the AI verdict."),
       });
       await refresh();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not request manual review");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "无法请求人工复核。" : "Could not request manual review");
     } finally {
       setBusy(false);
     }
@@ -458,7 +460,7 @@ export default function ChallengeVerdictPanel({
       ? (manualWinnerId || accepted[0]?.user.id || null)
       : null;
     if (outcome === "winner" && !winnerId) {
-      setVerdictErr("Pick a winner before resolving manual review.");
+      setVerdictErr(currentZhCopy() ? "请先选择赢家再完成复核。" : "Pick a winner before resolving manual review.");
       return;
     }
     setBusy(true);
@@ -467,12 +469,12 @@ export default function ChallengeVerdictPanel({
       await api.manualResolveChallenge(challenge.id, {
         outcome,
         winnerId,
-        reason: manualReason || "Creator resolved the manual review based on the submitted evidence.",
+        reason: manualReason || (currentZhCopy() ? "创建者根据提交的证据完成了人工复核。" : "Creator resolved the manual review based on the submitted evidence."),
       });
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not resolve manual review");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "无法完成人工复核。" : "Could not resolve manual review");
     } finally {
       setBusy(false);
     }
@@ -487,20 +489,21 @@ export default function ChallengeVerdictPanel({
     };
 
     if (!navigator.clipboard?.writeText) {
-      showCopied("Clipboard is blocked here. Use the visible join link.");
+      showCopied(currentZhCopy() ? "剪贴板被浏览器阻止。请手动复制下方链接。" : "Clipboard is blocked here. Use the visible join link.");
       return;
     }
 
     navigator.clipboard.writeText(url)
-      .then(() => showCopied("Join link copied."))
-      .catch(() => showCopied("Clipboard is blocked here. Use the visible join link."));
+      .then(() => showCopied(currentZhCopy() ? "邀请链接已复制。" : "Join link copied."))
+      .catch(() => showCopied(currentZhCopy() ? "剪贴板被浏览器阻止。请手动复制下方链接。" : "Clipboard is blocked here. Use the visible join link."));
   };
 
   const runRejudge = async () => {
     if (!challenge) return;
     const cost = TIER_COST[tier];
     if (credits < cost) {
-      setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
+      const zh = currentZhCopy();
+      setVerdictErr(zh ? `需要 ${cost} 积分才能运行 ${TIER_LABEL[tier]}。你现在有 ${credits}。` : `Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
     }
     setBusy(true);
@@ -511,13 +514,13 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
         rejudge: true,
-        reason: "Creator disputed the previous AI verdict and requested another model pass.",
+        reason: currentZhCopy() ? "创建者认为上一次 AI 判定有误，请求另一个模型重新判定。" : "Creator disputed the previous AI verdict and requested another model pass.",
       });
       setVerdictRevealed(false);
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not rejudge this challenge");
+      setVerdictErr(e instanceof Error ? e.message : currentZhCopy() ? "无法重新判定这个挑战。" : "Could not rejudge this challenge");
     } finally {
       setBusy(false);
     }
@@ -542,14 +545,15 @@ export default function ChallengeVerdictPanel({
 
   const closeEmptyChallenge = async () => {
     if (!challenge) return;
-    if (!window.confirm(`Close "${challenge.title}"? This only works before another participant joins.`)) return;
+    const zh = currentZhCopy();
+    if (!window.confirm(zh ? `关闭「${challenge.title}」？只会在还没有对手加入前生效。` : `Close "${challenge.title}"? This only works before another participant joins.`)) return;
     setBusy(true);
     setVerdictErr("");
     try {
       await api.deleteChallenge(challenge.id);
       window.location.href = "/markets";
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not close this challenge");
+      setVerdictErr(e instanceof Error ? e.message : zh ? "无法关闭这个挑战。" : "Could not close this challenge");
     } finally {
       setBusy(false);
     }
@@ -557,17 +561,18 @@ export default function ChallengeVerdictPanel({
 
   const cancelAndRefundChallenge = async () => {
     if (!challenge) return;
-    if (!window.confirm(`Cancel "${challenge.title}" and refund all locked stakes? This only works before evidence is submitted.`)) return;
+    const zh = currentZhCopy();
+    if (!window.confirm(zh ? `取消「${challenge.title}」并退回所有托管积分？只会在提交证据前生效。` : `Cancel "${challenge.title}" and refund all locked stakes? This only works before evidence is submitted.`)) return;
     setBusy(true);
     setVerdictErr("");
     try {
       const res = await api.cancelChallenge(challenge.id, {
-        reason: "Creator cancelled before evidence was submitted.",
+        reason: zh ? "创建者在提交证据前取消挑战。" : "Creator cancelled before evidence was submitted.",
       });
       setChallenge(res.challenge);
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not cancel and refund this challenge");
+      setVerdictErr(e instanceof Error ? e.message : zh ? "无法取消并退款这个挑战。" : "Could not cancel and refund this challenge");
     } finally {
       setBusy(false);
     }
@@ -575,20 +580,26 @@ export default function ChallengeVerdictPanel({
 
   const archiveOrRestoreChallenge = async (archived: boolean) => {
     if (!challenge) return;
+    const zh = currentZhCopy();
     const verb = archived ? "Archive" : "Restore";
     const detail = archived
       ? "This keeps evidence, verdict, and ledger history but removes it from your default challenge board and public discovery."
       : "This returns it to your private challenge board. It will stay out of public discovery.";
-    if (!window.confirm(`${verb} "${challenge.title}"? ${detail}`)) return;
+    const confirmCopy = zh
+      ? archived
+        ? `归档「${challenge.title}」？证据、判定和积分流水都会保留，只是不再默认显示。`
+        : `恢复「${challenge.title}」到你的私人挑战列表？它仍不会进入公开发现。`
+      : `${verb} "${challenge.title}"? ${detail}`;
+    if (!window.confirm(confirmCopy)) return;
     setBusy(true);
     setVerdictErr("");
     setManageNotice("");
     try {
       const res = await api.archiveChallenge(challenge.id, { archived });
       setChallenge(res.challenge);
-      setManageNotice(archived ? "Archived. History and ledger are preserved." : "Restored to your private challenge board.");
+      setManageNotice(archived ? (zh ? "已归档，历史和积分流水已保留。" : "Archived. History and ledger are preserved.") : (zh ? "已恢复到你的私人挑战列表。" : "Restored to your private challenge board."));
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : `Could not ${verb.toLowerCase()} this challenge`);
+      setVerdictErr(e instanceof Error ? e.message : zh ? "无法更新这个挑战。" : `Could not ${verb.toLowerCase()} this challenge`);
     } finally {
       setBusy(false);
     }
@@ -1181,9 +1192,9 @@ export default function ChallengeVerdictPanel({
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
           >
-            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>AI recommendation ready</p>
+            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{zhCopy ? "AI 判定已生成" : "AI recommendation ready"}</p>
             <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              Confirm to settle, or review.
+              {zhCopy ? "确认后结算；不确定就复核。" : "Confirm to settle, or review."}
             </p>
             {verdictMetrics.autoSettleEligible ? (
               <motion.button
@@ -1198,17 +1209,17 @@ export default function ChallengeVerdictPanel({
                   boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
                 }}
               >
-                {busy ? "Settling..." : "Confirm + settle"}
+                {busy ? (zhCopy ? "结算中..." : "Settling...") : (zhCopy ? "确认并结算" : "Confirm + settle")}
               </motion.button>
             ) : (
               <div className="p-3 text-xs font-semibold" style={{ color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "14px" }}>
-                Not eligible. Rejudge or review.
+                {zhCopy ? "暂不满足自动结算条件。请重新判定或人工复核。" : "Not eligible. Rejudge or review."}
               </div>
             )}
 
             {canRejudge && (
               <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #E2E8F0" }}>
-                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>Try another judge model</p>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "换一个模型再判一次" : "Try another judge model"}</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((t) => {
                     const selected = tier === t;
@@ -1238,7 +1249,7 @@ export default function ChallengeVerdictPanel({
                   className="w-full py-3 rounded-xl text-sm font-black disabled:opacity-40"
                   style={{ color: "#1D4ED8", background: "#EFF6FF", border: "1px solid #BFDBFE" }}
                 >
-                  {busy ? "Rejudging..." : `Rejudge - ${TIER_COST[tier]} cr`}
+                  {busy ? (zhCopy ? "重新判定中..." : "Rejudging...") : (zhCopy ? `重新判定 - ${TIER_COST[tier]} 积分` : `Rejudge - ${TIER_COST[tier]} cr`)}
                 </motion.button>
               </div>
             )}
@@ -1254,16 +1265,16 @@ export default function ChallengeVerdictPanel({
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
           >
             <div>
-              <p className="text-sm font-bold" style={{ color: "#1E293B" }}>Manual review</p>
+              <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{zhCopy ? "人工复核" : "Manual review"}</p>
               <p className="text-xs font-medium mt-1" style={{ color: "#64748B", lineHeight: 1.5 }}>
-                Use when AI looks wrong.
+                {zhCopy ? "AI 看错、不确定、证据不清楚时使用。" : "Use when AI looks wrong."}
               </p>
             </div>
             <textarea
               value={manualReason}
               onChange={(event) => setManualReason(event.target.value)}
               rows={3}
-              placeholder="What is wrong or unclear about this verdict?"
+              placeholder={zhCopy ? "哪里不对或哪里不清楚？" : "What is wrong or unclear about this verdict?"}
               className="w-full resize-none rounded-2xl border px-3 py-2 text-xs font-semibold focus:outline-none"
               style={{ borderColor: "#E2E8F0", color: "#334155", background: "#F8FAFC" }}
             />
@@ -1276,13 +1287,13 @@ export default function ChallengeVerdictPanel({
                 className="w-full py-3 rounded-xl text-sm font-black disabled:opacity-40"
                 style={{ color: "#92400E", background: "#FEF3C7", border: "1px solid #FDE68A" }}
               >
-                {busy ? "Requesting review..." : "Request manual review"}
+                {busy ? (zhCopy ? "提交中..." : "Requesting review...") : (zhCopy ? "请求人工复核" : "Request manual review")}
               </motion.button>
             )}
             {canManualResolve && (
               <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #E2E8F0" }}>
                 <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>
-                  Creator resolution
+                  {zhCopy ? "创建者处理" : "Creator resolution"}
                 </p>
                 <select
                   value={selectedManualWinnerId}
@@ -1305,7 +1316,7 @@ export default function ChallengeVerdictPanel({
                     className="py-3 rounded-xl text-sm font-black disabled:opacity-40"
                     style={{ color: "#065F46", background: "#D1FAE5", border: "1px solid #A7F3D0" }}
                   >
-                    {busy ? "Resolving..." : "Award selected winner"}
+                    {busy ? (zhCopy ? "处理中..." : "Resolving...") : (zhCopy ? "判给所选赢家" : "Award selected winner")}
                   </motion.button>
                   <motion.button
                     type="button"
@@ -1315,7 +1326,7 @@ export default function ChallengeVerdictPanel({
                     className="py-3 rounded-xl text-sm font-black disabled:opacity-40"
                     style={{ color: "#334155", background: "#F8FAFC", border: "1px solid #E2E8F0" }}
                   >
-                    {challenge.stake > 0 ? "Refund locked credits" : "Void challenge"}
+                    {challenge.stake > 0 ? (zhCopy ? "退回托管积分" : "Refund locked credits") : (zhCopy ? "作废挑战" : "Void challenge")}
                   </motion.button>
                 </div>
               </div>
@@ -1349,7 +1360,7 @@ export default function ChallengeVerdictPanel({
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </motion.div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">AI Verdict</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{zhCopy ? "AI 判定" : "AI Verdict"}</p>
               </div>
 
               {/* Winner */}
@@ -1360,7 +1371,7 @@ export default function ChallengeVerdictPanel({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                 >
-                  Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
+                  {zhCopy ? "赢家：" : "Winner: "}<span className="text-success">@{verdictRow.winner?.username ?? (zhCopy ? "平局 / 作废" : "Tie / Void")}</span>
                 </motion.span>
               </div>
 
@@ -1378,38 +1389,38 @@ export default function ChallengeVerdictPanel({
                           color: verdictRow.confidence > 0.7 ? "#00e87a" : "#f5a623",
                           border: `1px solid ${verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.2)" : "rgba(245,166,35,0.2)"}`,
                         }}>
-                    {(verdictRow.confidence * 100).toFixed(0)}% confidence
+                    {(verdictRow.confidence * 100).toFixed(0)}% {zhCopy ? "置信度" : "confidence"}
                   </span>
                 )}
               </div>
 
               <div className="grid gap-2 sm:grid-cols-5">
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "证据质量" : "Evidence quality"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.evidenceQuality === "good" ? "#047857" : "#9A3412" }}>
                     {displayEnum(verdictMetrics.evidenceQuality)}
                   </p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Recommendation</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "建议" : "Recommendation"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.recommendation === "settle_winner" ? "#047857" : "#9A3412" }}>
                     {displayEnum(verdictMetrics.recommendation)}
                   </p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Settlement gate</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "结算门槛" : "Settlement gate"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.autoSettleEligible ? "#047857" : "#9A3412" }}>
-                    {verdictMetrics.autoSettleEligible ? "Eligible" : "Needs Review"}
+                    {verdictMetrics.autoSettleEligible ? (zhCopy ? "可结算" : "Eligible") : (zhCopy ? "需复核" : "Needs Review")}
                   </p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Judge source</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "判定来源" : "Judge source"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.source === "fallback" ? "#9A3412" : "#047857" }}>
                     {displayEnum(verdictMetrics.source)}
                   </p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Provider call</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "模型调用" : "Provider call"}</p>
                   <p className="text-[11px] font-extrabold mt-1 leading-snug" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
                     {providerCallSummary(verdictMetrics.providerCall)}
                   </p>
@@ -1423,7 +1434,7 @@ export default function ChallengeVerdictPanel({
 
               {verdictMetrics.blockingIssues.length > 0 && (
                 <div className="p-4" style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "20px" }}>
-                  <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9A3412" }}>Blocking issues</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#9A3412" }}>{zhCopy ? "阻塞问题" : "Blocking issues"}</p>
                   <ul className="space-y-1.5">
                     {verdictMetrics.blockingIssues.map((issue) => (
                       <li key={issue} className="text-xs font-semibold" style={{ color: "#7C2D12", lineHeight: 1.5 }}>
@@ -1437,29 +1448,29 @@ export default function ChallengeVerdictPanel({
               {(participantAMetrics || participantBMetrics) && (
                 <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
                   <p className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: "#64748B" }}>
-                    Video metrics
+                    {zhCopy ? "视频指标" : "Video metrics"}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {[
-                      ["Participant A", participantAMetrics],
-                      ["Participant B", participantBMetrics],
+                      [zhCopy ? "参与者 A" : "Participant A", participantAMetrics],
+                      [zhCopy ? "参与者 B" : "Participant B", participantBMetrics],
                     ].map(([label, metrics]) => metrics && (
                       <div key={label as string} className="p-3" style={{ background: "#F8FAFC", borderRadius: "16px" }}>
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <p className="text-xs font-black" style={{ color: "#1E293B" }}>{label as string}</p>
                           <span className="px-2 py-1 text-[10px] font-black" style={{ color: "#047857", background: "#D1FAE5", borderRadius: "9999px" }}>
                             {typeof (metrics as Record<string, unknown>).holdDurationSec === "number"
-                              ? `${(metrics as Record<string, unknown>).holdDurationSec as number}s hold`
-                              : `${metricCount((metrics as Record<string, unknown>).validRepCount)} reps`}
+                              ? `${(metrics as Record<string, unknown>).holdDurationSec as number}s ${zhCopy ? "保持" : "hold"}`
+                              : `${metricCount((metrics as Record<string, unknown>).validRepCount)} ${zhCopy ? "次" : "reps"}`}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[11px] font-bold" style={{ color: "#475569" }}>
-                          <span>Full body: {metricBool((metrics as Record<string, unknown>).fullBodyVisible)}</span>
-                          <span>Liveness: {metricBool((metrics as Record<string, unknown>).livenessPhraseVisible)}</span>
-                          <span>Duration: {metricBool((metrics as Record<string, unknown>).fullDurationCovered)}</span>
-                          <span>Continuous: {metricBool((metrics as Record<string, unknown>).continuousAttemptLikely)}</span>
-                          <span>Too short: {metricBool((metrics as Record<string, unknown>).videoTooShort)}</span>
-                          <span>Edit/loop: {metricBool((metrics as Record<string, unknown>).suspectedEditingOrLoop)}</span>
+                          <span>{zhCopy ? "全身" : "Full body"}: {metricBool((metrics as Record<string, unknown>).fullBodyVisible, zhCopy)}</span>
+                          <span>{zhCopy ? "口令" : "Liveness"}: {metricBool((metrics as Record<string, unknown>).livenessPhraseVisible, zhCopy)}</span>
+                          <span>{zhCopy ? "时长" : "Duration"}: {metricBool((metrics as Record<string, unknown>).fullDurationCovered, zhCopy)}</span>
+                          <span>{zhCopy ? "连续" : "Continuous"}: {metricBool((metrics as Record<string, unknown>).continuousAttemptLikely, zhCopy)}</span>
+                          <span>{zhCopy ? "太短" : "Too short"}: {metricBool((metrics as Record<string, unknown>).videoTooShort, zhCopy)}</span>
+                          <span>{zhCopy ? "剪辑/循环" : "Edit/loop"}: {metricBool((metrics as Record<string, unknown>).suspectedEditingOrLoop, zhCopy)}</span>
                         </div>
                         {metricNotes((metrics as Record<string, unknown>).invalidRepNotes).length > 0 && (
                           <ul className="mt-2 space-y-1">
@@ -1483,7 +1494,7 @@ export default function ChallengeVerdictPanel({
 
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>AI Reasoning</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>{zhCopy ? "AI 理由" : "AI Reasoning"}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
@@ -1508,7 +1519,7 @@ export default function ChallengeVerdictPanel({
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>
-                  Verdict receipt
+                  {zhCopy ? "判定收据" : "Verdict receipt"}
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
                   {verdictRow.aiModel}
@@ -1526,7 +1537,7 @@ export default function ChallengeVerdictPanel({
                 >
                   <span className="text-lg">🏆</span>
                   <span className="text-sm font-extrabold" style={{ color: "#065F46" }}>
-                    {verdictRow.winner.username} wins
+                    {zhCopy ? `${verdictRow.winner.username} 获胜` : `${verdictRow.winner.username} wins`}
                   </span>
                 </div>
               )}
@@ -1540,7 +1551,7 @@ export default function ChallengeVerdictPanel({
               {verdictRow.confidence != null && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    <span>Confidence</span>
+                    <span>{zhCopy ? "置信度" : "Confidence"}</span>
                     <span>{Math.round(verdictRow.confidence * 100)}%</span>
                   </div>
                   <div className="h-1.5 overflow-hidden" style={{ background: "#F1F5F9", borderRadius: "999px" }}>
@@ -1560,15 +1571,15 @@ export default function ChallengeVerdictPanel({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Evidence quality</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "证据质量" : "Evidence quality"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.evidenceQuality)}</p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Recommendation</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "建议" : "Recommendation"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.recommendation)}</p>
                 </div>
                 <div className="col-span-2 px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>Provider call</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "模型调用" : "Provider call"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
                     {providerCallSummary(verdictMetrics.providerCall)}
                   </p>
@@ -1577,7 +1588,9 @@ export default function ChallengeVerdictPanel({
 
               <motion.button
                 onClick={() => {
-                  const text = `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
+                  const text = zhCopy
+                    ? `AI 判定：「${challenge.title}」— ${verdictRow.winner?.username ?? "平局"} 获胜（${Math.round((verdictRow.confidence ?? 0) * 100)}% 置信度）\n\n「${verdictRow.reasoning}」\n\n模型：${verdictRow.aiModel}`
+                    : `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
                   void navigator.clipboard.writeText(text);
                 }}
                 whileTap={{ scale: 0.97 }}

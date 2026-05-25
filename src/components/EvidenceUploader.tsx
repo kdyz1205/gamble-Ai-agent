@@ -475,6 +475,15 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
                 <span className="text-xs font-bold text-white">Starting camera preview... tap here if it stays black.</span>
               </button>
             )}
+            {cameraReady && !recording && (
+              <button
+                type="button"
+                onClick={() => { void playCameraPreview(); }}
+                className="absolute bottom-3 left-3 rounded-full bg-black/65 px-3 py-1.5 text-[11px] font-black text-white"
+              >
+                Preview black? Tap here
+              </button>
+            )}
           </div>
           <div className="flex gap-2 mt-3">
             {!recording ? (

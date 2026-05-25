@@ -36,8 +36,8 @@ function askLocation(): Promise<{ snapshot: api.LocationSnapshot | null; accurac
   });
 }
 
-function distanceLabel(meters: number | null | undefined) {
-  if (meters == null) return "global";
+function distanceLabel(meters: number | null | undefined, zhCopy = false) {
+  if (meters == null) return zhCopy ? "全局" : "global";
   if (meters < 1000) return `${meters}m`;
   return `${(meters / 1000).toFixed(meters < 10_000 ? 1 : 0)}km`;
 }
@@ -61,6 +61,11 @@ export default function RadarPage() {
   const [challenges, setChallenges] = useState<RadarChallenge[]>([]);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zhCopy, setZhCopy] = useState(false);
+
+  useEffect(() => {
+    setZhCopy(/^zh/i.test(navigator.language));
+  }, []);
 
   const loadRadar = useCallback(async (nextSnapshot: api.LocationSnapshot | null) => {
     setLoading(true);
@@ -73,7 +78,7 @@ export default function RadarPage() {
         console.warn("[radar] challenge load failed", challengeResult.reason);
         setChallenges([]);
         setPresence([]);
-        setMessage("Challenge radar is temporarily unavailable. You can still create or manage challenges.");
+        setMessage(zhCopy ? "挑战雷达暂时不可用。你仍然可以创建或管理挑战。" : "Challenge radar is temporarily unavailable. You can still create or manage challenges.");
         setStatus("error");
         return;
       }
@@ -87,12 +92,12 @@ export default function RadarPage() {
       setStatus(nextSnapshot ? "ready" : "global");
     } catch (err) {
       console.warn("[radar] load failed", err);
-      setMessage("Challenge radar is temporarily unavailable. You can still create or manage challenges.");
+      setMessage(zhCopy ? "挑战雷达暂时不可用。你仍然可以创建或管理挑战。" : "Challenge radar is temporarily unavailable. You can still create or manage challenges.");
       setStatus("error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [zhCopy]);
 
   useEffect(() => {
     void loadRadar(null);
@@ -100,12 +105,16 @@ export default function RadarPage() {
 
   const enableLocation = async () => {
     setStatus("locating");
-    setMessage("Locating...");
+    setMessage(zhCopy ? "正在定位..." : "Locating...");
     const result = await askLocation();
     if (!result.snapshot) {
-      setStatus(result.status);
-      setMessage(result.status === "blocked" ? "Location blocked. Browser settings can re-enable it." : "Location unavailable.");
       await loadRadar(null);
+      setStatus(result.status);
+      setMessage(
+        result.status === "blocked"
+          ? zhCopy ? "位置权限被拒绝。可以在浏览器设置里重新允许。" : "Location blocked. Browser settings can re-enable it."
+          : zhCopy ? "暂时无法获取位置。" : "Location unavailable.",
+      );
       return;
     }
     setSnapshot(result.snapshot);
@@ -120,6 +129,23 @@ export default function RadarPage() {
   };
 
   const nearest = useMemo(() => challenges.slice(0, 5), [challenges]);
+  const labels = {
+    title: zhCopy ? "挑战雷达" : "Challenge Radar",
+    refresh: zhCopy ? "刷新" : "Refresh",
+    refreshing: zhCopy ? "刷新中" : "Refreshing",
+    myChallenges: zhCopy ? "我的挑战" : "My challenges",
+    create: zhCopy ? "创建" : "Create",
+    loadingRadar: zhCopy ? "加载雷达中..." : "Loading radar...",
+    noNearby: zhCopy ? "附近没有开放挑战。" : "No open challenges nearby.",
+    status: zhCopy ? "状态" : "Status",
+    enable: zhCopy ? "开启" : "Enable",
+    nearbyChallenges: zhCopy ? "附近挑战" : "Nearby Challenges",
+    noJoinable: zhCopy ? "暂无可加入挑战。" : "No joinable challenges.",
+    players: zhCopy ? "附近玩家" : "Nearby Players",
+    noPlayers: zhCopy ? "附近暂无活跃玩家。" : "No active players nearby.",
+    joined: zhCopy ? "人" : "joined",
+    credits: zhCopy ? "积分" : "cr",
+  };
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] text-[#172033]">
@@ -127,7 +153,7 @@ export default function RadarPage() {
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#047857]">Axelrod</p>
-            <h1 className="text-2xl font-black md:text-3xl">Challenge Radar</h1>
+            <h1 className="text-2xl font-black md:text-3xl">{labels.title}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -136,10 +162,10 @@ export default function RadarPage() {
               disabled={loading}
               className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold disabled:opacity-50"
             >
-              Refresh
+              {loading ? labels.refreshing : labels.refresh}
             </button>
-            <Link className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold" href="/markets">My challenges</Link>
-            <Link className="rounded-full bg-[#111827] px-4 py-2 text-sm font-bold text-white" href="/">Create</Link>
+            <Link className="rounded-full border border-[#CBD5E1] bg-white px-4 py-2 text-sm font-bold" href="/markets">{labels.myChallenges}</Link>
+            <Link className="rounded-full bg-[#111827] px-4 py-2 text-sm font-bold text-white" href="/">{labels.create}</Link>
           </div>
         </header>
 
@@ -153,10 +179,10 @@ export default function RadarPage() {
             <div className="absolute left-1/2 top-1/2 h-[92%] w-px -translate-y-1/2 bg-[#A7F3D0]" />
 
             {loading ? (
-              <div className="absolute inset-0 grid place-items-center text-sm font-bold text-[#047857]">Loading radar...</div>
+              <div className="absolute inset-0 grid place-items-center text-sm font-bold text-[#047857]">{labels.loadingRadar}</div>
             ) : challenges.length === 0 ? (
               <div className="absolute inset-0 grid place-items-center text-center text-sm font-bold text-[#047857]">
-                No open challenges nearby.
+                {labels.noNearby}
               </div>
             ) : (
               challenges.slice(0, 18).map((challenge, index) => {
@@ -172,8 +198,8 @@ export default function RadarPage() {
                     title={challenge.title}
                   >
                     <span className="block truncate text-[10px] font-black text-[#065F46]">{challenge.type}</span>
-                    <span className="mt-1 block text-[10px] font-bold leading-tight text-[#172033]">{distanceLabel(challenge.radar?.approximateDistanceMeters)}</span>
-                    <span className="mt-1 block truncate text-[9px] text-[#64748B]">{challenge.stake} cr</span>
+                    <span className="mt-1 block text-[10px] font-bold leading-tight text-[#172033]">{distanceLabel(challenge.radar?.approximateDistanceMeters, zhCopy)}</span>
+                    <span className="mt-1 block truncate text-[9px] text-[#64748B]">{challenge.stake} {labels.credits}</span>
                   </Link>
                 );
               })
@@ -184,7 +210,7 @@ export default function RadarPage() {
             <div className="rounded-[8px] border border-[#E2E8F0] bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#64748B]">Status</p>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#64748B]">{labels.status}</p>
                   <p className="mt-1 text-sm font-bold text-[#172033]">{message}</p>
                 </div>
                 <button
@@ -193,33 +219,33 @@ export default function RadarPage() {
                   disabled={status === "locating"}
                   className="rounded-full bg-[#10B981] px-4 py-2 text-sm font-black text-white disabled:opacity-60"
                 >
-                  {status === "locating" ? "..." : snapshot ? "Refresh" : "Enable"}
+                  {status === "locating" ? "..." : snapshot ? labels.refresh : labels.enable}
                 </button>
               </div>
             </div>
 
             <div className="rounded-[8px] border border-[#E2E8F0] bg-white p-4">
-              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#64748B]">Nearby Challenges</h2>
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#64748B]">{labels.nearbyChallenges}</h2>
               <div className="mt-3 space-y-3">
                 {nearest.length === 0 ? (
-                  <p className="text-sm font-semibold text-[#64748B]">No joinable challenges.</p>
+                  <p className="text-sm font-semibold text-[#64748B]">{labels.noJoinable}</p>
                 ) : nearest.map((challenge) => (
                   <Link key={challenge.id} href={`/join/${challenge.id}`} className="block rounded-[8px] border border-[#E2E8F0] p-3 hover:border-[#10B981]">
                     <div className="flex items-start justify-between gap-2">
                       <p className="line-clamp-2 text-sm font-black text-[#172033]">{challenge.title}</p>
-                      <span className="shrink-0 rounded-full bg-[#D1FAE5] px-2 py-1 text-[11px] font-black text-[#047857]">{distanceLabel(challenge.radar?.approximateDistanceMeters)}</span>
+                      <span className="shrink-0 rounded-full bg-[#D1FAE5] px-2 py-1 text-[11px] font-black text-[#047857]">{distanceLabel(challenge.radar?.approximateDistanceMeters, zhCopy)}</span>
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-[#64748B]">{challenge.participants.length}/{challenge.maxParticipants} joined - {challenge.evidenceType}</p>
+                    <p className="mt-2 text-xs font-semibold text-[#64748B]">{challenge.participants.length}/{challenge.maxParticipants} {labels.joined} / {challenge.evidenceType}</p>
                   </Link>
                 ))}
               </div>
             </div>
 
             <div className="rounded-[8px] border border-[#E2E8F0] bg-white p-4">
-              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#64748B]">Nearby Players</h2>
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#64748B]">{labels.players}</h2>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {presence.length === 0 ? (
-                  <p className="col-span-2 text-sm font-semibold text-[#64748B]">No active players nearby.</p>
+                  <p className="col-span-2 text-sm font-semibold text-[#64748B]">{labels.noPlayers}</p>
                 ) : presence.slice(0, 8).map((user) => (
                   <div key={user.id} className="rounded-[8px] border border-[#E2E8F0] p-3">
                     <p className="truncate text-sm font-black text-[#172033]">{user.username}</p>

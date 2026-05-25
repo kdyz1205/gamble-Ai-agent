@@ -16,6 +16,10 @@ const PEACH_TEXT = "#7C2D12";
 const ORANGE_GLOW = "rgba(251,146,60,0.39)";
 const CREAM = "#FFEDD5";
 
+function hasChineseText(value: string) {
+  return /[\u3400-\u9FFF]/.test(value);
+}
+
 export default function RoomClient({
   challengeId,
   title,
@@ -30,6 +34,7 @@ export default function RoomClient({
     | undefined;
   const router = useRouter();
   const [showAuth, setShowAuth] = useState(false);
+  const zhCopy = hasChineseText(title);
 
   return (
     <div className="relative min-h-screen">
@@ -52,7 +57,7 @@ export default function RoomClient({
               borderRadius: "9999px",
             }}
           >
-            My challenges
+            {zhCopy ? "我的挑战" : "My challenges"}
           </Link>
           <Link
             href="/"
@@ -64,7 +69,7 @@ export default function RoomClient({
               borderRadius: "9999px",
             }}
           >
-            + New challenge
+            {zhCopy ? "+ 新挑战" : "+ New challenge"}
           </Link>
           {user ? (
             <div
@@ -102,7 +107,7 @@ export default function RoomClient({
                 borderRadius: "9999px",
               }}
             >
-              Checking...
+              {zhCopy ? "检查中..." : "Checking..."}
             </div>
           ) : (
             <motion.button
@@ -116,7 +121,7 @@ export default function RoomClient({
                 boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
               }}
             >
-              Sign In
+              {zhCopy ? "登录" : "Sign In"}
             </motion.button>
           )}
         </div>
@@ -141,7 +146,7 @@ export default function RoomClient({
               {title}
             </h2>
             <p className="text-sm font-medium" style={{ color: NAVY_DIM }}>
-              Loading...
+              {zhCopy ? "加载中..." : "Loading..."}
             </p>
           </motion.div>
         ) : (
@@ -155,7 +160,7 @@ export default function RoomClient({
               {title}
             </h2>
             <p className="text-sm font-medium mb-5" style={{ color: NAVY_DIM }}>
-              Sign in to continue.
+              {zhCopy ? "登录后继续。" : "Sign in to continue."}
             </p>
             <motion.button
               onClick={() => setShowAuth(true)}
@@ -168,7 +173,7 @@ export default function RoomClient({
                 boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
               }}
             >
-              Sign in
+              {zhCopy ? "登录" : "Sign in"}
             </motion.button>
           </motion.div>
         )}

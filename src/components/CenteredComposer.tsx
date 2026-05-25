@@ -46,6 +46,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const [interim, setInterim] = useState("");
   const [voiceLang, setVoiceLang] = useState<VoiceLang>("auto");
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Kept only as a defensive cleanup handle for older browser-preview code.
@@ -63,6 +64,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     onSubmit(v, voiceLang);
     setInput("");
     setInterim("");
+    setVoiceError("");
   }, [input, isParsing, isTranscribing, onSubmit, voiceLang]);
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -202,16 +204,29 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
   const startRecording = useCallback(async () => {
     if (isParsing || isTranscribing) return;
+    setVoiceError("");
 
     const hasMediaRecorder = typeof window !== "undefined" && "MediaRecorder" in window;
     const hasGetUserMedia = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
 
     if (!hasMediaRecorder || !hasGetUserMedia) {
-      alert("This browser does not support voice recording.");
+      setVoiceError(voiceLang === "zh" ? "这个浏览器不支持语音录制。请直接输入文字。" : "This browser does not support voice recording. Type the challenge instead.");
       return;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      const denied = err instanceof DOMException && ["NotAllowedError", "SecurityError", "PermissionDeniedError"].includes(err.name);
+      setListening(false);
+      setVoiceError(
+        denied
+          ? voiceLang === "zh" ? "麦克风权限被拒绝。允许权限后再试，或直接输入文字。" : "Microphone permission was blocked. Allow it, or type the challenge instead."
+          : err instanceof Error ? err.message : voiceLang === "zh" ? "无法开始录音。请直接输入文字。" : "Could not start recording. Type the challenge instead.",
+      );
+      return;
+    }
     streamRef.current = stream;
     audioChunksRef.current = [];
 
@@ -246,7 +261,14 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     } catch {
       // Absolute last-resort: some browsers throw even when isTypeSupported
       // said yes. Retry with no options so we at least get default-encoded audio.
-      recorder = new MediaRecorder(stream);
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch (err) {
+        stream.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+        setVoiceError(err instanceof Error ? err.message : voiceLang === "zh" ? "无法开始录音。请直接输入文字。" : "Could not start recording. Type the challenge instead.");
+        return;
+      }
     }
     mediaRecorderRef.current = recorder;
     if (typeof console !== "undefined") {
@@ -260,6 +282,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     };
 
     recorder.onerror = () => {
+      setVoiceError(voiceLang === "zh" ? "录音中断了。请重新点麦克风再试一次。" : "Recording stopped unexpectedly. Tap Mic and try again.");
       setListening(false);
       stopPreviewRecognition();
       stopAllTracks();
@@ -276,7 +299,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     setListening(true);
     setInterim("");
     startPreviewRecognition();
-  }, [isParsing, isTranscribing, startPreviewRecognition, stopAllTracks, stopPreviewRecognition, transcribeRecordedAudio]);
+  }, [isParsing, isTranscribing, startPreviewRecognition, stopAllTracks, stopPreviewRecognition, transcribeRecordedAudio, voiceLang]);
 
   const toggleMic = useCallback(async () => {
     if (listening) {
@@ -451,6 +474,11 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       <p className="mt-2 px-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
         {selectedLanguage.status}
       </p>
+      {voiceError && (
+        <p className="mt-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ color: "#991B1B", background: "#FECACA" }}>
+          {voiceError}
+        </p>
+      )}
     </div>
   );
 }

@@ -32,6 +32,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
 
   // Reset transient state whenever modal closes so re-opening gives a clean slate
   // (fixes "modal closed but stuck" — old success/error/loading flags could keep
@@ -41,6 +42,8 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
       setError("");
       setLoading(false);
       setSuccess(false);
+      setWebviewWarning(false);
+      setWebviewCopyNotice("");
     }
   }, [open]);
 
@@ -97,9 +100,9 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
   const copySiteLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      alert("Link copied. Open Safari or Chrome and paste it — Google sign-in works there.");
+      setWebviewCopyNotice("Link copied. Open Safari or Chrome and paste it there.");
     } catch {
-      // no-op
+      setWebviewCopyNotice("Copy this page URL from the address bar and open it in Safari or Chrome.");
     }
   };
 
@@ -178,16 +181,6 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
               transition={{ type: "spring", damping: 22, stiffness: 400 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Floating candy orbs in card bg */}
-              <div
-                className="absolute -top-6 -right-6 w-28 h-28 rounded-full opacity-60 pointer-events-none"
-                style={{ background: PINK, filter: "blur(24px)" }}
-              />
-              <div
-                className="absolute -bottom-8 -left-6 w-32 h-32 rounded-full opacity-50 pointer-events-none"
-                style={{ background: PEACH, filter: "blur(26px)" }}
-              />
-
               <div className="relative p-7">
                 {/* Success overlay */}
                 <AnimatePresence>
@@ -273,8 +266,13 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       onClick={copySiteLink}
                       className="px-3 py-1.5 text-[11px] font-black rounded-full active:scale-95 transition-transform"
                       style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}>
-                      📋 Copy link
+                      Copy link
                     </button>
+                    {webviewCopyNotice && (
+                      <p className="mt-2 text-[11px] font-bold" style={{ color: ROSE_TEXT }}>
+                        {webviewCopyNotice}
+                      </p>
+                    )}
                   </div>
                 )}
 
