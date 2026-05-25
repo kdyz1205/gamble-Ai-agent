@@ -272,7 +272,6 @@ export function summarizeDataSourceCoverage() {
 export function applyDataSourceGateToProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const wantsOracle =
     protocol.evidenceProtocol.mode === "public_oracle" ||
-    protocol.evidenceProtocol.mode === "platform_metric" ||
     protocol.settlementProtocol.mode === "auto_oracle";
   if (!wantsOracle) return protocol;
 

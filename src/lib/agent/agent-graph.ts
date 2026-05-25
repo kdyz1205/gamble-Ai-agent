@@ -432,7 +432,6 @@ function usesVisualEvidence(protocol: ProtocolSpecV2) {
 
 function usesOracleEvidence(protocol: ProtocolSpecV2) {
   return protocol.evidenceProtocol.mode === "public_oracle" ||
-    protocol.evidenceProtocol.mode === "platform_metric" ||
     protocol.settlementProtocol.mode === "auto_oracle";
 }
 

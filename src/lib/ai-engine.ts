@@ -891,9 +891,7 @@ function shouldTryDataSourceJudge(params: JudgeChallengeParams, text: string): b
     explicitDataSourceKey(text) ||
     metadataDataSourceKey(params) ||
     params.evidencePolicy === "public_oracle" ||
-    params.evidencePolicy === "platform_metric" ||
     protocol?.evidenceProtocol.mode === "public_oracle" ||
-    protocol?.evidenceProtocol.mode === "platform_metric" ||
     protocol?.settlementProtocol.mode === "auto_oracle",
   );
 }

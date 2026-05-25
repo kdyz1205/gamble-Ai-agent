@@ -318,8 +318,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       : protocol.evidenceProtocol.mode;
   const visionEvidence = isVisionEvidenceMode(evidenceMode);
   const oracleEvidence = evidenceMode === "gps" ||
-    evidenceMode === "public_oracle" ||
-    evidenceMode === "platform_metric";
+    evidenceMode === "public_oracle";
   const sameCamera = evidenceMode === "same_camera_video";
   const riskBlocked = !protocol.riskPolicy.allowed || protocol.riskPolicy.riskLevel === "blocked";
   const desiredSettlementMode: ProtocolSpecV2["settlementProtocol"]["mode"] =

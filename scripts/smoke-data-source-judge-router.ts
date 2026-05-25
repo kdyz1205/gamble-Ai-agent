@@ -112,6 +112,49 @@ async function main() {
   assert(verdict.recommendation === "needs_review", "Future-deadline oracle smoke should not settle early");
   assert(verdict.blockingIssues?.some((issue) => /not ready/i.test(issue)), "Future-deadline oracle should explain not-due status");
 
+  const platformMetricProtocol: ProtocolSpecV2 = {
+    ...protocol,
+    title: "Study streak platform metric",
+    userFacingSummary: "A normal app-metric challenge using proof tokens, not a crypto oracle.",
+    rawPrompt: "Make a study streak challenge with a proof token.",
+    outcomeType: "completion",
+    evidenceProtocol: {
+      mode: "platform_metric",
+      requiredEvidence: ["Structured proof token"],
+      captureInstructions: ["Submit ANSWER metadata."],
+      invalidEvidenceRules: ["Missing answer is invalid."],
+      requiredMetadata: ["answer"],
+    },
+    settlementProtocol: {
+      mode: "auto_ai_text",
+      winCondition: "EXPECTED_ANSWER: STUDY-TOKEN-123. The participant with the expected proof token wins.",
+      judgeInstructions: [
+        "Read proof token from submitted evidence.",
+        "Correct proof token: STUDY-TOKEN-123",
+      ],
+      autoSettleConfidenceThreshold: 0.85,
+      manualReviewTriggers: ["Both or neither participants match the token."],
+    },
+  };
+  const platformMetricVerdict: JudgmentResult = await judgeChallenge({
+    title: platformMetricProtocol.title,
+    description: platformMetricProtocol.userFacingSummary,
+    type: "platform_metric",
+    rules: platformMetricProtocol.settlementProtocol.winCondition,
+    deadlineIso: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    evidencePolicy: "platform_metric",
+    evidenceA: { type: "text", description: "ANSWER: STUDY-TOKEN-123", metadata: { answer: "STUDY-TOKEN-123" } },
+    evidenceB: { type: "text", description: "ANSWER: WRONG-TOKEN", metadata: { answer: "WRONG-TOKEN" } },
+    participantAId: "creator_user",
+    participantBId: "opponent_user",
+    providerId: "openai",
+    model: "gpt-4o-mini",
+    protocol: platformMetricProtocol,
+  });
+  assert(platformMetricVerdict.source === "deterministic", "Platform metric proof tokens must not be hijacked by crypto/data-source routing");
+  assert(platformMetricVerdict.winnerId === "creator_user", "Platform metric objective answer should keep its deterministic winner");
+  assert(platformMetricVerdict.recommendation === "settle_winner", "Platform metric objective answer should remain settlement-grade");
+
   console.log(JSON.stringify({
     ok: true,
     sourceKey: resolvedSourceKey,
@@ -120,6 +163,8 @@ async function main() {
     verdictSource: verdict.source,
     verdictRecommendation: verdict.recommendation,
     traceStatus: verdict.dataSourceTrace.status,
+    platformMetricSource: platformMetricVerdict.source,
+    platformMetricRecommendation: platformMetricVerdict.recommendation,
   }, null, 2));
 }
 
