@@ -285,7 +285,9 @@ function evidenceResult(
   }
 
   const mode = protocol.evidenceProtocol.mode;
-  if (mode === "public_oracle" || mode === "platform_metric") {
+  const requiresExternalDataSource =
+    mode === "public_oracle" || protocol.settlementProtocol.mode === "auto_oracle";
+  if (requiresExternalDataSource) {
     const sourceMatch = resolveDataSourceForPrompt([
       protocol.rawPrompt,
       protocol.title,

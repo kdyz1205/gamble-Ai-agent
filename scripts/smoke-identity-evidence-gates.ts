@@ -200,6 +200,70 @@ const badVisionGates = evaluateProtocolJudgmentGates({
 assert.equal(badVisionGates.settlementEligibility.eligible, false);
 assert.ok(badVisionGates.blockingIssues.some((issue) => /full body/i.test(issue)));
 
+const soloPlatformMetricProtocol: ProtocolSpecV2 = {
+  ...protocol(),
+  title: "Solo platform metric proof",
+  userFacingSummary: "Creator proves a solo objective claim without an opponent.",
+  rawPrompt: "I bet my cat can finish the food under one minute.",
+  participantMode: "solo",
+  outcomeType: "threshold",
+  evidenceProtocol: {
+    mode: "platform_metric",
+    requiredEvidence: ["Submit structured text proof with ANSWER."],
+    captureInstructions: ["Submit one proof row before judging."],
+    invalidEvidenceRules: ["Missing answer is invalid."],
+    requiredMetadata: ["answer"],
+  },
+  identityProtocol: {
+    mode: "account_only",
+    required: false,
+    participantBindings: [
+      { role: "creator", label: "Creator", expectedPosition: "any", requiredQrOrCode: false },
+    ],
+    autoSettlementRequiresIdentityConfidence: 1,
+  },
+  settlementProtocol: {
+    mode: "auto_ai_text",
+    winCondition: "If the creator submits the expected answer, the solo claim passes.",
+    judgeInstructions: ["Read the answer from the evidence metadata or text."],
+    autoSettleConfidenceThreshold: 0.85,
+    manualReviewTriggers: ["Answer is missing or does not match."],
+  },
+};
+
+const soloPlatformMetricGates = evaluateProtocolJudgmentGates({
+  protocol: soloPlatformMetricProtocol,
+  participants: [
+    { userId: "creator_user", role: "creator", status: "accepted" },
+  ],
+  participantBindings: [],
+  evidence: [
+    { userId: "creator_user", type: "text", url: null, description: "ANSWER: SOLO-PASS" },
+  ],
+  evidenceChecks: [
+    {
+      userId: "creator_user",
+      decision: "passed",
+      identityConfidence: 1,
+      evidenceConfidence: 1,
+      blockingIssues: null,
+    },
+  ],
+  result: {
+    winnerId: "creator_user",
+    reasoning: "Creator submitted the expected answer, so the solo claim passed.",
+    confidence: 0.99,
+    evidenceQuality: "good",
+    recommendation: "settle_winner",
+    settlementRecommendation: "settle_winner",
+    source: "deterministic",
+  },
+});
+assert.equal(soloPlatformMetricGates.protocolCompliance.passed, true);
+assert.equal(soloPlatformMetricGates.identityResult.passed, true);
+assert.equal(soloPlatformMetricGates.evidenceResult.passed, true);
+assert.equal(soloPlatformMetricGates.settlementEligibility.eligible, true);
+
 console.log(JSON.stringify({
   ok: true,
   exactCodeDecision: exactCreator.decision,
@@ -207,4 +271,5 @@ console.log(JSON.stringify({
   visionResolvedSoftPrecheck: gates.settlementEligibility.eligible,
   badVisionEligible: badVisionGates.settlementEligibility.eligible,
   badVisionIssue: badVisionGates.blockingIssues[0],
+  soloPlatformMetricEligible: soloPlatformMetricGates.settlementEligibility.eligible,
 }, null, 2));
