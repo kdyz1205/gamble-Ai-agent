@@ -108,6 +108,13 @@ function stringArrayValue(value: unknown, fallback: string[] = []): string[] {
   return text ? [text] : fallback;
 }
 
+function pickField(record: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (record[key] !== undefined) return record[key];
+  }
+  return undefined;
+}
+
 function numberValue(value: unknown, fallback: number) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -145,7 +152,7 @@ function normalizeBindings(value: unknown): ProtocolSpecV2["identityProtocol"]["
     const record = asRecord(item);
     if (!record) return [];
     const role = normalizedEnum(
-      record.role,
+      pickField(record, "role", "participantRole", "participant_role"),
       ["creator", "opponent", "participant", "host"] as const,
       {
         player_a: "creator",
@@ -162,15 +169,15 @@ function normalizeBindings(value: unknown): ProtocolSpecV2["identityProtocol"]["
     if (!role) return [];
     return [{
       role,
-      label: stringValue(record.label, role === "creator" ? "Creator" : role === "opponent" ? "Opponent" : "Participant"),
+      label: stringValue(pickField(record, "label", "displayName", "display_name", "name"), role === "creator" ? "Creator" : role === "opponent" ? "Opponent" : "Participant"),
       expectedPosition: normalizedEnum(
-        record.expectedPosition,
+        pickField(record, "expectedPosition", "expected_position", "position"),
         ["left", "right", "center", "any"] as const,
         { none: "any", either: "any", unknown: "any" },
         "any",
       ) ?? "any",
-      ...(nonEmptyString(record.requiredPhrase) ? { requiredPhrase: nonEmptyString(record.requiredPhrase) ?? undefined } : {}),
-      requiredQrOrCode: booleanValue(record.requiredQrOrCode, false),
+      ...(nonEmptyString(pickField(record, "requiredPhrase", "required_phrase", "livenessPhrase", "liveness_phrase")) ? { requiredPhrase: nonEmptyString(pickField(record, "requiredPhrase", "required_phrase", "livenessPhrase", "liveness_phrase")) ?? undefined } : {}),
+      requiredQrOrCode: booleanValue(pickField(record, "requiredQrOrCode", "required_qr_or_code", "qrRequired", "qr_required"), false),
     }];
   });
   if (!bindings.some((binding) => binding.role === "creator")) {
@@ -208,20 +215,20 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
   const candidate = unwrapProtocolRecord(input);
   if (!candidate) return null;
 
-  const title = nonEmptyString(candidate.title) ?? nonEmptyString(candidate.challenge_title);
-  const summary = nonEmptyString(candidate.userFacingSummary) ?? nonEmptyString(candidate.summary) ?? nonEmptyString(candidate.description) ?? nonEmptyString(candidate.objective);
+  const title = nonEmptyString(pickField(candidate, "title", "challengeTitle", "challenge_title"));
+  const summary = nonEmptyString(pickField(candidate, "userFacingSummary", "user_facing_summary", "summary", "description", "objective"));
   if (!title || !summary) return null;
 
-  const evidence = asRecord(candidate.evidenceProtocol);
-  const identity = asRecord(candidate.identityProtocol);
-  const location = asRecord(candidate.locationProtocol);
-  const timing = asRecord(candidate.timingProtocol);
-  const settlement = asRecord(candidate.settlementProtocol);
-  const risk = asRecord(candidate.riskPolicy);
-  const budget = asRecord(candidate.aiBudgetPolicy);
+  const evidence = asRecord(pickField(candidate, "evidenceProtocol", "evidence_protocol", "evidence"));
+  const identity = asRecord(pickField(candidate, "identityProtocol", "identity_protocol", "identity"));
+  const location = asRecord(pickField(candidate, "locationProtocol", "location_protocol", "location"));
+  const timing = asRecord(pickField(candidate, "timingProtocol", "timing_protocol", "timing"));
+  const settlement = asRecord(pickField(candidate, "settlementProtocol", "settlement_protocol", "settlement"));
+  const risk = asRecord(pickField(candidate, "riskPolicy", "risk_policy", "risk"));
+  const budget = asRecord(pickField(candidate, "aiBudgetPolicy", "ai_budget_policy", "budget", "aiBudget"));
   if (!evidence || !identity || !location || !timing || !settlement || !risk || !budget) return null;
 
-  const evidenceMode = normalizedEnum(evidence.mode, EVIDENCE_MODES, {
+  const evidenceMode = normalizedEnum(pickField(evidence, "mode", "evidenceMode", "evidence_mode"), EVIDENCE_MODES, {
     video: "separate_video",
     videos: "separate_video",
     video_upload: "separate_video",
@@ -246,7 +253,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     data_source: "public_oracle",
     app_metric: "platform_metric",
   });
-  const identityMode = normalizedEnum(identity.mode, IDENTITY_MODES, {
+  const identityMode = normalizedEnum(pickField(identity, "mode", "identityMode", "identity_mode"), IDENTITY_MODES, {
     none: "account_only",
     not_required: "account_only",
     no_identity: "account_only",
@@ -261,7 +268,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     qr_code: "qr_participant_card",
     manual: "manual_identity_review",
   });
-  const locationMode = normalizedEnum(location.mode, LOCATION_MODES, {
+  const locationMode = normalizedEnum(pickField(location, "mode", "locationMode", "location_mode"), LOCATION_MODES, {
     no_location: "none",
     not_required: "none",
     nearby: "nearby_discovery",
@@ -271,7 +278,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     geofence: "geo_fenced_zone",
     mass_event: "mass_local_event",
   });
-  const settlementMode = normalizedEnum(settlement.mode, SETTLEMENT_MODES, {
+  const settlementMode = normalizedEnum(pickField(settlement, "mode", "settlementMode", "settlement_mode"), SETTLEMENT_MODES, {
     oracle: "auto_oracle",
     public_oracle: "auto_oracle",
     data_oracle: "auto_oracle",
@@ -293,9 +300,9 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     version: "2.0",
     title,
     userFacingSummary: summary,
-    rawPrompt: stringValue(candidate.rawPrompt),
-    language: normalizedEnum(candidate.language, ["en", "zh", "auto"] as const, { chinese: "zh", english: "en" }, "auto") ?? "auto",
-    participantMode: normalizedEnum(candidate.participantMode, PARTICIPANT_MODES, {
+    rawPrompt: stringValue(pickField(candidate, "rawPrompt", "raw_prompt")),
+    language: normalizedEnum(pickField(candidate, "language", "lang"), ["en", "zh", "auto"] as const, { chinese: "zh", english: "en" }, "auto") ?? "auto",
+    participantMode: normalizedEnum(pickField(candidate, "participantMode", "participant_mode", "mode"), PARTICIPANT_MODES, {
       one_person: "solo",
       single_person: "solo",
       self_challenge: "solo",
@@ -313,7 +320,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
       market: "public_market",
       prediction_market: "public_market",
     }, "head_to_head") ?? "head_to_head",
-    outcomeType: normalizedEnum(candidate.outcomeType, OUTCOME_TYPES, {
+    outcomeType: normalizedEnum(pickField(candidate, "outcomeType", "outcome_type"), OUTCOME_TYPES, {
       fastest: "speed",
       race: "speed",
       time: "speed",
@@ -334,24 +341,24 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     }, "custom") ?? "custom",
     evidenceProtocol: {
       mode: evidenceMode,
-      requiredEvidence: stringArrayValue(evidence.requiredEvidence, ["Submit evidence that directly proves the challenge outcome."]),
-      captureInstructions: stringArrayValue(evidence.captureInstructions, ["Capture the full attempt clearly and continuously."]),
-      invalidEvidenceRules: stringArrayValue(evidence.invalidEvidenceRules, ["Edited, unclear, reused, unsafe, or non-consensual evidence is invalid."]),
-      requiredMetadata: stringArrayValue(evidence.requiredMetadata, ["created_at"]),
+      requiredEvidence: stringArrayValue(pickField(evidence, "requiredEvidence", "required_evidence"), ["Submit evidence that directly proves the challenge outcome."]),
+      captureInstructions: stringArrayValue(pickField(evidence, "captureInstructions", "capture_instructions"), ["Capture the full attempt clearly and continuously."]),
+      invalidEvidenceRules: stringArrayValue(pickField(evidence, "invalidEvidenceRules", "invalid_evidence_rules"), ["Edited, unclear, reused, unsafe, or non-consensual evidence is invalid."]),
+      requiredMetadata: stringArrayValue(pickField(evidence, "requiredMetadata", "required_metadata"), ["created_at"]),
     },
     identityProtocol: {
       mode: identityMode,
-      required: booleanValue(identity.required, evidenceMode.includes("video") || evidenceMode === "photo"),
-      participantBindings: normalizeBindings(identity.participantBindings),
-      autoSettlementRequiresIdentityConfidence: numberValue(identity.autoSettlementRequiresIdentityConfidence, 0.85),
+      required: booleanValue(pickField(identity, "required", "isRequired", "is_required"), evidenceMode.includes("video") || evidenceMode === "photo"),
+      participantBindings: normalizeBindings(pickField(identity, "participantBindings", "participant_bindings", "bindings")),
+      autoSettlementRequiresIdentityConfidence: numberValue(pickField(identity, "autoSettlementRequiresIdentityConfidence", "auto_settlement_requires_identity_confidence", "identityConfidenceThreshold", "identity_confidence_threshold"), 0.85),
     },
     locationProtocol: {
       mode: locationMode,
-      ...(location.joinRadiusMeters !== undefined ? { joinRadiusMeters: numberValue(location.joinRadiusMeters, 500) } : {}),
-      ...(location.challengeRadiusMeters !== undefined ? { challengeRadiusMeters: numberValue(location.challengeRadiusMeters, 500) } : {}),
-      requiresLiveLocation: booleanValue(location.requiresLiveLocation, locationMode !== "none"),
-      requiresCoPresence: booleanValue(location.requiresCoPresence, locationMode === "same_place_required"),
-      locationPrivacy: normalizedEnum(location.locationPrivacy, LOCATION_PRIVACY, {
+      ...(pickField(location, "joinRadiusMeters", "join_radius_meters") !== undefined ? { joinRadiusMeters: numberValue(pickField(location, "joinRadiusMeters", "join_radius_meters"), 500) } : {}),
+      ...(pickField(location, "challengeRadiusMeters", "challenge_radius_meters") !== undefined ? { challengeRadiusMeters: numberValue(pickField(location, "challengeRadiusMeters", "challenge_radius_meters"), 500) } : {}),
+      requiresLiveLocation: booleanValue(pickField(location, "requiresLiveLocation", "requires_live_location"), locationMode !== "none"),
+      requiresCoPresence: booleanValue(pickField(location, "requiresCoPresence", "requires_co_presence"), locationMode === "same_place_required"),
+      locationPrivacy: normalizedEnum(pickField(location, "locationPrivacy", "location_privacy"), LOCATION_PRIVACY, {
         private: "hidden",
         approximate_public: "approximate",
         precise_live: "precise_live_only",
@@ -359,34 +366,34 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
       }, locationMode === "none" ? "hidden" : "approximate") ?? "hidden",
     },
     timingProtocol: {
-      startCondition: stringValue(timing.startCondition, "Challenge starts after all required participants accept."),
-      endCondition: stringValue(timing.endCondition, "Challenge ends when the protocol objective is completed or the deadline expires."),
-      deadline: stringValue(timing.deadline, "48 hours"),
-      tieBreaker: stringValue(timing.tieBreaker, settlement.winCondition ? String(settlement.winCondition) : "Manual review decides ties."),
-      allowedAttempts: stringValue(timing.allowedAttempts, "One official attempt unless the protocol says otherwise."),
+      startCondition: stringValue(pickField(timing, "startCondition", "start_condition"), "Challenge starts after all required participants accept."),
+      endCondition: stringValue(pickField(timing, "endCondition", "end_condition"), "Challenge ends when the protocol objective is completed or the deadline expires."),
+      deadline: stringValue(pickField(timing, "deadline", "timeLimit", "time_limit"), "48 hours"),
+      tieBreaker: stringValue(pickField(timing, "tieBreaker", "tie_breaker"), pickField(settlement, "winCondition", "win_condition") ? String(pickField(settlement, "winCondition", "win_condition")) : "Manual review decides ties."),
+      allowedAttempts: stringValue(pickField(timing, "allowedAttempts", "allowed_attempts"), "One official attempt unless the protocol says otherwise."),
     },
     settlementProtocol: {
       mode: settlementMode,
-      winCondition: stringValue(settlement.winCondition, summary),
-      judgeInstructions: stringArrayValue(settlement.judgeInstructions, ["Compare submitted evidence against the win condition."]),
-      autoSettleConfidenceThreshold: numberValue(settlement.autoSettleConfidenceThreshold, 0.85),
-      manualReviewTriggers: stringArrayValue(settlement.manualReviewTriggers, ["Confidence below threshold or evidence/identity is unclear."]),
+      winCondition: stringValue(pickField(settlement, "winCondition", "win_condition"), summary),
+      judgeInstructions: stringArrayValue(pickField(settlement, "judgeInstructions", "judge_instructions", "judgingInstructions", "judging_instructions"), ["Compare submitted evidence against the win condition."]),
+      autoSettleConfidenceThreshold: numberValue(pickField(settlement, "autoSettleConfidenceThreshold", "auto_settle_confidence_threshold", "confidenceThreshold", "confidence_threshold"), 0.85),
+      manualReviewTriggers: stringArrayValue(pickField(settlement, "manualReviewTriggers", "manual_review_triggers"), ["Confidence below threshold or evidence/identity is unclear."]),
     },
     riskPolicy: {
-      riskLevel: normalizedEnum(risk.riskLevel, RISK_LEVELS, { low: "safe", moderate: "medium", unsafe: "high", disallowed: "blocked" }, "safe") ?? "safe",
-      allowed: booleanValue(risk.allowed, true),
-      warnings: stringArrayValue(risk.warnings, []),
-      restrictions: stringArrayValue(risk.restrictions, []),
-      ...(nonEmptyString(risk.safeAlternative) ? { safeAlternative: nonEmptyString(risk.safeAlternative) ?? undefined } : {}),
-      ...(nonEmptyString(risk.blockedReason) ? { blockedReason: nonEmptyString(risk.blockedReason) ?? undefined } : {}),
+      riskLevel: normalizedEnum(pickField(risk, "riskLevel", "risk_level"), RISK_LEVELS, { low: "safe", moderate: "medium", unsafe: "high", disallowed: "blocked" }, "safe") ?? "safe",
+      allowed: booleanValue(pickField(risk, "allowed", "isAllowed", "is_allowed"), true),
+      warnings: stringArrayValue(pickField(risk, "warnings", "warning"), []),
+      restrictions: stringArrayValue(pickField(risk, "restrictions", "restriction"), []),
+      ...(nonEmptyString(pickField(risk, "safeAlternative", "safe_alternative")) ? { safeAlternative: nonEmptyString(pickField(risk, "safeAlternative", "safe_alternative")) ?? undefined } : {}),
+      ...(nonEmptyString(pickField(risk, "blockedReason", "blocked_reason")) ? { blockedReason: nonEmptyString(pickField(risk, "blockedReason", "blocked_reason")) ?? undefined } : {}),
     },
     aiBudgetPolicy: {
-      compileMaxTokens: numberValue(budget.compileMaxTokens, 1800),
-      judgeMaxTokens: numberValue(budget.judgeMaxTokens, evidenceMode.includes("video") ? 2200 : 1200),
-      maxVisionFrames: numberValue(budget.maxVisionFrames, evidenceMode.includes("video") || evidenceMode === "photo" ? 12 : 0),
-      allowEscalation: booleanValue(budget.allowEscalation, false),
-      estimatedCostTier: normalizedEnum(budget.estimatedCostTier, COST_TIERS, { cheap: "low", light: "low", normal: "medium", expensive: "high" }, "low") ?? "low",
-      ...(budget.requireHumanReviewAboveStake !== undefined ? { requireHumanReviewAboveStake: numberValue(budget.requireHumanReviewAboveStake, 20) } : {}),
+      compileMaxTokens: numberValue(pickField(budget, "compileMaxTokens", "compile_max_tokens"), 1800),
+      judgeMaxTokens: numberValue(pickField(budget, "judgeMaxTokens", "judge_max_tokens"), evidenceMode.includes("video") ? 2200 : 1200),
+      maxVisionFrames: numberValue(pickField(budget, "maxVisionFrames", "max_vision_frames"), evidenceMode.includes("video") || evidenceMode === "photo" ? 12 : 0),
+      allowEscalation: booleanValue(pickField(budget, "allowEscalation", "allow_escalation"), false),
+      estimatedCostTier: normalizedEnum(pickField(budget, "estimatedCostTier", "estimated_cost_tier"), COST_TIERS, { cheap: "low", light: "low", normal: "medium", expensive: "high" }, "low") ?? "low",
+      ...(pickField(budget, "requireHumanReviewAboveStake", "require_human_review_above_stake") !== undefined ? { requireHumanReviewAboveStake: numberValue(pickField(budget, "requireHumanReviewAboveStake", "require_human_review_above_stake"), 20) } : {}),
     },
   };
 }

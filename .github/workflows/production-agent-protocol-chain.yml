@@ -24,6 +24,8 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
+      - name: Prove compiler intent matrix
+        run: npm run e2e:protocol-compile-matrix
       - name: Prove agent compile-to-publish chain
         run: npm run e2e:agent-compile-publish
       - name: Prove agent protocol-chain tools
@@ -34,3 +36,5 @@ jobs:
         run: npm run e2e:agent-golden-path
       - name: Prove agent review/no-settlement path
         run: npm run e2e:agent-review-path
+      - name: Prove solo challenge path
+        run: npm run e2e:solo-flow
