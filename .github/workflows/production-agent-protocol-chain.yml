@@ -24,8 +24,16 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
+      - name: Install browser for UI E2E
+        run: npx playwright install --with-deps chromium
+      - name: Prove public click/navigation flow
+        run: npm run e2e:click-flow
       - name: Prove rule safety prefilter
         run: npm run e2e:rule-safety-production
+      - name: Prove challenge manager close/cancel/refund flow
+        run: npm run e2e:manage-flow
+      - name: Prove challenge archive/restore flow
+        run: npm run e2e:archive-flow
       - name: Prove challenge discovery filters
         run: npm run e2e:discovery-filters
       - name: Prove GPS location gate settlement

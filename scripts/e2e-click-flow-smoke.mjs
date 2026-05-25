@@ -56,7 +56,7 @@ async function runCoreNavSuite(proof, page, labelPrefix = "") {
     "Study streak",
     "Nearby check-in",
     "Game score",
-    "Auto language",
+    "Auto detects EN/ZH.",
     "English",
     "中文",
   ], labelPrefix);
