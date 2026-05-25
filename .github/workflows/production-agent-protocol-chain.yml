@@ -38,6 +38,8 @@ jobs:
         run: npm run e2e:agent-golden-path
       - name: Prove agent review/no-settlement path
         run: npm run e2e:agent-review-path
+      - name: Prove rejudge escalation path
+        run: npm run e2e:rejudge-verdict
       - name: Prove manual review resolution path
         run: npm run e2e:manual-review-resolution
       - name: Prove solo challenge path

@@ -178,11 +178,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run duplicate-confirm and retry settlement tests that prove no double payout.",
   },
   rejudge_escalation: {
-    status: "runtime_backed",
-    summary: "Rejudge escalation has a policy engine that routes low-confidence/model-failed verdicts to stronger models or manual review without blind paid retries.",
-    evidence: ["src/lib/rejudge-escalation.ts", "src/app/api/challenges/[id]/judge/route.ts rejudge routing", "scripts/smoke-rejudge-escalation.ts"],
-    missing: ["No production E2E proving a disputed real challenge rejudges on the next model and then settles or enters manual review."],
-    nextProof: "Run production rejudge E2E: inconclusive verdict -> explicit rejudge -> stronger model -> settled/manual_review_required with audit trace.",
+    status: "production_proven",
+    summary: "Rejudge escalation has production proof for explicit retry from a Light judge call to a stronger Pro model, separate AI judge ledger rows, no provider fallback refund, and manual-review stop after max attempts.",
+    evidence: ["src/lib/rejudge-escalation.ts", "src/app/api/challenges/[id]/judge/route.ts rejudge routing", "scripts/smoke-rejudge-escalation.ts", "scripts/e2e-rejudge-verdict.mjs", ".github/workflows/production-agent-protocol-chain.yml"],
+    missing: ["No production proof yet for an unclear real video rejudge that escalates vision models/providers before manual review."],
+    nextProof: "Run a video rejudge E2E: unclear vision verdict -> explicit rejudge -> stronger vision model/provider -> settled or manual_review_required with audit trace.",
   },
   manual_review: {
     status: "production_proven",
