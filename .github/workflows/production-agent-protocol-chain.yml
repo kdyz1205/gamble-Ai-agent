@@ -26,3 +26,5 @@ jobs:
       - run: npm ci
       - name: Prove agent protocol-chain tools
         run: npm run e2e:agent-tool-guardrails
+      - name: Prove agent judge-to-settlement chain
+        run: npm run e2e:agent-settlement-chain

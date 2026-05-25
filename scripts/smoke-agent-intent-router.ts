@@ -38,6 +38,14 @@ const judge = classifyAgentIntent("Please rejudge this verdict with a stronger m
 assert.equal(judge.route, "outcome_judge");
 assert.equal(judge.directCompile, false);
 
+const runProtocolJudge = classifyAgentIntent("Run the protocol judge for challenge cmp123 now.", emptyDraft);
+assert.equal(runProtocolJudge.route, "outcome_judge");
+assert.equal(runProtocolJudge.directCompile, false);
+
+const confirmVerdict = classifyAgentIntent("Confirm the AI verdict for challenge cmp123 and settle credits.", emptyDraft);
+assert.equal(confirmVerdict.route, "outcome_judge");
+assert.equal(confirmVerdict.directCompile, false);
+
 const discovery = classifyAgentIntent("match me with a nearby challenge", emptyDraft);
 assert.equal(discovery.route, "challenge_discovery");
 assert.equal(discovery.directCompile, false);
@@ -60,6 +68,8 @@ console.log(JSON.stringify({
   recording: recording.route,
   verify: verify.route,
   judge: judge.route,
+  runProtocolJudge: runProtocolJudge.route,
+  confirmVerdict: confirmVerdict.route,
   discovery: discovery.route,
   existingProtocolSignal: existingProtocol.blockingSignals[0],
 }, null, 2));
