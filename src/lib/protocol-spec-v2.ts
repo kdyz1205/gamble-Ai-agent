@@ -179,8 +179,33 @@ function normalizeBindings(value: unknown): ProtocolSpecV2["identityProtocol"]["
   return bindings;
 }
 
+function unwrapProtocolRecord(input: unknown): Record<string, unknown> | null {
+  const root = asRecord(input);
+  if (!root) return null;
+  const wrapperKeys = [
+    "protocol",
+    "protocolSpec",
+    "protocolSpecV2",
+    "ProtocolSpecV2",
+    "challengeProtocol",
+    "compiledProtocol",
+    "spec",
+  ];
+  for (const key of wrapperKeys) {
+    const wrapped = asRecord(root[key]);
+    if (wrapped) {
+      return {
+        ...wrapped,
+        rawPrompt: wrapped.rawPrompt ?? root.rawPrompt,
+        language: wrapped.language ?? root.language,
+      };
+    }
+  }
+  return root;
+}
+
 function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
-  const candidate = asRecord(input);
+  const candidate = unwrapProtocolRecord(input);
   if (!candidate) return null;
 
   const title = nonEmptyString(candidate.title) ?? nonEmptyString(candidate.challenge_title);
@@ -198,6 +223,9 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
 
   const evidenceMode = normalizedEnum(evidence.mode, EVIDENCE_MODES, {
     video: "separate_video",
+    videos: "separate_video",
+    video_upload: "separate_video",
+    uploaded_media: "separate_video",
     camera: "separate_video",
     camera_video: "separate_video",
     uploaded_video: "separate_video",
@@ -208,7 +236,9 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     same_device: "same_camera_video",
     live_video: "live_host_video",
     image: "photo",
+    images: "photo",
     picture: "photo",
+    photos: "photo",
     text: "witness",
     self_report: "witness",
     oracle: "public_oracle",
@@ -218,8 +248,12 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
   });
   const identityMode = normalizedEnum(identity.mode, IDENTITY_MODES, {
     none: "account_only",
+    not_required: "account_only",
+    no_identity: "account_only",
     account: "account_only",
+    account_identity: "account_only",
     liveness: "liveness_phrase",
+    liveness_code: "liveness_phrase",
     phrase: "liveness_phrase",
     left_right: "left_right_assignment",
     same_camera: "left_right_assignment",
@@ -229,6 +263,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
   });
   const locationMode = normalizedEnum(location.mode, LOCATION_MODES, {
     no_location: "none",
+    not_required: "none",
     nearby: "nearby_discovery",
     walk_by: "walk_to_join",
     walkby: "walk_to_join",
@@ -238,11 +273,16 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
   });
   const settlementMode = normalizedEnum(settlement.mode, SETTLEMENT_MODES, {
     oracle: "auto_oracle",
+    public_oracle: "auto_oracle",
+    data_oracle: "auto_oracle",
     ai_text: "auto_ai_text",
     text_ai: "auto_ai_text",
     ai_vision: "auto_ai_vision",
     vision_ai: "auto_ai_vision",
     auto_ai: "auto_ai_vision",
+    vision: "auto_ai_vision",
+    ai_referee: "auto_ai_vision",
+    ai_judge: "auto_ai_vision",
     manual: "manual_review",
     human_review: "manual_review",
     blocked_by_policy: "blocked",
@@ -257,8 +297,10 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     language: normalizedEnum(candidate.language, ["en", "zh", "auto"] as const, { chinese: "zh", english: "en" }, "auto") ?? "auto",
     participantMode: normalizedEnum(candidate.participantMode, PARTICIPANT_MODES, {
       one_person: "solo",
-      single: "solo",
+      single_person: "solo",
+      self_challenge: "solo",
       self: "solo",
+      single: "solo",
       pet: "solo",
       two_player: "head_to_head",
       two_person: "head_to_head",
@@ -273,10 +315,16 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     }, "head_to_head") ?? "head_to_head",
     outcomeType: normalizedEnum(candidate.outcomeType, OUTCOME_TYPES, {
       fastest: "speed",
+      race: "speed",
+      time: "speed",
+      timed: "speed",
       reps: "count",
       rep_count: "count",
+      number: "count",
       pass_fail: "completion",
+      task_completion: "completion",
       boolean: "yes_no",
+      true_false: "yes_no",
       leaderboard: "ranking",
       subjective: "quality_score",
       price_prediction: "prediction",
