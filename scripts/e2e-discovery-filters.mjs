@@ -160,13 +160,13 @@ try {
     username: creator.username,
   };
 
-  const noDeadline = await createDiscoveryChallenge(creator.jar, stamp, "no-deadline", undefined);
+  const defaultDeadline = await createDiscoveryChallenge(creator.jar, stamp, "default-deadline", undefined);
   const expired = await createDiscoveryChallenge(creator.jar, stamp, "expired", "0 minutes");
   const active = await createDiscoveryChallenge(creator.jar, stamp, "active", "2 hours");
-  for (const row of [noDeadline, expired, active]) createdIds.push(row.challenge.id);
+  for (const row of [defaultDeadline, expired, active]) createdIds.push(row.challenge.id);
 
   proof.created = {
-    noDeadline: { id: noDeadline.challenge.id, deadline: noDeadline.challenge.deadline },
+    defaultDeadline: { id: defaultDeadline.challenge.id, deadline: defaultDeadline.challenge.deadline },
     expired: { id: expired.challenge.id, deadline: expired.challenge.deadline },
     active: { id: active.challenge.id, deadline: active.challenge.deadline },
   };
@@ -190,9 +190,9 @@ try {
   );
   requireCheck(
     proof,
-    "no_deadline_public_challenge_is_hidden",
-    !ids.has(noDeadline.challenge.id),
-    { noDeadlineId: noDeadline.challenge.id },
+    "omitted_deadline_defaults_to_future_and_is_discoverable",
+    ids.has(defaultDeadline.challenge.id),
+    { defaultDeadlineId: defaultDeadline.challenge.id, deadline: defaultDeadline.challenge.deadline },
   );
   requireCheck(
     proof,

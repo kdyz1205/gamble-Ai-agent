@@ -115,11 +115,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Keep no-regression coverage for create -> join -> evidence -> judge -> settle.",
   },
   challenge_discovery: {
-    status: "runtime_backed",
-    summary: "Nearby/open discovery routes exist and sort/filter challenges; production robustness still depends on location UX.",
-    evidence: ["src/app/api/challenges/discover/route.ts", "src/app/api/map/challenges/route.ts", "src/app/radar/page.tsx"],
-    missing: ["No full two-device nearby location proof in the latest run."],
-    nextProof: "Run two-account nearby challenge creation and join from current GPS snapshots.",
+    status: "production_proven",
+    summary: "Production discovery E2E proves public challenge discovery returns currently playable future-deadline rows and hides expired rows from nearby/global join lists.",
+    evidence: ["src/app/api/challenges/discover/route.ts", "src/app/api/map/challenges/route.ts", "src/app/radar/page.tsx", "scripts/e2e-discovery-filters.mjs", ".github/workflows/production-agent-protocol-chain.yml"],
+    missing: ["Browser location permission UX and true two-device nearby discovery still need repeated mobile proof."],
+    nextProof: "Run browser-level radar proof with real geolocation permission, copy/join link, and two signed-in devices.",
   },
   join_contract: {
     status: "production_proven",
@@ -129,11 +129,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run browser/incognito join-link E2E: open /join/:id, accept rules, verify evidence_window_open.",
   },
   location_gate: {
-    status: "runtime_backed",
-    summary: "Location eligibility is a shared gate used by join routes/tools and supports outside-radius rejection plus inside-radius acceptance.",
-    evidence: ["src/lib/location-eligibility.ts", "src/app/api/challenges/[id]/check-location-eligibility/route.ts", "src/app/api/map/ping/route.ts", "scripts/smoke-location-gate.ts"],
-    missing: ["No latest two-device production proof for walk-to-join/same-place-required challenges."],
-    nextProof: "Create walk-to-join challenge and prove outside-radius reject plus inside-radius accept.",
+    status: "production_proven",
+    summary: "Production GPS E2E proves map ping, far-user rejection, nearby-user eligibility, location-bound accept, GPS evidence, high-confidence verdict, settlement, and ledger rows.",
+    evidence: ["src/lib/location-eligibility.ts", "src/app/api/challenges/[id]/check-location-eligibility/route.ts", "src/app/api/map/ping/route.ts", "scripts/smoke-location-gate.ts", "scripts/e2e-gps-checkin-settlement.mjs", ".github/workflows/production-agent-protocol-chain.yml"],
+    missing: ["No browser permission prompt proof for real mobile GPS yet; production E2E uses injected coordinates."],
+    nextProof: "Run mobile browser proof for geolocation prompt, radar discovery, location-bound join, and same-place challenge start.",
   },
   recording_session: {
     status: "production_proven",

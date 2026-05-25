@@ -26,6 +26,10 @@ jobs:
       - run: npm ci
       - name: Prove rule safety prefilter
         run: npm run e2e:rule-safety-production
+      - name: Prove challenge discovery filters
+        run: npm run e2e:discovery-filters
+      - name: Prove GPS location gate settlement
+        run: npm run e2e:gps-checkin-settlement
       - name: Prove data-source oracle settlement
         run: npm run e2e:data-source-oracle-settlement
       - name: Prove compiler intent matrix

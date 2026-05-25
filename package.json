@@ -18,6 +18,7 @@
     "e2e:archive-flow": "node scripts/e2e-archive-challenge.mjs",
     "e2e:solo-flow": "node scripts/e2e-solo-challenge-flow.mjs",
     "e2e:screenshot-settlement": "node scripts/e2e-screenshot-settlement.mjs",
+    "e2e:discovery-filters": "node scripts/e2e-discovery-filters.mjs",
     "e2e:gps-checkin-settlement": "node scripts/e2e-gps-checkin-settlement.mjs",
     "e2e:study-streak-settlement": "node scripts/e2e-study-streak-settlement.mjs",
     "e2e:data-source-oracle-settlement": "node scripts/e2e-data-source-oracle-settlement.mjs",
