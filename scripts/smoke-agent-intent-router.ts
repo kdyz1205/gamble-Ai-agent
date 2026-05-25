@@ -22,6 +22,18 @@ const evidence = classifyAgentIntent("Submit my video evidence for challenge cmp
 assert.equal(evidence.route, "evidence_intake");
 assert.equal(evidence.directCompile, false);
 
+const binding = classifyAgentIntent("Issue my participant binding instructions for challenge cmp123.", emptyDraft);
+assert.equal(binding.route, "evidence_intake");
+assert.equal(binding.directCompile, false);
+
+const recording = classifyAgentIntent("Start a same-camera recording session for challenge cmp123.", emptyDraft);
+assert.equal(recording.route, "evidence_intake");
+assert.equal(recording.directCompile, false);
+
+const verify = classifyAgentIntent("Verify identity for challenge cmp123 and evidence id ev123.", emptyDraft);
+assert.equal(verify.route, "evidence_intake");
+assert.equal(verify.directCompile, false);
+
 const judge = classifyAgentIntent("Please rejudge this verdict with a stronger model.", emptyDraft);
 assert.equal(judge.route, "outcome_judge");
 assert.equal(judge.directCompile, false);
@@ -44,6 +56,9 @@ console.log(JSON.stringify({
   randomZh,
   join: join.route,
   evidence: evidence.route,
+  binding: binding.route,
+  recording: recording.route,
+  verify: verify.route,
   judge: judge.route,
   discovery: discovery.route,
   existingProtocolSignal: existingProtocol.blockingSignals[0],

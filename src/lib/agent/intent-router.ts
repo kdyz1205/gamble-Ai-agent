@@ -27,6 +27,8 @@ const JOIN_ZH_RE = /\u52a0\u5165|\u63a5\u53d7|\u540c\u610f|\u89c4\u5219|\u63a5\u
 
 const EVIDENCE_RE = /\b(upload|submit|evidence|recording|video url|proof|recorded|file)\b/i;
 const EVIDENCE_ZH_RE = /\u4e0a\u4f20|\u63d0\u4ea4|\u8bc1\u636e|\u5f55\u50cf|\u89c6\u9891|\u8bc1\u660e/;
+const PROTOCOL_CHAIN_TOOL_RE = /\b(issue .*binding|participant binding|liveness code|qr token|start .*recording|recording session|verify identity|verify evidence|evidenceid|evidence id)\b/i;
+const PROTOCOL_CHAIN_TOOL_ZH_RE = /\u8eab\u4efd\u7ed1\u5b9a|\u6d3b\u4f53\u7801|\u5f00\u59cb\u5f55\u5236|\u5f55\u5236\u4f1a\u8bdd|\u9a8c\u8bc1\u8eab\u4efd|\u9a8c\u8bc1\u8bc1\u636e/;
 
 const JUDGE_RE = /\b(judge|verdict|who won|winner|settle|settlement|rejudge|review again)\b/i;
 const JUDGE_ZH_RE = /\u5224\u5b9a|\u8c01\u8d62|\u8d62\u5bb6|\u7ed3\u7b97|\u91cd\u65b0\u5224|\u590d\u6838/;
@@ -85,6 +87,16 @@ export function classifyAgentIntent(message: string, draftState?: Pick<DraftStat
       language,
       confidence: 0.9,
       reason: "join_or_accept_request",
+      blockingSignals,
+    };
+  }
+  if (has(PROTOCOL_CHAIN_TOOL_RE, text) || has(PROTOCOL_CHAIN_TOOL_ZH_RE, raw)) {
+    return {
+      route: "evidence_intake",
+      directCompile: false,
+      language,
+      confidence: 0.94,
+      reason: "protocol_chain_tool_request",
       blockingSignals,
     };
   }
