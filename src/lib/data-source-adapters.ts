@@ -275,6 +275,16 @@ function nonLiveMessage(source: RegisteredDataSource) {
   return source.limitation;
 }
 
+function settlementReadiness(source: RegisteredDataSource) {
+  if (source.autoSettleAllowed) return "auto_settle_proven";
+  if (source.connectionStatus === "live_fetch_connected") return "live_fetch_needs_evaluator";
+  if (source.connectionStatus === "oauth_required") return "needs_user_oauth";
+  if (source.connectionStatus === "api_key_required") return "needs_provider_api_key";
+  if (source.connectionStatus === "provider_contract_required") return "needs_provider_contract";
+  if (source.connectionStatus === "document_ai_required") return "needs_document_ai";
+  return "needs_adapter";
+}
+
 export function dataSourceAdapterCatalog() {
   return listDataSourceAdapters().map((source) => ({
     sourceKey: source.sourceKey,
@@ -282,6 +292,7 @@ export function dataSourceAdapterCatalog() {
     connectionStatus: source.connectionStatus,
     adapterStatus: source.adapterStatus,
     autoSettleAllowed: source.autoSettleAllowed,
+    settlementReadiness: settlementReadiness(source),
     hasLiveFetch: Boolean(LIVE_ADAPTERS[source.sourceKey]),
     requiredFields: source.requiredFields,
     limitation: source.limitation,

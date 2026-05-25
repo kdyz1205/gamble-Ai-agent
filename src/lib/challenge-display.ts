@@ -99,6 +99,15 @@ function joinSentences(first: string, second: string) {
   return `${a}. ${b}`;
 }
 
+function joinSentencesForLanguage(first: string, second: string, zh: boolean) {
+  if (!zh) return joinSentences(first, second);
+  const a = first.trim().replace(/[.!?。！？]+$/g, "");
+  const b = second.trim();
+  if (!a) return b;
+  if (!b) return a;
+  return `${a}。${b}`;
+}
+
 function compactDeadlineLabel(timeLimit: string | undefined, deadlineLabel: string | null) {
   if (!deadlineLabel) return null;
   // Old AI drafts sometimes stored placeholder absolute dates that are now in the past.
@@ -108,10 +117,22 @@ function compactDeadlineLabel(timeLimit: string | undefined, deadlineLabel: stri
   return deadlineLabel;
 }
 
+function usesChineseCopy(challenge: ChallengeLike) {
+  return /[\u3400-\u9FFF]/.test([
+    challenge.title,
+    challenge.rules,
+    challenge.proofWindow,
+    challenge.disputeWindow,
+  ].filter(Boolean).join("\n"));
+}
+
 function compactSettlementSummary(challenge: ChallengeLike) {
   const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
-  if (stake <= 0) return "No credits move.";
-  return `${stake} ${challenge.stakeToken || "credits"} escrowed. Winner gets the pool.`;
+  const zh = usesChineseCopy(challenge);
+  if (stake <= 0) return zh ? "不移动积分。" : "No credits move.";
+  return zh
+    ? `${stake} ${challenge.stakeToken || "credits"} 已托管，赢家获得奖池。`
+    : `${stake} ${challenge.stakeToken || "credits"} escrowed. Winner gets the pool.`;
 }
 
 export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
@@ -163,6 +184,7 @@ export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard
 
 export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
   const cards = parseChallengeRules(challenge);
+  const zh = usesChineseCopy(challenge);
   const goal = pickCard(cards, ["Goal"])?.value || challenge.title;
   const win = pickCard(cards, ["Scoring", "Win condition"])?.value || goal;
   const evidence = joinUnique([
@@ -172,19 +194,19 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
   const timeLimit = pickCard(cards, ["Time limit"])?.value;
   const deadlineLabel = compactDeadlineLabel(timeLimit, formatChallengeDeadline(challenge.deadline));
   const time = timeLimit && deadlineLabel
-    ? joinSentences(timeLimit, deadlineLabel)
+    ? joinSentencesForLanguage(timeLimit, deadlineLabel, zh)
     : timeLimit || deadlineLabel || challenge.proofWindow || "Before the challenge window closes";
   const dispute = pickCard(cards, ["Dispute window"])?.value;
   const settlement = compactSettlementSummary(challenge);
   const review = dispute && settlement
-    ? joinSentences(dispute, settlement)
+    ? joinSentencesForLanguage(dispute, settlement, zh)
     : dispute || settlement || settlementSummary(challenge);
 
   return [
-    { label: "Match", value: goal },
-    { label: "How to win", value: win },
-    { label: "Evidence", value: evidence },
-    { label: "Time + review", value: joinSentences(time, review) },
+    { label: zh ? "挑战" : "Match", value: goal },
+    { label: zh ? "胜利条件" : "How to win", value: win },
+    { label: zh ? "证据" : "Evidence", value: evidence },
+    { label: zh ? "时间与复核" : "Time + review", value: joinSentencesForLanguage(time, review, zh) },
   ];
 }
 
@@ -205,6 +227,9 @@ export function acceptanceContract(challenge: ChallengeLike): string[] {
 
 export function settlementSummary(challenge: ChallengeLike): string {
   const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
-  if (stake <= 0) return "Free challenge: no credits escrowed or paid out.";
-  return `${stake} ${challenge.stakeToken || "credits"} per accepted player is escrowed. Settlement happens only after the AI recommendation is confirmed.`;
+  const zh = usesChineseCopy(challenge);
+  if (stake <= 0) return zh ? "免费挑战：不托管或支付积分。" : "Free challenge: no credits escrowed or paid out.";
+  return zh
+    ? `每位接受者托管 ${stake} ${challenge.stakeToken || "credits"}。AI 判定确认后结算。`
+    : `${stake} ${challenge.stakeToken || "credits"} per accepted player is escrowed. Settlement happens only after the AI recommendation is confirmed.`;
 }

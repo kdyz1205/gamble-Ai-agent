@@ -102,22 +102,51 @@ function blockedProtocol(inputText: string, language: ProtocolSpecV2["language"]
   };
 }
 
-function pickProvider(requested?: string, tierId: 1 | 2 | 3 = 1) {
+function compileProviderAttempts(requested?: string, tierId: 1 | 2 | 3 = 1) {
   const requestedProvider = requested ? getProviderById(requested) : undefined;
   if (requested && !requestedProvider) throw new CompileRequestError(`Unknown AI provider: ${requested}`, 400);
-  if (requestedProvider) {
-    if (!isProviderConfigured(requestedProvider)) {
+
+  const attempts = new Map<string, NonNullable<ReturnType<typeof getProviderById>>>();
+  if (requestedProvider && isProviderConfigured(requestedProvider)) {
+    attempts.set(requestedProvider.id, requestedProvider);
+  }
+
+  const envProvider = process.env.ORACLE_DEFAULT_PROVIDER ? getProviderById(process.env.ORACLE_DEFAULT_PROVIDER) : undefined;
+  if (envProvider && isProviderConfigured(envProvider)) attempts.set(envProvider.id, envProvider);
+
+  const tierProvider = resolveTierProvider(tierId);
+  if (tierProvider && isProviderConfigured(tierProvider)) attempts.set(tierProvider.id, tierProvider);
+
+  for (const provider of configuredProviders()) {
+    attempts.set(provider.id, provider);
+  }
+
+  const providers = [...attempts.values()];
+  if (providers.length === 0) {
+    if (requestedProvider) {
       throw new CompileRequestError(`Selected AI provider ${requestedProvider.shortLabel} is not configured.`, 503);
     }
-    return requestedProvider;
-  }
-  const envProvider = process.env.ORACLE_DEFAULT_PROVIDER ? getProviderById(process.env.ORACLE_DEFAULT_PROVIDER) : undefined;
-  if (envProvider && configuredProviders().some((provider) => provider.id === envProvider.id)) return envProvider;
-  const provider = resolveTierProvider(tierId) ?? configuredProviders()[0];
-  if (!provider || !isProviderConfigured(provider)) {
     throw new CompileRequestError("No configured AI provider is available for protocol compilation.", 503);
   }
-  return provider;
+  return providers;
+}
+
+function compileModelForProvider(
+  provider: NonNullable<ReturnType<typeof getProviderById>>,
+  requestedModel: string | undefined,
+  tierId: 1 | 2 | 3,
+) {
+  const model = requestedModel?.trim();
+  if (!model) return resolveTierModel(provider, tierId);
+  const lower = model.toLowerCase();
+  const modelLooksCompatible =
+    provider.models.includes(model) ||
+    (provider.id === "openai" && (/^gpt/.test(lower) || /^o\d/.test(lower))) ||
+    (provider.id === "anthropic" && lower.startsWith("claude")) ||
+    (provider.id === "google" && lower.startsWith("gemini")) ||
+    (provider.id === "local_ollama" && !lower.startsWith("gpt") && !lower.startsWith("claude") && !lower.startsWith("gemini")) ||
+    (provider.kind === "openai_compat" && provider.id !== "openai" && !lower.startsWith("gpt") && !lower.startsWith("claude") && !lower.startsWith("gemini"));
+  return modelLooksCompatible ? model : resolveTierModel(provider, tierId);
 }
 
 function extractJson(raw: string) {
@@ -753,88 +782,108 @@ export async function compileProtocolForUser(input: {
   }
 
   try {
-    const provider = pickProvider(input.providerId, tierId);
-    const selectedModel = input.model || resolveTierModel(provider, tierId);
-    console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
-    const completion = await completeOraclePromptWithMetadata({
-      providerId: provider.id,
-      model: selectedModel,
-      system: compileSystemPrompt(),
-      user: [
-        `User prompt: ${inputText}`,
-        `Language hint: ${language}`,
-        input.context ? `Context: ${JSON.stringify(input.context)}` : null,
-        "Compile the protocol. Return JSON only.",
-      ].filter(Boolean).join("\n\n"),
-      maxTokens: 2400,
-      temperature: 0.15,
-    });
-    await logAiUsage({
-      userId: input.userId,
-      route: input.route ?? "/api/challenges/compile",
-      metadata: completion.metadata,
-      extra: { surface: input.context?.surface ?? null, rawPromptChars: inputText.length },
-    });
-
-    let parsed: unknown = null;
-    let normalizedProtocol: ProtocolSpecV2 | null = null;
-    let fallbackReason: string | null = null;
-    try {
-      parsed = extractJson(completion.text);
-      const protocol = parseProtocolSpecV2({
-        ...(objectRecord(parsed) ?? {}),
-        version: "2.0",
-        rawPrompt: inputText,
-        language,
-      });
-      if (protocol) {
-        const normalized = finalizeCompiledProtocol(protocol);
-        const repaired = repairRandomProtocolIfGeneric(normalized, language);
-        normalizedProtocol = repaired.protocol;
-        if (repaired.repaired) {
-          fallbackReason = "LLM returned a generic random-challenge title; repaired to a concrete playable protocol";
-        }
-      } else {
-        const issues = protocolSpecV2ValidationIssues({
-          ...(objectRecord(parsed) ?? {}),
-          version: "2.0",
-          rawPrompt: inputText,
-          language,
+    const attempts = compileProviderAttempts(input.providerId, tierId);
+    let lastError: { providerId: string; model: string; message: string } | null = null;
+    for (const provider of attempts) {
+      const selectedModel = compileModelForProvider(provider, input.model, tierId);
+      try {
+        console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
+        const completion = await completeOraclePromptWithMetadata({
+          providerId: provider.id,
+          model: selectedModel,
+          system: compileSystemPrompt(),
+          user: [
+            `User prompt: ${inputText}`,
+            `Language hint: ${language}`,
+            input.context ? `Context: ${JSON.stringify(input.context)}` : null,
+            "Compile the protocol. Return JSON only.",
+          ].filter(Boolean).join("\n\n"),
+          maxTokens: 2400,
+          temperature: 0.15,
         });
-        fallbackReason = `LLM response did not match ProtocolSpecV2: ${issues.slice(0, 4).join("; ") || "unknown validation issue"}`;
+        await logAiUsage({
+          userId: input.userId,
+          route: input.route ?? "/api/challenges/compile",
+          metadata: completion.metadata,
+          extra: { surface: input.context?.surface ?? null, rawPromptChars: inputText.length },
+        });
+
+        let parsed: unknown = null;
+        let normalizedProtocol: ProtocolSpecV2 | null = null;
+        let fallbackReason: string | null = null;
+        try {
+          parsed = extractJson(completion.text);
+          const protocol = parseProtocolSpecV2({
+            ...(objectRecord(parsed) ?? {}),
+            version: "2.0",
+            rawPrompt: inputText,
+            language,
+          });
+          if (protocol) {
+            const normalized = finalizeCompiledProtocol(protocol);
+            const repaired = repairRandomProtocolIfGeneric(normalized, language);
+            normalizedProtocol = repaired.protocol;
+            if (repaired.repaired) {
+              fallbackReason = "LLM returned a generic random-challenge title; repaired to a concrete playable protocol";
+            }
+          } else {
+            const issues = protocolSpecV2ValidationIssues({
+              ...(objectRecord(parsed) ?? {}),
+              version: "2.0",
+              rawPrompt: inputText,
+              language,
+            });
+            fallbackReason = `LLM response did not match ProtocolSpecV2: ${issues.slice(0, 4).join("; ") || "unknown validation issue"}`;
+          }
+        } catch (err) {
+          fallbackReason = err instanceof Error ? err.message : "LLM did not return valid protocol JSON";
+        }
+
+        const repairedProtocol = normalizedProtocol ?? fallbackProtocolFromPrompt(inputText, language, parsed);
+        if (fallbackReason) {
+          console.warn("[compile-protocol] repaired malformed LLM protocol", {
+            providerId: provider.id,
+            model: selectedModel,
+            reason: fallbackReason,
+          });
+        }
+
+        return {
+          rawPrompt: inputText,
+          protocol: repairedProtocol,
+          preview: protocolPreview(repairedProtocol),
+          source: fallbackReason ? "fallback" as const : "llm" as const,
+          providerId: provider.id,
+          model: selectedModel,
+          externalApiCharged: isPaidProvider(provider),
+          providerCall: completion.metadata,
+          fallbackReason: fallbackReason ?? undefined,
+          dailyQuota: quota.status,
+          agentGraph: routeCompiledProtocol(repairedProtocol, {
+            source: input.route ?? "/api/challenges/compile",
+            compileSource: fallbackReason ? "fallback" : "llm",
+            providerId: provider.id,
+            model: selectedModel,
+            fallbackReason,
+          }),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        lastError = { providerId: provider.id, model: selectedModel, message };
+        console.warn("[compile-protocol] provider attempt failed", {
+          providerId: provider.id,
+          model: selectedModel,
+          error: message.slice(0, 500),
+        });
       }
-    } catch (err) {
-      fallbackReason = err instanceof Error ? err.message : "LLM did not return valid protocol JSON";
     }
 
-    const repairedProtocol = normalizedProtocol ?? fallbackProtocolFromPrompt(inputText, language, parsed);
-    if (fallbackReason) {
-      console.warn("[compile-protocol] repaired malformed LLM protocol", {
-        providerId: provider.id,
-        model: selectedModel,
-        reason: fallbackReason,
-      });
-    }
-
-    return {
-      rawPrompt: inputText,
-      protocol: repairedProtocol,
-      preview: protocolPreview(repairedProtocol),
-      source: fallbackReason ? "fallback" as const : "llm" as const,
-      providerId: provider.id,
-      model: selectedModel,
-      externalApiCharged: isPaidProvider(provider),
-      providerCall: completion.metadata,
-      fallbackReason: fallbackReason ?? undefined,
-      dailyQuota: quota.status,
-      agentGraph: routeCompiledProtocol(repairedProtocol, {
-        source: input.route ?? "/api/challenges/compile",
-        compileSource: fallbackReason ? "fallback" : "llm",
-        providerId: provider.id,
-        model: selectedModel,
-        fallbackReason,
-      }),
-    };
+    throw new CompileRequestError(
+      lastError
+        ? `AI provider unavailable (${lastError.providerId}/${lastError.model}): ${lastError.message}`
+        : "No configured AI provider could compile this challenge.",
+      503,
+    );
   } catch (error) {
     await refundDailyAiQuota(input.userId, "spec").catch(() => null);
     throw error;

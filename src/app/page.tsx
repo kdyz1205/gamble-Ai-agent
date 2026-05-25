@@ -68,6 +68,23 @@ function initialOraclePrefs(): OraclePrefs {
   };
 }
 
+function shortAiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/insufficient_quota|exceeded your current quota|quota/i.test(message)) {
+    return "AI provider has no quota. Pick another model or add provider credits.";
+  }
+  if (/not configured|no configured ai provider|api key/i.test(message)) {
+    return "AI provider is not connected. Pick another model or add an API key.";
+  }
+  if (/rate limit|429/i.test(message)) {
+    return "AI provider is rate limited. Try again shortly or pick another model.";
+  }
+  if (/timed out|timeout/i.test(message)) {
+    return "AI took too long. Try a shorter prompt or another model.";
+  }
+  return message || "Could not generate challenge.";
+}
+
 function providerFromAlias(value: string) {
   const normalized = value.trim();
   return MODEL_TEXT_ALIASES.find((item) => item.pattern.test(normalized))?.providerId ?? null;
@@ -356,7 +373,7 @@ export default function Home() {
       if (res.dailyQuota) setDailyQuota(res.dailyQuota);
       setAppState("preview");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate challenge spec");
+      setError(shortAiError(err));
       setAppState("idle");
     }
   }, [oraclePrefs, user]);
@@ -767,8 +784,7 @@ export default function Home() {
               </section>
 
               <aside className="grid gap-4">
-                <LiveProofPanel />
-                <MoneyModeCard policy={paymentPolicy} />
+                <HomeStatusCard policy={paymentPolicy} />
                 {user && (
                   <LaunchInviteCard
                     inviteLink={personalInviteLink}
@@ -928,37 +944,33 @@ function LaunchInviteCard({
   );
 }
 
-function MoneyModeCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
-  const country = policy?.jurisdiction.country || "unknown";
-  const region = policy?.jurisdiction.region ? `-${policy.jurisdiction.region}` : "";
+function HomeStatusCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
   const cashAllowed = Boolean(policy?.cashStakeAllowed);
-  const reasonLabel = policy?.reason === "hard_blocked_country"
-    ? "US cash mode blocked"
-    : policy?.reason === "unknown_jurisdiction"
-      ? "Location unknown"
-      : policy?.reason === "not_allowlisted"
-        ? "Not in cash allowlist"
-        : policy?.reason === "real_money_flags_disabled"
-          ? "Cash flags off"
-          : policy?.reason || "Checking policy";
-
   return (
-    <section className="rounded-[22px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: cashAllowed ? "#A7F3D0" : "#E2E8F0", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide" style={{ color: cashAllowed ? "#047857" : "#64748B" }}>Money mode</p>
-          <p className="mt-1 text-sm font-black" style={{ color: "#172033" }}>
-            {cashAllowed ? "Cash challenges available here" : "Internal pts only here"}
-          </p>
-          <p className="mt-1 text-xs font-semibold" style={{ color: "#64748B" }}>
-            Jurisdiction: {country}{region} / {cashAllowed ? "cash stake enabled" : reasonLabel}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full px-3 py-1 text-[11px] font-black" style={{ background: cashAllowed ? "#ECFDF5" : "#F8FAFC", color: cashAllowed ? "#047857" : "#64748B" }}>
-          {cashAllowed ? "cash on" : "cash off"}
+    <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
+      <div className="grid grid-cols-3 gap-2">
+        <StatusChip label="Draft" value="AI" />
+        <StatusChip label="Proof" value="video/data" />
+        <StatusChip label="Payout" value="85%+" />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border px-3 py-2" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
+        <span className="text-xs font-black uppercase tracking-wide" style={{ color: "#64748B" }}>
+          Money
+        </span>
+        <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: cashAllowed ? "#ECFDF5" : "#FFFFFF", color: cashAllowed ? "#047857" : "#64748B" }}>
+          {cashAllowed ? "cash allowed" : "pts only"}
         </span>
       </div>
     </section>
+  );
+}
+
+function StatusChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border bg-[#F8FAFC] px-3 py-3" style={{ borderColor: "#E2E8F0" }}>
+      <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>{label}</p>
+      <p className="mt-1 truncate text-sm font-black" style={{ color: "#172033" }}>{value}</p>
+    </div>
   );
 }
 
@@ -1087,28 +1099,6 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
           </div>
         </details>
       )}
-    </section>
-  );
-}
-
-function LiveProofPanel() {
-  return (
-    <section className="overflow-hidden rounded-[24px] border bg-white/95 p-5 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 24px 70px rgba(15,23,42,0.08)" }}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>Live gates</p>
-          <h2 className="mt-2 text-xl font-black tracking-tight" style={{ color: "#172033" }}>Rules first. Payout last.</h2>
-        </div>
-        <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#ECFDF5", color: "#047857" }}>0.85 gate</span>
-      </div>
-
-      <div className="mt-4 grid gap-2">
-        {["AI compiles the protocol.", "Evidence must match the rules.", "Credits settle only after verdict gates pass."].map((line) => (
-          <div key={line} className="rounded-2xl border px-3 py-2 text-sm font-bold" style={{ borderColor: "#E2E8F0", background: "#F8FAFC", color: "#172033" }}>
-            {line}
-          </div>
-        ))}
-      </div>
     </section>
   );
 }
