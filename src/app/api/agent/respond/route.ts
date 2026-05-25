@@ -197,6 +197,15 @@ function extractLabeledText(message: string, label: string) {
   return match?.[1]?.trim().replace(/[.;]\s*$/g, "") || null;
 }
 
+function extractRecordingSessionId(message: string) {
+  const idPattern = "(c[a-z0-9][a-z0-9_-]{6,})";
+  const directMatch = message.match(new RegExp(`\\brecordingSessionId\\s*(?:[:=]|\\bis\\b|\\bwas\\b)\\s*${idPattern}`, "i"))?.[1];
+  if (directMatch) return directMatch;
+
+  const spacedMatch = message.match(new RegExp(`\\brecording\\s+session(?:\\s+id)?\\s*(?:[:=]|\\bis\\b|\\bwas\\b)?\\s*${idPattern}`, "i"))?.[1];
+  return spacedMatch ?? null;
+}
+
 function uploadEvidenceArgsFromMessage(message: string, challengeId: string): Record<string, unknown> | null {
   const text = message.toLowerCase();
   const looksLikeUpload =
@@ -212,7 +221,7 @@ function uploadEvidenceArgsFromMessage(message: string, challengeId: string): Re
     extractLabeledText(message, "Description") ||
     (answer ? `ANSWER: ${answer}` : message.slice(0, 1200));
   const url = message.match(/https?:\/\/[^\s)]+/i)?.[0]?.replace(/[.,;]+$/g, "") ?? null;
-  const recordingSessionId = message.match(/\brecordingSessionId\s*[:=]\s*([a-z0-9_-]+)/i)?.[1] ?? null;
+  const recordingSessionId = extractRecordingSessionId(message);
   const type = /\b(video|mp4|webm|mov)\b/i.test(message)
     ? "video"
     : /\b(photo|image|jpg|jpeg|png)\b/i.test(message)
