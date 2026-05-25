@@ -24,6 +24,8 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
+      - name: Prove rule safety prefilter
+        run: npm run e2e:rule-safety-production
       - name: Prove compiler intent matrix
         run: npm run e2e:protocol-compile-matrix
       - name: Prove agent compile-to-publish chain

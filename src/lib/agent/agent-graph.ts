@@ -73,11 +73,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run production prompt replay for compile, publish, join, evidence, judge, discovery, and support prompts with expected routes.",
   },
   rule_safety: {
-    status: "runtime_backed",
-    summary: "Rule safety has a standalone prefilter with blocked/review/allowed fixture coverage before protocol compilation.",
-    evidence: ["src/lib/rule-safety.ts", "src/lib/protocol-compiler.ts", "scripts/smoke-rule-safety.ts"],
+    status: "production_proven",
+    summary: "Rule safety has a production E2E prefilter proof for alcohol, violence, non-consensual recording, chance/cash, and illegal-account prompts before any paid LLM call.",
+    evidence: ["src/lib/rule-safety.ts", "src/lib/protocol-compiler.ts", "scripts/smoke-rule-safety.ts", "scripts/e2e-rule-safety-production.mjs", ".github/workflows/production-agent-protocol-chain.yml"],
     missing: ["No large adversarial multilingual red-team run in production telemetry."],
-    nextProof: "Run a broader prompt replay with unsafe, legal-region cash, safe alternatives, and multilingual edge cases.",
+    nextProof: "Broaden the production prompt replay with Chinese, slang, legal-region cash policy, safe alternatives, and jailbreak-style edge cases.",
   },
   data_source_router: {
     status: "runtime_backed",

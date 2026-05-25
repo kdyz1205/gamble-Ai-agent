@@ -23,6 +23,7 @@
     "e2e:data-source-oracle-settlement": "node scripts/e2e-data-source-oracle-settlement.mjs",
     "e2e:manual-review-resolution": "node scripts/e2e-manual-review-resolution.mjs",
     "e2e:rejudge-verdict": "node scripts/e2e-rejudge-verdict.mjs",
+    "e2e:rule-safety-production": "node scripts/e2e-rule-safety-production.mjs",
     "e2e:real-video-robustness": "node scripts/e2e-real-video-robustness.mjs",
     "e2e:protocol-compile-matrix": "node scripts/e2e-protocol-compile-matrix.mjs",
     "e2e:plank-video-settlement": "node scripts/e2e-plank-video-settlement.mjs",
