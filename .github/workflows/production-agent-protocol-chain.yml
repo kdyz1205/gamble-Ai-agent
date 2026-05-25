@@ -24,6 +24,8 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
+      - name: Prove agent compile-to-publish chain
+        run: npm run e2e:agent-compile-publish
       - name: Prove agent protocol-chain tools
         run: npm run e2e:agent-tool-guardrails
       - name: Prove agent judge-to-settlement chain
