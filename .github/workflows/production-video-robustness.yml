@@ -28,8 +28,8 @@ jobs:
       - name: Prove production video robustness gates
         env:
           E2E_BASE_URL: https://gamble-ai-agent.vercel.app
-          E2E_JUDGE_PROVIDER: openai
-          E2E_JUDGE_MODEL: gpt-4o
+          E2E_JUDGE_PROVIDER: ${{ vars.E2E_JUDGE_PROVIDER || 'openai' }}
+          E2E_JUDGE_MODEL: ${{ vars.E2E_JUDGE_MODEL || 'gpt-4o' }}
           E2E_COMMIT_SHA: ${{ github.sha }}
           E2E_COMPACT_SUMMARY: "1"
           RUN_ROBUSTNESS_CASES: ${{ github.event.inputs.cases || '' }}
