@@ -637,6 +637,35 @@ function compactVisionRetryImages(images: JudgeVisionImage[]): JudgeVisionImage[
   return [0, 1, 2, 3].map((i) => images[Math.round((i * (images.length - 1)) / 3)]);
 }
 
+function visionFallbackModel(providerId: string, primaryModel: string) {
+  const def = getProviderById(providerId);
+  if (providerId === "openai") return process.env.OPENAI_JUDGE_MODEL || "gpt-4o";
+  if (providerId === "google") return "gemini-2.0-flash";
+  if (providerId === "anthropic") return process.env.ANTHROPIC_JUDGE_MODEL || def?.defaultModel || "claude-sonnet-4-20250514";
+  if (providerId === "xai") return "grok-2-vision-latest";
+  if (providerId === "local_ollama") return process.env.LOCAL_VISION_MODEL || "llama3.2-vision:latest";
+  return def?.defaultModel || primaryModel;
+}
+
+function configuredVisionJudgeAttempts(primaryProviderId: string, primaryModel: string, needsVision: boolean) {
+  const attempts: Array<{ providerId: string; model: string; role: "primary" | "fallback" }> = [
+    { providerId: primaryProviderId, model: primaryModel, role: "primary" },
+  ];
+  if (!needsVision) return attempts;
+
+  const configuredOrder =
+    process.env.JUDGE_VISION_FALLBACK_PROVIDERS
+      ?.split(",")
+      .map((providerId) => providerId.trim())
+      .filter(Boolean) ?? ["google", "anthropic", "openai", "xai", "local_ollama"];
+  for (const providerId of configuredOrder) {
+    if (providerId === primaryProviderId) continue;
+    if (!getProviderById(providerId) || !isProviderConfigured(providerId)) continue;
+    attempts.push({ providerId, model: visionFallbackModel(providerId, primaryModel), role: "fallback" });
+  }
+  return attempts;
+}
+
 function unclearVideoMetrics(
   framesInspected: number,
   rules: string | null | undefined,
@@ -1593,7 +1622,9 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
 
   // One-shot vision call, with optional low-confidence escalation to a bigger model
   // in the same family. Default path: gpt-4o-mini (fast/cheap). Escalation: gpt-4o.
-  const runJudge = async (modelName: string): Promise<{
+  let lastJudgeFailure: { providerId: string; model: string; error: string } | null = null;
+
+  const runJudge = async (attempt: { providerId: string; model: string; role: "primary" | "fallback" }): Promise<{
     winner: "A" | "B" | null;
     reasoning: string;
     confidence: number;
@@ -1607,8 +1638,8 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     const callJudgeModel = async (imagesForCall: JudgeVisionImage[]) => {
       return imagesForCall.length > 0
         ? await completeOracleJudgeVisionWithMetadata({
-            providerId: params.providerId,
-            model: modelName,
+            providerId: attempt.providerId,
+            model: attempt.model,
             system,
             userText,
             images: imagesForCall,
@@ -1616,8 +1647,8 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             temperature: 0.1,
           })
         : await completeOraclePromptWithMetadata({
-            providerId: params.providerId,
-            model: modelName,
+            providerId: attempt.providerId,
+            model: attempt.model,
             system,
             user: userText,
             maxTokens: 1800,
@@ -1645,8 +1676,8 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       if (!parsedUnknown) {
         const reason = "Vision judge returned no usable JSON verdict.";
         console.warn("[judgeChallenge] LLM judge returned no JSON object", {
-          providerId: params.providerId,
-          model: modelName,
+          providerId: attempt.providerId,
+          model: attempt.model,
           visualFrames: visualFrameCount,
           sample: text.slice(0, 300),
         });
@@ -1690,11 +1721,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       const completion = await callJudgeModel(allVisuals);
       return parseCompletion(completion, allVisuals.length);
     } catch (err) {
+      const error = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
+      lastJudgeFailure = { providerId: attempt.providerId, model: attempt.model, error };
       console.warn("[judgeChallenge] LLM judge call failed", {
-        providerId: params.providerId,
-        model: modelName,
+        providerId: attempt.providerId,
+        model: attempt.model,
+        role: attempt.role,
         visualFrames: allVisuals.length,
-        error: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+        error,
       });
       const compactVisuals = compactVisionRetryImages(allVisuals);
       if (compactVisuals.length > 0 && compactVisuals.length < allVisuals.length) {
@@ -1702,11 +1736,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           const completion = await callJudgeModel(compactVisuals);
           return parseCompletion(completion, compactVisuals.length);
         } catch (retryErr) {
+          const retryError = retryErr instanceof Error ? retryErr.message.slice(0, 500) : String(retryErr).slice(0, 500);
+          lastJudgeFailure = { providerId: attempt.providerId, model: attempt.model, error: retryError };
           console.warn("[judgeChallenge] compact vision judge retry failed", {
-            providerId: params.providerId,
-            model: modelName,
+            providerId: attempt.providerId,
+            model: attempt.model,
+            role: attempt.role,
             visualFrames: compactVisuals.length,
-            error: retryErr instanceof Error ? retryErr.message.slice(0, 500) : String(retryErr).slice(0, 500),
+            error: retryError,
           });
         }
       }
@@ -1714,14 +1751,21 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     }
   };
 
-  let parsedResult = await runJudge(params.model);
+  const judgeAttempts = configuredVisionJudgeAttempts(params.providerId, params.model, allVisuals.length > 0);
+  let parsedResult: Awaited<ReturnType<typeof runJudge>> = null;
+  for (const attempt of judgeAttempts) {
+    parsedResult = await runJudge(attempt);
+    if (parsedResult) break;
+  }
 
   // Low-confidence escalation: if the fast model hedged (< 0.70), retry once on
   // the flagship variant in the same family. Covers the most common accuracy
   // tradeoff (mini → flagship) without doubling every call.
-  const escalated = escalateModelForLowConfidence(params.providerId, params.model, parsedResult?.confidence);
+  const escalatedProviderId = parsedResult?.providerCall?.providerId ?? params.providerId;
+  const escalatedModel = parsedResult?.providerCall?.model ?? params.model;
+  const escalated = escalateModelForLowConfidence(escalatedProviderId, escalatedModel, parsedResult?.confidence);
   if (escalated) {
-    const retry = await runJudge(escalated);
+    const retry = await runJudge({ providerId: escalatedProviderId, model: escalated, role: "primary" });
     // Keep the retry only if it came back with meaningfully higher confidence.
     if (retry && retry.confidence > (parsedResult?.confidence ?? 0)) {
       parsedResult = retry;
@@ -1770,7 +1814,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     };
   }
 
-  return judgeChallengeFallback(title, evidenceA!, evidenceB, participantAId, participantBId);
+  return judgeChallengeFallback(title, evidenceA!, evidenceB, participantAId, participantBId, lastJudgeFailure);
 }
 
 /**
@@ -1900,7 +1944,11 @@ function judgeChallengeFallback(
   _evidenceB: { description: string | null; type: string } | null,
   _participantAId: string,
   _participantBId: string | null,
+  failure?: { providerId: string; model: string; error: string } | null,
 ): JudgmentResult {
+  const failureIssue = failure
+    ? `AI provider call failed (${failure.providerId}/${failure.model}): ${failure.error}`
+    : "AI judge returned malformed JSON or provider call failed.";
   return {
     winnerId: null,
     // Below both the 0.70 escalation trigger and the 0.85 auto-settle gate
@@ -1909,10 +1957,10 @@ function judgeChallengeFallback(
     evidenceQuality: "unclear",
     recommendation: "needs_review",
     settlementRecommendation: "needs_review",
-    blockingIssues: ["AI judge returned malformed JSON or provider call failed."],
+    blockingIssues: [failureIssue],
     source: "fallback",
     reasoning:
-      `AI was unable to evaluate "${challengeTitle}" (primary and escalated model calls both failed or returned malformed JSON). ` +
+      `AI was unable to evaluate "${challengeTitle}" (${failureIssue}). ` +
       `Marking this challenge as needing manual review. No credits will move until the creator explicitly confirms a winner.`,
   };
 }

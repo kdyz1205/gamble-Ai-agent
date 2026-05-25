@@ -745,6 +745,8 @@ export async function POST(
         ? `Oracle - ${result.providerCall?.providerLabel ?? "public oracle"} ${result.providerCall?.model ?? ""}`.trim()
       : result.source === "fallback"
         ? "Fallback - no-settlement-v1"
+      : result.providerCall
+        ? `${result.providerCall.providerLabel} Â· ${result.providerCall.model}`
         : aiModelLabel;
   const providerCallAudit = result.providerCall ? JSON.parse(JSON.stringify(result.providerCall)) : null;
   await logAiUsage({
