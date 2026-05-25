@@ -20,7 +20,7 @@ import { logAiUsage } from "@/lib/ai-usage-log";
 import { completeOraclePromptWithMetadata, type LlmCallMetadata } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
-import { routeAgentTool, routeAgentTurn } from "./agent-graph";
+import { routeAgentTool, routeAgentTurn, routeJudgmentOutcome } from "./agent-graph";
 import { executeAgentTool } from "./tools";
 import {
   emptyDraftState,
@@ -213,7 +213,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     // tool), do a grounded 2nd turn so the reply reflects real data. For
     // clean `call_tool` responses we trust the first reply (usually a short
     // "doing it now…" placeholder before the client renders toolResult).
-    agentGraph = routeAgentTool(validated.toolName, {
+    agentGraph = judgmentGraphForToolResult(validated.toolName, result.data) ?? routeAgentTool(validated.toolName, {
       source: "/api/agent/respond",
       draftState: finalDraftState,
       toolOk: result.ok,
@@ -349,6 +349,49 @@ function extractToolResultStatus(data: unknown): string | null {
   const record = data as Record<string, unknown>;
   const status = record.status ?? record.finalStatus;
   return typeof status === "string" ? status : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function stringArrayValue(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function judgmentGraphForToolResult(toolName: AgentToolName | null, data: unknown) {
+  if (toolName !== "runProtocolJudge" && toolName !== "runVisionJudge") return null;
+  const record = objectValue(data);
+  if (!record) return null;
+  const settlementEligibility = objectValue(record.settlementEligibility);
+  const eligible = settlementEligibility
+    ? settlementEligibility.eligible === true
+    : Boolean(record.winnerId && numberOrNull(record.confidence) !== null && (numberOrNull(record.confidence) ?? 0) >= 0.85);
+  const blockingIssues = [
+    ...stringArrayValue(record.blockingIssues),
+    ...stringArrayValue(settlementEligibility?.blockingIssues),
+  ];
+  return routeJudgmentOutcome({
+    source: "/api/agent/respond",
+    verdictStatus: stringOrNull(record.status),
+    winnerId: stringOrNull(record.winnerId),
+    confidence: numberOrNull(record.confidence),
+    recommendation: stringOrNull(record.recommendation),
+    autoSettleEligible: eligible,
+    blockingIssues,
+  });
 }
 
 function mergeSafetyNotes(prev: string[], next: unknown): string[] {
