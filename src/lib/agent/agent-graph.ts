@@ -158,10 +158,10 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
   },
   outcome_judge: {
     status: "runtime_backed",
-    summary: "Text, oracle, and vision judge paths exist; fixture video settlement is proven, arbitrary real phone video is not.",
-    evidence: ["src/app/api/challenges/[id]/judge/route.ts", "src/lib/ai-engine.ts"],
-    missing: ["No reliable proof that arbitrary real push-up videos are counted correctly across bad angles/light/crops."],
-    nextProof: "Pass e2e-real-video-robustness with source=vision_llm and no visible answer labels.",
+    summary: "Text, oracle, and vision judge paths exist; production robustness now covers labeled and unlabeled generated phone-style video fixtures, but arbitrary real human phone video is not proven.",
+    evidence: ["src/app/api/challenges/[id]/judge/route.ts", "src/lib/ai-engine.ts", "scripts/e2e-real-video-robustness.mjs", ".github/workflows/production-video-robustness.yml"],
+    missing: ["No reliable proof that arbitrary real human push-up videos are counted correctly across real-world bodies, angles, lighting, and camera motion."],
+    nextProof: "Run a real-human phone footage suite: clean, bad angle, cropped, low light, tie, non-push-up, and looped media with no answer labels.",
   },
   settlement_gate: {
     status: "production_proven",
@@ -185,11 +185,11 @@ export const AGENT_READINESS: Record<AgentNodeId, AgentReadiness> = {
     nextProof: "Run production rejudge E2E: inconclusive verdict -> explicit rejudge -> stronger model -> settled/manual_review_required with audit trace.",
   },
   manual_review: {
-    status: "runtime_backed",
-    summary: "Manual review has dispute, queue, policy, and resolve APIs with audited winner/refund/void outcomes.",
-    evidence: ["src/lib/manual-review-policy.ts", "src/app/api/manual-review/queue/route.ts", "src/app/manual-review/page.tsx", "src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts", "scripts/smoke-manual-review-policy.ts"],
-    missing: ["No reviewer assignment, SLA, appeal flow, or latest production dispute -> resolve ledger proof."],
-    nextProof: "Run dispute -> manual-review queue -> resolve -> ledger proof in production-equivalent E2E.",
+    status: "production_proven",
+    summary: "Manual review has dispute, queue, resolve, duplicate-resolution guard, and production ledger proof for overriding an AI verdict into a settled winner.",
+    evidence: ["src/lib/manual-review-policy.ts", "src/app/api/manual-review/queue/route.ts", "src/app/manual-review/page.tsx", "src/app/api/challenges/[id]/manual-resolve/route.ts", "src/app/api/challenges/[id]/dispute/route.ts", "scripts/e2e-manual-review-resolution.mjs"],
+    missing: ["No reviewer assignment, SLA, appeal flow, or multi-reviewer audit workflow."],
+    nextProof: "Add reviewer assignment/SLA/appeal proof after the MVP manual override path remains stable.",
   },
 };
 
