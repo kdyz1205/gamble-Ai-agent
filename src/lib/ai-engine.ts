@@ -630,6 +630,36 @@ function coerceVideoMetrics(
   };
 }
 
+function unclearVideoMetrics(
+  framesInspected: number,
+  rules: string | null | undefined,
+  reason: string,
+): VideoJudgmentMetrics {
+  const participant = (): VideoJudgmentParticipantMetrics => ({
+    validRepCount: null,
+    holdDurationSec: null,
+    invalidRepNotes: [],
+    observedPosition: "unclear",
+    fullDurationCovered: null,
+    livenessPhraseVisible: null,
+    fullBodyVisible: null,
+    continuousAttemptLikely: null,
+    videoTooShort: null,
+    suspectedEditingOrLoop: null,
+    antiCheatFlags: ["vision_verdict_unusable"],
+    reasonForManualReview: reason,
+    unclearReason: reason,
+  });
+
+  return {
+    participantA: participant(),
+    participantB: participant(),
+    validRepDefinition: (rules || "Valid repetitions must match the challenge rules.").slice(0, 500),
+    framesInspected,
+    judgingMethod: "Vision-capable judge received sampled video frames, but the model response was not usable as a structured verdict.",
+  };
+}
+
 function parseRequiredDurationSec(...parts: Array<string | null | undefined>): number | null {
   const text = parts.filter(Boolean).join("\n").toLowerCase();
   if (!text) return null;
@@ -1587,17 +1617,32 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             temperature: 0.1,
           });
       const text = completion.text;
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      const unusableVisionVerdict = (reason: string) => {
+        if (allVisuals.length === 0) return null;
+        return {
+          winner: null,
+          reasoning: `${reason} Manual review is required; no automatic winner settlement is allowed.`,
+          confidence: 0.4,
+          evidenceQuality: "unclear" as const,
+          recommendation: "needs_review" as const,
+          blockingIssues: [reason],
+          videoMetrics: unclearVideoMetrics(allVisuals.length, rules || title, reason),
+          providerCall: completion.metadata,
+        };
+      };
+
+      const parsedUnknown = safeParseJson(text);
+      if (!parsedUnknown) {
+        const reason = "Vision judge returned no usable JSON verdict.";
         console.warn("[judgeChallenge] LLM judge returned no JSON object", {
           providerId: params.providerId,
           model: modelName,
           visualFrames: allVisuals.length,
           sample: text.slice(0, 300),
         });
-        return null;
+        return unusableVisionVerdict(reason);
       }
-      const parsed = (safeParseJson(text) ?? JSON.parse(jsonMatch[0])) as {
+      const parsed = parsedUnknown as {
         winner?: unknown;
         reasoning?: unknown;
         confidence?: unknown;
@@ -1608,8 +1653,12 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         blockingIssues?: unknown;
         videoMetrics?: unknown;
       };
-      if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) return null;
-      if (typeof parsed.reasoning !== "string" || typeof parsed.confidence !== "number") return null;
+      if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) {
+        return unusableVisionVerdict("Vision judge returned an invalid winner schema.");
+      }
+      if (typeof parsed.reasoning !== "string" || typeof parsed.confidence !== "number") {
+        return unusableVisionVerdict("Vision judge returned an invalid verdict schema.");
+      }
       return {
         winner: parsed.winner as "A" | "B" | null,
         reasoning: parsed.reasoning,
