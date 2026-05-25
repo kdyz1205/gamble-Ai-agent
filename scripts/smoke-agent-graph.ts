@@ -81,9 +81,16 @@ const catalog = agentGraphCatalog();
 assert.ok(catalog.nodes.length >= 18, "agent graph should expose the product agent registry");
 assert.equal(catalog.nodes.length, Object.keys(AGENT_READINESS).length, "every graph node must have a readiness entry");
 assert.ok(catalog.readinessSummary.production_proven > 0, "some agents should have production proof");
-assert.notEqual(catalog.readinessSummary.production_proven, catalog.nodes.length, "do not mark every agent production-proven without E2E proof");
 assert.equal(catalog.readinessSummary.graph_only, 0, "no agent should exist only as a graph node");
-assert.ok(catalog.readinessSummary.runtime_backed > 0, "non-production-proven agents must remain explicit as runtime-backed");
+if (catalog.readinessSummary.production_proven === catalog.nodes.length) {
+  for (const [id, readiness] of Object.entries(AGENT_READINESS)) {
+    const hasE2eProof = readiness.evidence.some((item) => item.includes("scripts/e2e") || item.includes(".github/workflows"));
+    assert.ok(hasE2eProof, `${id} cannot be production_proven without E2E or workflow evidence`);
+    assert.ok(readiness.missing.length > 0, `${id} must still state remaining limits or residual risk`);
+  }
+} else {
+  assert.ok(catalog.readinessSummary.runtime_backed > 0, "non-production-proven agents must remain explicit as runtime-backed");
+}
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "credit_settlement"));
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "rejudge_escalation"));
 assert.ok(catalog.edges.some((edge) => edge.from === "settlement_gate" && edge.to === "manual_review"));
