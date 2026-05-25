@@ -99,6 +99,21 @@ function joinSentences(first: string, second: string) {
   return `${a}. ${b}`;
 }
 
+function compactDeadlineLabel(timeLimit: string | undefined, deadlineLabel: string | null) {
+  if (!deadlineLabel) return null;
+  // Old AI drafts sometimes stored placeholder absolute dates that are now in the past.
+  // If we already have a human-readable time rule, keep the compact card focused on that
+  // instead of appending a confusing "Deadline passed" artifact.
+  if (timeLimit && deadlineLabel === "Deadline passed") return null;
+  return deadlineLabel;
+}
+
+function compactSettlementSummary(challenge: ChallengeLike) {
+  const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
+  if (stake <= 0) return "No credits move.";
+  return `${stake} ${challenge.stakeToken || "credits"} escrowed. Winner gets the pool.`;
+}
+
 export function parseChallengeRules(challenge: ChallengeLike): ChallengeRuleCard[] {
   const cards: ChallengeRuleCard[] = [];
   const seen = new Set<string>();
@@ -155,12 +170,12 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     pickCard(cards, ["Recording standard"])?.value,
   ]) || (challenge.evidenceType ? challenge.evidenceType.replace(/_/g, " ") : "Required evidence");
   const timeLimit = pickCard(cards, ["Time limit"])?.value;
-  const deadlineLabel = formatChallengeDeadline(challenge.deadline);
+  const deadlineLabel = compactDeadlineLabel(timeLimit, formatChallengeDeadline(challenge.deadline));
   const time = timeLimit && deadlineLabel
     ? joinSentences(timeLimit, deadlineLabel)
     : timeLimit || deadlineLabel || challenge.proofWindow || "Before the challenge window closes";
   const dispute = pickCard(cards, ["Dispute window"])?.value;
-  const settlement = pickCard(cards, ["Settlement"])?.value;
+  const settlement = compactSettlementSummary(challenge);
   const review = dispute && settlement
     ? joinSentences(dispute, settlement)
     : dispute || settlement || settlementSummary(challenge);

@@ -33,6 +33,7 @@
     "e2e:agent-review-path": "node scripts/e2e-agent-review-path.mjs",
     "smoke:payment-policy": "tsx scripts/smoke-payment-policy.ts",
     "smoke:auth-session": "tsx scripts/smoke-auth-session.ts",
+    "smoke:challenge-display": "tsx scripts/smoke-challenge-display.ts",
     "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts",
     "smoke:weather-oracle": "tsx scripts/smoke-weather-oracle.ts",
     "smoke:data-source-registry": "tsx scripts/smoke-data-source-registry.ts",
