@@ -186,6 +186,32 @@ function normalizeBindings(value: unknown): ProtocolSpecV2["identityProtocol"]["
   return bindings;
 }
 
+function inferEvidenceModeFromText(text: string): ProtocolSpecV2["evidenceProtocol"]["mode"] {
+  const normalized = text.toLowerCase();
+  if (/\b(same[-_ ]?camera|same[-_ ]?device|one phone|shared video|same room|one device)\b/.test(normalized)) return "same_camera_video";
+  if (/\b(live host|live-host|host video|livestream|live stream)\b/.test(normalized)) return "live_host_video";
+  if (/\b(video|recording|recorded|camera|clip|film|upload a video|phone video)\b/.test(normalized)) return "separate_video";
+  if (/\b(photo|picture|image|snapshot)\b/.test(normalized)) return "photo";
+  if (/\b(screenshot|screen capture)\b/.test(normalized)) return "screenshot";
+  if (/\b(gps|location|check[-_ ]?in|geofence|geo)\b/.test(normalized)) return "gps";
+  if (/\b(receipt|invoice|ticket)\b/.test(normalized)) return "receipt";
+  if (/\b(oracle|public data|api data|price feed|market data|registry|weather)\b/.test(normalized)) return "public_oracle";
+  if (/\b(app metric|platform metric|scoreboard|game score|metadata answer|text answer)\b/.test(normalized)) return "platform_metric";
+  return "manual_review";
+}
+
+function inferredSettlementModeForEvidence(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]): ProtocolSpecV2["settlementProtocol"]["mode"] {
+  if (mode === "same_camera_video" || mode === "separate_video" || mode === "live_host_video" || mode === "photo") return "auto_ai_vision";
+  if (mode === "public_oracle" || mode === "gps" || mode === "platform_metric") return "auto_oracle";
+  return "manual_review";
+}
+
+function inferredIdentityModeForEvidence(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]): ProtocolSpecV2["identityProtocol"]["mode"] {
+  if (mode === "same_camera_video") return "left_right_assignment";
+  if (mode === "separate_video" || mode === "live_host_video" || mode === "photo") return "liveness_phrase";
+  return "account_only";
+}
+
 function unwrapProtocolRecord(input: unknown): Record<string, unknown> | null {
   const root = asRecord(input);
   if (!root) return null;
@@ -219,14 +245,22 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
   const summary = nonEmptyString(pickField(candidate, "userFacingSummary", "user_facing_summary", "summary", "description", "objective"));
   if (!title || !summary) return null;
 
-  const evidence = asRecord(pickField(candidate, "evidenceProtocol", "evidence_protocol", "evidence"));
-  const identity = asRecord(pickField(candidate, "identityProtocol", "identity_protocol", "identity"));
-  const location = asRecord(pickField(candidate, "locationProtocol", "location_protocol", "location"));
-  const timing = asRecord(pickField(candidate, "timingProtocol", "timing_protocol", "timing"));
-  const settlement = asRecord(pickField(candidate, "settlementProtocol", "settlement_protocol", "settlement"));
-  const risk = asRecord(pickField(candidate, "riskPolicy", "risk_policy", "risk"));
-  const budget = asRecord(pickField(candidate, "aiBudgetPolicy", "ai_budget_policy", "budget", "aiBudget"));
-  if (!evidence || !identity || !location || !timing || !settlement || !risk || !budget) return null;
+  const evidence = asRecord(pickField(candidate, "evidenceProtocol", "evidence_protocol", "evidence")) ?? {};
+  const identity = asRecord(pickField(candidate, "identityProtocol", "identity_protocol", "identity")) ?? {};
+  const location = asRecord(pickField(candidate, "locationProtocol", "location_protocol", "location")) ?? {};
+  const timing = asRecord(pickField(candidate, "timingProtocol", "timing_protocol", "timing")) ?? {};
+  const settlement = asRecord(pickField(candidate, "settlementProtocol", "settlement_protocol", "settlement")) ?? {};
+  const risk = asRecord(pickField(candidate, "riskPolicy", "risk_policy", "risk")) ?? {};
+  const budget = asRecord(pickField(candidate, "aiBudgetPolicy", "ai_budget_policy", "budget", "aiBudget")) ?? {};
+  const inferenceText = [
+    title,
+    summary,
+    pickField(candidate, "rawPrompt", "raw_prompt"),
+    pickField(candidate, "rules", "rule", "instructions"),
+    pickField(candidate, "evidenceMode", "evidence_mode", "requiredEvidence", "required_evidence"),
+    pickField(evidence, "mode", "evidenceMode", "evidence_mode", "requiredEvidence", "required_evidence"),
+    pickField(settlement, "mode", "settlementMode", "settlement_mode", "winCondition", "win_condition"),
+  ].filter(Boolean).map(String).join(" ");
 
   const evidenceMode = normalizedEnum(pickField(evidence, "mode", "evidenceMode", "evidence_mode"), EVIDENCE_MODES, {
     video: "separate_video",
@@ -252,7 +286,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     public_data: "public_oracle",
     data_source: "public_oracle",
     app_metric: "platform_metric",
-  });
+  }, inferEvidenceModeFromText(inferenceText)) ?? "manual_review";
   const identityMode = normalizedEnum(pickField(identity, "mode", "identityMode", "identity_mode"), IDENTITY_MODES, {
     none: "account_only",
     not_required: "account_only",
@@ -267,7 +301,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     qr: "qr_participant_card",
     qr_code: "qr_participant_card",
     manual: "manual_identity_review",
-  });
+  }, inferredIdentityModeForEvidence(evidenceMode)) ?? inferredIdentityModeForEvidence(evidenceMode);
   const locationMode = normalizedEnum(pickField(location, "mode", "locationMode", "location_mode"), LOCATION_MODES, {
     no_location: "none",
     not_required: "none",
@@ -277,7 +311,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     same_place: "same_place_required",
     geofence: "geo_fenced_zone",
     mass_event: "mass_local_event",
-  });
+  }, "none") ?? "none";
   const settlementMode = normalizedEnum(pickField(settlement, "mode", "settlementMode", "settlement_mode"), SETTLEMENT_MODES, {
     oracle: "auto_oracle",
     public_oracle: "auto_oracle",
@@ -293,8 +327,7 @@ function normalizeProtocolCandidate(input: unknown): ProtocolSpecV2 | null {
     manual: "manual_review",
     human_review: "manual_review",
     blocked_by_policy: "blocked",
-  });
-  if (!evidenceMode || !identityMode || !locationMode || !settlementMode) return null;
+  }, inferredSettlementModeForEvidence(evidenceMode)) ?? inferredSettlementModeForEvidence(evidenceMode);
 
   return {
     version: "2.0",
