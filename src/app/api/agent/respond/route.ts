@@ -152,19 +152,100 @@ function extractChallengeId(message: string) {
   return message.match(/\b(c[a-z0-9]{12,40})\b/i)?.[1] ?? null;
 }
 
-function directToolFromMessage(message: string, intentRoute: string): { toolName: AgentToolName; challengeId: string } | null {
+function extractFirstJsonObject(message: string) {
+  const start = message.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < message.length; i += 1) {
+    const char = message[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(message.slice(start, i + 1));
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed as Record<string, unknown>
+            : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function extractLabeledText(message: string, label: string) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = message.match(new RegExp(`${escaped}\\s*:\\s*([^\\n]+)`, "i"));
+  return match?.[1]?.trim().replace(/[.;]\s*$/g, "") || null;
+}
+
+function uploadEvidenceArgsFromMessage(message: string, challengeId: string): Record<string, unknown> | null {
+  const text = message.toLowerCase();
+  const looksLikeUpload =
+    /\b(upload|submit|evidence|proof|answer)\b/i.test(text) ||
+    /(\u63d0\u4ea4|\u4e0a\u4f20|\u4e0a\u50b3|\u8bc1\u636e|\u8b49\u64da|\u7b54\u6848)/.test(message);
+  if (!looksLikeUpload) return null;
+
+  const metadata = extractFirstJsonObject(message);
+  const answer = metadata && typeof metadata.answer === "string"
+    ? metadata.answer
+    : (message.match(/\bANSWER\s*:\s*([^\n.;]+)/i)?.[1]?.trim() ?? null);
+  const description =
+    extractLabeledText(message, "Description") ||
+    (answer ? `ANSWER: ${answer}` : message.slice(0, 1200));
+  const url = message.match(/https?:\/\/[^\s)]+/i)?.[0]?.replace(/[.,;]+$/g, "") ?? null;
+  const recordingSessionId = message.match(/\brecordingSessionId\s*[:=]\s*([a-z0-9_-]+)/i)?.[1] ?? null;
+  const type = /\b(video|mp4|webm|mov)\b/i.test(message)
+    ? "video"
+    : /\b(photo|image|jpg|jpeg|png)\b/i.test(message)
+      ? "photo"
+      : "text";
+
+  return {
+    challengeId,
+    type,
+    description,
+    ...(url ? { url } : {}),
+    ...(metadata ? { metadata } : answer ? { metadata: { answer } } : {}),
+    ...(recordingSessionId ? { recordingSessionId } : {}),
+  };
+}
+
+function directToolFromMessage(message: string, intentRoute: string): { toolName: AgentToolName; args: Record<string, unknown> } | null {
   const challengeId = extractChallengeId(message);
   if (!challengeId) return null;
 
   const text = message.toLowerCase();
+  const uploadArgs = uploadEvidenceArgsFromMessage(message, challengeId);
+  if (uploadArgs) {
+    return { toolName: "uploadEvidence", args: uploadArgs };
+  }
   if (/\b(confirm|finalize|settle credits|confirm verdict)\b|\u786e\u8ba4|\u7ed3\u7b97/.test(text)) {
-    return { toolName: "confirmVerdict", challengeId };
+    return { toolName: "confirmVerdict", args: { challengeId } };
   }
   if (
     intentRoute === "outcome_judge" ||
     /\b(run protocol judge|judge|verdict|who won|winner|rejudge)\b|\u5224\u5b9a|\u8c01\u8d62|\u91cd\u65b0\u5224/.test(text)
   ) {
-    return { toolName: "runProtocolJudge", challengeId };
+    return { toolName: "runProtocolJudge", args: { challengeId } };
   }
   return null;
 }
@@ -267,7 +348,7 @@ export async function POST(req: NextRequest) {
         providerId,
         model,
       },
-      { challengeId: directTool.challengeId },
+      directTool.args,
     );
     const toolResult = result.ok ? result.data : undefined;
     const resultStatus = toolResult && typeof toolResult === "object" && "status" in toolResult
@@ -277,12 +358,14 @@ export async function POST(req: NextRequest) {
       userVisibleReply: result.ok
         ? directTool.toolName === "confirmVerdict"
           ? "Verdict confirmed through the settlement guardrail."
-          : "Protocol judge finished. The backend result is attached."
+          : directTool.toolName === "uploadEvidence"
+            ? "Evidence submitted through the protocol tool."
+            : "Protocol judge finished. The backend result is attached."
         : `I could not run ${directTool.toolName}: ${result.error || "tool failed"}`,
       agentAction: "call_tool",
       draftPatch: {},
       toolName: directTool.toolName,
-      toolArgs: { challengeId: directTool.challengeId },
+      toolArgs: directTool.args,
       draftState,
       toolResult,
       toolError: result.ok ? undefined : result.error,
