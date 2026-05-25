@@ -235,6 +235,39 @@ function addUniqueText(items: Iterable<string>, additions: string[]) {
   return [...out];
 }
 
+function hardRiskReasonText(protocol: ProtocolSpecV2) {
+  return [
+    protocol.rawPrompt,
+    protocol.riskPolicy.blockedReason,
+    protocol.riskPolicy.safeAlternative,
+    ...protocol.riskPolicy.warnings,
+    ...protocol.riskPolicy.restrictions,
+  ].filter(Boolean).join("\n").toLowerCase();
+}
+
+function hasHardRiskReason(protocol: ProtocolSpecV2) {
+  const text = hardRiskReasonText(protocol);
+  return /\b(violence|assault|fight|punch|weapon|self[- ]?harm|suicide|drug|alcohol|beer|vodka|non[- ]?consensual|without consent|harass|stalk|illegal|steal|hack account|coin flip|dice|roulette|lottery|casino|cash payout|withdraw cash|real money random)\b/.test(text) ||
+    /(打架|殴打|攻击|自残|自杀|毒品|喝酒|白酒|啤酒|偷拍|未经同意|骚扰|跟踪|违法|非法|盗窃|硬币|骰子|彩票|赌场|提现吗|现金赔付)/.test(text);
+}
+
+function massCrowdRiskPolicy(protocol: ProtocolSpecV2): ProtocolSpecV2["riskPolicy"] {
+  const { blockedReason: _blockedReason, safeAlternative: _safeAlternative, ...policy } = protocol.riskPolicy;
+  const riskLevel = policy.riskLevel === "blocked" || protocol.riskPolicy.allowed === false ? "medium" : policy.riskLevel;
+  return {
+    ...policy,
+    allowed: true,
+    riskLevel,
+    warnings: addUniqueText(policy.warnings, [
+      "Large events use leaderboard settlement and may require review for high stakes or unclear submissions.",
+    ]),
+    restrictions: addUniqueText(policy.restrictions, [
+      "Use internal credits/points only until event compliance and payout rules are separately approved.",
+      "Participant identity tickets and leaderboard audit logs are required before settlement.",
+    ]),
+  };
+}
+
 function hasExplicitCounterparty(rawPrompt: string) {
   const text = rawPrompt.toLowerCase();
   if (/\b(vs\.?|versus|against|opponent|rival|challenger)\b/.test(text)) return true;
@@ -362,6 +395,10 @@ function concreteRandomProtocol(rawPrompt: string, language: ProtocolSpecV2["lan
 
 function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const participantMode = inferParticipantModeFromPrompt(protocol.rawPrompt, protocol.participantMode);
+  const massCrowd = participantMode === "mass_crowd";
+  const riskPolicy = massCrowd && !hasHardRiskReason(protocol)
+    ? massCrowdRiskPolicy(protocol)
+    : protocol.riskPolicy;
   const objectiveTextAnswer = isObjectiveTextAnswerProtocol(protocol);
   const expectedAnswer = extractObjectiveExpectedAnswer(protocol);
   const sourceEvidenceMode =
@@ -373,10 +410,10 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const oracleEvidence = evidenceMode === "gps" ||
     evidenceMode === "public_oracle";
   const sameCamera = evidenceMode === "same_camera_video";
-  const riskBlocked = !protocol.riskPolicy.allowed || protocol.riskPolicy.riskLevel === "blocked";
+  const riskBlocked = !riskPolicy.allowed || riskPolicy.riskLevel === "blocked";
   const desiredSettlementMode: ProtocolSpecV2["settlementProtocol"]["mode"] =
     riskBlocked ? "blocked" :
-      participantMode === "mass_crowd" ? "leaderboard" :
+      massCrowd ? "leaderboard" :
         visionEvidence ? "auto_ai_vision" :
           oracleEvidence ? "auto_oracle" :
             protocol.settlementProtocol.mode;
@@ -493,7 +530,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     identityProtocol: {
       ...protocol.identityProtocol,
       required: identityRequired,
-      mode: objectiveTextAnswer ? "account_only" : sameCamera ? "left_right_assignment" : visionEvidence && (protocol.identityProtocol.mode === "account_only" || participantMode === "solo")
+      mode: objectiveTextAnswer ? "account_only" : massCrowd ? "group_lobby_ticket" : sameCamera ? "left_right_assignment" : visionEvidence && (protocol.identityProtocol.mode === "account_only" || participantMode === "solo")
         ? "liveness_phrase"
         : protocol.identityProtocol.mode,
       autoSettlementRequiresIdentityConfidence: identityThreshold,
@@ -515,9 +552,10 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       autoSettleConfidenceThreshold: threshold,
       manualReviewTriggers: [...manualReviewTriggers],
     },
+    riskPolicy,
     aiBudgetPolicy: {
       ...protocol.aiBudgetPolicy,
-      estimatedCostTier: visionEvidence ? "medium" : protocol.aiBudgetPolicy.estimatedCostTier,
+      estimatedCostTier: massCrowd ? "high" : visionEvidence ? "medium" : protocol.aiBudgetPolicy.estimatedCostTier,
       maxVisionFrames: visionEvidence
         ? Math.min(18, Math.max(8, protocol.aiBudgetPolicy.maxVisionFrames || 12))
         : 0,
