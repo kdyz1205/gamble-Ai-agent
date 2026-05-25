@@ -185,6 +185,56 @@ function isVisionEvidenceMode(mode: ProtocolSpecV2["evidenceProtocol"]["mode"]) 
     mode === "photo";
 }
 
+function protocolTextForDetection(protocol: ProtocolSpecV2) {
+  return [
+    protocol.rawPrompt,
+    protocol.title,
+    protocol.userFacingSummary,
+    protocol.settlementProtocol.winCondition,
+    ...protocol.settlementProtocol.judgeInstructions,
+    ...protocol.evidenceProtocol.requiredEvidence,
+    ...protocol.evidenceProtocol.captureInstructions,
+    ...protocol.evidenceProtocol.requiredMetadata,
+  ].filter(Boolean).join("\n");
+}
+
+function extractObjectiveExpectedAnswer(protocol: ProtocolSpecV2) {
+  const match = protocolTextForDetection(protocol).match(/\b(?:expected[_ -]?answer|correct[_ -]?answer)\s*[:=]\s*([^\n\r;.]+)/i);
+  return match?.[1]?.trim() || null;
+}
+
+function isObjectiveTextAnswerProtocol(protocol: ProtocolSpecV2) {
+  const text = protocolTextForDetection(protocol).toLowerCase();
+  const mode = protocol.evidenceProtocol.mode;
+  const explicitlyTextAnswer =
+    Boolean(extractObjectiveExpectedAnswer(protocol)) ||
+    /\bmetadata\.answer\b/.test(text) ||
+    /\btext[- ]?answer\b/.test(text) ||
+    /\bsubmit(?:s| one)? text evidence\b/.test(text);
+  const mediaOrOracleMode =
+    isVisionEvidenceMode(mode) ||
+    mode === "screenshot" ||
+    mode === "receipt" ||
+    mode === "gps" ||
+    mode === "public_oracle";
+  return protocol.settlementProtocol.mode === "auto_ai_text" &&
+    explicitlyTextAnswer &&
+    !mediaOrOracleMode;
+}
+
+function addUniqueText(items: Iterable<string>, additions: string[]) {
+  const out = new Set<string>();
+  for (const item of items) {
+    const trimmed = item.trim();
+    if (trimmed) out.add(trimmed);
+  }
+  for (const item of additions) {
+    const trimmed = item.trim();
+    if (trimmed) out.add(trimmed);
+  }
+  return [...out];
+}
+
 function hasExplicitCounterparty(rawPrompt: string) {
   const text = rawPrompt.toLowerCase();
   if (/\b(vs\.?|versus|against|opponent|rival|challenger)\b/.test(text)) return true;
@@ -312,10 +362,13 @@ function concreteRandomProtocol(rawPrompt: string, language: ProtocolSpecV2["lan
 
 function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const participantMode = inferParticipantModeFromPrompt(protocol.rawPrompt, protocol.participantMode);
-  const evidenceMode =
+  const objectiveTextAnswer = isObjectiveTextAnswerProtocol(protocol);
+  const expectedAnswer = extractObjectiveExpectedAnswer(protocol);
+  const sourceEvidenceMode =
     participantMode === "solo" && protocol.evidenceProtocol.mode === "same_camera_video"
       ? "separate_video"
       : protocol.evidenceProtocol.mode;
+  const evidenceMode = objectiveTextAnswer ? "platform_metric" : sourceEvidenceMode;
   const visionEvidence = isVisionEvidenceMode(evidenceMode);
   const oracleEvidence = evidenceMode === "gps" ||
     evidenceMode === "public_oracle";
@@ -328,17 +381,32 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
           oracleEvidence ? "auto_oracle" :
             protocol.settlementProtocol.mode;
   const threshold = Math.max(0.85, Math.min(1, protocol.settlementProtocol.autoSettleConfidenceThreshold || 0.85));
-  const identityThreshold = Math.max(0.85, Math.min(1, protocol.identityProtocol.autoSettlementRequiresIdentityConfidence || 0.85));
+  const identityRequired = objectiveTextAnswer ? false : protocol.identityProtocol.required || visionEvidence;
+  const identityThreshold = objectiveTextAnswer
+    ? 0
+    : Math.max(0.85, Math.min(1, protocol.identityProtocol.autoSettlementRequiresIdentityConfidence || 0.85));
   const requiredMetadata = new Set(protocol.evidenceProtocol.requiredMetadata);
+  if (objectiveTextAnswer) {
+    requiredMetadata.add("answer");
+  }
   if (visionEvidence) {
     requiredMetadata.add("created_at");
     requiredMetadata.add("duration");
     requiredMetadata.add("file_hash");
     requiredMetadata.add("device_timestamp");
   }
-  const manualReviewTriggers = new Set(protocol.settlementProtocol.manualReviewTriggers.filter(Boolean));
-  manualReviewTriggers.add("Identity confidence below threshold.");
+  const manualReviewTriggers = new Set(
+    protocol.settlementProtocol.manualReviewTriggers
+      .filter(Boolean)
+      .filter((trigger) => !(objectiveTextAnswer && /identity/i.test(trigger))),
+  );
+  if (identityRequired) {
+    manualReviewTriggers.add("Identity confidence below threshold.");
+  }
   manualReviewTriggers.add("Evidence quality is unclear, insufficient, invalid, edited, or too short.");
+  if (objectiveTextAnswer) {
+    manualReviewTriggers.add("Both participants match or neither participant matches the expected answer.");
+  }
   if (visionEvidence) {
     manualReviewTriggers.add("Full body, liveness phrase, or continuous attempt cannot be verified.");
   }
@@ -347,17 +415,17 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     .filter((binding) => participantMode !== "solo" || binding.role !== "opponent")
     .map((binding) => ({
       ...binding,
-      expectedPosition: sameCamera
+      expectedPosition: objectiveTextAnswer ? "any" : sameCamera
         ? binding.role === "creator" ? "left" : binding.role === "opponent" ? "right" : binding.expectedPosition ?? "any"
         : "any",
-      requiredQrOrCode: binding.requiredQrOrCode || visionEvidence,
+      requiredQrOrCode: objectiveTextAnswer ? false : binding.requiredQrOrCode || visionEvidence,
     }));
   if (!participantBindings.some((binding) => binding.role === "creator")) {
     participantBindings.unshift({
       role: "creator",
       label: "Creator",
       expectedPosition: "any",
-      requiredQrOrCode: visionEvidence,
+      requiredQrOrCode: objectiveTextAnswer ? false : visionEvidence,
     });
   }
   if (participantMode === "head_to_head" && !participantBindings.some((binding) => binding.role === "opponent")) {
@@ -365,7 +433,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       role: "opponent",
       label: "Opponent",
       expectedPosition: sameCamera ? "right" : "any",
-      requiredQrOrCode: visionEvidence,
+      requiredQrOrCode: objectiveTextAnswer ? false : visionEvidence,
     });
   }
   if (
@@ -376,9 +444,35 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       role: "participant",
       label: participantMode === "public_market" ? "Market participant" : "Participant",
       expectedPosition: "any",
-      requiredQrOrCode: visionEvidence,
+      requiredQrOrCode: objectiveTextAnswer ? false : visionEvidence,
     });
   }
+  const requiredEvidence = objectiveTextAnswer
+    ? addUniqueText(protocol.evidenceProtocol.requiredEvidence, [
+      "Submit one text answer in the evidence description or metadata.answer.",
+    ])
+    : protocol.evidenceProtocol.requiredEvidence;
+  const captureInstructions = objectiveTextAnswer
+    ? addUniqueText(protocol.evidenceProtocol.captureInstructions, [
+      "Submit exactly one answer before the deadline.",
+    ])
+    : protocol.evidenceProtocol.captureInstructions;
+  const invalidEvidenceRules = objectiveTextAnswer
+    ? addUniqueText(protocol.evidenceProtocol.invalidEvidenceRules, [
+      "Missing, empty, or conflicting answers are invalid.",
+    ])
+    : protocol.evidenceProtocol.invalidEvidenceRules;
+  const expectedAnswerInstruction = expectedAnswer ? `Correct answer: ${expectedAnswer}` : null;
+  const winCondition = expectedAnswer && !/\bexpected[_ -]?answer\b/i.test(protocol.settlementProtocol.winCondition)
+    ? `EXPECTED_ANSWER: ${expectedAnswer}. ${protocol.settlementProtocol.winCondition}`
+    : protocol.settlementProtocol.winCondition;
+  const judgeInstructions = objectiveTextAnswer
+    ? addUniqueText(protocol.settlementProtocol.judgeInstructions, [
+      "Read each participant answer from evidence metadata.answer first, then from text evidence.",
+      ...(expectedAnswerInstruction ? [expectedAnswerInstruction] : []),
+      "Return settle_winner only when exactly one participant matches the expected answer.",
+    ])
+    : protocol.settlementProtocol.judgeInstructions;
   const rawDeadline = protocol.timingProtocol.deadline?.trim() || "48 hours";
   const parsedDeadline = parseChallengeDeadline(rawDeadline, { fallbackHours: 48 });
   const rawAbsoluteDeadline = new Date(rawDeadline);
@@ -398,8 +492,8 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     },
     identityProtocol: {
       ...protocol.identityProtocol,
-      required: protocol.identityProtocol.required || visionEvidence,
-      mode: sameCamera ? "left_right_assignment" : visionEvidence && (protocol.identityProtocol.mode === "account_only" || participantMode === "solo")
+      required: identityRequired,
+      mode: objectiveTextAnswer ? "account_only" : sameCamera ? "left_right_assignment" : visionEvidence && (protocol.identityProtocol.mode === "account_only" || participantMode === "solo")
         ? "liveness_phrase"
         : protocol.identityProtocol.mode,
       autoSettlementRequiresIdentityConfidence: identityThreshold,
@@ -408,11 +502,16 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     evidenceProtocol: {
       ...protocol.evidenceProtocol,
       mode: evidenceMode,
+      requiredEvidence,
+      captureInstructions,
+      invalidEvidenceRules,
       requiredMetadata: [...requiredMetadata],
     },
     settlementProtocol: {
       ...protocol.settlementProtocol,
       mode: desiredSettlementMode,
+      winCondition,
+      judgeInstructions,
       autoSettleConfidenceThreshold: threshold,
       manualReviewTriggers: [...manualReviewTriggers],
     },

@@ -29,6 +29,7 @@
     "e2e:agent-tool-guardrails": "node scripts/e2e-agent-tool-guardrails.mjs",
     "e2e:agent-settlement-chain": "node scripts/e2e-agent-settlement-chain.mjs",
     "e2e:agent-compile-publish": "node scripts/e2e-agent-compile-publish.mjs",
+    "e2e:agent-golden-path": "node scripts/e2e-agent-golden-path.mjs",
     "smoke:payment-policy": "tsx scripts/smoke-payment-policy.ts",
     "smoke:auth-session": "tsx scripts/smoke-auth-session.ts",
     "smoke:crypto-oracle": "tsx scripts/smoke-crypto-price-oracle.ts",
