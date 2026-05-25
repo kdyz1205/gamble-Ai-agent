@@ -1,0 +1,50 @@
+name: Production Core Settlement E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Comma-separated cases: solo,study,screenshot,oracle. Empty runs all."
+        required: false
+        default: ""
+  schedule:
+    # Low-cost non-video production settlement regression. Weekly to avoid cluttering prod with test accounts.
+    - cron: "31 12 * * 3"
+
+concurrency:
+  group: production-core-settlement-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  core-settlement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      E2E_BASE_URL: https://gamble-ai-agent.vercel.app
+      E2E_COMMIT_SHA: ${{ github.sha }}
+      RUN_CORE_SETTLEMENT_CASES: ${{ github.event.inputs.cases }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Prove solo no-opponent settlement
+        if: ${{ env.RUN_CORE_SETTLEMENT_CASES == '' || contains(env.RUN_CORE_SETTLEMENT_CASES, 'solo') }}
+        run: npm run e2e:solo-flow
+
+      - name: Prove platform-metric settlement
+        if: ${{ env.RUN_CORE_SETTLEMENT_CASES == '' || contains(env.RUN_CORE_SETTLEMENT_CASES, 'study') }}
+        run: npm run e2e:study-streak-settlement
+
+      - name: Prove screenshot/text settlement
+        if: ${{ env.RUN_CORE_SETTLEMENT_CASES == '' || contains(env.RUN_CORE_SETTLEMENT_CASES, 'screenshot') }}
+        run: npm run e2e:screenshot-settlement
+
+      - name: Prove live data-source oracle settlement
+        if: ${{ env.RUN_CORE_SETTLEMENT_CASES == '' || contains(env.RUN_CORE_SETTLEMENT_CASES, 'oracle') }}
+        run: npm run e2e:data-source-oracle-settlement
