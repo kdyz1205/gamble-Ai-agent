@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import * as api from "@/lib/api-client";
 import type { ActivityEventData, ChallengeData } from "@/lib/api-client";
 import PlazaSection from "@/components/PlazaSection";
+import { challengeUsesChineseCopy } from "@/lib/challenge-display";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 
 /* ── Drawer shell ── */
@@ -271,6 +272,7 @@ function DiscoverContent({
       {rows.map((c, i) => {
         const mine = Boolean(uid && c.creatorId === uid);
         const joined = Boolean(uid && c.participants.some((p) => p.user.id === uid));
+        const zhCopy = challengeUsesChineseCopy(c);
         return (
           <motion.div
             key={c.id}
@@ -283,7 +285,7 @@ function DiscoverContent({
             <p className="text-sm font-bold text-text-primary leading-snug">{c.title}</p>
             <p className="text-[11px] text-text-muted">
               by @{c.creator.username}
-              {c.stake > 0 ? ` · ${c.stake} credits stake` : ""} · {c.participants.length}/{c.maxParticipants ?? 2} players
+              {c.stake > 0 ? ` / ${c.stake} ${zhCopy ? "积分托管" : "credits stake"}` : ""} / {c.participants.length}/{c.maxParticipants ?? 2} {zhCopy ? "人" : "players"}
             </p>
             <div className="flex flex-wrap gap-2">
               <motion.button
@@ -294,19 +296,19 @@ function DiscoverContent({
                 className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)" }}
               >
-                {mine ? "Yours" : joined ? "Open room" : "Review rules"}
+                {mine ? (zhCopy ? "我的" : "Yours") : joined ? (zhCopy ? "进入房间" : "Open room") : (zhCopy ? "查看规则" : "Review rules")}
               </motion.button>
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 onClick={() => {
                   void navigator.clipboard.writeText(`${window.location.origin}/join/${c.id}`);
-                  setMsg("Link copied — send it to your opponent.");
+                  setMsg(zhCopy ? "邀请链接已复制，发给对手即可。" : "Link copied. Send it to your opponent.");
                   setTimeout(() => setMsg(null), 2500);
                 }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold border border-border-subtle text-text-muted"
               >
-                Copy invite link
+                {zhCopy ? "复制邀请链接" : "Copy invite link"}
               </motion.button>
             </div>
           </motion.div>

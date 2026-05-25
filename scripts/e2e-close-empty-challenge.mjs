@@ -223,7 +223,7 @@ try {
   await page.goto(`${base}/markets`, { waitUntil: "networkidle" });
   await page.getByText(title, { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
   const card = page.locator("article").filter({ hasText: title }).first();
-  await card.getByRole("button", { name: /^Close empty$/ }).click();
+  await card.getByRole("button", { name: /^Close$/ }).click();
   await page.getByText("Closed. 1 credits refunded.", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
   await card.waitFor({ state: "detached", timeout: 20_000 }).catch(async () => {
     await page.waitForTimeout(500);

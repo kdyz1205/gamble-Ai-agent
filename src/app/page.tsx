@@ -9,6 +9,7 @@ import CenteredComposer from "@/components/CenteredComposer";
 import AuthModal from "@/components/AuthModal";
 import BrandMark from "@/components/BrandMark";
 import * as api from "@/lib/api-client";
+import { challengeUsesChineseCopy } from "@/lib/challenge-display";
 import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
@@ -1127,11 +1128,12 @@ function OpenChallengeStrip({
   onJoin: (challenge: api.ChallengeData) => void;
 }) {
   const canAskForLocation = locationState !== "ready" && locationState !== "unavailable";
+  const stripZh = challenges.some((challenge) => challengeUsesChineseCopy(challenge));
   return (
     <section className="text-left">
       <div className="flex items-center justify-between gap-3 mb-2">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>Join nearby</p>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>{stripZh ? "附近挑战" : "Join nearby"}</p>
           <p className="text-xs font-semibold" style={{ color: "#64748B" }}>
             {message || "Open challenges"}
           </p>
@@ -1145,7 +1147,11 @@ function OpenChallengeStrip({
               className="rounded-full border px-3 py-2 text-xs font-black disabled:opacity-50"
               style={{ borderColor: "#10B981", color: "#065F46", background: "#D1FAE5" }}
             >
-              {locationState === "checking" ? "Asking..." : locationState === "blocked" ? "Try location" : "Enable location"}
+              {locationState === "checking"
+                ? stripZh ? "请求中..." : "Asking..."
+                : locationState === "blocked"
+                  ? stripZh ? "重试位置" : "Try location"
+                  : stripZh ? "开启位置" : "Enable location"}
             </button>
           )}
           <button
@@ -1155,7 +1161,7 @@ function OpenChallengeStrip({
             className="rounded-full border bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
             style={{ borderColor: "#D1FAE5", color: "#047857" }}
           >
-            {loading ? "Checking" : "Refresh"}
+            {loading ? (stripZh ? "检查中" : "Checking") : (stripZh ? "刷新" : "Refresh")}
           </button>
         </div>
       </div>
@@ -1167,20 +1173,21 @@ function OpenChallengeStrip({
           ))
         ) : challenges.length === 0 ? (
           <div className="rounded-[18px] border bg-white/95 px-4 py-4 text-sm font-semibold shadow-sm" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
-            No open challenges.
+            {stripZh ? "暂无开放挑战。" : "No open challenges."}
           </div>
         ) : (
           challenges.slice(0, 3).map((challenge) => {
             const mine = userId === challenge.creatorId;
             const joined = Boolean(userId && challenge.participants.some((participant) => participant.user.id === userId));
             const distance = challenge.discovery?.distanceMiles;
+            const zhCopy = challengeUsesChineseCopy(challenge);
             return (
               <article key={challenge.id} className="rounded-[20px] border bg-white/95 p-3 shadow-sm" style={{ borderColor: "#E2E8F0", boxShadow: "0 12px 34px rgba(15,23,42,0.05)" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="line-clamp-2 text-sm font-extrabold" style={{ color: "#172033" }}>{challenge.title}</p>
                     <p className="mt-1 text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                      @{challenge.creator.username} / {challenge.stake > 0 ? `${challenge.stake} pts` : "free"}
+                      @{challenge.creator.username} / {challenge.stake > 0 ? `${challenge.stake} ${zhCopy ? "积分" : "pts"}` : zhCopy ? "免费" : "free"}
                       {distance != null ? ` / ${distance} mi` : ""}
                     </p>
                   </div>
@@ -1195,7 +1202,13 @@ function OpenChallengeStrip({
                   className="mt-3 w-full rounded-full px-3 py-2 text-xs font-black disabled:opacity-60"
                   style={{ background: mine ? "#F8FAFC" : "#A7F3D0", color: mine ? "#64748B" : "#065F46" }}
                 >
-                  {joiningId === challenge.id ? "Opening..." : mine ? "Open yours" : joined ? "Open room" : "Review rules"}
+                  {joiningId === challenge.id
+                    ? zhCopy ? "打开中..." : "Opening..."
+                    : mine
+                      ? zhCopy ? "打开我的" : "Open yours"
+                      : joined
+                        ? zhCopy ? "进入房间" : "Open room"
+                        : zhCopy ? "查看规则" : "Review rules"}
                 </button>
               </article>
             );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import * as api from "@/lib/api-client";
-import { acceptanceContract, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
+import { acceptanceContract, challengeUsesChineseCopy, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
 
 interface Props {
   challenge: {
@@ -25,14 +25,19 @@ interface Props {
 export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed, onCancel, onError }: Props) {
   const [accepting, setAccepting] = useState(false);
   const [contractAccepted, setContractAccepted] = useState(false);
+  const zhCopy = challengeUsesChineseCopy(challenge);
   const insufficientFunds = challenge.stake > 0 && userCredits < challenge.stake;
   const ruleCards = parseChallengeRules(challenge);
   const contract = acceptanceContract(challenge);
+  const creditUnit = zhCopy
+    ? !challenge.stakeToken || challenge.stakeToken === "credits" ? "积分" : challenge.stakeToken
+    : challenge.stakeToken || "credits";
+  const stakeDisplay = `${challenge.stake} ${creditUnit}`;
 
   const handleAccept = async () => {
     if (insufficientFunds || accepting) return;
     if (!contractAccepted) {
-      onError("Accept the rule contract first.");
+      onError(zhCopy ? "请先勾选并同意规则。" : "Accept the rule contract first.");
       return;
     }
     setAccepting(true);
@@ -40,8 +45,10 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
       await api.acceptChallenge(challenge.id, null, { acceptedRuleContract: true });
       onConfirmed(challenge.id);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to accept";
-      onError(msg.includes("taken") ? "Too slow! This challenge was just taken." : msg);
+      const msg = err instanceof Error ? err.message : zhCopy ? "接受挑战失败。" : "Failed to accept";
+      onError(msg.includes("taken")
+        ? zhCopy ? "手慢了，这个挑战刚刚被别人加入了。" : "Too slow! This challenge was just taken."
+        : msg);
     } finally {
       setAccepting(false);
     }
@@ -81,15 +88,17 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
         {challenge.stake > 0 && (
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl"
                style={{ background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.15)" }}>
-            <span className="text-xs text-text-secondary">You will lock</span>
-            <span className="text-xl font-black text-[#f5a623]">{challenge.stake} credits</span>
+            <span className="text-xs text-text-secondary">{zhCopy ? "将托管" : "You will lock"}</span>
+            <span className="text-xl font-black text-[#f5a623]">{stakeDisplay}</span>
           </div>
         )}
 
         {insufficientFunds && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold"
                style={{ background: "rgba(255,59,48,0.1)", border: "1px solid rgba(255,59,48,0.2)", color: "#ff3b30" }}>
-            Insufficient funds. You have {userCredits} credits, need {challenge.stake}.
+            {zhCopy
+              ? `积分不足。你有 ${userCredits} 积分，需要 ${challenge.stake}。`
+              : `Insufficient funds. You have ${userCredits} credits, need ${challenge.stake}.`}
           </div>
         )}
 
@@ -98,7 +107,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
           <p className="font-bold text-amber-300">{settlementSummary(challenge)}</p>
           <details>
             <summary className="cursor-pointer font-black uppercase tracking-wider text-[10px] text-text-primary">
-              Full terms
+              {zhCopy ? "完整条款" : "Full terms"}
             </summary>
             <ul className="mt-2 space-y-1">
               {contract.map((item) => (
@@ -113,7 +122,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
               onChange={(event) => setContractAccepted(event.target.checked)}
               className="mt-0.5"
             />
-            <span>I accept rules, AI judging, disputes, and credits.</span>
+            <span>{zhCopy ? "我同意规则、AI 判定、争议处理和积分结算。" : "I accept rules, AI judging, disputes, and credits."}</span>
           </label>
         </div>
 
@@ -129,7 +138,13 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
                 : "bg-gradient-to-r from-accent to-teal text-white shadow-lg shadow-accent/30"
             }`}
           >
-            {accepting ? "Locking..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Accept + lock ${challenge.stake}` : "Accept"}
+            {accepting
+              ? zhCopy ? "托管中..." : "Locking..."
+              : insufficientFunds
+                ? zhCopy ? "积分不足" : "Insufficient Funds"
+                : challenge.stake > 0
+                  ? zhCopy ? `接受并托管 ${stakeDisplay}` : `Accept + lock ${stakeDisplay}`
+                  : zhCopy ? "接受" : "Accept"}
           </motion.button>
 
           <motion.button
@@ -138,7 +153,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
             whileTap={{ scale: 0.97 }}
             className="px-5 py-3.5 rounded-xl text-sm font-bold text-text-secondary border border-border-subtle"
           >
-            Cancel
+            {zhCopy ? "取消" : "Cancel"}
           </motion.button>
         </div>
       </div>

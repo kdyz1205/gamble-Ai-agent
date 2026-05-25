@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useParams, usePathname } from "next/navigation";
 import AuthModal from "@/components/AuthModal";
 import * as api from "@/lib/api-client";
 import { acceptanceContract, challengeUsesChineseCopy, compactChallengeRules, parseChallengeRules, settlementSummary } from "@/lib/challenge-display";
@@ -52,8 +53,22 @@ const CREAM = "#FFEDD5";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
-export default function JoinPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+function locationReasonLabel(reason: string | null | undefined, zhCopy: boolean) {
+  if (!reason || !zhCopy) return reason ?? "";
+  const normalized = reason.toLowerCase();
+  if (normalized.includes("does not require location")) return "这个挑战不需要位置验证。";
+  if (normalized.includes("no location snapshot")) return "这个挑战还没有可验证的位置快照。";
+  if (normalized.includes("location is required")) return "加入附近挑战前需要允许位置权限。";
+  if (normalized.includes("within the challenge join radius")) return "你在允许加入的范围内。";
+  if (normalized.includes("outside the challenge join radius")) return "你不在允许加入的范围内。";
+  return reason;
+}
+
+export default function JoinPage() {
+  const params = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const paramId = params?.id;
+  const id = (Array.isArray(paramId) ? paramId[0] : paramId) || pathname.split("/").filter(Boolean).pop() || "";
   const { data: session } = useSession();
   const user = session?.user as { id: string; username: string } | undefined;
 
@@ -69,15 +84,30 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return;
+      setError("Can't find this challenge.");
+      setLoading(false);
+    }, 5000);
     api.getChallenge(id)
       .then((res) => {
+        if (cancelled) return;
+        window.clearTimeout(timeout);
         setChallenge(res.challenge);
         setLoading(false);
       })
       .catch(() => {
+        if (cancelled) return;
+        window.clearTimeout(timeout);
         setError("Can't find this challenge.");
         setLoading(false);
       });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
   }, [id]);
 
   const needsLocationGate = (target: Challenge | null) => {
@@ -85,9 +115,9 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
     return LOCATION_GATED_MODES.has(target.locationMode);
   };
 
-  const requestBrowserLocation = () => new Promise<api.LocationSnapshot>((resolve, reject) => {
+  const requestBrowserLocation = (zhCopy: boolean) => new Promise<api.LocationSnapshot>((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error("This browser cannot provide location."));
+      reject(new Error(zhCopy ? "这个浏览器无法提供位置。" : "This browser cannot provide location."));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -97,36 +127,40 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
           lng: position.coords.longitude,
         });
       },
-      () => reject(new Error("Location permission is required before joining this nearby challenge.")),
+      () => reject(new Error(zhCopy ? "加入附近挑战前需要允许位置权限。" : "Location permission is required before joining this nearby challenge.")),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
   });
 
   const verifyLocationForJoin = async (): Promise<api.LocationSnapshot> => {
+    const zhCopy = challenge ? challengeUsesChineseCopy(challenge) : false;
     setLocationStatus("checking");
-    setLocationMessage("Checking whether you are close enough to join...");
+    setLocationMessage(zhCopy ? "正在确认你是否足够靠近..." : "Checking whether you are close enough to join...");
     let snapshot: api.LocationSnapshot;
     try {
-      snapshot = await requestBrowserLocation();
+      snapshot = await requestBrowserLocation(zhCopy);
     } catch (err) {
       setLocationSnapshot(null);
       setLocationStatus("unavailable");
-      setLocationMessage(err instanceof Error ? err.message : "Location permission is required before joining this nearby challenge.");
+      setLocationMessage(err instanceof Error ? err.message : zhCopy ? "加入附近挑战前需要允许位置权限。" : "Location permission is required before joining this nearby challenge.");
       throw err;
     }
     const result = await api.checkLocationEligibility(id, snapshot);
+    const reason = locationReasonLabel(result.reason, zhCopy);
     if (!result.eligible) {
       setLocationSnapshot(null);
       setLocationStatus("blocked");
       const distanceLabel = result.distanceMeters == null
         ? ""
-        : ` You are about ${Math.round(result.distanceMeters)}m away; required radius is ${result.requiredRadiusMeters}m.`;
-      setLocationMessage(`${result.reason}${distanceLabel}`);
-      throw new Error(result.reason);
+        : zhCopy
+          ? ` 你距离约 ${Math.round(result.distanceMeters)} 米；要求半径 ${result.requiredRadiusMeters} 米。`
+          : ` You are about ${Math.round(result.distanceMeters)}m away; required radius is ${result.requiredRadiusMeters}m.`;
+      setLocationMessage(`${reason}${distanceLabel}`);
+      throw new Error(reason);
     }
     setLocationSnapshot(snapshot);
     setLocationStatus("ready");
-    setLocationMessage(result.reason);
+    setLocationMessage(reason);
     return snapshot;
   };
 
@@ -134,7 +168,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
     if (!challenge) return;
     if (!user) {
       setShowAuth(true);
-      setError("Sign in before checking location.");
+      setError(challengeUsesChineseCopy(challenge) ? "请先登录再验证位置。" : "Sign in before checking location.");
       return;
     }
     setError(null);
@@ -142,13 +176,13 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
       await verifyLocationForJoin();
     } catch (err) {
       setLocationStatus(err instanceof Error && err.message.includes("permission") ? "unavailable" : "blocked");
-      setError(err instanceof Error ? err.message : "Could not verify your location.");
+      setError(err instanceof Error ? err.message : challengeUsesChineseCopy(challenge) ? "无法验证你的位置。" : "Could not verify your location.");
     }
   };
 
   const handleAccept = async () => {
     if (!contractAccepted) {
-      setError("Accept the rule contract first.");
+      setError(challenge ? challengeUsesChineseCopy(challenge) ? "请先勾选并同意规则。" : "Accept the rule contract first." : "Accept the rule contract first.");
       return;
     }
     if (!user) {
@@ -164,7 +198,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
       await api.acceptChallenge(id, joinSnapshot ?? null, { acceptedRuleContract: true });
       setAccepted(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to accept challenge.");
+      setError(err instanceof Error ? err.message : challenge && challengeUsesChineseCopy(challenge) ? "接受挑战失败。" : "Failed to accept challenge.");
     } finally {
       setAccepting(false);
     }
@@ -221,11 +255,11 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const c = challenge!;
-  const stakeLabel = c.stake > 0 ? `${c.stake} cr` : "Free";
   const ruleCards = parseChallengeRules(c);
   const compactRules = compactChallengeRules(c);
   const contract = acceptanceContract(c);
   const zhCopy = challengeUsesChineseCopy(c);
+  const stakeLabel = c.stake > 0 ? `${c.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "Free";
   const locationGateRequired = needsLocationGate(c);
   const rawDeadlineLabel = formatChallengeDeadline(c.deadline, { includePrefix: !zhCopy });
   const deadlineLabel = zhCopy && rawDeadlineLabel
@@ -244,14 +278,14 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
           >
-            My challenges
+            {zhCopy ? "我的挑战" : "My challenges"}
           </Link>
           <Link
             href="/radar"
             className="hidden text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform sm:inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
           >
-            Radar
+            {zhCopy ? "雷达" : "Radar"}
           </Link>
         </div>
       </header>
@@ -272,7 +306,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             }}
           >
             <span className="text-xs font-bold uppercase tracking-widest" style={{ color: PEACH_TEXT }}>
-              You have been challenged
+              {zhCopy ? "你收到一个挑战" : "You have been challenged"}
             </span>
           </div>
 
@@ -570,9 +604,9 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   className="font-extrabold underline decoration-dotted"
                   style={{ color: PEACH_TEXT }}
                 >
-                  Sign in
+                  {zhCopy ? "登录" : "Sign in"}
                 </button>{" "}
-                to accept this challenge
+                {zhCopy ? "后接受这个挑战" : "to accept this challenge"}
               </p>
             )}
           </div>

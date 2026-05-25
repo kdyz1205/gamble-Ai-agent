@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { ChallengeData } from "@/lib/api-client";
+import { challengeUsesChineseCopy } from "@/lib/challenge-display";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 import { formatChallengeDeadline } from "@/lib/challenge-time";
 
@@ -17,10 +18,30 @@ export interface Challenge {
   status: "open" | "live" | "judging" | "completed";
   participants: number;
   aiReview: boolean;
+  zhCopy: boolean;
+}
+
+function displayCreditAmount(stake: number, zhCopy: boolean) {
+  if (stake <= 0) return zhCopy ? "免费" : "Free";
+  return zhCopy ? `${stake} 积分` : `${stake} credits`;
+}
+
+function displayEvidenceType(value: string, zhCopy: boolean) {
+  const normalized = value.replace(/_/g, " ").trim();
+  if (!zhCopy) return normalized;
+  const lower = normalized.toLowerCase();
+  if (lower.includes("same camera")) return "同机位视频";
+  if (lower.includes("separate video")) return "分开视频";
+  if (lower.includes("video")) return "视频";
+  if (lower.includes("photo") || lower.includes("image")) return "照片";
+  if (lower.includes("gps") || lower.includes("location")) return "位置";
+  if (lower.includes("screenshot")) return "截图";
+  return normalized;
 }
 
 export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
   const opponent = c.participants.find((p) => p.role === "opponent");
+  const zhCopy = challengeUsesChineseCopy(c);
   let status: Challenge["status"] = "open";
   if (isTerminalStatus(c.status)) status = "completed";
   else if (isAiReviewStatus(c.status) || c.status === "finalized") status = "judging";
@@ -42,22 +63,23 @@ export function mapChallengeDataToChallenge(c: ChallengeData): Challenge {
     type: c.type,
     stake: c.stake,
     deadline: deadlineStr,
-    evidence: c.evidenceType.replace(/_/g, " "),
+    evidence: displayEvidenceType(c.evidenceType, zhCopy),
     status,
     participants: c.participants.length,
     aiReview: c.aiReview,
+    zhCopy,
   };
 }
 
-function StatusBadge({ status }: { status: Challenge["status"] }) {
+function StatusBadge({ status, zhCopy }: { status: Challenge["status"]; zhCopy: boolean }) {
   const config = {
-    open: { label: "Open", className: "bg-accent-light text-accent" },
+    open: { label: zhCopy ? "开放中" : "Open", className: "bg-accent-light text-accent" },
     live: {
-      label: "Live",
+      label: zhCopy ? "进行中" : "Live",
       className: "bg-danger-light text-danger animate-pulse-soft",
     },
-    judging: { label: "AI Judging", className: "bg-gold-light text-gold" },
-    completed: { label: "Settled", className: "bg-success-light text-success" },
+    judging: { label: zhCopy ? "AI 判定中" : "AI Judging", className: "bg-gold-light text-gold" },
+    completed: { label: zhCopy ? "已结算" : "Settled", className: "bg-success-light text-success" },
   };
   const { label, className } = config[status];
   return (
@@ -84,6 +106,7 @@ export default function ChallengeCard({
   acceptChallengePending?: boolean;
 }) {
   const isDark = tone === "dark";
+  const zhCopy = challenge.zhCopy;
   return (
     <div
       className={`group rounded-2xl border p-5 transition-all duration-300 animate-float-up ${
@@ -107,7 +130,7 @@ export default function ChallengeCard({
         >
           {challenge.type}
         </span>
-        <StatusBadge status={challenge.status} />
+        <StatusBadge status={challenge.status} zhCopy={zhCopy} />
       </div>
 
       {/* Title */}
@@ -155,7 +178,7 @@ export default function ChallengeCard({
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Join
+            {zhCopy ? "加入" : "Join"}
           </button>
         )}
       </div>
@@ -193,7 +216,7 @@ export default function ChallengeCard({
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
           <span className="text-xs font-semibold text-text-primary">
-            {challenge.stake > 0 ? `${challenge.stake} credits` : "Free"}
+            {displayCreditAmount(challenge.stake, zhCopy)}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-input">
@@ -229,7 +252,7 @@ export default function ChallengeCard({
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           <span className="text-xs font-medium text-text-secondary">
-            {challenge.participants} joined
+            {zhCopy ? `${challenge.participants} 人已加入` : `${challenge.participants} joined`}
           </span>
         </div>
       </div>
@@ -249,7 +272,7 @@ export default function ChallengeCard({
             </svg>
           </div>
           <span className="text-xs font-medium text-accent">
-            AI Review Enabled
+            {zhCopy ? "AI 复核开启" : "AI Review Enabled"}
           </span>
         </div>
       )}
@@ -263,29 +286,29 @@ export default function ChallengeCard({
             disabled={!onAcceptChallenge || acceptChallengePending}
             className="flex-1 py-2.5 text-sm font-semibold text-white bg-accent rounded-xl hover:bg-accent-dark transition-colors shadow-sm hover:shadow-md disabled:opacity-45 disabled:pointer-events-none"
           >
-            {acceptChallengePending ? "Opening..." : "Review rules"}
+            {acceptChallengePending ? (zhCopy ? "打开中..." : "Opening...") : (zhCopy ? "查看规则" : "Review rules")}
           </button>
         )}
         {challenge.status === "live" && (
           <button className="flex-1 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-danger to-danger/80 rounded-xl hover:opacity-90 transition-opacity shadow-sm">
-            Watch Live
+            {zhCopy ? "观看挑战" : "Watch Live"}
           </button>
         )}
         {(challenge.status === "open" || challenge.status === "live") && (
           <>
             <button className="flex-1 py-2.5 text-sm font-semibold text-accent bg-accent-light rounded-xl hover:bg-accent/20 transition-colors">
-              Pick {challenge.playerA.name.split(" ")[0]}
+              {zhCopy ? "选择" : "Pick"} {challenge.playerA.name.split(" ")[0]}
             </button>
             {challenge.playerB && (
               <button className="flex-1 py-2.5 text-sm font-semibold text-teal bg-teal-light rounded-xl hover:bg-teal/20 transition-colors">
-                Pick {challenge.playerB.name.split(" ")[0]}
+                {zhCopy ? "选择" : "Pick"} {challenge.playerB.name.split(" ")[0]}
               </button>
             )}
           </>
         )}
         {challenge.status === "completed" && (
           <button className="flex-1 py-2.5 text-sm font-semibold text-text-secondary bg-bg-input rounded-xl hover:bg-bg-hover transition-colors">
-            View Results
+            {zhCopy ? "查看结果" : "View Results"}
           </button>
         )}
       </div>

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
+import { challengeUsesChineseCopy } from "@/lib/challenge-display";
 import { isOpenForOpponentStatus, isTerminalStatus } from "@/lib/challenge-state-machine";
 import { formatChallengeDeadline } from "@/lib/challenge-time";
 
@@ -56,8 +57,35 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   voided: { bg: NAVY_FAINT, text: NAVY_DIM, label: "Voided" },
 };
 
-function formatDeadline(value: string | null) {
-  return formatChallengeDeadline(value) ?? "No deadline";
+const STATUS_LABEL_ZH: Record<string, string> = {
+  draft: "草稿",
+  open: "开放中",
+  live: "进行中",
+  judging: "判定中",
+  settled: "已结算",
+  cancelled: "已取消",
+  disputed: "需复核",
+  pending_settlement: "结算中",
+  waiting_for_opponent: "等待对手",
+  evidence_window_open: "提交证据",
+  creator_submitted: "创建者已提交",
+  opponent_submitted: "对手已提交",
+  ai_reviewing: "AI 复核中",
+  ai_verdict_ready: "判定待确认",
+  dispute_window_open: "争议期",
+  manual_review_required: "人工复核",
+  ai_inconclusive: "AI 未能判定",
+  finalized: "已确认",
+  refunded: "已退款",
+  voided: "已作废",
+};
+
+function formatDeadline(value: string | null, zhCopy = false) {
+  const label = formatChallengeDeadline(value);
+  if (!label) return zhCopy ? "无截止时间" : "No deadline";
+  if (!zhCopy) return label;
+  if (label === "Deadline passed") return "已过期";
+  return label.replace(/^Due\s+/, "截止 ");
 }
 
 function hasOtherParticipant(market: ChallengeData, userId?: string) {
@@ -81,30 +109,36 @@ type ManageAction =
   | { kind: "restore"; label: string; confirm: string; success: string }
   | { kind: "locked"; label: string; reason: string };
 
-function getManageAction(market: ChallengeData, userId?: string): ManageAction | null {
+function getManageAction(market: ChallengeData, userId?: string, zhCopy = false): ManageAction | null {
   if (!userId || market.creatorId !== userId) return null;
   if (market.visibility === "archived") {
     return {
       kind: "restore",
-      label: "Restore",
-      confirm: `Restore "${market.title}" to your challenge board? It will stay private and out of public discovery.`,
-      success: "Restored to your private challenge board.",
+      label: zhCopy ? "恢复" : "Restore",
+      confirm: zhCopy
+        ? `恢复「${market.title}」到你的挑战列表？它仍然保持私密，不进入公开发现。`
+        : `Restore "${market.title}" to your challenge board? It will stay private and out of public discovery.`,
+      success: zhCopy ? "已恢复到你的私人挑战列表。" : "Restored to your private challenge board.",
     };
   }
   if (isTerminalStatus(market.status)) {
     return {
       kind: "archive",
-      label: "Archive",
-      confirm: `Archive "${market.title}"? The result and ledger stay preserved, but it will leave your default board.`,
-      success: "Archived. Result and ledger history were preserved.",
+      label: zhCopy ? "归档" : "Archive",
+      confirm: zhCopy
+        ? `归档「${market.title}」？结果和积分流水会保留，但它会离开默认列表。`
+        : `Archive "${market.title}"? The result and ledger stay preserved, but it will leave your default board.`,
+      success: zhCopy ? "已归档，结果和积分流水已保留。" : "Archived. Result and ledger history were preserved.",
     };
   }
   if (hasChallengeHistory(market)) {
     return {
       kind: "archive",
-      label: "Archive",
-      confirm: `Archive "${market.title}"? Evidence and judgment history stay preserved for audit.`,
-      success: "Archived. Evidence and judgment history were preserved.",
+      label: zhCopy ? "归档" : "Archive",
+      confirm: zhCopy
+        ? `归档「${market.title}」？证据和判定历史会保留用于审计。`
+        : `Archive "${market.title}"? Evidence and judgment history stay preserved for audit.`,
+      success: zhCopy ? "已归档，证据和判定历史已保留。" : "Archived. Evidence and judgment history were preserved.",
     };
   }
 
@@ -113,24 +147,34 @@ function getManageAction(market: ChallengeData, userId?: string): ManageAction |
   if (canDeleteEmpty) {
     return {
       kind: "delete",
-      label: "Close empty",
-      confirm: `Close "${market.title}"? Nobody else has joined, so this removes it from discovery.`,
-      success: market.stake > 0 ? "Closed and creator stake refunded." : "Closed and removed from discovery.",
+      label: zhCopy ? "关闭" : "Close",
+      confirm: zhCopy
+        ? `关闭「${market.title}」？还没有其他人加入，所以它会从发现列表移除。`
+        : `Close "${market.title}"? Nobody else has joined, so this removes it from discovery.`,
+      success: market.stake > 0
+        ? zhCopy ? "已关闭，创建者托管积分已退回。" : "Closed and creator stake refunded."
+        : zhCopy ? "已关闭，并从发现列表移除。" : "Closed and removed from discovery.",
     };
   }
   if (CANCELLABLE_BEFORE_EVIDENCE.has(market.status)) {
     return {
       kind: "cancel",
-      label: hasOpponent ? "Cancel & refund" : "Cancel",
-      confirm: `Cancel "${market.title}"? This stops the challenge before evidence/judging and refunds locked credits when needed.`,
-      success: market.stake > 0 ? "Cancelled and locked credits refunded." : "Cancelled.",
+      label: hasOpponent ? (zhCopy ? "取消并退款" : "Cancel & refund") : (zhCopy ? "取消" : "Cancel"),
+      confirm: zhCopy
+        ? `取消「${market.title}」？这会在证据/判定前停止挑战，并在需要时退回托管积分。`
+        : `Cancel "${market.title}"? This stops the challenge before evidence/judging and refunds locked credits when needed.`,
+      success: market.stake > 0 ? (zhCopy ? "已取消，托管积分已退回。" : "Cancelled and locked credits refunded.") : (zhCopy ? "已取消。" : "Cancelled."),
     };
   }
-  return { kind: "locked", label: "Locked", reason: `Status ${market.status.replace(/_/g, " ")} needs room review.` };
+  return {
+    kind: "locked",
+    label: zhCopy ? "进房间处理" : "Room only",
+    reason: zhCopy ? `当前状态「${STATUS_LABEL_ZH[market.status] ?? market.status}」需要进房间处理。` : `Status ${market.status.replace(/_/g, " ")} needs room review.`,
+  };
 }
 
 function messageColor(message: string) {
-  if (/closed|cancelled|refunded/i.test(message)) return MINT_TEXT;
+  if (/closed|cancelled|refunded|已关闭|已取消|已退回|已归档|已恢复/i.test(message)) return MINT_TEXT;
   if (/temporarily unavailable|still usable/i.test(message)) return NAVY_DIM;
   return ROSE_TEXT;
 }
@@ -142,14 +186,17 @@ export default function MarketsPage() {
   const userId = user?.id;
   const [markets, setMarkets] = useState<ChallengeData[]>([]);
   const [openPublic, setOpenPublic] = useState<ChallengeData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [matching, setMatching] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const loadChallenges = useCallback(async () => {
-    if (sessionLoading) return;
+    if (sessionLoading) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setMessage(null);
     try {
@@ -215,7 +262,8 @@ export default function MarketsPage() {
   };
 
   const closeChallenge = async (market: ChallengeData) => {
-    const action = getManageAction(market, user?.id);
+    const zhCopy = challengeUsesChineseCopy(market);
+    const action = getManageAction(market, user?.id, zhCopy);
     if (!action || action.kind === "locked") return;
     if (!window.confirm(action.confirm)) return;
     setClosingId(market.id);
@@ -225,7 +273,9 @@ export default function MarketsPage() {
         const res = await api.deleteChallenge(market.id);
         setMarkets((prev) => prev.filter((item) => item.id !== market.id));
         setOpenPublic((prev) => prev.filter((item) => item.id !== market.id));
-        setMessage(res.refundedStake > 0 ? `Closed. ${res.refundedStake} credits refunded.` : action.success);
+        setMessage(res.refundedStake > 0
+          ? zhCopy ? `已关闭，退回 ${res.refundedStake} 积分。` : `Closed. ${res.refundedStake} credits refunded.`
+          : action.success);
       } else if (action.kind === "cancel") {
         const res = await api.cancelChallenge(market.id, { reason: "Creator cancelled from challenge manager." });
         if (res.challenge) {
@@ -234,7 +284,7 @@ export default function MarketsPage() {
         } else {
           await loadChallenges();
         }
-        setMessage(res.cancellation.refunded ? "Cancelled. Credits refunded." : action.success);
+        setMessage(res.cancellation.refunded ? (zhCopy ? "已取消，积分已退回。" : "Cancelled. Credits refunded.") : action.success);
       } else {
         const res = await api.archiveChallenge(market.id, { archived: action.kind === "archive" });
         setMarkets((prev) => {
@@ -245,7 +295,7 @@ export default function MarketsPage() {
         setMessage(action.success);
       }
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Couldn't close this challenge");
+      setMessage(e instanceof Error ? e.message : zhCopy ? "无法关闭这个挑战。" : "Couldn't close this challenge");
     } finally {
       setClosingId(null);
     }
@@ -374,30 +424,35 @@ export default function MarketsPage() {
             </h2>
             <div className="space-y-2">
               {openPublic.slice(0, 5).map((m) => (
-                <Link
-                  key={m.id}
-                  href={`/join/${m.id}`}
-                  className="block p-3 rounded-2xl lp-glass active:scale-[0.98] transition-transform"
-                  style={{ border: `1px solid ${NAVY_FAINT}` }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate mb-0.5" style={{ color: NAVY }}>{m.title}</p>
-                      <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>
-                        by {m.creator.username} / {m.type} / {m.stake > 0 ? `${m.stake} cr` : "free"}
-                      </p>
-                      <p className="text-[10px] font-semibold mt-0.5" style={{ color: NAVY_DIM }}>
-                        Deadline: {formatDeadline(m.deadline)}
-                      </p>
-                    </div>
-                    <span
-                      className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full"
-                      style={{ background: PEACH, color: PEACH_TEXT }}
+                (() => {
+                  const zhCopy = challengeUsesChineseCopy(m);
+                  return (
+                    <Link
+                      key={m.id}
+                      href={`/join/${m.id}`}
+                      className="block p-3 rounded-2xl lp-glass active:scale-[0.98] transition-transform"
+                      style={{ border: `1px solid ${NAVY_FAINT}` }}
                     >
-                      Join
-                    </span>
-                  </div>
-                </Link>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate mb-0.5" style={{ color: NAVY }}>{m.title}</p>
+                          <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>
+                            {zhCopy ? "来自" : "by"} {m.creator.username} / {m.type} / {m.stake > 0 ? `${m.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "free"}
+                          </p>
+                          <p className="text-[10px] font-semibold mt-0.5" style={{ color: NAVY_DIM }}>
+                            {zhCopy ? "截止：" : "Deadline: "}{formatDeadline(m.deadline, zhCopy)}
+                          </p>
+                        </div>
+                        <span
+                          className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full"
+                          style={{ background: PEACH, color: PEACH_TEXT }}
+                        >
+                          {zhCopy ? "加入" : "Join"}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })()
               ))}
             </div>
           </section>
@@ -470,9 +525,10 @@ export default function MarketsPage() {
                 <div className="grid gap-3 md:grid-cols-2">
             {groupItems.map((m, i) => {
               const status = STATUS_STYLE[m.status] || STATUS_STYLE.draft;
+              const zhCopy = challengeUsesChineseCopy(m);
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
-              const manageAction = getManageAction(m, user.id);
+              const manageAction = getManageAction(m, user.id, zhCopy);
               const canAct = manageAction?.kind === "delete" || manageAction?.kind === "cancel" || manageAction?.kind === "archive" || manageAction?.kind === "restore";
               return (
                 <motion.article
@@ -494,7 +550,7 @@ export default function MarketsPage() {
                           {m.type}
                         </span>
                         <span className="text-xs font-bold" style={{ color: m.stake > 0 ? PEACH_TEXT : MINT_TEXT }}>
-                          {m.stake > 0 ? `${m.stake} cr` : "Free"}
+                          {m.stake > 0 ? `${m.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "Free"}
                         </span>
                       </div>
                     </div>
@@ -502,16 +558,16 @@ export default function MarketsPage() {
                       className="flex-shrink-0 inline-flex items-center px-2.5 py-1 text-[11px] font-bold"
                       style={{ color: status.text, background: status.bg, borderRadius: "9999px" }}
                     >
-                      {status.label}
+                      {zhCopy ? STATUS_LABEL_ZH[m.status] ?? status.label : status.label}
                     </span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-xs font-medium" style={{ color: NAVY_DIM }}>
-                    <span>{pcount}/{maxP} players</span>
+                    <span>{pcount}/{maxP} {zhCopy ? "人" : "players"}</span>
                     <span>/</span>
                     <span>{new Date(m.createdAt).toLocaleDateString()}</span>
                     <span>/</span>
-                    <span>{formatDeadline(m.deadline)}</span>
+                    <span>{formatDeadline(m.deadline, zhCopy)}</span>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2">
@@ -520,7 +576,7 @@ export default function MarketsPage() {
                       className="flex-1 text-center py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
                     >
-                      Manage
+                      {zhCopy ? "管理" : "Manage"}
                     </Link>
                     {canAct && (
                       <button
@@ -535,7 +591,7 @@ export default function MarketsPage() {
                           borderRadius: "9999px",
                         }}
                       >
-                        {closingId === m.id ? "Closing..." : manageAction.label}
+                        {closingId === m.id ? (zhCopy ? "处理中..." : "Closing...") : manageAction.label}
                       </button>
                     )}
                     {manageAction?.kind === "locked" && (
