@@ -20,8 +20,10 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { runAgentTurn } from "@/lib/agent/orchestrator";
+import { routeAgentTool } from "@/lib/agent/agent-graph";
+import { executeAgentTool } from "@/lib/agent/tools";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
-import { refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
+import { getDailyAiQuotaStatus, refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { getProviderById } from "@/lib/llm-providers";
 import { parseProtocolSpecV2, protocolPreview } from "@/lib/protocol-spec-v2";
 import { CompileRequestError, compileProtocolForUser } from "@/lib/protocol-compiler";
@@ -125,6 +127,15 @@ function shouldDirectCompile(message: string, draftState: DraftState) {
     /(挑战|赌|比赛|生成|随便|来一个|给我来|给我生成)/.test(message);
 }
 
+function shouldDirectPublish(message: string, draftState: DraftState) {
+  if (!draftState.protocol || !draftState.readyToPublish) return false;
+  if (!draftState.protocol.riskPolicy.allowed) return false;
+  const text = message.trim().toLowerCase();
+  if (!text) return false;
+  return /\b(publish|create|launch|post|make it live|go live|confirm|use createchallengefromprotocol)\b/i.test(text) ||
+    /(\u53d1\u5e03|\u521b\u5efa|\u5275\u5efa|\u4e0a\u7ebf|\u4e0a\u7dda|\u786e\u8ba4|\u78ba\u8a8d|\u5c31\u8fd9\u6837|\u5c31\u9019\u6a23|\u53d1\u51fa\u53bb|\u767c\u51fa\u53bb)/.test(message);
+}
+
 function summarizeProviderCall(metadata: unknown) {
   const raw = metadata && typeof metadata === "object" ? metadata as Record<string, unknown> : {};
   return {
@@ -166,6 +177,60 @@ export async function POST(req: NextRequest) {
   const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : null;
   if (providerId && !getProviderById(providerId)) {
     return Response.json({ error: `Unknown provider: ${providerId}` }, { status: 400 });
+  }
+
+  // Base URL for share links is taken from the incoming request so dev/staging
+  // point at the right host.
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
+  const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://gamble-ai-agent.vercel.app");
+
+  if (shouldDirectPublish(message, draftState)) {
+    const result = await executeAgentTool(
+      "createChallengeFromProtocol",
+      {
+        userId: user.userId,
+        baseUrl,
+        draftState,
+        locationSnapshot,
+        providerId,
+        model,
+      },
+      {},
+    );
+    const draftPatch: Partial<DraftState> = result.ok ? { readyToPublish: false } : {};
+    const nextDraftState: DraftState = result.ok ? { ...draftState, ...draftPatch } : draftState;
+    const toolResult = result.ok ? result.data : undefined;
+    return Response.json({
+      userVisibleReply: result.ok
+        ? "Published. Share the invite link with the opponent."
+        : `I could not publish this challenge: ${result.error || "tool failed"}`,
+      agentAction: "call_tool",
+      draftPatch,
+      toolName: "createChallengeFromProtocol",
+      toolArgs: {},
+      draftState: nextDraftState,
+      toolResult,
+      toolError: result.ok ? undefined : result.error,
+      llmCall: {
+        providerId: "deterministic",
+        model: "agent-direct-publish",
+        responseModel: null,
+        usedApi: false,
+        totalTokens: 0,
+        durationMs: 0,
+      },
+      dailyQuota: await getDailyAiQuotaStatus(user.userId),
+      agentGraph: routeAgentTool("createChallengeFromProtocol", {
+        source: "/api/agent/respond/direct-publish",
+        draftState: nextDraftState,
+        toolOk: result.ok,
+        toolError: result.ok ? null : result.error ?? "tool_failed",
+        resultStatus: typeof toolResult === "object" && toolResult && "status" in toolResult
+          ? String((toolResult as { status?: unknown }).status ?? "")
+          : null,
+      }),
+    });
   }
 
   const intent = classifyAgentIntent(message, draftState);
@@ -256,12 +321,6 @@ export async function POST(req: NextRequest) {
     );
   }
   let dailyQuotaStatus: DailyAiQuotaStatus = quota.status;
-
-  // Base URL for share links is taken from the incoming request so dev/staging
-  // point at the right host.
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
-  const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://gamble-ai-agent.vercel.app");
 
   try {
     const result = await runAgentTurn({
