@@ -295,7 +295,9 @@ export async function POST(req: NextRequest) {
     }
 
     const deadlineSource = deadline || protocolSpec?.timingProtocol.deadline;
-    const deadlineDate = parseChallengeDeadline(deadlineSource);
+    const deadlineDate = parseChallengeDeadline(deadlineSource, {
+      allowPast: protocolSpec?.settlementProtocol.mode === "auto_oracle",
+    });
 
     let challenge: { id: string; title: string } | null = null;
     const evidenceDescriptor = [

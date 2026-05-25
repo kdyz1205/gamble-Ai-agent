@@ -18,7 +18,7 @@ function defaultDeadline(now: Date, fallbackHours: number) {
 
 export function parseChallengeDeadline(
   source: unknown,
-  options?: { now?: Date; fallbackHours?: number },
+  options?: { now?: Date; fallbackHours?: number; allowPast?: boolean },
 ): Date | null {
   if (source == null) return null;
   const text = String(source).trim();
@@ -51,7 +51,7 @@ export function parseChallengeDeadline(
 
   const absolute = new Date(text);
   if (Number.isFinite(absolute.getTime())) {
-    return absolute.getTime() > now.getTime() + PAST_GRACE_MS
+    return options?.allowPast || absolute.getTime() > now.getTime() + PAST_GRACE_MS
       ? absolute
       : defaultDeadline(now, fallbackHours);
   }

@@ -1,4 +1,5 @@
 import { judgeChallenge, type JudgmentResult } from "../src/lib/ai-engine";
+import { parseChallengeDeadline } from "../src/lib/challenge-time";
 import { canAutoSettleWithDataSource, resolveDataSourceForPrompt } from "../src/lib/data-source-registry";
 import { executeDataSourceAdapter } from "../src/lib/data-source-adapters";
 import type { ProtocolSpecV2 } from "../src/lib/protocol-spec-v2";
@@ -84,6 +85,17 @@ const resolvedSourceKey = match.source.sourceKey;
 const gateAllowed = match.autoSettlementGate.allowed;
 
 async function main() {
+  const now = new Date("2026-05-25T07:00:00.000Z");
+  const pastSettlement = "2026-05-25T06:58:00.000Z";
+  assert(
+    parseChallengeDeadline(pastSettlement, { now, allowPast: true })?.toISOString() === pastSettlement,
+    "Oracle create path must be able to preserve already-due absolute settlement timestamps",
+  );
+  assert(
+    parseChallengeDeadline(pastSettlement, { now })?.toISOString() !== pastSettlement,
+    "Normal challenge deadlines should still avoid creating already-expired deadlines",
+  );
+
   const dryRun = await executeDataSourceAdapter({
     sourceKey: "npm_registry_package",
     params: { package: "react" },
