@@ -630,6 +630,13 @@ function coerceVideoMetrics(
   };
 }
 
+function compactVisionRetryImages(images: JudgeVisionImage[]): JudgeVisionImage[] {
+  if (images.length <= 4) return images;
+  const filmstrips = images.filter((image) => /filmstrip/i.test(image.caption));
+  if (filmstrips.length > 0) return filmstrips.slice(0, 4);
+  return [0, 1, 2, 3].map((i) => images[Math.round((i * (images.length - 1)) / 3)]);
+}
+
 function unclearVideoMetrics(
   framesInspected: number,
   rules: string | null | undefined,
@@ -1597,14 +1604,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     videoMetrics?: VideoJudgmentMetrics;
     providerCall?: LlmCallMetadata;
   } | null> => {
-    try {
-      const completion = allVisuals.length > 0
+    const callJudgeModel = async (imagesForCall: JudgeVisionImage[]) => {
+      return imagesForCall.length > 0
         ? await completeOracleJudgeVisionWithMetadata({
             providerId: params.providerId,
             model: modelName,
             system,
             userText,
-            images: allVisuals,
+            images: imagesForCall,
             maxTokens: 1800,
             temperature: 0.1,
           })
@@ -1616,9 +1623,12 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
             maxTokens: 1800,
             temperature: 0.1,
           });
+    };
+
+    const parseCompletion = (completion: { text: string; metadata: LlmCallMetadata }, visualFrameCount: number) => {
       const text = completion.text;
       const unusableVisionVerdict = (reason: string) => {
-        if (allVisuals.length === 0) return null;
+        if (visualFrameCount === 0) return null;
         return {
           winner: null,
           reasoning: `${reason} Manual review is required; no automatic winner settlement is allowed.`,
@@ -1626,7 +1636,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           evidenceQuality: "unclear" as const,
           recommendation: "needs_review" as const,
           blockingIssues: [reason],
-          videoMetrics: unclearVideoMetrics(allVisuals.length, rules || title, reason),
+          videoMetrics: unclearVideoMetrics(visualFrameCount, rules || title, reason),
           providerCall: completion.metadata,
         };
       };
@@ -1637,7 +1647,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         console.warn("[judgeChallenge] LLM judge returned no JSON object", {
           providerId: params.providerId,
           model: modelName,
-          visualFrames: allVisuals.length,
+          visualFrames: visualFrameCount,
           sample: text.slice(0, 300),
         });
         return unusableVisionVerdict(reason);
@@ -1671,9 +1681,14 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         blockingIssues: Array.isArray(parsed.blockingIssues)
           ? parsed.blockingIssues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
           : undefined,
-        videoMetrics: coerceVideoMetrics(parsed.videoMetrics, allVisuals.length, rules || title),
+        videoMetrics: coerceVideoMetrics(parsed.videoMetrics, visualFrameCount, rules || title),
         providerCall: completion.metadata,
       };
+    };
+
+    try {
+      const completion = await callJudgeModel(allVisuals);
+      return parseCompletion(completion, allVisuals.length);
     } catch (err) {
       console.warn("[judgeChallenge] LLM judge call failed", {
         providerId: params.providerId,
@@ -1681,6 +1696,20 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         visualFrames: allVisuals.length,
         error: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
       });
+      const compactVisuals = compactVisionRetryImages(allVisuals);
+      if (compactVisuals.length > 0 && compactVisuals.length < allVisuals.length) {
+        try {
+          const completion = await callJudgeModel(compactVisuals);
+          return parseCompletion(completion, compactVisuals.length);
+        } catch (retryErr) {
+          console.warn("[judgeChallenge] compact vision judge retry failed", {
+            providerId: params.providerId,
+            model: modelName,
+            visualFrames: compactVisuals.length,
+            error: retryErr instanceof Error ? retryErr.message.slice(0, 500) : String(retryErr).slice(0, 500),
+          });
+        }
+      }
       return null;
     }
   };
