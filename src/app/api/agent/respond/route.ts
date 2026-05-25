@@ -22,7 +22,7 @@ import { getAuthUser, unauthorized } from "@/lib/auth";
 import { runAgentTurn } from "@/lib/agent/orchestrator";
 import { routeAgentTool } from "@/lib/agent/agent-graph";
 import { executeAgentTool } from "@/lib/agent/tools";
-import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
+import { emptyDraftState, type AgentMessage, type AgentToolName, type DraftState } from "@/lib/agent/types";
 import { getDailyAiQuotaStatus, refundDailyAiQuota, spendDailyAiQuota, type DailyAiQuotaStatus } from "@/lib/daily-ai-quota";
 import { getProviderById } from "@/lib/llm-providers";
 import { parseProtocolSpecV2, protocolPreview } from "@/lib/protocol-spec-v2";
@@ -148,6 +148,27 @@ function summarizeProviderCall(metadata: unknown) {
   };
 }
 
+function extractChallengeId(message: string) {
+  return message.match(/\b(c[a-z0-9]{12,40})\b/i)?.[1] ?? null;
+}
+
+function directToolFromMessage(message: string, intentRoute: string): { toolName: AgentToolName; challengeId: string } | null {
+  const challengeId = extractChallengeId(message);
+  if (!challengeId) return null;
+
+  const text = message.toLowerCase();
+  if (/\b(confirm|finalize|settle credits|confirm verdict)\b|\u786e\u8ba4|\u7ed3\u7b97/.test(text)) {
+    return { toolName: "confirmVerdict", challengeId };
+  }
+  if (
+    intentRoute === "outcome_judge" ||
+    /\b(run protocol judge|judge|verdict|who won|winner|rejudge)\b|\u5224\u5b9a|\u8c01\u8d62|\u91cd\u65b0\u5224/.test(text)
+  ) {
+    return { toolName: "runProtocolJudge", challengeId };
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
@@ -234,6 +255,56 @@ export async function POST(req: NextRequest) {
   }
 
   const intent = classifyAgentIntent(message, draftState);
+  const directTool = directToolFromMessage(message, intent.route);
+  if (directTool) {
+    const result = await executeAgentTool(
+      directTool.toolName,
+      {
+        userId: user.userId,
+        baseUrl,
+        draftState,
+        locationSnapshot,
+        providerId,
+        model,
+      },
+      { challengeId: directTool.challengeId },
+    );
+    const toolResult = result.ok ? result.data : undefined;
+    const resultStatus = toolResult && typeof toolResult === "object" && "status" in toolResult
+      ? String((toolResult as { status?: unknown }).status ?? "")
+      : null;
+    return Response.json({
+      userVisibleReply: result.ok
+        ? directTool.toolName === "confirmVerdict"
+          ? "Verdict confirmed through the settlement guardrail."
+          : "Protocol judge finished. The backend result is attached."
+        : `I could not run ${directTool.toolName}: ${result.error || "tool failed"}`,
+      agentAction: "call_tool",
+      draftPatch: {},
+      toolName: directTool.toolName,
+      toolArgs: { challengeId: directTool.challengeId },
+      draftState,
+      toolResult,
+      toolError: result.ok ? undefined : result.error,
+      llmCall: {
+        providerId: "deterministic",
+        model: "agent-direct-tool",
+        responseModel: null,
+        usedApi: false,
+        totalTokens: 0,
+        durationMs: 0,
+      },
+      dailyQuota: await getDailyAiQuotaStatus(user.userId),
+      agentGraph: routeAgentTool(directTool.toolName, {
+        source: "/api/agent/respond/direct-tool",
+        draftState,
+        toolOk: result.ok,
+        toolError: result.ok ? null : result.error ?? "tool_failed",
+        resultStatus,
+      }),
+    });
+  }
+
   if (intent.directCompile || shouldDirectCompile(message, draftState)) {
     try {
       const compiled = await compileProtocolForUser({
