@@ -18,6 +18,7 @@ const videoStorage = process.env.E2E_VIDEO_STORAGE || "public_fixture";
 const publicFixtureLivenessPhrase = "Axelrod VIDEO-E2E-STATIC";
 const caseDelayMs = Number(process.env.E2E_ROBUSTNESS_CASE_DELAY_MS || (judgeProvider === "openai" ? 45_000 : 5_000));
 const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
+const compactSummary = process.env.E2E_COMPACT_SUMMARY === "1";
 const selectedCaseIds = (process.env.RUN_ROBUSTNESS_CASES || "")
   .split(",")
   .map((value) => value.trim())
@@ -129,6 +130,67 @@ function txView(tx) {
 function requireCheck(caseProof, name, passed, detail) {
   caseProof.checks[name] = { passed, detail };
   if (!passed) throw new Error(`${caseProof.id}: ${name}`);
+}
+
+function summarizeCase(caseProof) {
+  const providerCall = caseProof.judgment?.providerCall ?? null;
+  return {
+    id: caseProof.id,
+    expectedOutcome: caseProof.expectedOutcome,
+    challengeId: caseProof.challengeId,
+    creatorEvidenceId: caseProof.evidence?.creatorEvidenceId ?? null,
+    opponentEvidenceId: caseProof.evidence?.opponentEvidenceId ?? null,
+    judgmentId: caseProof.judgment?.id ?? null,
+    finalStatus: caseProof.finalStatus ?? null,
+    winnerId: caseProof.judgment?.winnerId ?? null,
+    confidence: caseProof.judgment?.confidence ?? null,
+    evidenceQuality: caseProof.judgment?.evidenceQuality ?? null,
+    recommendation: caseProof.judgment?.settlementRecommendation ?? null,
+    source: caseProof.judgment?.source ?? null,
+    model: caseProof.judgment?.model ?? null,
+    autoSettleEligible: caseProof.judgment?.autoSettleEligible ?? null,
+    blockReason: caseProof.judgment?.autoSettleBlockReason ?? null,
+    responseId: providerCall?.responseId ?? null,
+    imageCount: providerCall?.imageCount ?? null,
+    tokenCount: providerCall?.totalTokens ?? null,
+    validRepCounts: {
+      creator: caseProof.judgment?.videoMetrics?.participantA?.validRepCount ?? null,
+      opponent: caseProof.judgment?.videoMetrics?.participantB?.validRepCount ?? null,
+    },
+    preparedFrameCounts: {
+      creator: caseProof.preparedFrames?.creatorCount ?? null,
+      opponent: caseProof.preparedFrames?.opponentCount ?? null,
+    },
+    creditTxTypes: {
+      creator: caseProof.creditTx?.creator?.map((tx) => tx.type) ?? [],
+      opponent: caseProof.creditTx?.opponent?.map((tx) => tx.type) ?? [],
+      refundCount: caseProof.creditTx?.refundRows?.length ?? 0,
+    },
+    failedChecks: Object.entries(caseProof.checks ?? {})
+      .filter(([, check]) => !check?.passed)
+      .map(([name]) => name),
+  };
+}
+
+function buildProofSummary(proofDoc) {
+  return {
+    base: proofDoc.base,
+    commitSha: proofDoc.commitSha,
+    judgeProvider: proofDoc.judgeProvider,
+    judgeModel: proofDoc.judgeModel,
+    caseCount: proofDoc.caseCount,
+    selectedCases: selectedCaseIds,
+    passed: proofDoc.passed === true,
+    error: proofDoc.error ?? null,
+    cases: proofDoc.cases.map(summarizeCase),
+  };
+}
+
+function printProof(proofDoc) {
+  const output = compactSummary
+    ? buildProofSummary(proofDoc)
+    : { ...proofDoc, summary: buildProofSummary(proofDoc) };
+  console.log(JSON.stringify(output, null, 2));
 }
 
 function phaseFor(repCount, durationSec, elapsedSec) {
@@ -734,7 +796,7 @@ try {
     status: error?.status,
     data: error?.data,
   };
-  console.log(JSON.stringify(proof, null, 2));
+  printProof(proof);
   process.exitCode = 1;
 } finally {
   if (tempDir) {
@@ -744,5 +806,5 @@ try {
 
 if (!proof.error) {
   proof.passed = true;
-  console.log(JSON.stringify(proof, null, 2));
+  printProof(proof);
 }
