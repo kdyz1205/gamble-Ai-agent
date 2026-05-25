@@ -1,0 +1,28 @@
+name: Production Agent Protocol Chain E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly because this exercises real production auth, agent LLM calls, and evidence writes.
+    - cron: "47 12 * * 3"
+
+concurrency:
+  group: production-agent-protocol-chain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  agent-protocol-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_BASE_URL: https://gamble-ai-agent.vercel.app
+      E2E_COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - name: Prove agent protocol-chain tools
+        run: npm run e2e:agent-tool-guardrails
