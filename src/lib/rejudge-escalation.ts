@@ -47,11 +47,13 @@ export type RejudgeEscalationInput = {
 const DEFAULT_MAX_ATTEMPTS = 2;
 
 const STRONGER_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o-mini", "o4-mini", "o3-mini", "gpt-4o"],
-  anthropic: ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
-  google: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.5-pro-preview-05-06"],
-  xai: ["grok-2-latest", "grok-2-vision-latest"],
-  local_ollama: ["llama3.3:latest", "llama4:latest", "llama3.2-vision:latest"],
+  openai: ["gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.4", "gpt-5.5"],
+  anthropic: ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"],
+  google: ["gemini-3.1-flash-lite", "gemini-3-flash", "gemini-3.5-flash", "gemini-3.1-pro"],
+  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+  moonshot: ["kimi-k2.5", "kimi-k2.6"],
+  xai: ["grok-2-vision-latest", "grok-4.3"],
+  local_ollama: ["llama3.3:latest", "qwen3:latest", "llama4:latest", "llama3.2-vision:latest"],
 };
 
 const VISION_PROVIDER_ORDER = ["openai", "google", "anthropic", "xai", "local_ollama"];
@@ -76,8 +78,8 @@ function strongerModelFor(providerId: string | null, model: string | null, needs
   const ordered = STRONGER_MODELS[providerId] ?? getProviderById(providerId)?.models ?? [];
   if (!ordered.length) return null;
 
-  if (providerId === "openai" && /mini/i.test(current) && !isSameModel(current, "gpt-4o")) {
-    return "gpt-4o";
+  if (providerId === "openai" && /mini|nano|fast/i.test(current) && !isSameModel(current, "gpt-5.5")) {
+    return "gpt-5.5";
   }
 
   const currentIndex = ordered.findIndex((candidate) => isSameModel(candidate, current));
@@ -89,9 +91,11 @@ function strongerModelFor(providerId: string | null, model: string | null, needs
   }
 
   const directMiniUpgrade =
-    providerId === "openai" && /mini|fast/i.test(current) ? "gpt-4o" :
-    providerId === "anthropic" && /haiku/i.test(current) ? "claude-sonnet-4-20250514" :
-    providerId === "google" && /flash/i.test(current) ? "gemini-2.5-pro-preview-05-06" :
+    providerId === "openai" && /mini|nano|fast/i.test(current) ? "gpt-5.5" :
+    providerId === "anthropic" && /haiku|sonnet/i.test(current) ? "claude-opus-4-7" :
+    providerId === "google" && /flash/i.test(current) ? "gemini-3.1-pro" :
+    providerId === "deepseek" && /flash/i.test(current) ? "deepseek-v4-pro" :
+    providerId === "moonshot" && /k2\.5|0711|preview/i.test(current) ? "kimi-k2.6" :
     null;
   if (directMiniUpgrade && !isSameModel(directMiniUpgrade, current)) return directMiniUpgrade;
 
@@ -100,10 +104,10 @@ function strongerModelFor(providerId: string | null, model: string | null, needs
 }
 
 function supportsVisionCandidate(providerId: string, model: string) {
-  if (providerId === "openai") return /gpt-4o|o4/i.test(model);
+  if (providerId === "openai") return /gpt-5|gpt-4o|o4/i.test(model);
   if (providerId === "google") return /gemini/i.test(model);
   if (providerId === "anthropic") return /claude/i.test(model);
-  if (providerId === "xai") return /vision|grok-2/i.test(model);
+  if (providerId === "xai") return /vision|grok-2|grok-4/i.test(model);
   if (providerId === "local_ollama") return /vision|llama4/i.test(model);
   return false;
 }

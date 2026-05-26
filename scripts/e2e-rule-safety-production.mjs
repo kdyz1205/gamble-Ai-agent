@@ -152,7 +152,7 @@ try {
     const compiled = await postJson(user.jar, "/api/challenges/compile", {
       inputText: item.inputText,
       providerId: "openai",
-      model: "gpt-4o-mini",
+      model: "gpt-5.4-mini",
       language: "en",
       context: { surface: "e2e_rule_safety", caseKey: item.key },
     });

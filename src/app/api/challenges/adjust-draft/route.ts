@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const providerId = DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
-  const model = def?.defaultModel ?? "claude-haiku-4-5-20251001";
+  const model = def?.defaultModel ?? "deepseek-v4-pro";
 
   const apiKey = process.env[def?.envVar ?? "ANTHROPIC_API_KEY"];
   if (!apiKey) {

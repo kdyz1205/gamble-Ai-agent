@@ -639,10 +639,10 @@ function compactVisionRetryImages(images: JudgeVisionImage[]): JudgeVisionImage[
 
 function visionFallbackModel(providerId: string, primaryModel: string) {
   const def = getProviderById(providerId);
-  if (providerId === "openai") return process.env.OPENAI_JUDGE_MODEL || "gpt-4o";
-  if (providerId === "google") return "gemini-2.0-flash";
-  if (providerId === "anthropic") return process.env.ANTHROPIC_JUDGE_MODEL || def?.defaultModel || "claude-sonnet-4-20250514";
-  if (providerId === "xai") return "grok-2-vision-latest";
+  if (providerId === "openai") return process.env.OPENAI_JUDGE_MODEL || def?.defaultModel || "gpt-5.5";
+  if (providerId === "google") return "gemini-3.5-flash";
+  if (providerId === "anthropic") return process.env.ANTHROPIC_JUDGE_MODEL || def?.defaultModel || "claude-opus-4-7";
+  if (providerId === "xai") return def?.defaultModel || "grok-4.3";
   if (providerId === "local_ollama") return process.env.LOCAL_VISION_MODEL || "llama3.2-vision:latest";
   return def?.defaultModel || primaryModel;
 }
@@ -1620,8 +1620,8 @@ ${evidenceSummary}
 
 ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allVisuals.length > 0 ? `I have attached ${allVisuals.length} frame(s) from the submitted media — examine them as your primary evidence; the descriptions above are supporting context only.\n\n` : ""}${soloMode ? "Solo mode: Participant B does not exist. Return winner=\"A\" only if Participant A proved the claim; otherwise return winner=null. Do not require opponent evidence.\n" : ""}Decide now. Return JSON only.`;
 
-  // One-shot vision call, with optional low-confidence escalation to a bigger model
-  // in the same family. Default path: gpt-4o-mini (fast/cheap). Escalation: gpt-4o.
+  // One-shot vision call, with optional low-confidence escalation to a stronger
+  // current model in the same provider family.
   let lastJudgeFailure: { providerId: string; model: string; error: string } | null = null;
 
   const runJudge = async (attempt: { providerId: string; model: string; role: "primary" | "fallback" }): Promise<{
@@ -1820,7 +1820,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
 /**
  * Return a flagship model name if `model` is a "mini/fast" variant AND
  * confidence is suspect. Returns null to mean "don't escalate".
- * Kept intentionally narrow — only the common openai mini → 4o path today.
+ * Kept intentionally narrow: cheap/fast models only escalate when confidence is suspect.
  */
 function escalateModelForLowConfidence(
   providerId: string,
@@ -1830,15 +1830,20 @@ function escalateModelForLowConfidence(
   if (confidence == null) return null;
   if (confidence >= 0.70) return null;
   const m = model.toLowerCase();
-  if (providerId === "openai" && m.includes("mini")) {
-    // gpt-4o-mini / o4-mini → gpt-4o for the second pass.
-    return "gpt-4o";
+  if (providerId === "openai" && /mini|nano|fast/.test(m)) {
+    return "gpt-5.5";
   }
-  if (providerId === "anthropic" && m.includes("haiku")) {
-    return "claude-sonnet-4-20250514";
+  if (providerId === "anthropic" && /haiku|sonnet/.test(m)) {
+    return "claude-opus-4-7";
   }
   if (providerId === "google" && m.includes("flash")) {
-    return "gemini-2.5-pro-preview-05-06";
+    return "gemini-3.1-pro";
+  }
+  if (providerId === "deepseek" && m.includes("flash")) {
+    return "deepseek-v4-pro";
+  }
+  if (providerId === "moonshot" && /k2\.5|0711|preview/.test(m)) {
+    return "kimi-k2.6";
   }
   return null;
 }

@@ -381,7 +381,7 @@ async function main() {
   validateCases(cases);
   const live = process.env.RUN_PAID_LLM_EVAL === "1" || process.argv.includes("--live");
   const providerId = process.env.LLM_EVAL_PROVIDER || process.env.ORACLE_DEFAULT_PROVIDER?.replaceAll('"', "") || "openai";
-  const model = process.env.LLM_EVAL_MODEL || "gpt-4o-mini";
+  const model = process.env.LLM_EVAL_MODEL || "gpt-5.4-mini";
   const batchSize = Math.max(1, Number(process.env.LLM_EVAL_BATCH_SIZE ?? 10));
   const reportPath = process.env.LLM_EVAL_REPORT_PATH || "docs/evals/gambleai-140-diverse-judgeability-2026-05-24.md";
 

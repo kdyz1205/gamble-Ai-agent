@@ -193,7 +193,7 @@ try {
   const first = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, {
     tier: 1,
     providerId: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5.4-mini",
     autoSettle: false,
   });
   const afterFirst = await getJson(creator.jar, `/api/challenges/${challengeId}`);
@@ -204,7 +204,7 @@ try {
   const second = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, {
     tier: 2,
     providerId: "openai",
-    model: "gpt-4o",
+    model: "gpt-5.5",
     rejudge: true,
     reason: "E2E: creator disputes the first AI verdict and requests a stronger model.",
     autoSettle: false,
@@ -259,7 +259,7 @@ try {
   requireCheck(proof, "second_provider_call_used_api", secondProviderCall?.usedApi === true, secondProviderCall);
   requireCheck(proof, "second_provider_call_http_200", secondProviderCall?.httpStatus === 200 || secondProviderCall?.httpStatus == null, secondProviderCall);
   requireCheck(proof, "second_provider_response_id_present", typeof secondProviderCall?.responseId === "string" && secondProviderCall.responseId.length > 0, secondProviderCall);
-  requireCheck(proof, "second_uses_stronger_model", /gpt-4o/i.test(`${second.model} ${secondProviderCall?.model ?? ""}`), {
+  requireCheck(proof, "second_uses_stronger_model", /gpt-5.5/i.test(`${second.model} ${secondProviderCall?.model ?? ""}`), {
     model: second.model,
     providerModel: secondProviderCall?.model,
   });

@@ -142,7 +142,7 @@ const routeExamples: Array<{ title: string; trigger: string; trace: AgentGraphTr
       source: "/api/challenges/compile",
       compileSource: "llm",
       providerId: "openai",
-      model: "gpt-4o-mini",
+      model: "gpt-5.4-mini",
     }),
   },
   {

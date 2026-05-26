@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(135deg, #F8FFFB 0%, #EEF7FF 48%, #FFF4EF 100%);color:#12201A;} 
+.page{width:1440px;height:900px;padding:34px 44px;display:grid;grid-template-columns:1.04fr .96fr;gap:34px;overflow:hidden}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:72px}.mark{width:44px;height:44px;border-radius:14px;background:#10B981;box-shadow:0 20px 60px color-mix(in srgb, #10B981 26%, transparent);display:grid;place-items:center;color:#F7FBF8;font-weight:900}.brand span{font-size:13px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#60746B}
+h1{font-size:82px;line-height:.92;margin:0 0 18px;letter-spacing:-.055em;max-width:780px}.sub{font-size:22px;line-height:1.45;color:#60746B;max-width:680px;margin:0 0 28px;font-weight:650}.chips{display:flex;gap:12px;margin-bottom:28px}.chip{border:1px solid #DCE9E2;background:rgba(255,255,255,0.9);border-radius:999px;padding:11px 16px;font-size:13px;font-weight:900;color:#12201A;box-shadow:0 18px 50px rgba(0,0,0,.06)}.chip b{color:#10B981;margin-right:8px;text-transform:uppercase;letter-spacing:.12em;font-size:10px}
+.composer{background:rgba(255,255,255,0.9);border:1px solid #DCE9E2;border-radius:28px;box-shadow:0 28px 90px rgba(0,0,0,.14);overflow:hidden;backdrop-filter:blur(22px)}.input{height:128px;padding:28px;font-size:22px;font-weight:700;color:#12201A;display:flex;align-items:flex-start}.placeholder{color:#60746B}.bar{border-top:1px solid #DCE9E2;display:flex;align-items:center;justify-content:space-between;padding:16px 18px}.tools{display:flex;align-items:center;gap:10px}.pill{border-radius:999px;background:#F1F7F4;border:1px solid #DCE9E2;padding:9px 13px;font-size:12px;font-weight:850;color:#60746B}.send{border:0;border-radius:999px;padding:14px 28px;background:#10B981;color:#F7FBF8;font-weight:950;font-size:15px;box-shadow:0 18px 50px color-mix(in srgb, #10B981 25%, transparent)}
+.model{margin-top:18px;display:flex;align-items:center;gap:8px;width:max-content;border:1px solid #DCE9E2;background:rgba(255,255,255,0.9);border-radius:999px;padding:8px 10px;backdrop-filter:blur(18px);box-shadow:0 16px 50px rgba(0,0,0,.08)}.modelLabel{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:950;color:#10B981}.modelOpt{background:#F1F7F4;border-radius:999px;padding:9px 13px;font-size:13px;font-weight:850;color:#12201A;border:1px solid #DCE9E2}
+.tries{margin-top:36px}.tryTitle{font-size:12px;font-weight:950;color:#10B981;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}.tryBtns{display:flex;flex-wrap:wrap;gap:12px}.tryBtns button{border:1px solid #DCE9E2;background:rgba(255,255,255,0.9);color:#12201A;border-radius:999px;padding:15px 20px;font-size:15px;font-weight:900;box-shadow:0 16px 45px rgba(0,0,0,.05)}
+.right{display:grid;grid-template-rows:auto auto 1fr;gap:20px}.panel{border:1px solid #DCE9E2;background:rgba(255,255,255,0.9);border-radius:28px;padding:24px;box-shadow:0 28px 90px rgba(0,0,0,.12);backdrop-filter:blur(22px)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tile{border:1px solid #DCE9E2;background:#F1F7F4;border-radius:18px;padding:16px}.tile small{display:block;color:#60746B;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:950;margin-bottom:8px}.tile strong{font-size:17px}.ready{margin-top:18px;border:1px solid color-mix(in srgb, #10B981 35%, #DCE9E2);background:color-mix(in srgb, #10B981 13%, transparent);border-radius:21px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center}.ready strong{font-size:18px}.ready span{font-size:12px;font-weight:950;color:#10B981;background:rgba(255,255,255,0.9);border:1px solid #DCE9E2;border-radius:999px;padding:8px 13px}
+.invite{display:grid;gap:8px}.invite b{color:#10B981;font-size:12px;letter-spacing:.12em;text-transform:uppercase}.invite strong{font-size:18px}.url{margin-top:8px;border:1px solid #DCE9E2;border-radius:14px;background:#F1F7F4;padding:12px 14px;color:#60746B;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.join h3{margin:0 0 8px;color:#10B981;font-size:13px;letter-spacing:.12em;text-transform:uppercase}.join p{margin:0 0 16px;color:#60746B;font-weight:700}.room{border:1px solid #DCE9E2;border-radius:22px;background:#F1F7F4;padding:18px 18px 20px;display:flex;align-items:center;justify-content:space-between}.roomText strong{display:block;font-size:20px;margin-bottom:6px}.roomText span{color:#60746B;font-size:13px;font-weight:800}.cta{border:0;border-radius:999px;background:#F97316;color:#F7FBF8;font-weight:950;padding:13px 18px}
+.signature{position:absolute;right:48px;bottom:26px;color:#60746B;font-size:12px;font-weight:800}.n{color:#10B981;font-weight:950}
+@supports not (color: color-mix(in srgb, white, black)){.send{box-shadow:none}.ready{background:#F1F7F4}}
+</style>
+</head>
+<body>
+  <main class="page">
+    <section>
+      <div class="brand"><div class="mark">A</div><span>Axelrod / theme 02</span></div>
+      <h1>Bet anything you can prove.</h1>
+      <p class="sub">Say it once. Axelrod turns the prompt into rules, proof, identity, verdict, and settlement.</p>
+      <div class="chips"><div class="chip"><b>Say</b>one line</div><div class="chip"><b>Prove</b>camera</div><div class="chip"><b>Settle</b>gate</div></div>
+      <div class="composer">
+        <div class="input"><span class="placeholder">Challenge Jerry: 20 push-ups, same camera...</span></div>
+        <div class="bar"><div class="tools"><span class="pill">Auto</span><span class="pill">EN</span><span class="pill">中</span><span class="pill">Mic</span></div><button class="send">Send</button></div>
+      </div>
+      <div class="model"><span class="modelLabel">Model</span><span class="modelOpt">DeepSeek</span><span class="modelOpt">deepseek-v4-pro</span></div>
+      <div class="tries"><div class="tryTitle">Try one</div><div class="tryBtns"><button>Solo proof</button><button>Answer challenge</button><button>Push-up video</button><button>Plank hold</button></div></div>
+    </section>
+    <section class="right">
+      <div class="panel">
+        <div class="grid">
+          <div class="tile"><small>Prompt</small><strong>one sentence</strong></div>
+          <div class="tile"><small>Protocol</small><strong>rules + safety</strong></div>
+          <div class="tile"><small>Evidence</small><strong>video / GPS / oracle</strong></div>
+          <div class="tile"><small>Verdict</small><strong>AI + review</strong></div>
+        </div>
+        <div class="ready"><strong>Push-up challenge<br><span style="font-size:14px;color:#60746B;font-weight:800">same camera / liveness / payout</span></strong><span>ready</span></div>
+      </div>
+      <div class="panel invite"><b>Beta invite</b><strong>Give a friend +10 pts. You get +10 pts when they join.</strong><div class="url">https://axelrod.app/?ref=kdys1205&utm_source=invite...</div></div>
+      <div class="panel join"><h3>Join nearby</h3><p>No nearby challenges found — showing top open challenges globally.</p><div class="room"><div class="roomText"><strong>Radar push-up sprint</strong><span>@alex / free / 3.2 mi</span></div><button class="cta">Review</button></div></div>
+    </section>
+  </main>
+  <div class="signature"><span class="n">Porcelain Mint</span> · bright, simple, approachable</div>
+</body>
+</html>

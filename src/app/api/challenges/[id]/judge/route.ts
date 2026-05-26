@@ -639,7 +639,7 @@ export async function POST(
   const judgeModel =
     modelOverride?.trim() ||
     (!providerIdOverride && !modelOverride && bothHaveVideoUrl && googleVisionReady
-      ? "gemini-2.0-flash"
+      ? "gemini-3.5-flash"
       : pdef?.id === "anthropic"
         ? aiModel.model
         : (pdef?.defaultModel ?? aiModel.model));

@@ -33,7 +33,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     envVar: "OLLAMA_API_KEY",
     apiKeyOptional: true,
     defaultModel: "llama4:latest",
-    models: ["llama4:latest", "llama3.3:latest", "llama3.2-vision:latest", "qwen2.5:latest"],
+    models: ["llama4:latest", "qwen3:latest", "llama3.3:latest", "llama3.2-vision:latest"],
     docsUrl: "https://ollama.com",
   },
   {
@@ -42,8 +42,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Anthropic",
     kind: "anthropic",
     envVar: "ANTHROPIC_API_KEY",
-    defaultModel: "claude-haiku-4-5-20251001",
-    models: ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
+    defaultModel: "claude-opus-4-7",
+    models: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     docsUrl: "https://docs.anthropic.com",
   },
   {
@@ -53,8 +53,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.openai.com/v1",
     envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-4o-mini",
-    models: ["gpt-4o-mini", "gpt-4o", "o4-mini", "o3-mini"],
+    defaultModel: "gpt-5.5",
+    models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4.1", "gpt-4o"],
     docsUrl: "https://platform.openai.com/docs",
   },
   {
@@ -65,7 +65,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     /** Router uses env AZURE_OPENAI_BASE_URL (deployment path + api-version), not this field. */
     baseUrl: "",
     envVar: "AZURE_OPENAI_API_KEY",
-    defaultModel: "gpt-4o-mini",
+    defaultModel: "gpt-5.5",
     models: [],
     docsUrl: "https://learn.microsoft.com/azure/ai-services/openai/",
   },
@@ -75,8 +75,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Google",
     kind: "google",
     envVar: "GOOGLE_AI_API_KEY",
-    defaultModel: "gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-2.5-pro-preview-05-06", "gemini-1.5-pro"],
+    defaultModel: "gemini-3.5-flash",
+    models: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite", "gemini-2.5-pro"],
     docsUrl: "https://ai.google.dev/docs",
   },
   {
@@ -86,8 +86,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.groq.com/openai/v1",
     envVar: "GROQ_API_KEY",
-    defaultModel: "llama-3.3-70b-versatile",
-    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+    defaultModel: "openai/gpt-oss-120b",
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
     docsUrl: "https://console.groq.com/docs",
   },
   {
@@ -97,8 +97,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.mistral.ai/v1",
     envVar: "MISTRAL_API_KEY",
-    defaultModel: "mistral-small-latest",
-    models: ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
+    defaultModel: "mistral-large-latest",
+    models: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"],
     docsUrl: "https://docs.mistral.ai",
   },
   {
@@ -108,8 +108,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.moonshot.ai/v1",
     envVar: "MOONSHOT_API_KEY",
-    defaultModel: "kimi-k2-0711-preview",
-    models: ["kimi-k2-0711-preview", "moonshot-v1-8k", "moonshot-v1-32k"],
+    defaultModel: "kimi-k2.6",
+    models: ["kimi-k2.6", "kimi-k2.5", "moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
     docsUrl: "https://platform.moonshot.ai/docs",
   },
   {
@@ -119,8 +119,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.deepseek.com",
     envVar: "DEEPSEEK_API_KEY",
-    defaultModel: "deepseek-v4-flash",
-    models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+    defaultModel: "deepseek-v4-pro",
+    models: ["deepseek-v4-pro", "deepseek-v4-flash"],
     docsUrl: "https://api-docs.deepseek.com",
   },
   {
@@ -130,8 +130,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.x.ai/v1",
     envVar: "XAI_API_KEY",
-    defaultModel: "grok-2-latest",
-    models: ["grok-2-latest", "grok-2-vision-latest"],
+    defaultModel: "grok-4.3",
+    models: ["grok-4.3", "grok-4.20", "grok-2-vision-latest"],
     docsUrl: "https://docs.x.ai",
   },
   {
@@ -141,8 +141,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.together.xyz/v1",
     envVar: "TOGETHER_API_KEY",
-    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+    defaultModel: "deepseek-ai/DeepSeek-V4-Pro",
+    models: ["deepseek-ai/DeepSeek-V4-Pro", "moonshotai/Kimi-K2.6", "openai/gpt-oss-120b", "Qwen/Qwen3.5-397B-A17B"],
     docsUrl: "https://docs.together.ai",
   },
   {
@@ -152,8 +152,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.fireworks.ai/inference/v1",
     envVar: "FIREWORKS_API_KEY",
-    defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
-    models: ["accounts/fireworks/models/llama-v3p3-70b-instruct"],
+    defaultModel: "accounts/fireworks/models/llama4-maverick-instruct-basic",
+    models: ["accounts/fireworks/models/llama4-maverick-instruct-basic", "accounts/fireworks/models/llama-v3p3-70b-instruct"],
     docsUrl: "https://docs.fireworks.ai",
   },
 ];
@@ -213,7 +213,7 @@ export function resolveTierModel(provider: LlmProviderDefinition | undefined, ti
     if (needsVision && process.env.LOCAL_VISION_MODEL) return process.env.LOCAL_VISION_MODEL;
     return process.env.LOCAL_LLM_MODEL || provider.defaultModel;
   }
-  if (provider.id === "google" && needsVision) return "gemini-2.0-flash";
+  if (provider.id === "google" && needsVision) return "gemini-3.5-flash";
   if (provider.id === "openai" && tierId === 3) return process.env.OPENAI_JUDGE_MODEL || provider.defaultModel;
   if (provider.id === "anthropic" && tierId === 3) return process.env.ANTHROPIC_JUDGE_MODEL || provider.defaultModel;
   return provider.defaultModel;

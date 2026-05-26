@@ -337,7 +337,7 @@ export default function CalculatorPage() {
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Costs</p>
             <Slider
               label="AI cost per judgment"
-              explain="OpenAI GPT-4o vision: ~$0.30. gpt-4o-mini: ~$0.02. Hybrid with frame pre-extraction: ~$0.01."
+              explain="Vision judging cost depends on the selected current model and frame count. Hybrid frame extraction keeps repeat reviews cheaper."
               value={inputs.aiCostPerJudgment}
               min={0} max={0.5} step={0.005}
               format={(v) => `$${v.toFixed(3)}`}

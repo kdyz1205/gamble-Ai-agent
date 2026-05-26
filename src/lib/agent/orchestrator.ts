@@ -79,7 +79,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     ? requestedProviderId
     : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
-  const model = input.model?.trim() || def?.defaultModel || "gpt-4o-mini";
+  const model = input.model?.trim() || def?.defaultModel || "deepseek-v4-pro";
 
   // Build the user-turn payload. We give the LLM:
   //   (a) the hidden draft state as JSON,

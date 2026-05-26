@@ -15,7 +15,7 @@ const lowConfidencePlan = planRejudgeEscalation({
     blockingIssues: ["Confidence 72% is below the 85% settlement threshold."],
   },
   currentProviderId: "openai",
-  currentModel: "gpt-4o-mini",
+  currentModel: "gpt-5.4-mini",
   needsVision: true,
   attemptCount: 1,
   configuredProviderIds,
@@ -23,7 +23,7 @@ const lowConfidencePlan = planRejudgeEscalation({
 assert.equal(lowConfidencePlan.action, "retry_stronger_model");
 assert.equal(lowConfidencePlan.shouldRunRejudge, true);
 assert.equal(lowConfidencePlan.nextProviderId, "openai");
-assert.equal(lowConfidencePlan.nextModel, "gpt-4o");
+assert.equal(lowConfidencePlan.nextModel, "gpt-5.5");
 
 const fallbackPlan = planRejudgeEscalation({
   verdict: {
@@ -57,7 +57,7 @@ const hardFailurePlan = planRejudgeEscalation({
     blockingIssues: ["Participant B full body is not visible enough."],
   },
   currentProviderId: "openai",
-  currentModel: "gpt-4o",
+  currentModel: "gpt-5.5",
   needsVision: true,
   attemptCount: 1,
   configuredProviderIds,
@@ -78,7 +78,7 @@ const maxAttemptsPlan = planRejudgeEscalation({
     blockingIssues: ["Confidence 73% is below the 85% settlement threshold."],
   },
   currentProviderId: "openai",
-  currentModel: "gpt-4o-mini",
+  currentModel: "gpt-5.4-mini",
   needsVision: true,
   attemptCount: 2,
   maxAttempts: 2,
@@ -99,7 +99,7 @@ const eligiblePlan = planRejudgeEscalation({
     blockingIssues: [],
   },
   currentProviderId: "openai",
-  currentModel: "gpt-4o",
+  currentModel: "gpt-5.5",
   needsVision: true,
   attemptCount: 1,
   configuredProviderIds,

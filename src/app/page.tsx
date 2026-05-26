@@ -29,6 +29,23 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:claude|anthropic)$/i, providerId: "anthropic" },
 ];
 
+const PREFERRED_MODEL_REPLACEMENTS: Record<string, string> = {
+  "gpt-4o-mini": "gpt-5.4-mini",
+  "gpt-4o": "gpt-5.5",
+  "o4-mini": "gpt-5.4-mini",
+  "o3-mini": "gpt-5.4-mini",
+  "claude-sonnet-4-20250514": "claude-sonnet-4-6",
+  "claude-opus-4-20250514": "claude-opus-4-7",
+  "gemini-2.0-flash": "gemini-3.5-flash",
+  "gemini-2.5-flash": "gemini-3.5-flash",
+  "gemini-2.5-pro": "gemini-3.1-pro",
+  "gemini-2.5-pro-preview-05-06": "gemini-3.1-pro",
+  "kimi-k2-0711-preview": "kimi-k2.6",
+  "deepseek-chat": "deepseek-v4-flash",
+  "deepseek-reasoner": "deepseek-v4-pro",
+  "deepseek-v4-flash": "deepseek-v4-pro",
+};
+
 const REFERRAL_STORAGE_KEY = "axelrod_referral";
 const GTM_STORAGE_KEY = "axelrod_gtm";
 
@@ -63,9 +80,14 @@ function readStoredGtm() {
 function initialOraclePrefs(): OraclePrefs {
   const prefs = readOracleLlmPrefs();
   const provider = (prefs.providerId ? getProviderById(prefs.providerId) : undefined) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
+  const storedModel = prefs.model?.trim() || "";
+  const preferredStoredModel = PREFERRED_MODEL_REPLACEMENTS[storedModel] ?? storedModel;
+  const modelIsCurrent =
+    preferredStoredModel &&
+    (!provider?.models.length || provider.models.includes(preferredStoredModel));
   return {
     providerId: provider?.id ?? DEFAULT_LLM_PROVIDER_ID,
-    model: prefs.model ?? provider?.defaultModel ?? null,
+    model: modelIsCurrent ? preferredStoredModel : provider?.defaultModel ?? null,
   };
 }
 
@@ -387,7 +409,13 @@ export default function Home() {
   const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
     const provider = getProviderById(providerId);
     if (!provider) return;
-    const nextPrefs = { providerId, model: model?.trim() || provider.defaultModel };
+    const requestedModel = model?.trim() || provider.defaultModel;
+    const preferredModel = PREFERRED_MODEL_REPLACEMENTS[requestedModel] ?? requestedModel;
+    const safeModel =
+      preferredModel && (!provider.models.length || provider.models.includes(preferredModel))
+        ? preferredModel
+        : provider.defaultModel;
+    const nextPrefs = { providerId, model: safeModel };
     setOraclePrefs(nextPrefs);
     writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
   }, []);
@@ -766,19 +794,14 @@ export default function Home() {
       <main className="relative z-10 flex-1 px-4 pb-16 pt-4 sm:px-6 lg:pt-8">
         <div className="mx-auto w-full max-w-7xl">
           {appState === "idle" && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
-              <section className="min-w-0">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-white/90 px-3 py-2 shadow-sm" style={{ borderColor: "#D1FAE5" }}>
-                  <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
-                  <span className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>AI referee</span>
-                </div>
-                <h1 className="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" style={{ color: "#172033", lineHeight: 1.02 }}>
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto grid max-w-6xl items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <section className="min-w-0 pt-8 sm:pt-12 lg:pt-16">
+                <h1 className="max-w-4xl text-5xl font-black tracking-[-0.065em] sm:text-6xl lg:text-7xl" style={{ color: "#101827", lineHeight: 0.92 }}>
                   Bet anything you can prove.
                 </h1>
-                <p className="mt-4 max-w-xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
-                  Say it once. Axelrod builds the rules, proof, and verdict path.
+                <p className="mt-5 max-w-2xl text-base font-semibold leading-relaxed sm:text-xl" style={{ color: "#526078" }}>
+                  Say it once. Axelrod turns it into a challenge your friend can join, record, and settle.
                 </p>
-                <HeroSignalBar />
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
@@ -956,11 +979,11 @@ function LaunchInviteCard({
 function HomeStatusCard({ policy }: { policy: api.PaymentPolicyStatus | null }) {
   const cashAllowed = Boolean(policy?.cashStakeAllowed);
   return (
-    <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
+    <section className="rounded-[28px] border bg-white/80 p-4 text-left shadow-sm backdrop-blur-xl" style={{ borderColor: "rgba(148,163,184,0.24)", boxShadow: "0 22px 70px rgba(15,23,42,0.08)" }}>
       <div className="grid grid-cols-3 gap-2">
-        <StatusChip label="Create" value="draft" />
-        <StatusChip label="Prove" value="proof" />
-        <StatusChip label="Settle" value="gate" />
+        <StatusChip label="Say" value="1 line" />
+        <StatusChip label="Record" value="proof" />
+        <StatusChip label="Settle" value="win" />
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border px-3 py-2" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
         <span className="text-xs font-black uppercase tracking-wide" style={{ color: "#64748B" }}>
@@ -979,28 +1002,6 @@ function StatusChip({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border bg-[#F8FAFC] px-3 py-3" style={{ borderColor: "#E2E8F0" }}>
       <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>{label}</p>
       <p className="mt-1 truncate text-sm font-black" style={{ color: "#172033" }}>{value}</p>
-    </div>
-  );
-}
-
-function HeroSignalBar() {
-  const metrics = [
-    { label: "Say", value: "one line" },
-    { label: "Prove", value: "proof" },
-    { label: "Settle", value: "gate" },
-  ];
-  return (
-    <div className="mt-5 flex max-w-2xl flex-wrap gap-2">
-      {metrics.map((metric) => (
-        <div
-          key={metric.label}
-          className="inline-flex items-center gap-2 rounded-full border bg-white/80 px-3 py-2 shadow-sm"
-          style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 26px rgba(15,23,42,0.04)" }}
-        >
-          <span className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "#64748B" }}>{metric.label}</span>
-          <span className="text-xs font-black" style={{ color: "#172033" }}>{metric.value}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -1091,19 +1092,14 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
   const hidden = HOMEPAGE_CHALLENGE_LOOPS.slice(4);
   return (
     <section className="mt-5">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
-          Try one
-        </p>
-      </div>
       <div className="flex flex-wrap gap-2">
         {visible.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onPick(item.prompt)}
-            className="group rounded-full border bg-white/90 px-4 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
-            style={{ borderColor: "#E2E8F0", boxShadow: "0 10px 28px rgba(15,23,42,0.04)" }}
+            className="group rounded-full border bg-white/70 px-4 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
+            style={{ borderColor: "rgba(148,163,184,0.24)", boxShadow: "0 10px 28px rgba(15,23,42,0.04)" }}
           >
             <span className="text-sm font-extrabold transition group-hover:text-[#047857]" style={{ color: "#172033" }}>{item.title}</span>
           </button>
@@ -1111,8 +1107,8 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
       </div>
       {hidden.length > 0 && (
         <details className="mt-3 w-fit">
-          <summary className="cursor-pointer rounded-full border bg-white/70 px-4 py-2 text-xs font-black uppercase tracking-wide" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
-            More loops
+          <summary className="cursor-pointer rounded-full border bg-white/50 px-4 py-2 text-xs font-black" style={{ borderColor: "rgba(148,163,184,0.24)", color: "#64748B" }}>
+            More
           </summary>
           <div className="mt-2 flex max-w-2xl flex-wrap gap-2">
             {hidden.map((item) => (
@@ -1273,7 +1269,7 @@ function ModelModeBar({
   prefs: OraclePrefs;
   onChange: (providerId: string, model?: string | null) => void;
 }) {
-  const visible = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic"]
+  const visible = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
     .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
     .filter(Boolean) as typeof LLM_PROVIDERS;
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
@@ -1282,21 +1278,26 @@ function ModelModeBar({
   const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
 
   return (
-    <div className="mt-4 flex justify-center">
-      <div
-        className="flex max-w-full items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm"
-        style={{ borderColor: "#DDE7F0" }}
+    <details className="group mt-3 w-fit">
+      <summary
+        className="list-none cursor-pointer rounded-full border bg-white/70 px-4 py-2 text-xs font-black shadow-sm transition hover:bg-white"
+        style={{ borderColor: "rgba(148,163,184,0.28)", color: "#526078" }}
       >
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: "#047857" }}>
-          Model
-        </span>
+        <span className="text-[#047857]">Model</span>
+        <span className="ml-2">{selectedProvider?.shortLabel ?? "AI"}</span>
+        <span className="ml-1 text-slate-400">/ {selectedModel}</span>
+      </summary>
+      <div
+        className="mt-2 flex max-w-full flex-wrap items-center gap-2 rounded-[22px] border bg-white/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        style={{ borderColor: "rgba(148,163,184,0.28)" }}
+      >
         <select
           value={selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID}
           onChange={(event) => {
             const provider = getProviderById(event.target.value);
             onChange(event.target.value, provider?.defaultModel ?? null);
           }}
-          className="max-w-[8.5rem] rounded-full border px-2.5 py-1.5 text-xs font-extrabold outline-none"
+          className="max-w-[8.5rem] rounded-full border px-3 py-2 text-xs font-extrabold outline-none"
           style={{ borderColor: "#DDE7F0", color: "#172033", background: "#F8FAFC" }}
           aria-label="AI provider"
         >
@@ -1309,7 +1310,7 @@ function ModelModeBar({
         <select
           value={selectedModel}
           onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value)}
-          className="max-w-[11rem] rounded-full border px-2.5 py-1.5 text-xs font-bold outline-none"
+          className="max-w-[13rem] rounded-full border px-3 py-2 text-xs font-bold outline-none"
           style={{ borderColor: "#DDE7F0", color: "#526078", background: "#FFFFFF" }}
           aria-label="AI model"
         >
@@ -1321,7 +1322,7 @@ function ModelModeBar({
           ))}
         </select>
       </div>
-    </div>
+    </details>
   );
 }
 

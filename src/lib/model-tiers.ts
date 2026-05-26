@@ -5,8 +5,8 @@
  */
 export const MODEL_TIERS = {
   LIGHT: { id: 1, name: "Light", model: "claude-haiku-4-5-20251001", priceUsd: 0.01 },
-  PRO: { id: 2, name: "Pro", model: "claude-sonnet-4-20250514", priceUsd: 0.05 },
-  MAX: { id: 3, name: "Max", model: "claude-opus-4-20250514", priceUsd: 0.25 },
+  PRO: { id: 2, name: "Pro", model: "claude-sonnet-4-6", priceUsd: 0.05 },
+  MAX: { id: 3, name: "Max", model: "claude-opus-4-7", priceUsd: 0.25 },
 } as const;
 
 export type TierName = keyof typeof MODEL_TIERS;

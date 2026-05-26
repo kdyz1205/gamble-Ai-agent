@@ -1,6 +1,6 @@
 const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
 const providerId = process.env.E2E_AGENT_PROVIDER || "openai";
-const model = process.env.E2E_AGENT_MODEL || "gpt-4o-mini";
+const model = process.env.E2E_AGENT_MODEL || "gpt-5.4-mini";
 
 class Jar {
   constructor() {

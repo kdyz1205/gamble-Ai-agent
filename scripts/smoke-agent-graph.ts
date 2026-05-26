@@ -99,7 +99,7 @@ const compileTrace = routeCompiledProtocol(protocol(), {
   source: "smoke",
   compileSource: "llm",
   providerId: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-5.4-mini",
 });
 assert.equal(compileTrace.status, "executed");
 assert.ok(includesInOrder(compileTrace.route, ["rule_safety", "protocol_compiler", "identity_protocol", "evidence_protocol", "settlement_gate"]));

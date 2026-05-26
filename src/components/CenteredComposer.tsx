@@ -23,14 +23,14 @@ const LANGUAGE_OPTIONS: Array<{
   {
     value: "auto",
     shortLabel: "Auto",
-    label: "Auto language",
-    status: "Auto detects EN/ZH.",
+    label: "Auto",
+    status: "",
   },
   {
     value: "en",
     shortLabel: "English",
-    label: "English",
-    status: "English output.",
+    label: "EN",
+    status: "",
   },
   {
     value: "zh",
@@ -338,7 +338,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   // Axelrod canonical palette.
   const NAVY = "#1E293B";
   const NAVY_DIM = "#64748B";
-  const NAVY_FAINT = "#E2E8F0";
+  const NAVY_FAINT = "rgba(148,163,184,0.28)";
   const PEACH = "#FED7AA";       // orange-200 CTA
   const PEACH_DARK = "#FDBA74";  // orange-300 hover
   const PEACH_TEXT = "#7C2D12";  // orange-900 text on peach
@@ -352,13 +352,14 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     <div className="w-full">
       <div
         style={{
-          background: "#FFFFFF",
-          border: `2px solid ${busy ? PEACH : NAVY_FAINT}`,
-          borderRadius: "24px",
+          background: "rgba(255,255,255,0.86)",
+          border: `1px solid ${busy ? PEACH : NAVY_FAINT}`,
+          borderRadius: "28px",
           boxShadow: busy
             ? `0 4px 14px 0 ${ORANGE_GLOW}`
-            : `0 8px 30px rgba(15,23,42,0.04)`,
+            : `0 26px 80px rgba(15,23,42,0.09)`,
           transition: "all 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+          backdropFilter: "blur(18px)",
         }}
       >
         <textarea
@@ -369,7 +370,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           placeholder={isActive ? "Tweak it: \"$20 stake\" or \"video proof\"" : "Challenge Alex: I can do 20 pushups in one minute..."}
           rows={isActive ? 1 : 2}
           disabled={busy}
-          className="w-full bg-transparent px-5 py-4 text-base font-semibold resize-none focus:outline-none placeholder:font-normal"
+          className="w-full bg-transparent px-5 py-5 text-lg font-semibold resize-none focus:outline-none placeholder:font-normal"
           style={{ color: NAVY, caretColor: PEACH }}
         />
 
@@ -387,7 +388,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           )}
         </AnimatePresence>
 
-        <div className="flex items-center justify-between px-3 py-2.5 border-t" style={{ borderColor: NAVY_FAINT }}>
+        <div className="flex items-center justify-between px-3 py-3 border-t" style={{ borderColor: NAVY_FAINT }}>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1" aria-label="Language mode">
               {LANGUAGE_OPTIONS.map(option => (
@@ -395,17 +396,16 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
                   key={option.value}
                   onClick={() => setVoiceLang(option.value)}
                   disabled={listening || isTranscribing}
-                  className="px-2.5 py-1 text-[11px] font-bold transition-all disabled:opacity-40"
+                  className="px-2.5 py-1 text-[11px] font-black transition-all disabled:opacity-40"
                   style={{
-                    color: voiceLang === option.value ? "#FFFFFF" : NAVY_DIM,
+                    color: voiceLang === option.value ? PEACH_TEXT : NAVY_DIM,
                     background: voiceLang === option.value ? PEACH : "transparent",
                     borderRadius: "999px",
                   }}
                   title={option.status}
                   aria-pressed={voiceLang === option.value}
                 >
-                  <span className="hidden sm:inline">{option.label}</span>
-                  <span className="sm:hidden">{option.shortLabel}</span>
+                  <span>{option.label}</span>
                 </button>
               ))}
             </div>
@@ -459,7 +459,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
             disabled={!canSend}
             whileTap={canSend ? { scale: 0.94 } : undefined}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
-            className="px-6 py-2 text-sm font-bold transition-all disabled:opacity-40"
+            className="px-7 py-2.5 text-sm font-black transition-all disabled:opacity-40"
             style={{
               color: canSend ? PEACH_TEXT : NAVY_DIM,
               background: canSend ? PEACH : NAVY_FAINT,
@@ -471,9 +471,11 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           </motion.button>
         </div>
       </div>
-      <p className="mt-2 px-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
-        {selectedLanguage.status}
-      </p>
+      {selectedLanguage.status && (
+        <p className="mt-2 px-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
+          {selectedLanguage.status}
+        </p>
+      )}
       {voiceError && (
         <p className="mt-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ color: "#991B1B", background: "#FECACA" }}>
           {voiceError}

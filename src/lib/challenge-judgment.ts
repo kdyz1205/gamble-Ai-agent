@@ -217,7 +217,7 @@ export async function executeChallengeJudgment(
       ? tierMeta.model
       : (pdef?.defaultModel ?? tierMeta.model));
   if (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady) {
-    judgeModel = "gemini-2.0-flash";
+    judgeModel = "gemini-3.5-flash";
   }
   const aiModelLabel = `${pdef?.shortLabel ?? "LLM"} · ${judgeModel}`;
 

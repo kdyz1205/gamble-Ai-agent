@@ -109,7 +109,7 @@ function requireCheck(proof, name, passed, detail) {
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_COMPILE_PROVIDER || "openai";
-const model = process.env.E2E_COMPILE_MODEL || "gpt-4o-mini";
+const model = process.env.E2E_COMPILE_MODEL || "gpt-5.4-mini";
 const inputText = process.env.E2E_COMPILE_INPUT ||
   `I bet Alex I can do 20 pushups in one minute. Proof should be video. ${stamp}`;
 
