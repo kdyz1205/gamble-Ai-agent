@@ -10,7 +10,7 @@ import AuthModal from "@/components/AuthModal";
 import BrandMark from "@/components/BrandMark";
 import * as api from "@/lib/api-client";
 import { challengeUsesChineseCopy } from "@/lib/challenge-display";
-import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 import { HOMEPAGE_CHALLENGE_LOOPS } from "@/lib/challenge-loop-catalog";
@@ -268,6 +268,9 @@ export default function Home() {
   const [aiAccess, setAiAccess] = useState<api.AiAccessStatus | null>(null);
   const visibleAiAccess = aiAccess ?? FREE_FALLBACK_AI_ACCESS;
   const effectiveOraclePrefs = useMemo<OraclePrefs>(() => {
+    if (visibleAiAccess.isDeveloper || visibleAiAccess.role === "admin") {
+      return oraclePrefs;
+    }
     const freeModel = visibleAiAccess.freeTextModel;
     if (!visibleAiAccess.canUsePremiumModels && freeModel) {
       return { providerId: freeModel.providerId, model: freeModel.model };
@@ -466,6 +469,20 @@ export default function Home() {
     setPrompt(value);
     void handleGenerate(value);
   }, [handleGenerate]);
+
+  const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
+    const provider = getProviderById(providerId);
+    if (!provider) return;
+    const requestedModel = model?.trim() || provider.defaultModel;
+    const preferredModel = PREFERRED_MODEL_REPLACEMENTS[requestedModel] ?? requestedModel;
+    const safeModel =
+      preferredModel && (!provider.models.length || provider.models.includes(preferredModel))
+        ? preferredModel
+        : provider.defaultModel;
+    const nextPrefs = { providerId, model: safeModel };
+    setOraclePrefs(nextPrefs);
+    writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
+  }, []);
 
   const handleConfirm = useCallback(async () => {
     if (!protocol) return;
@@ -852,7 +869,7 @@ export default function Home() {
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
-                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} />
+                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} onChange={handleSelectOracle} />
                   <LaunchPromptStrip onPick={handleLaunchPrompt} />
                 </div>
               </section>
@@ -1308,14 +1325,22 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
 function ModelModeBar({
   prefs,
   aiAccess,
+  onChange,
 }: {
   prefs: OraclePrefs;
   aiAccess: api.AiAccessStatus | null;
+  onChange: (providerId: string, model?: string | null) => void;
 }) {
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
   const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
   const planLabel = aiAccess?.canUsePremiumModels ? "Premium" : "Free";
   const planCopy = aiAccess?.canUsePremiumModels ? "Strong AI judge" : "Basic AI judge";
+  const canDebugRouting = process.env.NODE_ENV !== "production" || aiAccess?.isDeveloper || aiAccess?.role === "admin";
+  const visibleProviders = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
+    .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
+    .filter(Boolean) as typeof LLM_PROVIDERS;
+  const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
+  const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
 
   return (
     <details className="group mt-3 w-fit">
@@ -1348,10 +1373,49 @@ function ModelModeBar({
         <p className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
           AI routing is automatic. Provider names stay internal.
         </p>
-        {process.env.NODE_ENV !== "production" && (
-          <p className="text-[10px] font-semibold" style={{ color: "#CBD5E1" }}>
-            {selectedProvider?.shortLabel ?? "AI"} / {selectedModel}
-          </p>
+        {canDebugRouting && (
+          <details className="rounded-[18px] border bg-slate-50 p-3" style={{ borderColor: "#E2E8F0" }}>
+            <summary className="cursor-pointer list-none text-[11px] font-black uppercase tracking-wide" style={{ color: "#334155" }}>
+              Debug model routing
+            </summary>
+            <div className="mt-3 grid gap-2">
+              {aiAccess?.isDeveloper && (
+                <p className="text-[10px] font-bold" style={{ color: "#047857" }}>
+                  Dev override active. Public plan still shows Premium.
+                </p>
+              )}
+              <select
+                value={selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID}
+                onChange={(event) => {
+                  const provider = getProviderById(event.target.value);
+                  onChange(event.target.value, provider?.defaultModel ?? null);
+                }}
+                className="w-full rounded-xl border px-3 py-2 text-xs font-extrabold outline-none"
+                style={{ borderColor: "#DDE7F0", color: "#172033", background: "#FFFFFF" }}
+                aria-label="Debug AI provider"
+              >
+                {visibleProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.shortLabel}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedModel}
+                onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value)}
+                className="w-full rounded-xl border px-3 py-2 text-xs font-bold outline-none"
+                style={{ borderColor: "#DDE7F0", color: "#526078", background: "#FFFFFF" }}
+                aria-label="Debug AI model"
+              >
+                {hasCustomSelectedModel && <option value={selectedModel}>{selectedModel}</option>}
+                {modelOptions.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </details>
         )}
       </div>
     </details>
