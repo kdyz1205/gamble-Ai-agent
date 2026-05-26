@@ -119,8 +119,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.deepseek.com",
     envVar: "DEEPSEEK_API_KEY",
-    defaultModel: "deepseek-chat",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    defaultModel: "deepseek-v4-flash",
+    models: ["deepseek-v4-flash", "deepseek-v4-pro"],
     docsUrl: "https://api-docs.deepseek.com",
   },
   {
