@@ -18,11 +18,11 @@ import {
 } from "@/lib/challenge-state-machine";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
-const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Free", 2: "Premium", 3: "Max" };
+const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Free", 2: "Premium", 3: "Premium" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
-  1: "Low-cost AI",
-  2: "Stronger judge",
-  3: "Hard cases",
+  1: "Basic AI",
+  2: "Strong judge",
+  3: "Deep review",
 };
 
 function statusColor(s: string) {
@@ -118,21 +118,16 @@ function displayEnum(value: string | null | undefined) {
 }
 
 function providerCallSummary(providerCall: Record<string, unknown> | null) {
-  if (!providerCall) return "Not recorded";
-  const provider = typeof providerCall.providerLabel === "string"
-    ? providerCall.providerLabel
-    : typeof providerCall.providerId === "string" ? providerCall.providerId : "Provider";
-  const model = typeof providerCall.model === "string" ? providerCall.model : "";
-  const status = typeof providerCall.httpStatus === "number" ? `HTTP ${providerCall.httpStatus}` : "SDK";
+  if (!providerCall) return "AI review recorded";
+  const usedApi = providerCall.usedApi === true;
   const kind = typeof providerCall.requestKind === "string" ? providerCall.requestKind : "call";
   const duration = typeof providerCall.durationMs === "number" ? `${providerCall.durationMs}ms` : "";
-  return [provider, model, status, kind, duration].filter(Boolean).join(" · ");
+  return [usedApi ? "AI review" : "AI fallback review", kind, duration].filter(Boolean).join(" · ");
 }
 
 function providerResponseId(providerCall: Record<string, unknown> | null) {
-  if (!providerCall || typeof providerCall.responseId !== "string" || !providerCall.responseId.trim()) return "";
-  const id = providerCall.responseId.trim();
-  return id.length > 28 ? `${id.slice(0, 18)}...${id.slice(-6)}` : id;
+  void providerCall;
+  return "";
 }
 
 function participantVideoMetrics(videoMetrics: Record<string, unknown> | null, key: "participantA" | "participantB") {
@@ -1249,7 +1244,7 @@ export default function ChallengeVerdictPanel({
 
             {canRejudge && (
               <div className="space-y-3 pt-2" style={{ borderTop: "1px solid #E2E8F0" }}>
-                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "换一个模型再判一次" : "Try another judge model"}</p>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "重新判定" : "Run another AI review"}</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((t) => {
                     const selected = tier === t;
@@ -1409,11 +1404,9 @@ export default function ChallengeVerdictPanel({
 
               {/* Metadata */}
               <div className="flex flex-wrap justify-center gap-2">
-                {verdictRow.aiModel && (
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                    {verdictRow.aiModel}
-                  </span>
-                )}
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
+                  {zhCopy ? "AI 判定" : "AI judge"}
+                </span>
                 {typeof verdictRow.confidence === "number" && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
                         style={{
@@ -1452,7 +1445,7 @@ export default function ChallengeVerdictPanel({
                   </p>
                 </div>
                 <div className="px-3 py-2" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "14px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "模型调用" : "Provider call"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "AI 调用" : "AI call"}</p>
                   <p className="text-[11px] font-extrabold mt-1 leading-snug" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
                     {providerCallSummary(verdictMetrics.providerCall)}
                   </p>
@@ -1554,7 +1547,7 @@ export default function ChallengeVerdictPanel({
                   {zhCopy ? "判定收据" : "Verdict receipt"}
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
-                  {verdictRow.aiModel}
+                  {zhCopy ? "AI 判定" : "AI judge"}
                 </span>
               </div>
 
@@ -1611,7 +1604,7 @@ export default function ChallengeVerdictPanel({
                   <p className="text-xs font-extrabold mt-1" style={{ color: "#1E293B" }}>{displayEnum(verdictMetrics.recommendation)}</p>
                 </div>
                 <div className="col-span-2 px-3 py-2" style={{ background: "#F8FAFC", borderRadius: "12px" }}>
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "模型调用" : "Provider call"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#64748B" }}>{zhCopy ? "AI 调用" : "AI call"}</p>
                   <p className="text-xs font-extrabold mt-1" style={{ color: verdictMetrics.providerCall?.usedApi ? "#047857" : "#9A3412" }}>
                     {providerCallSummary(verdictMetrics.providerCall)}
                   </p>
@@ -1621,8 +1614,8 @@ export default function ChallengeVerdictPanel({
               <motion.button
                 onClick={() => {
                   const text = zhCopy
-                    ? `AI 判定：「${challenge.title}」— ${verdictRow.winner?.username ?? "平局"} 获胜（${Math.round((verdictRow.confidence ?? 0) * 100)}% 置信度）\n\n「${verdictRow.reasoning}」\n\n模型：${verdictRow.aiModel}`
-                    : `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
+                    ? `AI 判定：「${challenge.title}」— ${verdictRow.winner?.username ?? "平局"} 获胜（${Math.round((verdictRow.confidence ?? 0) * 100)}% 置信度）\n\n「${verdictRow.reasoning}」`
+                    : `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"`;
                   void navigator.clipboard.writeText(text);
                 }}
                 whileTap={{ scale: 0.97 }}

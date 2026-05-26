@@ -1,5 +1,5 @@
 import prisma from "./db";
-import { getAiAccessForUser, type AiAccessTier } from "./ai-access-policy";
+import { getAiAccessForUser, type AiQuotaTier } from "./ai-access-policy";
 
 export type DailyAiQuotaKind = "spec" | "judge" | "video_judge" | "transcribe";
 
@@ -38,7 +38,7 @@ function intEnv(name: string, fallback: number) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 }
 
-export function dailyAiQuotaLimits(accessTier: AiAccessTier = "free") {
+export function dailyAiQuotaLimits(accessTier: AiQuotaTier = "free") {
   if (accessTier === "developer") {
     return {
       spec: intEnv("DEV_DAILY_SPEC_LIMIT", DEFAULT_DEV_SPEC_LIMIT),
@@ -82,7 +82,7 @@ function quotaField(kind: DailyAiQuotaKind) {
   return "judgeUsed" as const;
 }
 
-function quotaLimit(kind: DailyAiQuotaKind, accessTier: AiAccessTier = "free") {
+function quotaLimit(kind: DailyAiQuotaKind, accessTier: AiQuotaTier = "free") {
   const limits = dailyAiQuotaLimits(accessTier);
   if (kind === "spec") return limits.spec;
   if (kind === "video_judge") return limits.videoJudge;
@@ -109,7 +109,8 @@ export async function getDailyAiQuotaStatus(userId: string): Promise<DailyAiQuot
   const key = dateKey();
   const row = await ensureQuotaRow(userId, key);
   const access = await getAiAccessForUser(userId);
-  const limits = dailyAiQuotaLimits(access.tier);
+  const quotaTier: AiQuotaTier = access.internalFlags.developerOverride ? "developer" : access.plan;
+  const limits = dailyAiQuotaLimits(quotaTier);
   return {
     dateKey: key,
     resetsAt: nextUtcMidnight(),
@@ -127,7 +128,8 @@ export async function spendDailyAiQuota(
   const key = dateKey();
   const field = quotaField(kind);
   const access = await getAiAccessForUser(userId);
-  const limit = quotaLimit(kind, access.tier);
+  const quotaTier: AiQuotaTier = access.internalFlags.developerOverride ? "developer" : access.plan;
+  const limit = quotaLimit(kind, quotaTier);
   await ensureQuotaRow(userId, key);
 
   const result = await prisma.userDailyQuota.updateMany({
@@ -152,7 +154,7 @@ export async function spendDailyAiQuota(
     ok: false,
     status,
     retryAt,
-    error: `Daily beta limit reached for ${label}. It resets at ${retryAt}.`,
+    error: `Daily AI limit reached for ${label}. It resets at ${retryAt}.`,
   };
 }
 

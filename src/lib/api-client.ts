@@ -98,14 +98,28 @@ export interface DailyAiQuotaStatus {
 }
 
 export interface AiAccessStatus {
-  tier: "free" | "premium" | "developer";
-  label: "Free" | "Premium" | "Developer";
+  plan: "free" | "premium";
+  /** Backwards-compatible alias. UI should use plan. */
+  tier: "free" | "premium";
+  label: "Free" | "Premium";
+  isPremium: boolean;
+  role: "user" | "developer" | "admin";
+  internalFlags: {
+    developerOverride: boolean;
+    premiumOverride: boolean;
+    forcePremiumAll: boolean;
+    creditsPurchased: boolean;
+    stripeSubscription: boolean;
+  };
+  allowedModelTier: "free" | "premium";
   isDeveloper: boolean;
   canUsePremiumModels: boolean;
   maxJudgeTier: 1 | 2 | 3;
   reason: string;
   freeTextModel: { providerId: string; model: string } | null;
   freeVisionModel: { providerId: string; model: string } | null;
+  premiumTextModel: { providerId: string; model: string } | null;
+  premiumVisionModel: { providerId: string; model: string } | null;
   upgradeRequiredMessage: string;
 }
 

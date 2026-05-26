@@ -35,11 +35,11 @@ function supportedRecordingMimeType(): string | undefined {
 }
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
-const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Light", 2: "Pro", 3: "Max" };
+const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Free", 2: "Premium", 3: "Premium" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
-  1: "Fast & affordable",
-  2: "Balanced precision",
-  3: "Maximum intelligence",
+  1: "Basic AI",
+  2: "Strong judge",
+  3: "Deep review",
 };
 
 function statusConfig(s: string) {
@@ -1147,7 +1147,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </motion.div>
                   <div>
                     <h3 className="text-base font-black text-text-primary">AI Judge Ready</h3>
-                    <p className="text-[10px] text-text-muted">All evidence is in. Choose your AI tier and render the verdict.</p>
+                    <p className="text-[10px] text-text-muted">All evidence is in. Run the AI verdict.</p>
                   </div>
                 </div>
 
@@ -1279,7 +1279,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 <div className="flex flex-wrap justify-center gap-2">
                   {verdictRow.aiModel && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                      Model: {verdictRow.aiModel}
+                      AI judge
                     </span>
                   )}
                   {typeof verdictRow.confidence === "number" && (

@@ -15,9 +15,9 @@ import { privateKeyToAccount } from "viem/accounts";
  * On-chain AI Model Token integration (ERC-1155).
  *
  * Token IDs:
- *   1 = HAIKU   ($0.01/token)  → fast, cheap inference
- *   2 = SONNET  ($0.05/token)  → balanced
- *   3 = OPUS    ($0.25/token)  → most powerful
+ *   1 = FREE AI      ($0.01/token)
+ *   2 = PREMIUM AI   ($0.05/token)
+ *   3 = PREMIUM DEEP ($0.25/token)
  *
  * Each token = 1 inference call on that model tier.
  * Tokens are freely tradeable on any ERC-1155 marketplace.
@@ -83,9 +83,9 @@ export async function getAllBalances(userAddress: Address): Promise<TierBalance[
   });
 
   return [
-    { id: 1, name: "Light", balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
-    { id: 2, name: "Pro", balance: Number(balances[1]), valueUsd: Number(balances[1]) * 0.05 },
-    { id: 3, name: "Max", balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
+    { id: 1, name: "Free", balance: Number(balances[0]), valueUsd: Number(balances[0]) * 0.01 },
+    { id: 2, name: "Premium", balance: Number(balances[1]), valueUsd: Number(balances[1]) * 0.05 },
+    { id: 3, name: "Premium", balance: Number(balances[2]), valueUsd: Number(balances[2]) * 0.25 },
   ];
 }
 

@@ -307,7 +307,7 @@ export default function CalculatorPage() {
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Pricing</p>
             <Slider
               label="Subscription price"
-              explain="Monthly fee for Pro users. Must feel worth it — not too expensive, not too cheap."
+              explain="Monthly fee for Premium users. Must feel worth it — not too expensive, not too cheap."
               value={inputs.subPrice}
               min={0} max={50} step={1}
               format={(v) => `$${v.toFixed(0)}`}
@@ -439,11 +439,11 @@ export default function CalculatorPage() {
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: PEACH_TEXT }}>The math in plain english</p>
           <Explain
             title="How we make money"
-            body={"Two streams. (1) Subscriptions — a slice of your users pay $X/mo for Pro. (2) Rake — we keep a small cut of every stake that settles. Bigger stakes or more active users = more rake."}
+            body={"Two streams. (1) Subscriptions — a slice of your users pay $X/mo for Premium. (2) Rake — we keep a small cut of every stake that settles. Bigger stakes or more active users = more rake."}
           />
           <Explain
             title="How money is spent"
-            body={"Every time AI judges a challenge, we pay OpenAI. That cost scales with how many users and how active they are. Videos also cost storage. Team and infra are fixed — they don't grow with one extra user."}
+            body={"Every time AI judges a challenge, we pay the selected AI provider. That cost scales with how many users and how active they are. Videos also cost storage. Team and infra are fixed — they don't grow with one extra user."}
           />
           <Explain
             title="What makes us profitable"

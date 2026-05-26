@@ -45,5 +45,6 @@ export async function GET() {
       createdAt: dbUser.createdAt,
       aiAccess,
     },
+    aiAccess,
   });
 }

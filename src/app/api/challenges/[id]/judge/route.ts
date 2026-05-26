@@ -140,7 +140,7 @@ export async function POST(
     autoSettleRequested = body?.autoSettle === true;
     rejudgeRequested = body?.rejudge === true;
     if (typeof body?.reason === "string") rejudgeReason = body.reason.trim().slice(0, 500);
-  } catch { /* default to the Light tier */ }
+  } catch { /* default to the Free tier */ }
 
   let cost = TIER_MULTIPLIER[tierId];
 

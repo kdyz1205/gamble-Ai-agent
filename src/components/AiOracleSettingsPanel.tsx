@@ -6,7 +6,8 @@ import { LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 
 /**
- * Collapsed-by-default panel: pick LLM vendor + model for parse / AI judge calls.
+ * Debug-only panel. Public product UI uses Free/Premium and keeps provider
+ * routing internal.
  */
 import { DEFAULT_LLM_PROVIDER_ID } from "@/lib/llm-providers";
 
@@ -44,6 +45,8 @@ export default function AiOracleSettingsPanel() {
     persist(providerId, m);
   };
 
+  if (process.env.NODE_ENV === "production") return null;
+
   return (
     <div
       className="fixed left-4 z-30 max-w-[min(100vw-2rem,20rem)]"
@@ -63,7 +66,7 @@ export default function AiOracleSettingsPanel() {
         aria-expanded={open}
       >
         <span className="text-accent">⚖</span>
-        <span>Oracle LLM</span>
+        <span>Debug routing</span>
         <motion.span animate={{ rotate: open ? 180 : 0 }} className="text-text-muted">
           ▾
         </motion.span>
@@ -85,10 +88,10 @@ export default function AiOracleSettingsPanel() {
           >
             <div className="p-4 space-y-3 max-h-[min(70vh,22rem)] overflow-y-auto">
               <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                Off-chain AI oracle backend (keys stay on server)
+                Debug model routing. Hidden in production.
               </p>
               <label className="block space-y-1">
-                <span className="text-[10px] font-bold text-text-secondary">Provider</span>
+                <span className="text-[10px] font-bold text-text-secondary">Internal provider</span>
                 <select
                   value={providerId}
                   onChange={(e) => onProviderChange(e.target.value)}
@@ -102,7 +105,7 @@ export default function AiOracleSettingsPanel() {
                 </select>
               </label>
               <label className="block space-y-1">
-                <span className="text-[10px] font-bold text-text-secondary">Model id</span>
+                <span className="text-[10px] font-bold text-text-secondary">Internal model id</span>
                 <input
                   list={`models-${providerId}`}
                   value={model}

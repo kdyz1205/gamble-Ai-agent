@@ -10,7 +10,7 @@ import AuthModal from "@/components/AuthModal";
 import BrandMark from "@/components/BrandMark";
 import * as api from "@/lib/api-client";
 import { challengeUsesChineseCopy } from "@/lib/challenge-display";
-import { DEFAULT_LLM_PROVIDER_ID, LLM_PROVIDERS, getProviderById } from "@/lib/llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { readOracleLlmPrefs, writeOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { isOpenForOpponentStatus } from "@/lib/challenge-state-machine";
 import { HOMEPAGE_CHALLENGE_LOOPS } from "@/lib/challenge-loop-catalog";
@@ -22,14 +22,27 @@ type DiscoveryLocationState = "checking" | "ready" | "global" | "blocked" | "una
 type BrowserLocationStatus = "ready" | "blocked" | "timeout" | "unavailable" | "error";
 
 const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
+  plan: "free",
   tier: "free",
   label: "Free",
+  isPremium: false,
+  role: "user",
+  internalFlags: {
+    developerOverride: false,
+    premiumOverride: false,
+    forcePremiumAll: false,
+    creditsPurchased: false,
+    stripeSubscription: false,
+  },
+  allowedModelTier: "free",
   isDeveloper: false,
   canUsePremiumModels: false,
   maxJudgeTier: 1,
   reason: "free beta account",
   freeTextModel: { providerId: "deepseek", model: "deepseek-v4-flash" },
   freeVisionModel: { providerId: "google", model: "gemini-3.1-flash-lite" },
+  premiumTextModel: { providerId: "deepseek", model: "deepseek-v4-pro" },
+  premiumVisionModel: { providerId: "openai", model: "gpt-5.5" },
   upgradeRequiredMessage:
     "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
 };
@@ -113,13 +126,13 @@ function shortAiError(error: unknown) {
     return "Premium model required. Free mode uses low-cost AI for simple drafts and verdicts.";
   }
   if (/insufficient_quota|exceeded your current quota|quota/i.test(message)) {
-    return "AI provider has no quota. Pick another model or add provider credits.";
+    return "AI quota is temporarily unavailable. Try again shortly or use Premium.";
   }
   if (/not configured|no configured ai provider|api key/i.test(message)) {
-    return "AI provider is not connected. Pick another model or add an API key.";
+    return "AI routing is not connected yet. Try again later.";
   }
   if (/rate limit|429/i.test(message)) {
-    return "AI provider is rate limited. Try again shortly or pick another model.";
+    return "AI is rate limited. Try again shortly.";
   }
   if (/timed out|timeout/i.test(message)) {
     return "AI took too long. Try a shorter prompt or another model.";
@@ -236,10 +249,8 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [protocol, setProtocol] = useState<api.ProtocolSpecV2 | null>(null);
   const [specModel, setSpecModel] = useState("");
-  const [specSource, setSpecSource] = useState<"llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "">("");
   const [specProviderId, setSpecProviderId] = useState("");
   const [providerCall, setProviderCall] = useState<unknown>(null);
-  const [externalApiCharged, setExternalApiCharged] = useState(false);
   const [oraclePrefs, setOraclePrefs] = useState<OraclePrefs>(() => initialOraclePrefs());
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [publishedId, setPublishedId] = useState<string | null>(null);
@@ -261,6 +272,10 @@ export default function Home() {
     if (!visibleAiAccess.canUsePremiumModels && freeModel) {
       return { providerId: freeModel.providerId, model: freeModel.model };
     }
+    const premiumModel = visibleAiAccess.premiumTextModel;
+    if (visibleAiAccess.canUsePremiumModels && premiumModel) {
+      return { providerId: premiumModel.providerId, model: premiumModel.model };
+    }
     return oraclePrefs;
   }, [oraclePrefs, visibleAiAccess]);
   const joiningId: string | null = null;
@@ -280,10 +295,8 @@ export default function Home() {
     setPrompt("");
     setProtocol(null);
     setSpecModel("");
-    setSpecSource("");
     setSpecProviderId("");
     setProviderCall(null);
-    setExternalApiCharged(false);
     setShareLink(null);
     setPublishedId(null);
     setPublishedKind("challenge");
@@ -433,10 +446,8 @@ export default function Home() {
       }
       setProtocol(res.protocol);
       setSpecModel(res.model);
-      setSpecSource(res.source);
       setSpecProviderId(res.providerId || nextPrefs.providerId);
       setProviderCall(res.providerCall ?? null);
-      setExternalApiCharged(Boolean(res.externalApiCharged));
       if (res.dailyQuota) setDailyQuota(res.dailyQuota);
       if (res.aiAccess) setAiAccess(res.aiAccess);
       if (res.modelAccess?.downgraded) {
@@ -455,20 +466,6 @@ export default function Home() {
     setPrompt(value);
     void handleGenerate(value);
   }, [handleGenerate]);
-
-  const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
-    const provider = getProviderById(providerId);
-    if (!provider) return;
-    const requestedModel = model?.trim() || provider.defaultModel;
-    const preferredModel = PREFERRED_MODEL_REPLACEMENTS[requestedModel] ?? requestedModel;
-    const safeModel =
-      preferredModel && (!provider.models.length || provider.models.includes(preferredModel))
-        ? preferredModel
-        : provider.defaultModel;
-    const nextPrefs = { providerId, model: safeModel };
-    setOraclePrefs(nextPrefs);
-    writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
-  }, []);
 
   const handleConfirm = useCallback(async () => {
     if (!protocol) return;
@@ -855,7 +852,7 @@ export default function Home() {
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
-                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} onChange={handleSelectOracle} />
+                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} />
                   <LaunchPromptStrip onPick={handleLaunchPrompt} />
                 </div>
               </section>
@@ -905,10 +902,6 @@ export default function Home() {
               <ChallengeSpecPreview
                 protocol={protocol}
                 prompt={prompt}
-                model={specModel}
-                source={specSource}
-                providerId={specProviderId}
-                externalApiCharged={externalApiCharged}
                 onSelectInvite={handleSelectInvite}
                 onSelectParticipation={handleSelectParticipation}
                 onSelectVisibility={handleSelectVisibility}
@@ -1315,19 +1308,14 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
 function ModelModeBar({
   prefs,
   aiAccess,
-  onChange,
 }: {
   prefs: OraclePrefs;
   aiAccess: api.AiAccessStatus | null;
-  onChange: (providerId: string, model?: string | null) => void;
 }) {
-  const visible = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
-    .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
-    .filter(Boolean) as typeof LLM_PROVIDERS;
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
   const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
-  const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
-  const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
+  const planLabel = aiAccess?.canUsePremiumModels ? "Premium" : "Free";
+  const planCopy = aiAccess?.canUsePremiumModels ? "Strong AI judge" : "Basic AI judge";
 
   return (
     <details className="group mt-3 w-fit">
@@ -1335,59 +1323,35 @@ function ModelModeBar({
         className="list-none cursor-pointer rounded-full border bg-white/70 px-4 py-2 text-xs font-black shadow-sm transition hover:bg-white"
         style={{ borderColor: "rgba(148,163,184,0.28)", color: "#526078" }}
       >
-        <span className="text-[#047857]">Model</span>
-        <span className="ml-2">{selectedProvider?.shortLabel ?? "AI"}</span>
-        <span className="ml-1 text-slate-400">/ {selectedModel}</span>
-        {aiAccess && (
-          <span
-            className="ml-2 rounded-full px-2 py-0.5"
-            style={{
-              background: aiAccess.canUsePremiumModels ? "#DCFCE7" : "#F8FAFC",
-              color: aiAccess.canUsePremiumModels ? "#047857" : "#64748B",
-            }}
-          >
-            {aiAccess.label}
-          </span>
-        )}
+        <span className="text-[#047857]">Plan</span>
+        <span className="ml-2">{planLabel}</span>
       </summary>
       <div
-        className="mt-2 flex max-w-full flex-wrap items-center gap-2 rounded-[22px] border bg-white/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        className="mt-2 grid min-w-[17rem] gap-2 rounded-[22px] border bg-white/95 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
         style={{ borderColor: "rgba(148,163,184,0.28)" }}
       >
-        <select
-          value={selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID}
-          onChange={(event) => {
-            const provider = getProviderById(event.target.value);
-            onChange(event.target.value, provider?.defaultModel ?? null);
-          }}
-          className="max-w-[8.5rem] rounded-full border px-3 py-2 text-xs font-extrabold outline-none"
-          style={{ borderColor: "#DDE7F0", color: "#172033", background: "#F8FAFC" }}
-          aria-label="AI provider"
-        >
-          {visible.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.shortLabel}
-            </option>
-          ))}
-        </select>
-        <select
-          value={selectedModel}
-          onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value)}
-          className="max-w-[13rem] rounded-full border px-3 py-2 text-xs font-bold outline-none"
-          style={{ borderColor: "#DDE7F0", color: "#526078", background: "#FFFFFF" }}
-          aria-label="AI model"
-        >
-          {hasCustomSelectedModel && <option value={selectedModel}>{selectedModel}</option>}
-          {modelOptions.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
-        {aiAccess && !aiAccess.canUsePremiumModels && (
-          <span className="px-2 py-1 text-[11px] font-bold" style={{ color: "#64748B" }}>
-            Free routes to low-cost AI
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black" style={{ color: "#172033" }}>{planLabel}</p>
+            <p className="text-xs font-semibold" style={{ color: "#64748B" }}>{planCopy}</p>
+          </div>
+          <span
+            className="rounded-full px-3 py-1 text-[11px] font-black"
+            style={{
+              background: aiAccess?.canUsePremiumModels ? "#DCFCE7" : "#F8FAFC",
+              color: aiAccess?.canUsePremiumModels ? "#047857" : "#64748B",
+            }}
+          >
+            {planLabel}
           </span>
+        </div>
+        <p className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
+          AI routing is automatic. Provider names stay internal.
+        </p>
+        {process.env.NODE_ENV !== "production" && (
+          <p className="text-[10px] font-semibold" style={{ color: "#CBD5E1" }}>
+            {selectedProvider?.shortLabel ?? "AI"} / {selectedModel}
+          </p>
         )}
       </div>
     </details>
@@ -1397,20 +1361,12 @@ function ModelModeBar({
 function ChallengeSpecPreview({
   protocol,
   prompt,
-  model,
-  source,
-  providerId,
-  externalApiCharged,
   onSelectInvite,
   onSelectParticipation,
   onSelectVisibility,
 }: {
   protocol: api.ProtocolSpecV2;
   prompt: string;
-  model: string;
-  source: "llm" | "safety_prefilter" | "deterministic_oracle" | "fallback" | "";
-  providerId: string;
-  externalApiCharged: boolean;
   onSelectInvite: (value: "invite_link" | "nearby" | "same_device") => void;
   onSelectParticipation: (value: "remote_async" | "remote_live" | "same_camera" | "in_person") => void;
   onSelectVisibility: (value: "public" | "private") => void;
@@ -1459,8 +1415,6 @@ function ChallengeSpecPreview({
           <Pill>{protocol.identityProtocol.mode.replace(/_/g, " ")}</Pill>
           <Pill>{protocol.locationProtocol.locationPrivacy.replace(/_/g, " ")}</Pill>
           <Pill>{isSolo ? "solo proof" : `vs ${opponent}`}</Pill>
-          {model && <Pill>{source === "llm" ? "AI model" : source === "safety_prefilter" ? "safety gate" : source === "deterministic_oracle" ? "price oracle" : "fallback"}: {model}</Pill>}
-          {providerId && <Pill>{externalApiCharged ? "paid API enabled" : "no paid API"}: {providerId}</Pill>}
         </div>
       </div>
       <div className="grid gap-4 p-5 md:grid-cols-2">

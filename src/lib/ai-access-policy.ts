@@ -8,17 +8,36 @@ import {
 } from "@/lib/llm-providers";
 import type { TierId } from "@/lib/model-tiers";
 
-export type AiAccessTier = "free" | "premium" | "developer";
+export type AiAccessPlan = "free" | "premium";
+export type AiAccessRole = "user" | "developer" | "admin";
+export type AiAccessTier = AiAccessPlan;
+export type AiQuotaTier = AiAccessPlan | "developer";
+
+export interface AiAccessInternalFlags {
+  developerOverride: boolean;
+  premiumOverride: boolean;
+  forcePremiumAll: boolean;
+  creditsPurchased: boolean;
+  stripeSubscription: boolean;
+}
 
 export interface AiAccessStatus {
-  tier: AiAccessTier;
-  label: "Free" | "Premium" | "Developer";
+  plan: AiAccessPlan;
+  /** Backwards-compatible alias. User-facing code must use plan. */
+  tier: AiAccessPlan;
+  label: "Free" | "Premium";
+  isPremium: boolean;
+  role: AiAccessRole;
+  internalFlags: AiAccessInternalFlags;
+  allowedModelTier: AiAccessPlan;
   isDeveloper: boolean;
   canUsePremiumModels: boolean;
   maxJudgeTier: TierId;
   reason: string;
   freeTextModel: { providerId: string; model: string } | null;
   freeVisionModel: { providerId: string; model: string } | null;
+  premiumTextModel: { providerId: string; model: string } | null;
+  premiumVisionModel: { providerId: string; model: string } | null;
   upgradeRequiredMessage: string;
 }
 
@@ -66,10 +85,8 @@ function identityMatches(identity: string | null | undefined, candidates: string
   return Boolean(normalized && candidates.includes(normalized));
 }
 
-function accessLabel(tier: AiAccessTier): AiAccessStatus["label"] {
-  if (tier === "developer") return "Developer";
-  if (tier === "premium") return "Premium";
-  return "Free";
+function accessLabel(plan: AiAccessPlan): AiAccessStatus["label"] {
+  return plan === "premium" ? "Premium" : "Free";
 }
 
 function firstConfiguredFreeModel(needsVision: boolean, requestedProviderId?: string | null) {
@@ -90,18 +107,62 @@ function firstConfiguredFreeModel(needsVision: boolean, requestedProviderId?: st
   return null;
 }
 
-function buildStatus(tier: AiAccessTier, reason: string): AiAccessStatus {
+function firstConfiguredPremiumModel(needsVision: boolean, requestedProviderId?: string | null) {
+  const order = requestedProviderId
+    ? [requestedProviderId, process.env.ORACLE_DEFAULT_PROVIDER, "deepseek", "openai", "anthropic", "google", "xai", "groq", "moonshot", "mistral", "together", "fireworks"]
+    : needsVision
+      ? [process.env.ORACLE_DEFAULT_PROVIDER, "openai", "google", "xai", "anthropic", "deepseek"]
+      : [process.env.ORACLE_DEFAULT_PROVIDER, "deepseek", "openai", "anthropic", "xai", "google", "groq", "moonshot", "mistral", "together", "fireworks"];
+
+  for (const maybeProviderId of order) {
+    const providerId = maybeProviderId?.trim();
+    if (!providerId) continue;
+    const provider = getProviderById(providerId);
+    if (!provider || !isProviderConfigured(provider)) continue;
+    return {
+      providerId,
+      model: resolveTierModel(provider, 3, needsVision),
+    };
+  }
+  return null;
+}
+
+function buildStatus(input: {
+  plan: AiAccessPlan;
+  reason: string;
+  role?: AiAccessRole;
+  internalFlags?: Partial<AiAccessInternalFlags>;
+}): AiAccessStatus {
+  const plan = input.plan;
+  const role = input.role ?? "user";
+  const internalFlags: AiAccessInternalFlags = {
+    developerOverride: false,
+    premiumOverride: false,
+    forcePremiumAll: false,
+    creditsPurchased: false,
+    stripeSubscription: false,
+    ...input.internalFlags,
+  };
   const freeTextModel = firstConfiguredFreeModel(false);
   const freeVisionModel = firstConfiguredFreeModel(true);
+  const premiumTextModel = firstConfiguredPremiumModel(false);
+  const premiumVisionModel = firstConfiguredPremiumModel(true);
   return {
-    tier,
-    label: accessLabel(tier),
-    isDeveloper: tier === "developer",
-    canUsePremiumModels: tier !== "free",
-    maxJudgeTier: tier === "free" ? 1 : 3,
-    reason,
+    plan,
+    tier: plan,
+    label: accessLabel(plan),
+    isPremium: plan === "premium",
+    role,
+    internalFlags,
+    allowedModelTier: plan,
+    isDeveloper: role === "developer" || internalFlags.developerOverride,
+    canUsePremiumModels: plan === "premium",
+    maxJudgeTier: plan === "free" ? 1 : 3,
+    reason: input.reason,
     freeTextModel,
     freeVisionModel,
+    premiumTextModel,
+    premiumVisionModel,
     upgradeRequiredMessage:
       "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
   };
@@ -109,7 +170,11 @@ function buildStatus(tier: AiAccessTier, reason: string): AiAccessStatus {
 
 export async function getAiAccessForUser(userId: string): Promise<AiAccessStatus> {
   if (process.env.AXELROD_FORCE_PREMIUM_ALL === "1") {
-    return buildStatus("premium", "AXELROD_FORCE_PREMIUM_ALL enabled");
+    return buildStatus({
+      plan: "premium",
+      reason: "AXELROD_FORCE_PREMIUM_ALL enabled",
+      internalFlags: { forcePremiumAll: true, premiumOverride: true },
+    });
   }
 
   const user = await prisma.user.findUnique({
@@ -125,27 +190,53 @@ export async function getAiAccessForUser(userId: string): Promise<AiAccessStatus
     ...DEFAULT_DEV_IDENTITIES,
     ...splitEnvList("AXELROD_DEV_USERS"),
   ];
+  const adminIdentities = splitEnvList("AXELROD_ADMIN_USERS");
   const premiumIdentities = splitEnvList("AXELROD_PREMIUM_USERS");
+
+  if (
+    identityMatches(user?.email, adminIdentities) ||
+    identityMatches(user?.username, adminIdentities)
+  ) {
+    return buildStatus({
+      plan: "premium",
+      role: "admin",
+      reason: "admin allowlist",
+      internalFlags: { premiumOverride: true },
+    });
+  }
 
   if (
     identityMatches(user?.email, devIdentities) ||
     identityMatches(user?.username, devIdentities)
   ) {
-    return buildStatus("developer", "developer allowlist");
+    return buildStatus({
+      plan: "premium",
+      role: "developer",
+      reason: "developer allowlist",
+      internalFlags: { developerOverride: true, premiumOverride: true },
+    });
   }
 
   if (
     identityMatches(user?.email, premiumIdentities) ||
     identityMatches(user?.username, premiumIdentities)
   ) {
-    return buildStatus("premium", "premium allowlist");
+    return buildStatus({
+      plan: "premium",
+      reason: "premium allowlist",
+      internalFlags: { premiumOverride: true },
+    });
   }
 
   if ((user?.totalCreditsBought ?? 0) > 0) {
-    return buildStatus("premium", "credits purchased");
+    return buildStatus({
+      plan: "premium",
+      reason: "credits purchased",
+      internalFlags: { creditsPurchased: true },
+    });
   }
 
-  return buildStatus("free", "free beta account");
+  return buildStatus({ plan: "free", reason: "free beta account" });
 }
 
 function isFreeModelAllowed(providerId: string, model: string, needsVision: boolean) {
@@ -164,9 +255,10 @@ function resolvePremiumModel(input: {
   const requestedProvider = input.requestedProviderId?.trim();
   const requestedModel = input.requestedModel?.trim();
   const requestedTierId = input.requestedTierId ?? 1;
+  const requestedDefinition = requestedProvider ? getProviderById(requestedProvider) : undefined;
   const provider =
-    requestedProvider && getProviderById(requestedProvider)
-      ? getProviderById(requestedProvider)
+    requestedDefinition && isProviderConfigured(requestedDefinition)
+      ? requestedDefinition
       : resolveTierProvider(requestedTierId, input.needsVision);
   const model = requestedModel || resolveTierModel(provider, requestedTierId, input.needsVision);
   return {
@@ -188,7 +280,7 @@ export function resolveModelForAiAccess(input: {
   const requestedModel = input.requestedModel?.trim() || null;
   const needsVision = input.needsVision === true;
 
-  if (input.access.canUsePremiumModels) {
+  if (input.access.isPremium) {
     const premium = resolvePremiumModel({
       requestedProviderId,
       requestedModel,
@@ -265,7 +357,7 @@ export function resolveModelForAiAccess(input: {
       model: requestedModel ?? "unconfigured-model",
       needsUpgrade: false,
       downgraded: false,
-      reason: "No configured Free AI model is available. Connect DeepSeek flash, Google flash-lite, Groq, or Local Ollama.",
+      reason: "No configured Free AI route is available.",
       access: input.access,
       status: 503,
     };
@@ -297,7 +389,7 @@ export function resolveModelForAiAccess(input: {
     ),
     reason:
       requestedProviderId || requestedModel
-        ? `Free account routed to ${freeChoice.providerId}/${freeChoice.model}.`
+        ? "Free account routed to a Free AI model."
         : null,
     access: input.access,
   };

@@ -1,4 +1,4 @@
-import { getAuthUser, unauthorized, MODEL_TIERS } from "@/lib/auth";
+import { getAuthUser, unauthorized } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getTokenBalances, TIER_MULTIPLIER } from "@/lib/credits";
 import { isOnChainEnabled, tokenLink } from "@/lib/contracts";
@@ -31,9 +31,9 @@ export async function GET() {
     take: 30,
   });
 
-  const lightTier = { id: 1, name: "Light", priceUsd: 0.01, creditCost: TIER_MULTIPLIER[1], model: MODEL_TIERS.LIGHT.model };
-  const proTier = { id: 2, name: "Pro", priceUsd: 0.05, creditCost: TIER_MULTIPLIER[2], model: MODEL_TIERS.PRO.model };
-  const maxTier = { id: 3, name: "Max", priceUsd: 0.25, creditCost: TIER_MULTIPLIER[3], model: MODEL_TIERS.MAX.model };
+  const lightTier = { id: 1, name: "Free", priceUsd: 0.01, creditCost: TIER_MULTIPLIER[1], model: "free-ai-route" };
+  const proTier = { id: 2, name: "Premium", priceUsd: 0.05, creditCost: TIER_MULTIPLIER[2], model: "premium-ai-route" };
+  const maxTier = { id: 3, name: "Premium", priceUsd: 0.25, creditCost: TIER_MULTIPLIER[3], model: "premium-deep-review-route" };
 
   return Response.json({
     offChain: {
