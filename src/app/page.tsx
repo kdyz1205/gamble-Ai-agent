@@ -17,6 +17,7 @@ import { HOMEPAGE_CHALLENGE_LOOPS } from "@/lib/challenge-loop-catalog";
 
 type AppState = "idle" | "generating" | "preview" | "confirming" | "published";
 type OraclePrefs = { providerId: string; model: string | null };
+type ModelAccessChoice = "free" | "premium";
 type LanguageMode = api.ProtocolSpecV2["language"];
 type DiscoveryLocationState = "checking" | "ready" | "global" | "blocked" | "unavailable";
 type BrowserLocationStatus = "ready" | "blocked" | "timeout" | "unavailable" | "error";
@@ -74,6 +75,7 @@ const PREFERRED_MODEL_REPLACEMENTS: Record<string, string> = {
 
 const REFERRAL_STORAGE_KEY = "axelrod_referral";
 const GTM_STORAGE_KEY = "axelrod_gtm";
+const MODEL_TIER_STORAGE_KEY = "axelrod_model_tier";
 
 function withLaunchTracking(path: string, username?: string | null) {
   if (typeof window === "undefined") return path;
@@ -115,6 +117,25 @@ function initialOraclePrefs(): OraclePrefs {
     providerId: provider?.id ?? DEFAULT_LLM_PROVIDER_ID,
     model: modelIsCurrent ? preferredStoredModel : provider?.defaultModel ?? null,
   };
+}
+
+function initialModelAccessChoice(): ModelAccessChoice {
+  if (typeof window === "undefined") return "free";
+  return window.localStorage.getItem(MODEL_TIER_STORAGE_KEY) === "premium" ? "premium" : "free";
+}
+
+function writeModelAccessChoice(value: ModelAccessChoice) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(MODEL_TIER_STORAGE_KEY, value);
+}
+
+function resolveAccessTierPrefs(
+  aiAccess: api.AiAccessStatus | null,
+  tier: ModelAccessChoice,
+  fallback: OraclePrefs,
+): OraclePrefs {
+  const model = tier === "premium" ? aiAccess?.premiumTextModel : aiAccess?.freeTextModel;
+  return model ? { providerId: model.providerId, model: model.model } : fallback;
 }
 
 function shortAiError(error: unknown) {
@@ -252,6 +273,8 @@ export default function Home() {
   const [specProviderId, setSpecProviderId] = useState("");
   const [providerCall, setProviderCall] = useState<unknown>(null);
   const [oraclePrefs, setOraclePrefs] = useState<OraclePrefs>(() => initialOraclePrefs());
+  const [modelAccessChoice, setModelAccessChoice] = useState<ModelAccessChoice>(() => initialModelAccessChoice());
+  const [debugModelOverride, setDebugModelOverride] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [publishedId, setPublishedId] = useState<string | null>(null);
   const [publishedKind, setPublishedKind] = useState<"challenge" | "event">("challenge");
@@ -268,19 +291,14 @@ export default function Home() {
   const [aiAccess, setAiAccess] = useState<api.AiAccessStatus | null>(null);
   const visibleAiAccess = aiAccess ?? FREE_FALLBACK_AI_ACCESS;
   const effectiveOraclePrefs = useMemo<OraclePrefs>(() => {
-    if (visibleAiAccess.isDeveloper || visibleAiAccess.role === "admin") {
+    if ((visibleAiAccess.isDeveloper || visibleAiAccess.role === "admin") && debugModelOverride) {
       return oraclePrefs;
     }
-    const freeModel = visibleAiAccess.freeTextModel;
-    if (!visibleAiAccess.canUsePremiumModels && freeModel) {
-      return { providerId: freeModel.providerId, model: freeModel.model };
+    if (modelAccessChoice === "premium" && visibleAiAccess.canUsePremiumModels) {
+      return resolveAccessTierPrefs(visibleAiAccess, "premium", oraclePrefs);
     }
-    const premiumModel = visibleAiAccess.premiumTextModel;
-    if (visibleAiAccess.canUsePremiumModels && premiumModel) {
-      return { providerId: premiumModel.providerId, model: premiumModel.model };
-    }
-    return oraclePrefs;
-  }, [oraclePrefs, visibleAiAccess]);
+    return resolveAccessTierPrefs(visibleAiAccess, "free", oraclePrefs);
+  }, [debugModelOverride, modelAccessChoice, oraclePrefs, visibleAiAccess]);
   const joiningId: string | null = null;
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
@@ -413,8 +431,16 @@ export default function Home() {
 
   useEffect(() => {
     const freeModel = aiAccess?.freeTextModel;
-    if (!aiAccess || aiAccess.canUsePremiumModels || !freeModel) return;
-    if (oraclePrefs.providerId === freeModel.providerId && oraclePrefs.model === freeModel.model) return;
+    if (!aiAccess) return;
+    if (!aiAccess.canUsePremiumModels) {
+      setModelAccessChoice("free");
+      writeModelAccessChoice("free");
+      setDebugModelOverride(false);
+    } else if (typeof window !== "undefined" && !window.localStorage.getItem(MODEL_TIER_STORAGE_KEY)) {
+      setModelAccessChoice("premium");
+      writeModelAccessChoice("premium");
+    }
+    if (!freeModel || aiAccess.canUsePremiumModels || (oraclePrefs.providerId === freeModel.providerId && oraclePrefs.model === freeModel.model)) return;
     const freePrefs = { providerId: freeModel.providerId, model: freeModel.model };
     setOraclePrefs(freePrefs);
     writeOracleLlmPrefs(freePrefs.providerId, freePrefs.model);
@@ -430,6 +456,7 @@ export default function Home() {
     const nextPrefs = directive.prefs ?? effectiveOraclePrefs;
     if (directive.prefs) {
       setOraclePrefs(directive.prefs);
+      setDebugModelOverride(true);
       writeOracleLlmPrefs(directive.prefs.providerId, directive.prefs.model ?? "");
     }
     setPrompt(directive.prompt);
@@ -481,8 +508,23 @@ export default function Home() {
         : provider.defaultModel;
     const nextPrefs = { providerId, model: safeModel };
     setOraclePrefs(nextPrefs);
+    setDebugModelOverride(true);
     writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
   }, []);
+
+  const handleSelectModelAccess = useCallback((tier: ModelAccessChoice) => {
+    if (tier === "premium" && !visibleAiAccess.canUsePremiumModels) {
+      setError(visibleAiAccess.upgradeRequiredMessage || "Premium AI needs an active Premium plan.");
+      return;
+    }
+    const nextPrefs = resolveAccessTierPrefs(visibleAiAccess, tier, oraclePrefs);
+    setModelAccessChoice(tier);
+    setDebugModelOverride(false);
+    setOraclePrefs(nextPrefs);
+    writeModelAccessChoice(tier);
+    writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model ?? "");
+    setError(null);
+  }, [oraclePrefs, visibleAiAccess]);
 
   const handleConfirm = useCallback(async () => {
     if (!protocol) return;
@@ -869,7 +911,14 @@ export default function Home() {
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
-                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} onChange={handleSelectOracle} />
+                  <ModelModeBar
+                    prefs={effectiveOraclePrefs}
+                    aiAccess={visibleAiAccess}
+                    selectedTier={modelAccessChoice}
+                    debugModelOverride={debugModelOverride}
+                    onSelectTier={handleSelectModelAccess}
+                    onChange={handleSelectOracle}
+                  />
                   <LaunchPromptStrip onPick={handleLaunchPrompt} />
                 </div>
               </section>
@@ -1325,22 +1374,39 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
 function ModelModeBar({
   prefs,
   aiAccess,
+  selectedTier,
+  debugModelOverride,
+  onSelectTier,
   onChange,
 }: {
   prefs: OraclePrefs;
   aiAccess: api.AiAccessStatus | null;
+  selectedTier: ModelAccessChoice;
+  debugModelOverride: boolean;
+  onSelectTier: (tier: ModelAccessChoice) => void;
   onChange: (providerId: string, model?: string | null) => void;
 }) {
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
   const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
-  const planLabel = aiAccess?.canUsePremiumModels ? "Premium" : "Free";
-  const planCopy = aiAccess?.canUsePremiumModels ? "Strong AI judge" : "Basic AI judge";
+  const canUsePremium = Boolean(aiAccess?.canUsePremiumModels);
+  const activeTier: ModelAccessChoice = selectedTier === "premium" && canUsePremium ? "premium" : "free";
+  const planLabel = debugModelOverride ? "Custom" : activeTier === "premium" ? "Premium" : "Free";
+  const planCopy = debugModelOverride ? "Developer routing" : activeTier === "premium" ? "Best judge" : "Basic judge";
   const canDebugRouting = process.env.NODE_ENV !== "production" || aiAccess?.isDeveloper || aiAccess?.role === "admin";
   const visibleProviders = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
     .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
     .filter(Boolean) as typeof LLM_PROVIDERS;
   const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
   const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
+  const tierChoices: Array<{
+    id: ModelAccessChoice;
+    label: string;
+    kicker: string;
+    disabled: boolean;
+  }> = [
+    { id: "free", label: "Free AI", kicker: "basic", disabled: false },
+    { id: "premium", label: "Premium AI", kicker: canUsePremium ? "best" : "locked", disabled: !canUsePremium },
+  ];
 
   return (
     <details className="group mt-3 w-fit">
@@ -1352,7 +1418,7 @@ function ModelModeBar({
         <span className="ml-2">{planLabel}</span>
       </summary>
       <div
-        className="mt-2 grid min-w-[17rem] gap-2 rounded-[22px] border bg-white/95 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        className="mt-2 grid min-w-[18rem] gap-2 rounded-[22px] border bg-white/95 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
         style={{ borderColor: "rgba(148,163,184,0.28)" }}
       >
         <div className="flex items-center justify-between gap-3">
@@ -1363,16 +1429,37 @@ function ModelModeBar({
           <span
             className="rounded-full px-3 py-1 text-[11px] font-black"
             style={{
-              background: aiAccess?.canUsePremiumModels ? "#DCFCE7" : "#F8FAFC",
-              color: aiAccess?.canUsePremiumModels ? "#047857" : "#64748B",
+              background: activeTier === "premium" || debugModelOverride ? "#DCFCE7" : "#F8FAFC",
+              color: activeTier === "premium" || debugModelOverride ? "#047857" : "#64748B",
             }}
           >
             {planLabel}
           </span>
         </div>
-        <p className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
-          AI routing is automatic. Provider names stay internal.
-        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {tierChoices.map((choice) => {
+            const selected = !debugModelOverride && activeTier === choice.id;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                disabled={choice.disabled}
+                onClick={() => onSelectTier(choice.id)}
+                className="rounded-[16px] border px-3 py-3 text-left transition disabled:cursor-not-allowed"
+                style={{
+                  borderColor: selected ? "#10B981" : "rgba(148,163,184,0.28)",
+                  background: choice.disabled ? "#F1F5F9" : selected ? "#ECFDF5" : "#FFFFFF",
+                  color: choice.disabled ? "#94A3B8" : selected ? "#047857" : "#172033",
+                  opacity: choice.disabled ? 0.58 : 1,
+                }}
+                aria-disabled={choice.disabled}
+              >
+                <span className="block text-sm font-black">{choice.label}</span>
+                <span className="mt-1 block text-[10px] font-black uppercase tracking-wide">{choice.kicker}</span>
+              </button>
+            );
+          })}
+        </div>
         {canDebugRouting && (
           <details className="rounded-[18px] border bg-slate-50 p-3" style={{ borderColor: "#E2E8F0" }}>
             <summary className="cursor-pointer list-none text-[11px] font-black uppercase tracking-wide" style={{ color: "#334155" }}>
