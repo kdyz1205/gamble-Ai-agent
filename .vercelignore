@@ -1,0 +1,32 @@
+# Keep deployment bundles small. These are local/browser/test artifacts and are
+# not required for the Next.js runtime.
+.fastembed_cache/
+.chrome-shot-profile/
+gambles-recordings/
+data/
+screenshots/
+test-results/
+playwright-report/
+.tmp/
+scratch/
+
+# Local build/cache/log noise.
+.env
+.env.*
+.next/
+coverage/
+*.log
+*.tsbuildinfo
+
+# Ad-hoc proof artifacts generated during production verification.
+*.png
+*.webm
+prod-*.json
+prod-*.txt
+latest-*.json
+latest-*.txt
+check-*.json
+create-challenge.json
+creator-evidence*.json
+opponent-evidence*.json
+blob-event*.json
