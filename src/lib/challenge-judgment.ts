@@ -9,6 +9,7 @@ import { judgeChallenge } from "./ai-engine";
 import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "./credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { getAiAccessForUser, resolveModelForAiAccess } from "./ai-access-policy";
 import { isAiReviewStatus } from "./challenge-state-machine";
 import { cleanupChallengeFrameBlobs } from "./media/blob-cleanup";
 import {
@@ -104,16 +105,6 @@ export async function executeChallengeJudgment(
   }
 
   const payerUserId = challenge.creatorId;
-  const cost = TIER_MULTIPLIER[tierId];
-  const balance = await getCredits(payerUserId);
-  if (balance < cost) {
-    return {
-      ok: false,
-      error: `Not enough tokens. Need ${cost}, have ${balance}.`,
-      status: 402,
-      creditsRemaining: balance,
-    };
-  }
 
   // Require an opponent before judging. Solo challenges used to auto-win at
   // 0.85 confidence (above the settle threshold), turning self-staked markets
@@ -138,22 +129,6 @@ export async function executeChallengeJudgment(
       ok: false,
       error: "No opponent has accepted — judgment requires at least two participants.",
       status: 400,
-    };
-  }
-
-  const spend = await spendForInference(
-    payerUserId,
-    tierId,
-    "judge",
-    `Judge: "${challenge.title.slice(0, 40)}"`,
-    challengeId,
-  );
-  if (!spend.success) {
-    return {
-      ok: false,
-      error: spend.error || "Inference spend failed",
-      status: 402,
-      creditsRemaining: spend.balance,
     };
   }
 
@@ -202,24 +177,74 @@ export async function executeChallengeJudgment(
   const googleVisionReady =
     Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
 
+  const aiAccess = await getAiAccessForUser(payerUserId);
+  const modelAccess = resolveModelForAiAccess({
+    access: aiAccess,
+    requestedProviderId:
+      options?.providerId ??
+      (!options?.providerId && bothHaveVideoUrl && googleVisionReady
+        ? "google"
+        : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
+    requestedModel:
+      options?.model?.trim() ||
+      (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady ? "gemini-3.5-flash" : undefined),
+    requestedTierId: tierId,
+    needsVision: bothHaveVideoUrl,
+    allowFreeDowngrade: tierId === 1,
+  });
+  if (!modelAccess.ok) {
+    return {
+      ok: false,
+      error: modelAccess.reason || "Selected AI judge model requires Premium.",
+      status: modelAccess.status ?? 402,
+    };
+  }
+  tierId = modelAccess.tierId;
+  const cost = TIER_MULTIPLIER[tierId];
+  const balance = await getCredits(payerUserId);
+  if (balance < cost) {
+    return {
+      ok: false,
+      error: `Not enough tokens. Need ${cost}, have ${balance}.`,
+      status: 402,
+      creditsRemaining: balance,
+    };
+  }
+
   const tierMeta = getAiModel(tierId);
   const envDefault = process.env.ORACLE_DEFAULT_PROVIDER;
   let providerId =
-    options?.providerId ??
+    modelAccess.providerId ??
     (envDefault && getProviderById(envDefault) ? envDefault : DEFAULT_LLM_PROVIDER_ID);
   if (!options?.providerId && bothHaveVideoUrl && googleVisionReady) {
     providerId = "google";
   }
   const pdef = getProviderById(providerId);
   let judgeModel =
-    options?.model?.trim() ||
+    modelAccess.model ||
     (pdef?.id === "anthropic"
       ? tierMeta.model
       : (pdef?.defaultModel ?? tierMeta.model));
   if (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady) {
-    judgeModel = "gemini-3.5-flash";
+    judgeModel = modelAccess.model;
   }
   const aiModelLabel = `${pdef?.shortLabel ?? "LLM"} · ${judgeModel}`;
+
+  const spend = await spendForInference(
+    payerUserId,
+    tierId,
+    "judge",
+    `Judge: "${challenge.title.slice(0, 40)}"`,
+    challengeId,
+  );
+  if (!spend.success) {
+    return {
+      ok: false,
+      error: spend.error || "Inference spend failed",
+      status: 402,
+      creditsRemaining: spend.balance,
+    };
+  }
 
   // Wrap judgeChallenge so a throw (provider timeout, bad JSON, etc.) refunds
   // the inference spend instead of pocketing it silently.

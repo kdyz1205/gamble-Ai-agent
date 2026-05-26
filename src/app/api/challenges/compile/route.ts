@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         source: "error",
         providerId: providerId ?? null,
         model: model ?? null,
+        needsUpgrade: status === 402,
       },
       { status },
     );

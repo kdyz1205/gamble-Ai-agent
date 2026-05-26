@@ -3,6 +3,7 @@ import { getAuthUser, unauthorized } from "@/lib/auth";
 import { getCredits } from "@/lib/credits";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { getAiAccessForUser, resolveModelForAiAccess } from "@/lib/ai-access-policy";
 import type { ParsedChallenge } from "@/lib/ai-engine";
 
 /**
@@ -29,11 +30,25 @@ export async function POST(req: NextRequest) {
 
   const credits = await getCredits(user.userId);
 
-  const providerId = DEFAULT_LLM_PROVIDER_ID;
-  const def = getProviderById(providerId);
-  const model = def?.defaultModel ?? "deepseek-v4-pro";
+  const access = await getAiAccessForUser(user.userId);
+  const baseProviderId = DEFAULT_LLM_PROVIDER_ID;
+  const def = getProviderById(baseProviderId);
+  const modelAccess = resolveModelForAiAccess({
+    access,
+    requestedProviderId: baseProviderId,
+    requestedModel: def?.defaultModel ?? "deepseek-v4-pro",
+    requestedTierId: 1,
+    needsVision: false,
+    allowFreeDowngrade: true,
+  });
+  if (!modelAccess.ok) {
+    return Response.json({ error: modelAccess.reason || "AI model is not available for this account" }, { status: modelAccess.status ?? 402 });
+  }
+  const providerId = modelAccess.providerId;
+  const model = modelAccess.model;
+  const resolvedDef = getProviderById(providerId);
 
-  const apiKey = process.env[def?.envVar ?? "ANTHROPIC_API_KEY"];
+  const apiKey = resolvedDef?.apiKeyOptional ? "optional" : process.env[resolvedDef?.envVar ?? "ANTHROPIC_API_KEY"];
   if (!apiKey) {
     return Response.json({ error: "AI not configured" }, { status: 503 });
   }

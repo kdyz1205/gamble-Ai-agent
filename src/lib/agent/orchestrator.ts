@@ -19,6 +19,7 @@
 import { logAiUsage } from "@/lib/ai-usage-log";
 import { completeOraclePromptWithMetadata, type LlmCallMetadata } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { getAiAccessForUser, resolveModelForAiAccess } from "@/lib/ai-access-policy";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
 import { routeAgentTool, routeAgentTurn, routeJudgmentOutcome } from "./agent-graph";
 import { executeAgentTool } from "./tools";
@@ -71,15 +72,28 @@ function summarizeLlmCall(metadata: LlmCallMetadata) {
 export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse> {
   const draftState: DraftState = input.draftState ?? emptyDraftState();
 
-  // Resolve provider/model. A selected provider/model from the UI or caller
-  // takes precedence; otherwise use the environment default.
+  // Resolve provider/model through the account access policy. Free users are
+  // routed to low-cost models instead of accidentally burning premium APIs.
   const requestedProviderId = input.providerId?.trim();
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
-  const providerId = requestedProviderId && getProviderById(requestedProviderId)
+  const baseProviderId = requestedProviderId && getProviderById(requestedProviderId)
     ? requestedProviderId
     : envProvider && getProviderById(envProvider) ? envProvider : DEFAULT_LLM_PROVIDER_ID;
-  const def = getProviderById(providerId);
-  const model = input.model?.trim() || def?.defaultModel || "deepseek-v4-pro";
+  const baseDef = getProviderById(baseProviderId);
+  const aiAccess = await getAiAccessForUser(input.userId);
+  const modelAccess = resolveModelForAiAccess({
+    access: aiAccess,
+    requestedProviderId: baseProviderId,
+    requestedModel: input.model?.trim() || baseDef?.defaultModel || undefined,
+    requestedTierId: 1,
+    needsVision: false,
+    allowFreeDowngrade: true,
+  });
+  if (!modelAccess.ok) {
+    throw new Error(modelAccess.reason || "Selected AI model is not available for this account.");
+  }
+  const providerId = modelAccess.providerId;
+  const model = modelAccess.model;
 
   // Build the user-turn payload. We give the LLM:
   //   (a) the hidden draft state as JSON,

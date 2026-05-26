@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
       externalApiCharged: compiled.externalApiCharged,
       providerCall: compiled.providerCall,
       dailyQuota: compiled.dailyQuota,
+      aiAccess: "aiAccess" in compiled ? compiled.aiAccess : undefined,
+      modelAccess: "modelAccess" in compiled ? compiled.modelAccess : undefined,
       agentGraph: compiled.agentGraph,
     });
   } catch (error) {
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
         source: "error",
         providerId: providerId ?? null,
         model: model ?? null,
+        needsUpgrade: status === 402,
       },
       { status },
     );

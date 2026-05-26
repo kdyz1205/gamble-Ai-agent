@@ -37,6 +37,7 @@ import {
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 import { routeJudgmentOutcome } from "@/lib/agent/agent-graph";
 import { planRejudgeEscalation, type RejudgeEscalationPlan } from "@/lib/rejudge-escalation";
+import { getAiAccessForUser, modelAccessResponse, resolveModelForAiAccess } from "@/lib/ai-access-policy";
 
 function safeMetricsJson(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
@@ -542,6 +543,36 @@ export async function POST(
     cost = TIER_MULTIPLIER[tierId];
   }
 
+  const googleVisionReadyForAccess =
+    Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
+  const aiAccess = await getAiAccessForUser(user.userId);
+  const modelAccess = resolveModelForAiAccess({
+    access: aiAccess,
+    requestedProviderId:
+      providerIdOverride ??
+      (!providerIdOverride && bothHaveVideoUrl && googleVisionReadyForAccess
+        ? "google"
+        : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
+    requestedModel:
+      modelOverride ??
+      (!modelOverride && bothHaveVideoUrl && googleVisionReadyForAccess ? "gemini-3.5-flash" : undefined),
+    requestedTierId: tierId,
+    needsVision: isVideoJudgment,
+    allowFreeDowngrade: tierId === 1 && !isRejudge,
+  });
+  if (!modelAccess.ok) {
+    return Response.json({
+      error: modelAccess.reason || "This AI verdict needs Premium access.",
+      needsUpgrade: modelAccess.needsUpgrade,
+      aiAccess,
+      modelAccess: modelAccessResponse(modelAccess),
+    }, { status: modelAccess.status ?? 402 });
+  }
+  tierId = modelAccess.tierId;
+  cost = TIER_MULTIPLIER[tierId];
+  providerIdOverride = modelAccess.providerId;
+  modelOverride = modelAccess.model;
+
   let inferenceSpendCharged = false;
   if (!isFreeChallenge) {
     const balance = await getCredits(user.userId);
@@ -910,6 +941,8 @@ export async function POST(
       creditsRefunded: inferenceRefunded ? cost : 0,
       creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
       dailyQuota: dailyQuotaStatus,
+      aiAccess,
+      modelAccess: modelAccessResponse(modelAccess),
       txHash: null,
       freeMode: isFreeChallenge,
     });
@@ -973,6 +1006,8 @@ export async function POST(
           creditsUsed: isFreeChallenge ? 0 : cost,
           creditsRefunded: inferenceRefunded ? cost : 0,
           dailyQuota: dailyQuotaStatus,
+          aiAccess,
+          modelAccess: modelAccessResponse(modelAccess),
           freeMode: isFreeChallenge,
         },
         { status: 502 },
@@ -1040,6 +1075,8 @@ export async function POST(
     creditsRefunded: inferenceRefunded ? cost : 0,
     creditsRemaining: isFreeChallenge || inferenceRefunded ? postBalance : undefined,
     dailyQuota: dailyQuotaStatus,
+    aiAccess,
+    modelAccess: modelAccessResponse(modelAccess),
     txHash: settlement.txHash ?? null,
     freeMode: isFreeChallenge,
   });

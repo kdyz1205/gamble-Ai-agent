@@ -154,6 +154,8 @@ export async function POST(req: NextRequest) {
       creditsUsed: 0,
       creditsRemaining: balance,
       dailyQuota: compiled.dailyQuota,
+      aiAccess: "aiAccess" in compiled ? compiled.aiAccess : undefined,
+      modelAccess: "modelAccess" in compiled ? compiled.modelAccess : undefined,
       agentGraph: compiled.agentGraph,
       txHash: null,
       freeMode: true,
@@ -162,7 +164,7 @@ export async function POST(req: NextRequest) {
     const status = err instanceof CompileRequestError ? err.status : 502;
     console.error("Parse error:", err);
     return Response.json(
-      { error: err instanceof Error ? err.message : "Failed to parse challenge", source: "error" },
+      { error: err instanceof Error ? err.message : "Failed to parse challenge", source: "error", needsUpgrade: status === 402 },
       { status },
     );
   }

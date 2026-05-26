@@ -21,6 +21,19 @@ type LanguageMode = api.ProtocolSpecV2["language"];
 type DiscoveryLocationState = "checking" | "ready" | "global" | "blocked" | "unavailable";
 type BrowserLocationStatus = "ready" | "blocked" | "timeout" | "unavailable" | "error";
 
+const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
+  tier: "free",
+  label: "Free",
+  isDeveloper: false,
+  canUsePremiumModels: false,
+  maxJudgeTier: 1,
+  reason: "free beta account",
+  freeTextModel: { providerId: "deepseek", model: "deepseek-v4-flash" },
+  freeVisionModel: { providerId: "google", model: "gemini-3.1-flash-lite" },
+  upgradeRequiredMessage:
+    "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
+};
+
 const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:local|llama|ollama)$/i, providerId: "local_ollama" },
   { pattern: /^(?:deepseek|deep seeker)$/i, providerId: "deepseek" },
@@ -93,6 +106,12 @@ function initialOraclePrefs(): OraclePrefs {
 
 function shortAiError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
+  if (/UserDailyQuota|Foreign key constraint|constraint violated|Session user/i.test(message)) {
+    return "Your local session is stale. Sign out and sign in again before creating a challenge.";
+  }
+  if (/premium|upgrade|needs premium|requires premium/i.test(message)) {
+    return "Premium model required. Free mode uses low-cost AI for simple drafts and verdicts.";
+  }
   if (/insufficient_quota|exceeded your current quota|quota/i.test(message)) {
     return "AI provider has no quota. Pick another model or add provider credits.";
   }
@@ -235,6 +254,15 @@ export default function Home() {
   const [discoveryMessage, setDiscoveryMessage] = useState("");
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [dailyQuota, setDailyQuota] = useState<api.DailyAiQuotaStatus | null>(null);
+  const [aiAccess, setAiAccess] = useState<api.AiAccessStatus | null>(null);
+  const visibleAiAccess = aiAccess ?? FREE_FALLBACK_AI_ACCESS;
+  const effectiveOraclePrefs = useMemo<OraclePrefs>(() => {
+    const freeModel = visibleAiAccess.freeTextModel;
+    if (!visibleAiAccess.canUsePremiumModels && freeModel) {
+      return { providerId: freeModel.providerId, model: freeModel.model };
+    }
+    return oraclePrefs;
+  }, [oraclePrefs, visibleAiAccess]);
   const joiningId: string | null = null;
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<DiscoveryLocationState>("checking");
@@ -345,20 +373,36 @@ export default function Home() {
   }, [refreshReferralStats, updateSession, user?.id]);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!user || sessionLoading) {
       setDailyQuota(null);
+      setAiAccess(null);
       return;
     }
     let cancelled = false;
     api.getCredits()
       .then((res) => {
-        if (!cancelled) setDailyQuota(res.dailyQuota);
+        if (!cancelled) {
+          setDailyQuota(res.dailyQuota);
+          setAiAccess(res.aiAccess ?? null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setDailyQuota(null);
+        if (!cancelled) {
+          setDailyQuota(null);
+          setAiAccess(null);
+        }
       });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [sessionLoading, user]);
+
+  useEffect(() => {
+    const freeModel = aiAccess?.freeTextModel;
+    if (!aiAccess || aiAccess.canUsePremiumModels || !freeModel) return;
+    if (oraclePrefs.providerId === freeModel.providerId && oraclePrefs.model === freeModel.model) return;
+    const freePrefs = { providerId: freeModel.providerId, model: freeModel.model };
+    setOraclePrefs(freePrefs);
+    writeOracleLlmPrefs(freePrefs.providerId, freePrefs.model);
+  }, [aiAccess, oraclePrefs]);
 
   const handleGenerate = useCallback(async (input: string, languageMode?: LanguageMode) => {
     if (!user) {
@@ -367,7 +411,7 @@ export default function Home() {
       return;
     }
     const directive = extractModelDirective(input);
-    const nextPrefs = directive.prefs ?? oraclePrefs;
+    const nextPrefs = directive.prefs ?? effectiveOraclePrefs;
     if (directive.prefs) {
       setOraclePrefs(directive.prefs);
       writeOracleLlmPrefs(directive.prefs.providerId, directive.prefs.model ?? "");
@@ -394,12 +438,18 @@ export default function Home() {
       setProviderCall(res.providerCall ?? null);
       setExternalApiCharged(Boolean(res.externalApiCharged));
       if (res.dailyQuota) setDailyQuota(res.dailyQuota);
+      if (res.aiAccess) setAiAccess(res.aiAccess);
+      if (res.modelAccess?.downgraded) {
+        const downgradedPrefs = { providerId: res.modelAccess.providerId, model: res.modelAccess.model };
+        setOraclePrefs(downgradedPrefs);
+        writeOracleLlmPrefs(downgradedPrefs.providerId, downgradedPrefs.model);
+      }
       setAppState("preview");
     } catch (err) {
       setError(shortAiError(err));
       setAppState("idle");
     }
-  }, [oraclePrefs, user]);
+  }, [effectiveOraclePrefs, user]);
 
   const handleLaunchPrompt = useCallback((value: string) => {
     setPrompt(value);
@@ -805,7 +855,7 @@ export default function Home() {
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
                   <CenteredComposer onSubmit={handleGenerate} isActive={false} initialValue={prompt} onQuotaChange={setDailyQuota} />
-                  <ModelModeBar prefs={oraclePrefs} onChange={handleSelectOracle} />
+                  <ModelModeBar prefs={effectiveOraclePrefs} aiAccess={visibleAiAccess} onChange={handleSelectOracle} />
                   <LaunchPromptStrip onPick={handleLaunchPrompt} />
                 </div>
               </section>
@@ -1264,9 +1314,11 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
 
 function ModelModeBar({
   prefs,
+  aiAccess,
   onChange,
 }: {
   prefs: OraclePrefs;
+  aiAccess: api.AiAccessStatus | null;
   onChange: (providerId: string, model?: string | null) => void;
 }) {
   const visible = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
@@ -1286,6 +1338,17 @@ function ModelModeBar({
         <span className="text-[#047857]">Model</span>
         <span className="ml-2">{selectedProvider?.shortLabel ?? "AI"}</span>
         <span className="ml-1 text-slate-400">/ {selectedModel}</span>
+        {aiAccess && (
+          <span
+            className="ml-2 rounded-full px-2 py-0.5"
+            style={{
+              background: aiAccess.canUsePremiumModels ? "#DCFCE7" : "#F8FAFC",
+              color: aiAccess.canUsePremiumModels ? "#047857" : "#64748B",
+            }}
+          >
+            {aiAccess.label}
+          </span>
+        )}
       </summary>
       <div
         className="mt-2 flex max-w-full flex-wrap items-center gap-2 rounded-[22px] border bg-white/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
@@ -1321,6 +1384,11 @@ function ModelModeBar({
             </option>
           ))}
         </select>
+        {aiAccess && !aiAccess.canUsePremiumModels && (
+          <span className="px-2 py-1 text-[11px] font-bold" style={{ color: "#64748B" }}>
+            Free routes to low-cost AI
+          </span>
+        )}
       </div>
     </details>
   );

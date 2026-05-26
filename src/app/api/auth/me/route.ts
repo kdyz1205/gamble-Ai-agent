@@ -1,5 +1,6 @@
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { getAiAccessForUser } from "@/lib/ai-access-policy";
 
 export async function GET() {
   const user = await getAuthUser();
@@ -24,6 +25,7 @@ export async function GET() {
   });
 
   if (!dbUser) return unauthorized();
+  const aiAccess = await getAiAccessForUser(user.userId);
 
   return Response.json({
     user: {
@@ -41,6 +43,7 @@ export async function GET() {
       },
       isOnline: dbUser.isOnline,
       createdAt: dbUser.createdAt,
+      aiAccess,
     },
   });
 }

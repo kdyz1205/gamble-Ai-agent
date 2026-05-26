@@ -18,11 +18,11 @@ import {
 } from "@/lib/challenge-state-machine";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
-const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Light", 2: "Pro", 3: "Max" };
+const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Free", 2: "Premium", 3: "Max" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
-  1: "Fast & efficient",
-  2: "Balanced judgment",
-  3: "Maximum intelligence",
+  1: "Low-cost AI",
+  2: "Stronger judge",
+  3: "Hard cases",
 };
 
 function statusColor(s: string) {
@@ -260,6 +260,7 @@ export default function ChallengeVerdictPanel({
   // (evidenceText / evidenceUrl state removed — evidence capture now lives
   // in <EvidenceUploader />; this panel is verdict + settle only.)
   const [tier, setTier] = useState<1 | 2 | 3>(1);
+  const [aiAccess, setAiAccess] = useState<api.AiAccessStatus | null>(null);
   const [verdictErr, setVerdictErr] = useState("");
   const [manageNotice, setManageNotice] = useState("");
   const [asyncHint, setAsyncHint] = useState("");
@@ -290,6 +291,18 @@ export default function ChallengeVerdictPanel({
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getCredits()
+      .then((res) => {
+        if (!cancelled) setAiAccess(res.aiAccess ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAiAccess(null);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -329,6 +342,10 @@ export default function ChallengeVerdictPanel({
   const runVerdict = async () => {
     if (!challenge) return;
     const cost = TIER_COST[tier];
+    if (aiAccess && tier > aiAccess.maxJudgeTier) {
+      setVerdictErr(aiAccess.upgradeRequiredMessage);
+      return;
+    }
     if (credits < cost) {
       const zh = currentZhCopy();
       setVerdictErr(zh ? `需要 ${cost} 积分才能运行 ${TIER_LABEL[tier]}。你现在有 ${credits}。` : `Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
@@ -338,10 +355,11 @@ export default function ChallengeVerdictPanel({
     setVerdictErr("");
     try {
       const prefs = readOracleLlmPrefs();
-      await api.judgeChallenge(challenge.id, tier, {
+      const res = await api.judgeChallenge(challenge.id, tier, {
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (res.aiAccess) setAiAccess(res.aiAccess);
       await refresh();
       onCreditsMayChange();
     } catch (e) {
@@ -354,6 +372,10 @@ export default function ChallengeVerdictPanel({
   const runVerdictAsync = async () => {
     if (!challenge) return;
     const cost = TIER_COST[tier];
+    if (aiAccess && tier > aiAccess.maxJudgeTier) {
+      setVerdictErr(aiAccess.upgradeRequiredMessage);
+      return;
+    }
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -367,6 +389,7 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (res.aiAccess) setAiAccess(res.aiAccess);
       setAsyncHint(currentZhCopy() ? "AI 正在分析证据（视频帧 + 视觉模型）..." : "AI is analyzing evidence (video frames + vision)...");
 
       // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
@@ -501,6 +524,10 @@ export default function ChallengeVerdictPanel({
   const runRejudge = async () => {
     if (!challenge) return;
     const cost = TIER_COST[tier];
+    if (aiAccess && tier > aiAccess.maxJudgeTier) {
+      setVerdictErr(aiAccess.upgradeRequiredMessage);
+      return;
+    }
     if (credits < cost) {
       const zh = currentZhCopy();
       setVerdictErr(zh ? `需要 ${cost} 积分才能运行 ${TIER_LABEL[tier]}。你现在有 ${credits}。` : `Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
@@ -510,12 +537,13 @@ export default function ChallengeVerdictPanel({
     setVerdictErr("");
     try {
       const prefs = readOracleLlmPrefs();
-      await api.judgeChallenge(challenge.id, tier, {
+      const res = await api.judgeChallenge(challenge.id, tier, {
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
         rejudge: true,
         reason: currentZhCopy() ? "创建者认为上一次 AI 判定有误，请求另一个模型重新判定。" : "Creator disputed the previous AI verdict and requested another model pass.",
       });
+      if (res.aiAccess) setAiAccess(res.aiAccess);
       setVerdictRevealed(false);
       await refresh();
       onCreditsMayChange();
@@ -1117,11 +1145,12 @@ export default function ChallengeVerdictPanel({
                 <div className="grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((t) => {
                     const selected = tier === t;
+                    const locked = Boolean(aiAccess && t > aiAccess.maxJudgeTier);
                     return (
                       <motion.button
                         key={t}
                         type="button"
-                        onClick={() => setTier(t)}
+                        onClick={() => locked ? setVerdictErr(aiAccess?.upgradeRequiredMessage ?? "Premium judge required.") : setTier(t)}
                         whileTap={{ scale: 0.97 }}
                         transition={{ type: "spring", stiffness: 400, damping: 22 }}
                         className="p-3 text-center transition-colors"
@@ -1129,6 +1158,7 @@ export default function ChallengeVerdictPanel({
                           background: selected ? "#FED7AA" : "#FFFFFF",
                           border: selected ? "1.5px solid #FDBA74" : "1px solid #E2E8F0",
                           borderRadius: "16px",
+                          opacity: locked ? 0.56 : 1,
                         }}
                       >
                         <p className="text-xs font-bold" style={{ color: selected ? "#7C2D12" : "#334155" }}>
@@ -1136,7 +1166,7 @@ export default function ChallengeVerdictPanel({
                         </p>
                         <p className="text-[10px] font-medium mt-0.5" style={{ color: selected ? "#9A3412" : "#64748B" }}>{TIER_DESC[t]}</p>
                         <p className="text-[11px] font-bold mt-1" style={{ color: selected ? "#7C2D12" : "#94A3B8" }}>
-                          {TIER_COST[t]} cr
+                          {locked ? "Premium" : `${TIER_COST[t]} cr`}
                         </p>
                       </motion.button>
                     );
@@ -1223,20 +1253,22 @@ export default function ChallengeVerdictPanel({
                 <div className="grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((t) => {
                     const selected = tier === t;
+                    const locked = Boolean(aiAccess && t > aiAccess.maxJudgeTier);
                     return (
                       <button
                         key={`rejudge-${t}`}
                         type="button"
-                        onClick={() => setTier(t)}
+                        onClick={() => locked ? setVerdictErr(aiAccess?.upgradeRequiredMessage ?? "Premium judge required.") : setTier(t)}
                         className="p-2 text-center"
                         style={{
                           background: selected ? "#DBEAFE" : "#FFFFFF",
                           border: selected ? "1.5px solid #60A5FA" : "1px solid #E2E8F0",
                           borderRadius: "12px",
+                          opacity: locked ? 0.56 : 1,
                         }}
                       >
                         <p className="text-[11px] font-extrabold" style={{ color: selected ? "#1D4ED8" : "#334155" }}>{TIER_LABEL[t]}</p>
-                        <p className="text-[10px] font-bold mt-0.5" style={{ color: selected ? "#1E40AF" : "#94A3B8" }}>{TIER_COST[t]} cr</p>
+                        <p className="text-[10px] font-bold mt-0.5" style={{ color: selected ? "#1E40AF" : "#94A3B8" }}>{locked ? "Premium" : `${TIER_COST[t]} cr`}</p>
                       </button>
                     );
                   })}

@@ -97,6 +97,27 @@ export interface DailyAiQuotaStatus {
   transcribe: { used: number; limit: number; remaining: number };
 }
 
+export interface AiAccessStatus {
+  tier: "free" | "premium" | "developer";
+  label: "Free" | "Premium" | "Developer";
+  isDeveloper: boolean;
+  canUsePremiumModels: boolean;
+  maxJudgeTier: 1 | 2 | 3;
+  reason: string;
+  freeTextModel: { providerId: string; model: string } | null;
+  freeVisionModel: { providerId: string; model: string } | null;
+  upgradeRequiredMessage: string;
+}
+
+export interface ModelAccessSummary {
+  tierId: 1 | 2 | 3;
+  providerId: string;
+  model: string;
+  downgraded: boolean;
+  needsUpgrade: boolean;
+  reason: string | null;
+}
+
 export async function getTokenStatus(): Promise<TokenData> {
   return apiFetch("/tokens");
 }
@@ -105,6 +126,7 @@ export async function getCredits(): Promise<{
   credits: number;
   stats: { won: number; lost: number; bought: number };
   dailyQuota: DailyAiQuotaStatus;
+  aiAccess?: AiAccessStatus;
   transactions: Array<{
     id: string;
     type: string;
@@ -500,6 +522,8 @@ export async function generateChallengeSpec(inputText: string, prefs?: {
   providerCall?: unknown;
   fallbackReason?: string;
   dailyQuota?: DailyAiQuotaStatus;
+  aiAccess?: AiAccessStatus;
+  modelAccess?: ModelAccessSummary;
   agentGraph?: AgentGraphTrace;
 }> {
   return apiFetch("/challenges/generate-spec", {
@@ -524,6 +548,8 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   providerCall?: unknown;
   fallbackReason?: string;
   dailyQuota?: DailyAiQuotaStatus;
+  aiAccess?: AiAccessStatus;
+  modelAccess?: ModelAccessSummary;
   agentGraph?: AgentGraphTrace;
 }> {
   return apiFetch("/challenges/compile", {
@@ -813,6 +839,8 @@ export async function judgeChallenge(id: string, tier: 1 | 2 | 3 = 1, prefs?: {
   creditsRefunded?: number;
   creditsRemaining: number;
   dailyQuota?: DailyAiQuotaStatus;
+  aiAccess?: AiAccessStatus;
+  modelAccess?: ModelAccessSummary;
   txHash: string | null;
 }> {
   return apiFetch(`/challenges/${id}/judge`, {
@@ -1222,7 +1250,12 @@ export async function presignEvidenceUpload(input: {
   });
 }
 
-export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{ jobId: string; dailyQuota?: DailyAiQuotaStatus }> {
+export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{
+  jobId: string;
+  dailyQuota?: DailyAiQuotaStatus;
+  aiAccess?: AiAccessStatus;
+  modelAccess?: ModelAccessSummary;
+}> {
   return apiFetch(`/challenges/${id}/judge/async`, {
     method: "POST",
     body: JSON.stringify({ tier, ...prefs }),

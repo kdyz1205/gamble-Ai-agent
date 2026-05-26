@@ -1,6 +1,7 @@
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getDailyAiQuotaStatus } from "@/lib/daily-ai-quota";
+import { getAiAccessForUser } from "@/lib/ai-access-policy";
 
 export async function GET() {
   const user = await getAuthUser();
@@ -25,6 +26,7 @@ export async function GET() {
   });
 
   const dailyQuota = await getDailyAiQuotaStatus(user.userId);
+  const aiAccess = await getAiAccessForUser(user.userId);
 
   return Response.json({
     credits: dbUser.credits,
@@ -34,6 +36,7 @@ export async function GET() {
       bought: dbUser.totalCreditsBought,
     },
     dailyQuota,
+    aiAccess,
     transactions: recentTxs,
   });
 }

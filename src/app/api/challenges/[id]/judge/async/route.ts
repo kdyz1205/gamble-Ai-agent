@@ -7,6 +7,8 @@ import { runJudgeJob } from "@/lib/judge-async";
 import { isEvidenceUrlAllowed } from "@/lib/media/evidence-url";
 import { isAiReviewStatus } from "@/lib/challenge-state-machine";
 import { spendDailyAiQuota } from "@/lib/daily-ai-quota";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
+import { getAiAccessForUser, modelAccessResponse, resolveModelForAiAccess } from "@/lib/ai-access-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -43,10 +45,6 @@ export async function POST(
   if (webhookUrl && !isEvidenceUrlAllowed(webhookUrl)) {
     return Response.json({ error: "webhookUrl must be a safe public https URL" }, { status: 400 });
   }
-
-  const cost = TIER_MULTIPLIER[tierId];
-  const balance = await getCredits(user.userId);
-  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
@@ -92,6 +90,39 @@ export async function POST(
   const isVideoJudgment =
     evidenceType.includes("video") ||
     challenge.evidence.some((e) => String(e.type ?? "").toLowerCase() === "video");
+  const googleVisionReady =
+    Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
+  const aiAccess = await getAiAccessForUser(user.userId);
+  const modelAccess = resolveModelForAiAccess({
+    access: aiAccess,
+    requestedProviderId:
+      providerId ??
+      (!providerId && isVideoJudgment && googleVisionReady
+        ? "google"
+        : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
+    requestedModel:
+      model ??
+      (!model && isVideoJudgment && googleVisionReady ? "gemini-3.5-flash" : undefined),
+    requestedTierId: tierId,
+    needsVision: isVideoJudgment,
+    allowFreeDowngrade: tierId === 1,
+  });
+  if (!modelAccess.ok) {
+    return Response.json({
+      error: modelAccess.reason || "This background AI verdict needs Premium access.",
+      needsUpgrade: modelAccess.needsUpgrade,
+      aiAccess,
+      modelAccess: modelAccessResponse(modelAccess),
+    }, { status: modelAccess.status ?? 402 });
+  }
+  tierId = modelAccess.tierId;
+  providerId = modelAccess.providerId;
+  model = modelAccess.model;
+
+  const cost = TIER_MULTIPLIER[tierId];
+  const balance = await getCredits(user.userId);
+  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
+
   const quota = await spendDailyAiQuota(user.userId, isVideoJudgment ? "video_judge" : "judge");
   if (!quota.ok) {
     return Response.json(
@@ -126,6 +157,8 @@ export async function POST(
       pollUrl: `/api/judge-jobs/${job.id}`,
       pollUrlAbsolute: origin ? pollUrl : undefined,
       dailyQuota: quota.status,
+      aiAccess,
+      modelAccess: modelAccessResponse(modelAccess),
       message:
         "AI judgment runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; auto-settle mode settles high-confidence winners, otherwise creator confirmation settles credits.",
     },

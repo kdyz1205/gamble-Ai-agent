@@ -2,6 +2,12 @@ import { getDailyAiQuotaStatus, refundDailyAiQuota, spendDailyAiQuota } from "@/
 import { logAiUsage } from "@/lib/ai-usage-log";
 import { completeOraclePromptWithMetadata } from "@/lib/llm-router";
 import {
+  getAiAccessForUser,
+  modelAccessResponse,
+  resolveModelForAiAccess,
+  type ModelAccessDecision,
+} from "@/lib/ai-access-policy";
+import {
   configuredProviders,
   getProviderById,
   isPaidProvider,
@@ -694,6 +700,7 @@ export async function compileProtocolForUser(input: {
   const inputText = input.inputText.trim();
   const language = input.language ?? "auto";
   const tierId = input.tierId ?? 1;
+  let modelAccess: ModelAccessDecision | null = null;
   if (!inputText) throw new CompileRequestError("inputText is required", 400);
   if (inputText.length > 2000) {
     throw new CompileRequestError("Challenge prompt is too long. Keep it under 2000 characters.", 400);
@@ -782,10 +789,33 @@ export async function compileProtocolForUser(input: {
   }
 
   try {
-    const attempts = compileProviderAttempts(input.providerId, tierId);
+    const aiAccess = await getAiAccessForUser(input.userId);
+    modelAccess = resolveModelForAiAccess({
+      access: aiAccess,
+      requestedProviderId: input.providerId,
+      requestedModel: input.model,
+      requestedTierId: tierId,
+      needsVision: false,
+      allowFreeDowngrade: true,
+    });
+    if (!modelAccess.ok) {
+      throw new CompileRequestError(modelAccess.reason || "Selected AI model is not available for this account.", modelAccess.status ?? 402);
+    }
+
+    const attempts = compileProviderAttempts(modelAccess.providerId, modelAccess.tierId);
     let lastError: { providerId: string; model: string; message: string } | null = null;
     for (const provider of attempts) {
-      const selectedModel = compileModelForProvider(provider, input.model, tierId);
+      const providerDecision = resolveModelForAiAccess({
+        access: aiAccess,
+        requestedProviderId: provider.id,
+        requestedModel: provider.id === modelAccess.providerId ? modelAccess.model : undefined,
+        requestedTierId: modelAccess.tierId,
+        needsVision: false,
+        allowFreeDowngrade: true,
+      });
+      if (!providerDecision.ok) continue;
+      if (providerDecision.providerId !== provider.id) continue;
+      const selectedModel = compileModelForProvider(provider, providerDecision.model, providerDecision.tierId);
       try {
         console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
         const completion = await completeOraclePromptWithMetadata({
@@ -859,6 +889,8 @@ export async function compileProtocolForUser(input: {
           providerCall: completion.metadata,
           fallbackReason: fallbackReason ?? undefined,
           dailyQuota: quota.status,
+          aiAccess,
+          modelAccess: modelAccessResponse(providerDecision),
           agentGraph: routeCompiledProtocol(repairedProtocol, {
             source: input.route ?? "/api/challenges/compile",
             compileSource: fallbackReason ? "fallback" : "llm",
