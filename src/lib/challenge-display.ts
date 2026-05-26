@@ -237,16 +237,18 @@ export function compactChallengeRules(challenge: ChallengeLike): ChallengeRuleCa
     ? joinSentencesForLanguage(timeLimit, deadlineLabel, zh)
     : timeLimit || deadlineLabel || challenge.proofWindow || "Before the challenge window closes";
   const dispute = pickCard(cards, ["Dispute window"])?.value;
-  const settlement = compactSettlementSummary(challenge);
+  const stake = Math.max(0, Math.floor(challenge.stake ?? 0));
+  const settlement = stake > 0 ? compactSettlementSummary(challenge) : "";
   const review = dispute && settlement
     ? joinSentencesForLanguage(dispute, settlement, zh)
-    : dispute || settlement || settlementSummary(challenge);
+    : dispute || settlement;
+  const timeReview = review ? joinSentencesForLanguage(time, review, zh) : time;
 
   return [
     { label: zh ? "挑战" : "Match", value: goal },
     { label: zh ? "胜利条件" : "How to win", value: win },
     { label: zh ? "证据" : "Evidence", value: evidence },
-    { label: zh ? "时间与复核" : "Time + review", value: joinSentencesForLanguage(time, review, zh) },
+    { label: zh ? "时间与复核" : "Time + review", value: timeReview },
   ];
 }
 

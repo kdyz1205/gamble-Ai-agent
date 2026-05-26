@@ -770,13 +770,13 @@ export default function Home() {
               <section className="min-w-0">
                 <div className="mb-4 inline-flex items-center gap-2 rounded-full border bg-white/90 px-3 py-2 shadow-sm" style={{ borderColor: "#D1FAE5" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
-                  <span className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>AI challenge host</span>
+                  <span className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#047857" }}>AI referee</span>
                 </div>
                 <h1 className="max-w-3xl text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl" style={{ color: "#172033", lineHeight: 1.02 }}>
-                  Any challenge, one sentence.
+                  Bet anything you can prove.
                 </h1>
                 <p className="mt-4 max-w-xl text-base font-semibold leading-relaxed sm:text-lg" style={{ color: "#526078" }}>
-                  Axelrod turns it into rules, proof, and a verdict.
+                  Say it once. Axelrod builds the rules, proof, and verdict path.
                 </p>
                 <HeroSignalBar />
                 <div className="mt-7">
@@ -958,13 +958,13 @@ function HomeStatusCard({ policy }: { policy: api.PaymentPolicyStatus | null }) 
   return (
     <section className="rounded-[24px] border bg-white/95 p-4 text-left shadow-sm" style={{ borderColor: "#D1FAE5", boxShadow: "0 18px 48px rgba(15,23,42,0.07)" }}>
       <div className="grid grid-cols-3 gap-2">
-        <StatusChip label="Draft" value="AI" />
-        <StatusChip label="Proof" value="video/data" />
-        <StatusChip label="Payout" value="85%+" />
+        <StatusChip label="Create" value="draft" />
+        <StatusChip label="Prove" value="proof" />
+        <StatusChip label="Settle" value="gate" />
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border px-3 py-2" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
         <span className="text-xs font-black uppercase tracking-wide" style={{ color: "#64748B" }}>
-          Money
+          Stakes
         </span>
         <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: cashAllowed ? "#ECFDF5" : "#FFFFFF", color: cashAllowed ? "#047857" : "#64748B" }}>
           {cashAllowed ? "cash allowed" : "pts only"}
@@ -985,9 +985,9 @@ function StatusChip({ label, value }: { label: string; value: string }) {
 
 function HeroSignalBar() {
   const metrics = [
-    { label: "Prompt", value: "1 sentence" },
-    { label: "Rules", value: "AI compiled" },
-    { label: "Settle", value: "85% gate" },
+    { label: "Say", value: "one line" },
+    { label: "Prove", value: "proof" },
+    { label: "Settle", value: "gate" },
   ];
   return (
     <div className="mt-5 flex max-w-2xl flex-wrap gap-2">
@@ -1093,7 +1093,7 @@ function LaunchPromptStrip({ onPick }: { onPick: (prompt: string) => void }) {
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>
-          Proven loops
+          Try one
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -1162,9 +1162,9 @@ function OpenChallengeStrip({
     <section className="text-left">
       <div className="flex items-center justify-between gap-3 mb-2">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>{stripZh ? "附近挑战" : "Join nearby"}</p>
+          <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#047857" }}>{stripZh ? "附近挑战" : "Join"}</p>
           <p className="text-xs font-semibold" style={{ color: "#64748B" }}>
-            {message || "Open challenges"}
+            {message || "Nearby + public"}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -1202,7 +1202,7 @@ function OpenChallengeStrip({
           ))
         ) : challenges.length === 0 ? (
           <div className="rounded-[18px] border bg-white/95 px-4 py-4 text-sm font-semibold shadow-sm" style={{ borderColor: "#E2E8F0", color: "#64748B" }}>
-            {stripZh ? "暂无开放挑战。" : "No open challenges."}
+            {stripZh ? "暂无开放挑战。" : "No one waiting yet."}
           </div>
         ) : (
           challenges.slice(0, 3).map((challenge) => {

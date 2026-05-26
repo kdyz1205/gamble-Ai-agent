@@ -57,8 +57,8 @@ async function checkRoute(proof, page, route, expected, labelPrefix = "") {
 
 async function runCoreNavSuite(proof, page, labelPrefix = "") {
   await checkRoute(proof, page, "/", [
-    "Any challenge, one sentence.",
-    "PROVEN LOOPS",
+    "Bet anything you can prove.",
+    "TRY ONE",
     "Solo proof",
     "Answer challenge",
     "Push-up video",
@@ -70,7 +70,7 @@ async function runCoreNavSuite(proof, page, labelPrefix = "") {
   ], labelPrefix);
 
   await checkRoute(proof, page, "/markets", [
-    "MANAGE CHALLENGES",
+    "CONTROL ROOM",
     "Refresh",
     "+ New challenge",
   ], labelPrefix);

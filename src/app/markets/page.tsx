@@ -309,7 +309,7 @@ export default function MarketsPage() {
             Axelrod
           </Link>
           <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>
-            Challenge manager
+            Manager
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -344,13 +344,13 @@ export default function MarketsPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MINT_TEXT }}>
-                Manage challenges
+                Control room
               </p>
               <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" style={{ color: NAVY }}>
-                Your challenge board
+                Your rooms
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed" style={{ color: NAVY_DIM }}>
-                Close empty drafts, archive history, or re-enter any room.
+                Open rooms, clean tests, archive history.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center md:min-w-[320px]">
@@ -371,7 +371,7 @@ export default function MarketsPage() {
           {user && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: NAVY_FAINT }}>
               <p className="text-xs font-bold" style={{ color: NAVY_DIM }}>
-                Archive hides clutter. History stays.
+                Archive hides noise. Nothing is lost.
               </p>
               <button
                 type="button"
@@ -394,10 +394,10 @@ export default function MarketsPage() {
           }}
         >
           <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: PEACH_TEXT }}>
-            Quick match
+            Find one
           </p>
           <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
-            Join an open challenge.
+            Jump into a live room.
           </p>
           <button
             onClick={tryMatchMe}
@@ -461,11 +461,11 @@ export default function MarketsPage() {
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-extrabold" style={{ color: NAVY }}>
-              {sessionLoading ? "Challenges" : user ? "Your challenge board" : "Open challenges"}
+              {sessionLoading ? "Challenges" : user ? "Your rooms" : "Open challenges"}
             </h2>
             {user && (
               <p className="mt-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
-                Active first, closed history below. Use Manage to return to the exact room.
+                Active first. History below.
               </p>
             )}
           </div>
@@ -489,7 +489,7 @@ export default function MarketsPage() {
           </div>
         ) : !user ? (
           <div className="text-center py-10">
-            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>Sign in when you are ready to join or create.</p>
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>Sign in to play.</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"

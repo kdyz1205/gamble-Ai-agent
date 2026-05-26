@@ -219,4 +219,4 @@ export function resolveTierModel(provider: LlmProviderDefinition | undefined, ti
   return provider.defaultModel;
 }
 
-export const DEFAULT_LLM_PROVIDER_ID = "openai";
+export const DEFAULT_LLM_PROVIDER_ID = "deepseek";
