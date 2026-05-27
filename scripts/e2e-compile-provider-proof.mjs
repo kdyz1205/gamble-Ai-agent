@@ -238,7 +238,7 @@ try {
     "compiled_protocol_persisted_on_challenge",
     Boolean(challengeId) &&
       detail.challenge?.compilerProviderId === providerId &&
-      detail.challenge?.compilerModel === model &&
+      detail.challenge?.compilerModel === compiled.model &&
       storedProtocol.protocol?.rawPrompt === inputText,
     proof.create,
   );
