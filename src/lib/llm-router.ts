@@ -59,6 +59,13 @@ function elapsedMs(startedAt: number) {
   return Math.max(0, Date.now() - startedAt);
 }
 
+function jsonObjectResponseFormat(providerId: string, baseUrl: string) {
+  if (providerId === "openai" || providerId === "deepseek" || baseUrl.includes("api.openai.com")) {
+    return "json_object";
+  }
+  return null;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -163,7 +170,7 @@ async function openAiCompatibleCompleteWithMetadata(
 ): Promise<LlmCallResult> {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
   const startedAt = Date.now();
-  const responseFormat = baseUrl.includes("api.openai.com") ? "json_object" : null;
+  const responseFormat = jsonObjectResponseFormat(providerId, baseUrl);
   const { res, errorText } = await fetchWithLlmRetry(
     url,
     {
@@ -425,7 +432,7 @@ async function openAiCompatibleVisionCompleteWithMetadata(
       image_url: { url: `data:${img.mimeType};base64,${img.base64}`, detail: "auto" },
     });
   }
-  const responseFormat = baseUrl.includes("api.openai.com") ? "json_object" : null;
+  const responseFormat = jsonObjectResponseFormat(providerId, baseUrl);
   const startedAt = Date.now();
   const { res, errorText } = await fetchWithLlmRetry(
     url,

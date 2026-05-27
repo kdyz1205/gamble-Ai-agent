@@ -900,7 +900,7 @@ export async function compileProtocolForUser(input: {
             input.context ? `Context: ${JSON.stringify(input.context)}` : null,
             "Compile the protocol. Return JSON only.",
           ].filter(Boolean).join("\n\n"),
-          maxTokens: 2400,
+          maxTokens: 3600,
           temperature: 0.15,
         });
         await logAiUsage({
