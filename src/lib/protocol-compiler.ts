@@ -887,6 +887,8 @@ export async function compileProtocolForUser(input: {
       });
       if (!providerDecision.ok) continue;
       if (providerDecision.providerId !== provider.id) continue;
+      const responseModelAccess =
+        provider.id === modelAccess.providerId ? modelAccess : providerDecision;
       const selectedModel = compileModelForProvider(provider, providerDecision.model, providerDecision.tierId);
       try {
         console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
@@ -962,7 +964,7 @@ export async function compileProtocolForUser(input: {
           fallbackReason: fallbackReason ?? undefined,
           dailyQuota: quota.status,
           aiAccess,
-          modelAccess: modelAccessResponse(providerDecision),
+          modelAccess: modelAccessResponse(responseModelAccess),
           agentGraph: routeCompiledProtocol(repairedProtocol, {
             source: input.route ?? "/api/challenges/compile",
             compileSource: fallbackReason ? "fallback" : "llm",

@@ -110,6 +110,8 @@ const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_COMPILE_PROVIDER || "openai";
 const model = process.env.E2E_COMPILE_MODEL || "gpt-5.4-mini";
+const expectedModel = process.env.E2E_COMPILE_EXPECT_MODEL || model;
+const allowFreeModelDowngrade = process.env.E2E_ALLOW_FREE_MODEL_DOWNGRADE !== "0";
 const inputText = process.env.E2E_COMPILE_INPUT ||
   `I bet Alex I can do 20 pushups in one minute. Proof should be video. ${stamp}`;
 
@@ -148,6 +150,7 @@ try {
     source: compiled.source,
     providerId: compiled.providerId,
     model: compiled.model,
+    modelAccess: compiled.modelAccess,
     externalApiCharged: compiled.externalApiCharged,
     providerCall: {
       providerId: compiled.providerCall?.providerId,
@@ -165,15 +168,25 @@ try {
     maxVisionFrames: compiled.protocol?.aiBudgetPolicy?.maxVisionFrames,
     dailyQuota: compiled.dailyQuota,
   };
+  const selectedProviderModelCalled =
+    compiled.source === "llm" &&
+    compiled.providerId === providerId &&
+    compiled.providerCall?.usedApi === true &&
+    compiled.providerCall?.providerId === providerId &&
+    (
+      compiled.model === expectedModel ||
+      (
+        allowFreeModelDowngrade &&
+        compiled.modelAccess?.downgraded === true &&
+        compiled.modelAccess?.providerId === providerId &&
+        compiled.model === compiled.modelAccess?.model
+      )
+    );
   requireCheck(
     proof,
     "compile_called_selected_provider_model",
-    compiled.source === "llm" &&
-      compiled.providerId === providerId &&
-      compiled.model === model &&
-      compiled.providerCall?.usedApi === true &&
-      compiled.providerCall?.providerId === providerId,
-    proof.compile,
+    selectedProviderModelCalled,
+    { ...proof.compile, requestedModel: model, expectedModel, allowFreeModelDowngrade },
   );
   requireCheck(
     proof,
