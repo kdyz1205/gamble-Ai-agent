@@ -129,6 +129,7 @@ export interface JudgmentResult {
   source?: "deterministic" | "vision_llm" | "llm" | "oracle" | "fallback";
   providerCall?: LlmCallMetadata;
   videoMetrics?: VideoJudgmentMetrics;
+  eventMetrics?: Record<string, unknown>;
   dataSourceTrace?: DataSourceJudgmentTrace;
 }
 
@@ -628,6 +629,11 @@ function coerceVideoMetrics(
         ? source.judgingMethod.trim()
         : "AI vision reviewed sampled video frames, evidence descriptions, and challenge rules.",
   };
+}
+
+function coerceEventMetrics(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
 function compactVisionRetryImages(images: JudgeVisionImage[]): JudgeVisionImage[] {
@@ -1483,6 +1489,10 @@ VIDEO FRAMES (when images are attached to this message):
 - Frames are sampled via scene-change detection, labeled with the participant they belong to. Each participant typically contributes 4-22 frames spanning their clip.
 - When an ordered filmstrip image is provided, treat it as the primary motion summary: read left-to-right, top-to-bottom, and count repeated top/down/top cycles across the sequence before looking at isolated frames.
 - Check that the claimed action is actually visible across the frames, not just implied by the description.
+- Convert the user's specific prompt into observable checks. Identify the actors, objects, start event, decisive event, end event, and what would falsify the claim. Do not force every challenge into push-up/plank metrics.
+- For sports or small-object challenges such as badminton, tennis, ping-pong, catch/throw, cup shots, or "did they touch/return/catch it", inspect object visibility, contact/touch moment, object trajectory, landing/result area, and whether the camera loses the object. If the decisive contact or landing/result is not visible, use recommendation="needs_review".
+- For pet, feeding, object, cooking, cleaning, waking-up, daily-life, or household challenges, judge the concrete state change: the subject is visible, the starting state is visible, the end state is visible, timing is clear, and the result is not merely claimed by text.
+- For consensual human-interaction challenges such as a kiss, high-five, handshake, hug, or dance, require adult/consenting participant framing, identity/liveness when relevant, and visible completion of the agreed action. If consent, age, identity, or coercion is unclear, do not auto-settle.
 - Some controlled verification videos use a side-view pose diagram rather than a real human photo. In those, infer push-up motion from the head/torso/arms moving between high plank/top position and low/down position across the timer. Do not reject them as "no push-up motion" just because they are diagrams. Still do not read or trust any direct rep-count answer label.
 - Note timestamps/frame labels in your reasoning when citing what you saw.
 - For physical rep-count challenges such as push-ups, explicitly infer valid repetitions for Participant A and Participant B from body motion and posture across the attached frames. Do not trust text in the video that directly claims a rep count.
@@ -1497,9 +1507,9 @@ VIDEO FRAMES (when images are attached to this message):
 - For "who holds longer" challenges, never return a winner unless the winner's videoMetrics.holdDurationSec is strictly higher than the other participant's duration by a visually clear margin. If durations are tied, missing, or inconsistent with the selected winner, use winner=null or recommendation="needs_review" and list that as a blockingIssue.
 - When sampled frames make exact totals hard, still compare visible cadence: repeated top/down/top cycles across many timestamps strongly indicate more completed repetitions than a clip that stays mostly static or changes position only once or twice.
 - If the frames are sampled rather than every frame, only give a high-confidence winner when the count or result is visually obvious from the full video evidence, frame labels, metadata, and descriptions. Otherwise return winner null or confidence below 0.85.
-- Anti-cheat/liveness checks are required for video evidence: verify the liveness phrase if one is provided in metadata/rules, full body visibility, continuous attempt, required duration coverage, and whether the clip looks edited, looped, static, too dark, blurry, or cropped.
-- Camera quality checks are also required. A video can show a full body and still be invalid for auto-settlement if the camera angle is too tilted/rotated, the body is seen from an angle that makes push-up depth or arm extension unreliable, the participant is strongly diagonal/perspective-distorted, or the floor/body geometry is not stable enough to verify form. In those cases set evidenceQuality="unclear" or "insufficient", recommendation="needs_review", add a blockingIssue such as "Bad angle prevents reliable push-up validation", and set reasonForManualReview/unclearReason on the affected participant.
-- Never recommend auto-settlement for a video if either participant is missing liveness proof, full body visibility, continuous attempt, or required duration coverage; use recommendation="needs_review" or "invalid_evidence" and list the exact blockingIssues.
+- Anti-cheat/liveness checks are required for video evidence: verify the liveness phrase if one is provided in metadata/rules, required subject/body/object visibility for this challenge, continuous attempt, required duration coverage, and whether the clip looks edited, looped, static, too dark, blurry, or cropped.
+- Camera quality checks are also required. A video can show the subject and still be invalid for auto-settlement if camera angle, motion blur, occlusion, distance, or cropping makes the decisive event unreliable. In those cases set evidenceQuality="unclear" or "insufficient", recommendation="needs_review", add a blockingIssue naming the missing decisive event, and set reasonForManualReview/unclearReason on the affected participant.
+- Never recommend auto-settlement for a video if either participant is missing required liveness proof, required subject/object visibility, continuous attempt, or required duration/result coverage; use recommendation="needs_review" or "invalid_evidence" and list the exact blockingIssues.
 ${sharedSameCamera ? `
 SHARED SAME-CAMERA MODE:
 - Participant A and Participant B are in the same video, not two independent clips.
@@ -1568,6 +1578,17 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
     "validRepDefinition": string,
     "framesInspected": number,
     "judgingMethod": string
+  },
+  "eventMetrics": {
+    "challengeType": string,
+    "observableEntities": string[],
+    "startEventVisible": boolean | null,
+    "decisiveEventVisible": boolean | null,
+    "endStateVisible": boolean | null,
+    "eventTimeline": [{"timestampLabel": string, "observation": string}],
+    "domainChecks": object,
+    "winnerEvidence": string,
+    "uncertainty": string[]
   }
 }`;
 
@@ -1633,6 +1654,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
     recommendation?: "settle_winner" | "needs_review" | "invalid_evidence" | "tie_or_no_winner";
     blockingIssues?: string[];
     videoMetrics?: VideoJudgmentMetrics;
+    eventMetrics?: Record<string, unknown>;
     providerCall?: LlmCallMetadata;
   } | null> => {
     const callJudgeModel = async (imagesForCall: JudgeVisionImage[]) => {
@@ -1693,6 +1715,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
         settlementRecommendation?: unknown;
         blockingIssues?: unknown;
         videoMetrics?: unknown;
+        eventMetrics?: unknown;
       };
       if (!["A", "B", null].includes(parsed.winner as "A" | "B" | null)) {
         return unusableVisionVerdict("Vision judge returned an invalid winner schema.");
@@ -1713,6 +1736,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           ? parsed.blockingIssues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
           : undefined,
         videoMetrics: coerceVideoMetrics(parsed.videoMetrics, visualFrameCount, rules || title),
+        eventMetrics: coerceEventMetrics(parsed.eventMetrics),
         providerCall: completion.metadata,
       };
     };
@@ -1811,6 +1835,7 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
       source: allVisuals.length > 0 ? "vision_llm" : "llm",
       providerCall: parsedResult.providerCall,
       videoMetrics: parsedResult.videoMetrics,
+      eventMetrics: parsedResult.eventMetrics,
     };
   }
 

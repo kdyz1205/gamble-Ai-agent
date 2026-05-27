@@ -299,6 +299,7 @@ export function buildJudgmentMetricsJson(
     confidence: result.confidence,
     blockingIssues: params.autoSettlePolicy.blockingIssues,
     videoMetrics: result.videoMetrics ?? null,
+    eventMetrics: result.eventMetrics ?? null,
     dataSourceTrace: result.dataSourceTrace ?? null,
     providerCall: result.providerCall ?? null,
     judgingMethod: result.videoMetrics?.judgingMethod ?? result.source ?? "llm",

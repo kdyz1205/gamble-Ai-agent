@@ -270,6 +270,62 @@ function addUniqueText(items: Iterable<string>, additions: string[]) {
   return [...out];
 }
 
+function universalVisionJudgeInstructions(rawPrompt: string): {
+  judgeInstructions: string[];
+  requiredEvidence: string[];
+  captureInstructions: string[];
+  invalidEvidenceRules: string[];
+  manualReviewTriggers: string[];
+} {
+  const text = rawPrompt.toLowerCase();
+  const additions = {
+    judgeInstructions: [
+      "Compile the prompt into observable entities, start event, decisive event, end state, and blocking issues before deciding a winner.",
+      "Return eventMetrics with challengeType, observableEntities, eventTimeline, domainChecks, winnerEvidence, and uncertainty.",
+    ],
+    requiredEvidence: [
+      "Evidence must clearly show the subject(s), relevant object(s), start state, decisive event, and end/result state.",
+    ],
+    captureInstructions: [
+      "Record continuously from before the start event until after the result is visible; keep the decisive subject/object in frame.",
+    ],
+    invalidEvidenceRules: [
+      "Evidence is invalid or needs review if the decisive event is off-camera, hidden, too blurry, edited, coerced, or only asserted by text.",
+    ],
+    manualReviewTriggers: [
+      "The decisive event, object, subject identity, consent, timing, or end/result state cannot be verified.",
+    ],
+  };
+
+  if (/\b(badminton|shuttle|shuttlecock|tennis|ping[-\s]?pong|table tennis|baseball|basketball|soccer|football|volleyball|catch|throw|racket|racquet|ball)\b|羽毛球|球拍|接球|发球|乒乓|网球|篮球|足球|排球/.test(text)) {
+    additions.judgeInstructions.push(
+      "For ball/shuttle/racket sports, verify object visibility, contact/touch moment, trajectory, landing/result area, and whether the return/catch is valid under the stated rule.",
+    );
+    additions.requiredEvidence.push("Video must show the ball/shuttle/object, player or receiver, contact/catch attempt, and landing/result area.");
+    additions.captureInstructions.push("Use a stable wide angle or high-frame-rate clip when the object is small or fast.");
+    additions.manualReviewTriggers.push("Ball/shuttle/object leaves frame or contact/landing/result cannot be seen.");
+  }
+
+  if (/\b(cat|dog|pet|feed|feeding|food|eat|drink|bowl|treat)\b|猫|狗|宠物|喂|吃完|饭盆|食物|喝水/.test(text)) {
+    additions.judgeInstructions.push(
+      "For pet/feeding challenges, verify the animal or subject identity, starting food/water amount, timer/start point, end amount, and no hidden substitution.",
+    );
+    additions.requiredEvidence.push("Video must show the pet/subject, container or food, start amount, continuous attempt, and final amount/state.");
+    additions.manualReviewTriggers.push("Food/container leaves frame, the subject is swapped, or the final amount is not visible.");
+  }
+
+  if (/\b(kiss|hug|handshake|high[-\s]?five|dance|couple|date)\b|接吻|亲吻|拥抱|握手|击掌|跳舞/.test(text)) {
+    additions.judgeInstructions.push(
+      "For human-interaction challenges, verify willing adult participants, visible agreed action, and identity/consent framing; do not auto-settle if consent, age, coercion, or identity is unclear.",
+    );
+    additions.requiredEvidence.push("Evidence must show consenting adult participants and visible completion of the agreed interaction.");
+    additions.invalidEvidenceRules.push("Non-consensual, coerced, underage, hidden-camera, or privacy-invasive evidence is invalid.");
+    additions.manualReviewTriggers.push("Consent, adult status, identity, or completion of the interaction is unclear.");
+  }
+
+  return additions;
+}
+
 function hardRiskReasonText(protocol: ProtocolSpecV2) {
   return [
     protocol.rawPrompt,
@@ -480,7 +536,11 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     manualReviewTriggers.add("Both participants match or neither participant matches the expected answer.");
   }
   if (visionEvidence) {
-    manualReviewTriggers.add("Full body, liveness phrase, or continuous attempt cannot be verified.");
+    manualReviewTriggers.add("Required subject/object visibility, liveness phrase, or continuous attempt cannot be verified.");
+  }
+  const universalVision = visionEvidence ? universalVisionJudgeInstructions(protocol.rawPrompt) : null;
+  if (universalVision) {
+    for (const trigger of universalVision.manualReviewTriggers) manualReviewTriggers.add(trigger);
   }
 
   const participantBindings = protocol.identityProtocol.participantBindings
@@ -523,17 +583,23 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     ? addUniqueText(protocol.evidenceProtocol.requiredEvidence, [
       "Submit one text answer in the evidence description or metadata.answer.",
     ])
-    : protocol.evidenceProtocol.requiredEvidence;
+    : universalVision
+      ? addUniqueText(protocol.evidenceProtocol.requiredEvidence, universalVision.requiredEvidence)
+      : protocol.evidenceProtocol.requiredEvidence;
   const captureInstructions = objectiveTextAnswer
     ? addUniqueText(protocol.evidenceProtocol.captureInstructions, [
       "Submit exactly one answer before the deadline.",
     ])
-    : protocol.evidenceProtocol.captureInstructions;
+    : universalVision
+      ? addUniqueText(protocol.evidenceProtocol.captureInstructions, universalVision.captureInstructions)
+      : protocol.evidenceProtocol.captureInstructions;
   const invalidEvidenceRules = objectiveTextAnswer
     ? addUniqueText(protocol.evidenceProtocol.invalidEvidenceRules, [
       "Missing, empty, or conflicting answers are invalid.",
     ])
-    : protocol.evidenceProtocol.invalidEvidenceRules;
+    : universalVision
+      ? addUniqueText(protocol.evidenceProtocol.invalidEvidenceRules, universalVision.invalidEvidenceRules)
+      : protocol.evidenceProtocol.invalidEvidenceRules;
   const expectedAnswerInstruction = expectedAnswer ? `Correct answer: ${expectedAnswer}` : null;
   const winCondition = expectedAnswer && !/\bexpected[_ -]?answer\b/i.test(protocol.settlementProtocol.winCondition)
     ? `EXPECTED_ANSWER: ${expectedAnswer}. ${protocol.settlementProtocol.winCondition}`
@@ -544,7 +610,9 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       ...(expectedAnswerInstruction ? [expectedAnswerInstruction] : []),
       "Return settle_winner only when exactly one participant matches the expected answer.",
     ])
-    : protocol.settlementProtocol.judgeInstructions;
+    : universalVision
+      ? addUniqueText(protocol.settlementProtocol.judgeInstructions, universalVision.judgeInstructions)
+      : protocol.settlementProtocol.judgeInstructions;
   const rawDeadline = protocol.timingProtocol.deadline?.trim() || "48 hours";
   const parsedDeadline = parseChallengeDeadline(rawDeadline, { fallbackHours: 48 });
   const rawAbsoluteDeadline = new Date(rawDeadline);
@@ -674,6 +742,10 @@ Rules:
 - If the user bets another person that a solo subject will or will not satisfy a claim, use participantMode="head_to_head": the other person is the counterparty, not the subject in the video.
 - If the idea is unsafe, illegal, coercive, alcohol/drug based, violent, non-consensual, stalking-like, or chance-based real-money gambling, set riskPolicy.allowed=false and settlementProtocol.mode="blocked"; include a safeAlternative when possible.
 - Same-camera physical challenges require identityProtocol.required=true, identityProtocol.mode="left_right_assignment", creator left, opponent right, liveness/QR code required, and no auto-settlement unless identity is verified.
+- For every video/photo challenge, compile the prompt into domain-specific observable checks in settlementProtocol.judgeInstructions. Name the actors/subjects, objects, start event, decisive event, end state, invalid evidence, and exact manual-review triggers. Do not use generic "AI will judge" wording.
+- Sports/small-object examples: badminton/tennis/ping-pong/catch/throw must require visibility of the object, player/racket/hand contact if relevant, trajectory/result area, and a clear decisive event. If contact or landing/result is missing, manual review is required.
+- Pet/feeding/household examples: require visible subject, visible starting state, visible end state, timer/deadline, and no hidden substitution.
+- Consensual human-interaction examples such as kiss/high-five/handshake/hug/dance require willing adult participants, clear identity/consent framing, and visible completion. If consent, age, identity, or coercion is unclear, block or require manual review; never allow non-consensual recording.
 - Nearby or walk-by challenges should use locationProtocol.mode="nearby_discovery" or "walk_to_join", approximate public privacy, and a conservative radius.
 - Mass crowd challenges should use participantMode="mass_crowd" and settlementProtocol.mode="leaderboard"; they should not look like a normal 1v1 challenge.
 - Crypto price challenges must be public-oracle protocols: lock the selected CoinGecko asset id, target USD price, condition, settlement time, setup-time price snapshot, and use settlementProtocol.mode="auto_oracle".
