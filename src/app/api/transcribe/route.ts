@@ -3,6 +3,7 @@ import { getAuthUser, unauthorized } from "@/lib/auth";
 import { getDailyAiQuotaStatus, spendDailyAiQuota } from "@/lib/daily-ai-quota";
 import { logAiUsage } from "@/lib/ai-usage-log";
 import type { LlmCallMetadata } from "@/lib/llm-router";
+import { cleanEnvValue } from "@/lib/llm-providers";
 
 // Default to classic whisper-1 because it is the most battle-tested multilingual
 // transcription model on OpenAI's platform — Chinese, Spanish, Arabic, Hindi,
@@ -17,7 +18,7 @@ const DEFAULT_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1";
 // If the primary model call fails (model not available to this project, etc.)
 // try this as a fallback.
 const FALLBACK_MODEL = "whisper-1";
-const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+const OPENAI_BASE_URL = (cleanEnvValue(process.env.OPENAI_BASE_URL) || "https://api.openai.com/v1").replace(/\/$/, "");
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // OpenAI Whisper cap — reject larger before forwarding
 
 // In-memory per-user rate limiter. Serverless lambda-local so it's best-effort
@@ -78,7 +79,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const openAiApiKey = cleanEnvValue(process.env.OPENAI_API_KEY);
+
+    if (!openAiApiKey) {
       return Response.json({
         transcript: previewText,
         language: languageHint || "unknown",
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
       if (languageHint) upstream.append("language", languageHint);
       return fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        headers: { Authorization: `Bearer ${openAiApiKey}` },
         body: upstream,
       });
     };

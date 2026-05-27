@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getProviderById, isProviderConfigured, providerBaseUrl, type LlmProviderDefinition } from "./llm-providers";
+import { cleanEnvValue, getProviderById, isProviderConfigured, providerBaseUrl, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
 import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
 
@@ -114,7 +114,7 @@ async function anthropicCompleteWithMetadata(
   maxTokens: number,
   temperature?: number,
 ): Promise<LlmCallResult> {
-  const key = process.env[def.envVar];
+  const key = cleanEnvValue(process.env[def.envVar]);
   if (!key) throw new Error(`${def.envVar} is not set`);
   const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
@@ -345,7 +345,7 @@ async function anthropicCompleteVisionWithMetadata(
   maxTokens: number,
   temperature?: number,
 ): Promise<LlmCallResult> {
-  const key = process.env[def.envVar];
+  const key = cleanEnvValue(process.env[def.envVar]);
   if (!key) throw new Error(`${def.envVar} is not set`);
   const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
@@ -494,7 +494,7 @@ export async function completeOraclePromptWithMetadata(params: LlmCompleteParams
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = cleanEnvValue(process.env[def.envVar]);
 
   switch (def.kind) {
     case "anthropic":
@@ -505,7 +505,7 @@ export async function completeOraclePromptWithMetadata(params: LlmCompleteParams
       let baseUrl = providerBaseUrl(def);
       let querySuffix = "";
       if (def.id === "azure_openai") {
-        baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
+        baseUrl = cleanEnvValue(process.env.AZURE_OPENAI_BASE_URL);
         if (!baseUrl) throw new Error("AZURE_OPENAI_BASE_URL is not set (resource + /openai/deployments/<name>)");
         const ver = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
         querySuffix = `?api-version=${encodeURIComponent(ver)}`;
@@ -668,7 +668,7 @@ export async function completeOraclePromptWithTools(params: {
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = cleanEnvValue(process.env[def.envVar]);
 
   if (def.kind !== "openai_compat") {
     // Graceful degrade: use plain prompt, no tools.
@@ -688,7 +688,7 @@ export async function completeOraclePromptWithTools(params: {
   let baseUrl = providerBaseUrl(def);
   let querySuffix = "";
   if (def.id === "azure_openai") {
-    baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
+    baseUrl = cleanEnvValue(process.env.AZURE_OPENAI_BASE_URL);
     if (!baseUrl) throw new Error("AZURE_OPENAI_BASE_URL is not set");
     const ver = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
     querySuffix = `?api-version=${encodeURIComponent(ver)}`;
@@ -738,7 +738,7 @@ export async function completeOracleJudgeVisionWithMetadata(params: {
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = cleanEnvValue(process.env[def.envVar]);
 
   if (params.images.length === 0) {
     return completeOraclePromptWithMetadata({
@@ -760,7 +760,7 @@ export async function completeOracleJudgeVisionWithMetadata(params: {
       let baseUrl = providerBaseUrl(def);
       let querySuffix = "";
       if (def.id === "azure_openai") {
-        baseUrl = process.env.AZURE_OPENAI_BASE_URL || "";
+        baseUrl = cleanEnvValue(process.env.AZURE_OPENAI_BASE_URL);
         if (!baseUrl) throw new Error("AZURE_OPENAI_BASE_URL is not set");
         const ver = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview";
         querySuffix = `?api-version=${encodeURIComponent(ver)}`;

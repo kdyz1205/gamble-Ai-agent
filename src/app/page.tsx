@@ -139,15 +139,28 @@ function resolveAccessTierPrefs(
 }
 
 function shortAiError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "");
+  const message = (error instanceof Error ? error.message : String(error || ""))
+    .replace(/^AI protocol compilation failed:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (/UserDailyQuota|Foreign key constraint|constraint violated|Session user/i.test(message)) {
     return "Your local session is stale. Sign out and sign in again before creating a challenge.";
+  }
+  if (/Daily AI limit reached/i.test(message)) {
+    const reset = message.match(/resets at ([^.]+)\.?/i)?.[1];
+    return `Daily AI limit reached${reset ? ` until ${reset}` : ""}. Use Free/Premium accordingly or try after reset.`;
   }
   if (/premium|upgrade|needs premium|requires premium/i.test(message)) {
     return "Premium model required. Free mode uses low-cost AI for simple drafts and verdicts.";
   }
-  if (/insufficient_quota|exceeded your current quota|quota/i.test(message)) {
-    return "AI quota is temporarily unavailable. Try again shortly or use Premium.";
+  if (/insufficient_quota|exceeded your current quota/i.test(message)) {
+    return "The selected AI provider has no API credits right now. Try DeepSeek/Free AI or add provider billing.";
+  }
+  if (/ByteString|value of 65279|invalid character/i.test(message)) {
+    return "AI provider key has hidden characters. Retry after the latest deploy cleans the key automatically.";
+  }
+  if (/quota/i.test(message)) {
+    return message || "AI quota check failed. Refresh and try again.";
   }
   if (/not configured|no configured ai provider|api key/i.test(message)) {
     return "AI routing is not connected yet. Try again later.";

@@ -22,6 +22,10 @@ export interface LlmProviderDefinition {
   docsUrl: string;
 }
 
+export function cleanEnvValue(value: string | undefined | null) {
+  return String(value ?? "").replace(/\uFEFF/g, "").trim();
+}
+
 export const LLM_PROVIDERS: LlmProviderDefinition[] = [
   {
     id: "local_ollama",
@@ -163,7 +167,7 @@ export function getProviderById(id: string): LlmProviderDefinition | undefined {
 }
 
 export function providerBaseUrl(def: LlmProviderDefinition) {
-  return (def.baseUrlEnv ? process.env[def.baseUrlEnv] : undefined) || def.baseUrl || "";
+  return cleanEnvValue(def.baseUrlEnv ? process.env[def.baseUrlEnv] : undefined) || def.baseUrl || "";
 }
 
 export function isProviderConfigured(defOrId: LlmProviderDefinition | string | undefined) {
@@ -173,7 +177,7 @@ export function isProviderConfigured(defOrId: LlmProviderDefinition | string | u
     return process.env.LOCAL_LLM_ENABLED === "1" || Boolean(process.env.OLLAMA_BASE_URL);
   }
   if (process.env.ALLOW_PAID_AI !== "1") return false;
-  return Boolean(process.env[def.envVar]);
+  return Boolean(cleanEnvValue(process.env[def.envVar]));
 }
 
 export function isPaidProvider(def: LlmProviderDefinition | undefined) {
