@@ -41,7 +41,7 @@ const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
   maxJudgeTier: 1,
   reason: "free beta account",
   freeTextModel: { providerId: "deepseek", model: "deepseek-v4-flash" },
-  freeVisionModel: { providerId: "google", model: "gemini-2.5-flash" },
+  freeVisionModel: { providerId: "local_ollama", model: "llama3.2-vision:latest" },
   premiumTextModel: { providerId: "deepseek", model: "deepseek-v4-pro" },
   premiumVisionModel: { providerId: "openai", model: "gpt-5.2" },
   upgradeRequiredMessage:
