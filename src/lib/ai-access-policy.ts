@@ -58,19 +58,11 @@ const DEFAULT_DEV_IDENTITIES = ["kdys1205", "kdyz1205", "alexl"];
 const FREE_TEXT_MODELS: Record<string, string[]> = {
   local_ollama: ["llama4:latest", "qwen3:latest", "llama3.3:latest", "llama3.2-vision:latest"],
   deepseek: ["deepseek-v4-flash"],
-  moonshot: ["kimi-k2.5", "moonshot-v1-128k"],
-  google: ["gemini-2.5-flash"],
-  openai: ["gpt-5-nano"],
-  anthropic: ["claude-3-5-haiku-20241022"],
-  groq: ["openai/gpt-oss-20b", "llama-3.1-8b-instant"],
-  mistral: ["mistral-small-latest"],
-  fireworks: ["accounts/fireworks/models/llama4-maverick-instruct-basic"],
+  moonshot: ["kimi-k2.5"],
 };
 
 const FREE_VISION_MODELS: Record<string, string[]> = {
   local_ollama: ["llama3.2-vision:latest"],
-  google: ["gemini-2.5-flash"],
-  openai: ["gpt-5-nano"],
 };
 
 function splitEnvList(name: string) {
@@ -92,10 +84,10 @@ function accessLabel(plan: AiAccessPlan): AiAccessStatus["label"] {
 function firstConfiguredFreeModel(needsVision: boolean, requestedProviderId?: string | null) {
   const modelMap = needsVision ? FREE_VISION_MODELS : FREE_TEXT_MODELS;
   const order = requestedProviderId
-    ? [requestedProviderId, "local_ollama", "deepseek", "google", "groq", "moonshot", "openai", "anthropic", "mistral", "fireworks"]
+    ? [requestedProviderId, "local_ollama", "deepseek", "moonshot"]
     : needsVision
-      ? ["local_ollama", "google", "openai"]
-      : ["local_ollama", "deepseek", "groq", "moonshot", "google", "openai", "anthropic", "mistral", "fireworks"];
+      ? ["local_ollama"]
+      : ["local_ollama", "deepseek", "moonshot"];
 
   for (const providerId of order) {
     const provider = getProviderById(providerId);

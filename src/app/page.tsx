@@ -79,11 +79,15 @@ const PREFERRED_MODEL_REPLACEMENTS: Record<string, string> = {
 
 const PRODUCT_PROVIDER_IDS = ["deepseek", "moonshot", "openai", "anthropic", "google", "xai", "mistral"] as const;
 const ROUTING_HOST_PROVIDER_IDS = ["local_ollama", "groq", "together", "fireworks", "azure_openai"] as const;
-const FREE_PRODUCT_PROVIDER_IDS = new Set<string>(["deepseek", "moonshot"]);
+
+const FREE_PRODUCT_MODELS: Record<string, string[]> = {
+  deepseek: ["deepseek-v4-flash"],
+  moonshot: ["kimi-k2.5"],
+};
 
 const PROVIDER_DISPLAY_COPY: Record<string, { company: string; family: string; free?: boolean }> = {
-  deepseek: { company: "DeepSeek", family: "V4 Flash / V4 Pro", free: true },
-  moonshot: { company: "Kimi", family: "K2.5 / K2.6", free: true },
+  deepseek: { company: "DeepSeek", family: "V4 Flash free / V4 Pro premium", free: true },
+  moonshot: { company: "Kimi", family: "K2.5 free / K2.6 premium", free: true },
   openai: { company: "OpenAI", family: "GPT-5.2", free: false },
   anthropic: { company: "Anthropic", family: "Claude 4", free: false },
   google: { company: "Google", family: "Gemini", free: false },
@@ -243,8 +247,29 @@ function protocolLanguageStatus(language: LanguageMode | null | undefined) {
   return "Auto";
 }
 
-function productProviderTier(providerId: string | null | undefined): ModelAccessChoice {
-  return providerId && FREE_PRODUCT_PROVIDER_IDS.has(providerId) ? "free" : "premium";
+function productModelTier(providerId: string | null | undefined, model: string | null | undefined): ModelAccessChoice {
+  const provider = getProviderById(String(providerId ?? ""));
+  const resolvedModel = String(model || provider?.defaultModel || "").trim();
+  const freeModels = FREE_PRODUCT_MODELS[String(providerId ?? "")] ?? [];
+  return freeModels.includes(resolvedModel) ? "free" : "premium";
+}
+
+function defaultProductModelForAccess(providerId: string, canUsePremium: boolean) {
+  const provider = getProviderById(providerId);
+  if (!provider) return null;
+  if (canUsePremium) return provider.defaultModel;
+  const freeModels = FREE_PRODUCT_MODELS[providerId] ?? [];
+  return freeModels.find((model) => provider.models.includes(model)) ?? provider.defaultModel;
+}
+
+function providerTierLabel(providerId: string) {
+  const provider = getProviderById(providerId);
+  const freeModels = FREE_PRODUCT_MODELS[providerId] ?? [];
+  const hasFree = freeModels.some((model) => provider?.models.includes(model));
+  const hasPremium = Boolean(provider?.models.some((model) => productModelTier(providerId, model) === "premium"));
+  if (hasFree && hasPremium) return "Free + Premium";
+  if (hasFree) return "Free";
+  return "Premium";
 }
 
 function displayProviderCompany(providerId: string | null | undefined) {
@@ -377,7 +402,7 @@ export default function Home() {
     if ((visibleAiAccess.isDeveloper || visibleAiAccess.role === "admin") && debugModelOverride) {
       return oraclePrefs;
     }
-    const chosenTier = productProviderTier(oraclePrefs.providerId);
+    const chosenTier = productModelTier(oraclePrefs.providerId, oraclePrefs.model);
     if (modelAccessChoice === "premium" && visibleAiAccess.canUsePremiumModels && chosenTier === "premium") {
       return oraclePrefs;
     }
@@ -1508,8 +1533,12 @@ function ModelModeBar({
   onChange: (providerId: string, model?: string | null, options?: { debug?: boolean }) => void;
 }) {
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
-  const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
+  const rawSelectedModel = prefs.model || selectedProvider?.defaultModel || "";
   const canUsePremium = Boolean(aiAccess?.canUsePremiumModels);
+  const selectedModel =
+    !canUsePremium && productModelTier(selectedProvider?.id, rawSelectedModel) === "premium"
+      ? defaultProductModelForAccess(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, false) || rawSelectedModel
+      : rawSelectedModel;
   const activeTier: ModelAccessChoice = selectedTier === "premium" && canUsePremium ? "premium" : "free";
   const planLabel = activeTier === "premium" ? "Premium" : "Free";
   const selectedCompany = displayProviderCompany(selectedProvider?.id);
@@ -1527,10 +1556,12 @@ function ModelModeBar({
   const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
   const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
   const selectProductModel = (providerId: string, model?: string | null) => {
-    const tier = productProviderTier(providerId);
+    const provider = getProviderById(providerId);
+    const requestedModel = model?.trim() || defaultProductModelForAccess(providerId, canUsePremium) || provider?.defaultModel || null;
+    const tier = productModelTier(providerId, requestedModel);
     if (tier === "premium" && !canUsePremium) return;
     onSelectTier(tier);
-    onChange(providerId, model, { debug: false });
+    onChange(providerId, requestedModel, { debug: false });
   };
 
   return (
@@ -1563,16 +1594,18 @@ function ModelModeBar({
         </div>
         <div className="grid gap-2">
           {productProviders.map((provider) => {
-            const tier = productProviderTier(provider.id);
+            const defaultModel = defaultProductModelForAccess(provider.id, canUsePremium);
+            const tier = defaultModel ? productModelTier(provider.id, defaultModel) : "premium";
             const locked = tier === "premium" && !canUsePremium;
             const selected = selectedProvider?.id === provider.id && !debugModelOverride;
             const copy = PROVIDER_DISPLAY_COPY[provider.id] ?? { company: provider.shortLabel, family: provider.defaultModel };
+            const badge = providerTierLabel(provider.id);
             return (
               <button
                 key={provider.id}
                 type="button"
                 disabled={locked}
-                onClick={() => selectProductModel(provider.id, provider.defaultModel)}
+                onClick={() => selectProductModel(provider.id, defaultModel)}
                 className="flex items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition disabled:cursor-not-allowed"
                 style={{
                   borderColor: selected ? "#10B981" : "rgba(148,163,184,0.28)",
@@ -1589,11 +1622,11 @@ function ModelModeBar({
                 <span
                   className="rounded-full px-2.5 py-1 text-[10px] font-black"
                   style={{
-                    background: locked ? "#E2E8F0" : tier === "premium" ? "#DBEAFE" : "#DCFCE7",
-                    color: locked ? "#64748B" : tier === "premium" ? "#1D4ED8" : "#047857",
+                    background: locked ? "#E2E8F0" : badge.includes("Premium") && !badge.startsWith("Free +") ? "#DBEAFE" : "#DCFCE7",
+                    color: locked ? "#64748B" : badge.includes("Premium") && !badge.startsWith("Free +") ? "#1D4ED8" : "#047857",
                   }}
                 >
-                  {tier === "premium" ? "Premium" : "Free"}
+                  {badge}
                 </span>
               </button>
             );
@@ -1606,16 +1639,27 @@ function ModelModeBar({
             </span>
             <select
               value={selectedModel}
-              disabled={productProviderTier(selectedProvider.id) === "premium" && !canUsePremium}
+              disabled={modelOptions.every((model) => productModelTier(selectedProvider.id, model) === "premium") && !canUsePremium}
               onChange={(event) => selectProductModel(selectedProvider.id, event.target.value)}
               className="w-full rounded-xl border px-3 py-2 text-xs font-bold outline-none disabled:cursor-not-allowed disabled:opacity-50"
               style={{ borderColor: "#DDE7F0", color: "#172033", background: "#FFFFFF" }}
               aria-label={`${selectedCompany} model`}
             >
-              {hasCustomSelectedModel && <option value={selectedModel}>{displayModelName(selectedProvider.id, selectedModel)}</option>}
+              {hasCustomSelectedModel && (
+                <option
+                  value={selectedModel}
+                  disabled={productModelTier(selectedProvider.id, selectedModel) === "premium" && !canUsePremium}
+                >
+                  {displayModelName(selectedProvider.id, selectedModel)} · {productModelTier(selectedProvider.id, selectedModel) === "premium" ? "Premium" : "Free"}
+                </option>
+              )}
               {modelOptions.map((model) => (
-                <option key={model} value={model}>
-                  {displayModelName(selectedProvider.id, model)}
+                <option
+                  key={model}
+                  value={model}
+                  disabled={productModelTier(selectedProvider.id, model) === "premium" && !canUsePremium}
+                >
+                  {displayModelName(selectedProvider.id, model)} · {productModelTier(selectedProvider.id, model) === "premium" ? "Premium" : "Free"}
                 </option>
               ))}
             </select>
