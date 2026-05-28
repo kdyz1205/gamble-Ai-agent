@@ -35,6 +35,18 @@ export class CompileRequestError extends Error {
   }
 }
 
+const COMPILE_PROVIDER_TIMEOUT_MS = 22_000;
+
+function withCompileTimeout<T>(promise: Promise<T>, providerId: string, model: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(
+      () => reject(new Error(`Compile provider timed out after ${COMPILE_PROVIDER_TIMEOUT_MS}ms (${providerId}/${model})`)),
+      COMPILE_PROVIDER_TIMEOUT_MS,
+    )),
+  ]);
+}
+
 function safeAlternativeFor(flags: string[]) {
   if (flags.includes("drugs_or_alcohol")) return "Try a water bottle speed challenge with a clear safety limit.";
   if (flags.includes("violence")) return "Try a push-up, plank, sprint, trivia, or game-score challenge instead.";
@@ -892,19 +904,23 @@ export async function compileProtocolForUser(input: {
       const selectedModel = compileModelForProvider(provider, providerDecision.model, providerDecision.tierId);
       try {
         console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
-        const completion = await completeOraclePromptWithMetadata({
-          providerId: provider.id,
-          model: selectedModel,
-          system: compileSystemPrompt(),
-          user: [
-            `User prompt: ${inputText}`,
-            `Language hint: ${language}`,
-            input.context ? `Context: ${JSON.stringify(input.context)}` : null,
-            "Compile the protocol. Return JSON only.",
-          ].filter(Boolean).join("\n\n"),
-          maxTokens: 3600,
-          temperature: 0.15,
-        });
+        const completion = await withCompileTimeout(
+          completeOraclePromptWithMetadata({
+            providerId: provider.id,
+            model: selectedModel,
+            system: compileSystemPrompt(),
+            user: [
+              `User prompt: ${inputText}`,
+              `Language hint: ${language}`,
+              input.context ? `Context: ${JSON.stringify(input.context)}` : null,
+              "Compile the protocol. Return JSON only.",
+            ].filter(Boolean).join("\n\n"),
+            maxTokens: 2400,
+            temperature: 0.15,
+          }),
+          provider.id,
+          selectedModel,
+        );
         await logAiUsage({
           userId: input.userId,
           route: input.route ?? "/api/challenges/compile",

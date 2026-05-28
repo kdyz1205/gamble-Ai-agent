@@ -48,7 +48,7 @@ const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
     "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
 };
 
-const COMPILE_REQUEST_TIMEOUT_MS = 45_000;
+const COMPILE_REQUEST_TIMEOUT_MS = 90_000;
 
 const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:local|llama|ollama)$/i, providerId: "local_ollama" },
