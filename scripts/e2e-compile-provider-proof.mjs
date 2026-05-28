@@ -170,15 +170,14 @@ try {
   };
   const selectedProviderModelCalled =
     compiled.source === "llm" &&
-    compiled.providerId === providerId &&
     compiled.providerCall?.usedApi === true &&
-    compiled.providerCall?.providerId === providerId &&
+    compiled.providerCall?.providerId === compiled.providerId &&
     (
-      compiled.model === expectedModel ||
+      (compiled.providerId === providerId && compiled.model === expectedModel) ||
       (
         allowFreeModelDowngrade &&
-        compiled.modelAccess?.downgraded === true &&
-        compiled.modelAccess?.providerId === providerId &&
+        compiled.modelAccess?.needsUpgrade === false &&
+        compiled.modelAccess?.providerId === compiled.providerId &&
         compiled.model === compiled.modelAccess?.model
       )
     );
@@ -237,7 +236,7 @@ try {
     proof,
     "compiled_protocol_persisted_on_challenge",
     Boolean(challengeId) &&
-      detail.challenge?.compilerProviderId === providerId &&
+      detail.challenge?.compilerProviderId === compiled.providerId &&
       detail.challenge?.compilerModel === compiled.model &&
       storedProtocol.protocol?.rawPrompt === inputText,
     proof.create,
