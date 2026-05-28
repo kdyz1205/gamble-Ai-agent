@@ -783,7 +783,8 @@ function compileFastSystemPrompt() {
   const nowIso = new Date().toISOString();
   return `You are Axelrod, an AI challenge protocol compiler.
 
-Return ONLY compact JSON. The server expands this into ProtocolSpecV2, so keep it short but specific.
+Return ONLY compact JSON under 350 English words or equivalent. The server expands this into ProtocolSpecV2, so keep it short but specific.
+Arrays must have at most 2 short strings. Do not add extra fields. Close the JSON object.
 
 Shape:
 {
@@ -791,11 +792,11 @@ Shape:
   "userFacingSummary": string,
   "participantMode": "solo"|"head_to_head"|"small_group"|"team_vs_team"|"mass_crowd"|"public_market",
   "outcomeType": "speed"|"count"|"completion"|"threshold"|"yes_no"|"ranking"|"quality_score"|"prediction"|"location_checkin"|"survival_duration"|"custom",
-  "evidenceProtocol": {"mode": "same_camera_video"|"separate_video"|"live_host_video"|"photo"|"screenshot"|"gps"|"receipt"|"public_oracle"|"platform_metric"|"witness"|"manual_review", "requiredEvidence": string[], "captureInstructions": string[], "invalidEvidenceRules": string[], "requiredMetadata": string[]},
+  "evidenceProtocol": {"mode": "same_camera_video"|"separate_video"|"live_host_video"|"photo"|"screenshot"|"gps"|"receipt"|"public_oracle"|"platform_metric"|"witness"|"manual_review", "requiredEvidence": string[], "captureInstructions": string[]},
   "identityProtocol": {"mode": "account_only"|"liveness_phrase"|"left_right_assignment"|"qr_participant_card"|"host_checkin"|"group_lobby_ticket"|"manual_identity_review", "required": boolean, "participantBindings": [{"role":"creator"|"opponent"|"participant"|"host","label":string,"expectedPosition":"left"|"right"|"center"|"any"}]},
   "locationProtocol": {"mode":"none"|"nearby_discovery"|"same_place_required"|"walk_to_join"|"geo_fenced_zone"|"live_route"|"mass_local_event"},
   "settlementProtocol": {"mode":"auto_oracle"|"auto_ai_text"|"auto_ai_vision"|"leaderboard"|"host_confirmed"|"peer_confirmed"|"manual_review"|"blocked","winCondition": string,"judgeInstructions": string[],"manualReviewTriggers": string[]},
-  "riskPolicy": {"riskLevel":"safe"|"medium"|"high"|"blocked","allowed":boolean,"warnings":string[],"restrictions":string[],"safeAlternative":string,"blockedReason":string}
+  "riskPolicy": {"riskLevel":"safe"|"medium"|"high"|"blocked","allowed":boolean,"warnings":string[],"restrictions":string[]}
 }
 
 Rules:
