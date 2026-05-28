@@ -80,12 +80,137 @@ const STATUS_LABEL_ZH: Record<string, string> = {
   voided: "已作废",
 };
 
+const MARKET_COPY = {
+  en: {
+    manager: "Manager",
+    refreshing: "Refreshing",
+    refresh: "Refresh",
+    review: "Review",
+    newChallenge: "+ New challenge",
+    controlRoom: "Control room",
+    titleMine: "Your rooms",
+    titleSessionLoading: "Challenges",
+    titleOpen: "Open challenges",
+    subtitle: "Open rooms, clean tests, archive history.",
+    active: "Active",
+    closed: "Closed",
+    nearby: "Nearby",
+    archiveHint: "Archive hides noise. Nothing is lost.",
+    hideArchived: "Hide archived",
+    showArchived: "Show archived",
+    findOne: "Find one",
+    findOneBody: "Jump into a live room.",
+    looking: "Looking...",
+    matchMe: "Match me now",
+    openForAnyone: (count: number) => `Open for anyone - ${count} waiting`,
+    by: "by",
+    freeLower: "free",
+    free: "Free",
+    deadlinePrefix: "Deadline: ",
+    join: "Join",
+    activeFirst: "Active first. History below.",
+    createAnother: "Create another",
+    signInToPlay: "Sign in to play.",
+    signInCreate: "Sign in / create",
+    noChallenges: "No challenges yet.",
+    createFirst: "Create your first challenge",
+    closedHistory: "Closed history",
+    archived: "Archived",
+    creditsShort: "cr",
+    players: "players",
+    manage: "Manage",
+    closing: "Closing...",
+    noDeadline: "No deadline",
+    deadlinePassed: "Deadline passed",
+    signedOutMatch: "Sign in to be matched into a challenge.",
+    noOpenMatch: "No open challenges to match right now.",
+    matchUnavailable: "Matchmaking is temporarily unavailable. You can still join from a shared link or create a challenge.",
+    boardLoadFailed: "Could not load your challenge board. Refresh and try again.",
+    discoveryUnavailable: "Open challenge discovery is temporarily unavailable. Your own challenge board is still usable.",
+    managerLoadFailed: "Could not load challenge manager. Refresh and try again.",
+    closeFailed: "Couldn't close this challenge",
+  },
+  zh: {
+    manager: "管理台",
+    refreshing: "刷新中",
+    refresh: "刷新",
+    review: "复核",
+    newChallenge: "+ 新挑战",
+    controlRoom: "控制台",
+    titleMine: "我的挑战",
+    titleSessionLoading: "挑战",
+    titleOpen: "公开挑战",
+    subtitle: "进行中的挑战在前，历史记录在后。",
+    active: "进行中",
+    closed: "已结束",
+    nearby: "附近",
+    archiveHint: "归档只是隐藏噪音，记录不会丢。",
+    hideArchived: "隐藏归档",
+    showArchived: "显示归档",
+    findOne: "找一个",
+    findOneBody: "快速加入一个可玩的挑战。",
+    looking: "寻找中...",
+    matchMe: "帮我匹配",
+    openForAnyone: (count: number) => `公开可加入 / ${count} 个等待中`,
+    by: "来自",
+    freeLower: "免费",
+    free: "免费",
+    deadlinePrefix: "截止：",
+    join: "加入",
+    activeFirst: "进行中的在前，历史记录在后。",
+    createAnother: "再建一个",
+    signInToPlay: "登录后开始玩。",
+    signInCreate: "登录 / 创建",
+    noChallenges: "还没有挑战。",
+    createFirst: "创建第一个挑战",
+    closedHistory: "历史记录",
+    archived: "已归档",
+    creditsShort: "积分",
+    players: "人",
+    manage: "管理",
+    closing: "处理中...",
+    noDeadline: "无截止时间",
+    deadlinePassed: "已过期",
+    signedOutMatch: "登录后才能匹配挑战。",
+    noOpenMatch: "现在没有可匹配的公开挑战。",
+    matchUnavailable: "匹配暂时不可用。你仍然可以用分享链接加入，或创建一个挑战。",
+    boardLoadFailed: "无法加载你的挑战列表。请刷新重试。",
+    discoveryUnavailable: "公开挑战发现暂时不可用。你的挑战管理仍然可以使用。",
+    managerLoadFailed: "无法加载挑战管理页。请刷新重试。",
+    closeFailed: "无法关闭这个挑战。",
+  },
+};
+
 function formatDeadline(value: string | null, zhCopy = false) {
   const label = formatChallengeDeadline(value);
-  if (!label) return zhCopy ? "无截止时间" : "No deadline";
+  if (!label) return zhCopy ? MARKET_COPY.zh.noDeadline : MARKET_COPY.en.noDeadline;
   if (!zhCopy) return label;
-  if (label === "Deadline passed") return "已过期";
+  if (label === "Deadline passed") return MARKET_COPY.zh.deadlinePassed;
   return label.replace(/^Due\s+/, "截止 ");
+}
+
+function formatCreatedDate(value: string, zhCopy = false) {
+  return new Date(value).toLocaleDateString(zhCopy ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
+function formatChallengeType(value: string | null | undefined, zhCopy = false) {
+  const raw = (value || "challenge").trim();
+  if (!zhCopy) return raw.replace(/_/g, " ");
+  const normalized = raw.toLowerCase();
+  const labels: Record<string, string> = {
+    challenge: "挑战",
+    physical_challenge: "体能挑战",
+    peer_to_peer_challenge: "双人挑战",
+    fitness: "体能",
+    prediction: "预测",
+    solo: "单人",
+    event: "活动",
+  };
+  return labels[normalized] ?? raw.replace(/_/g, " ");
 }
 
 function hasOtherParticipant(market: ChallengeData, userId?: string) {
@@ -191,6 +316,21 @@ export default function MarketsPage() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [browserZh, setBrowserZh] = useState(false);
+
+  useEffect(() => {
+    setBrowserZh(
+      typeof navigator !== "undefined" &&
+        (navigator.language?.toLowerCase().startsWith("zh") ||
+          navigator.languages?.some((language) => language.toLowerCase().startsWith("zh"))),
+    );
+  }, []);
+
+  const pageZh = useMemo(
+    () => browserZh || markets.some(challengeUsesChineseCopy) || openPublic.some(challengeUsesChineseCopy),
+    [browserZh, markets, openPublic],
+  );
+  const copy = pageZh ? MARKET_COPY.zh : MARKET_COPY.en;
 
   const loadChallenges = useCallback(async () => {
     if (sessionLoading) {
@@ -208,23 +348,23 @@ export default function MarketsPage() {
         setMarkets(mineResult.value.challenges);
       } else {
         setMarkets([]);
-        setMessage("Could not load your challenge board. Refresh and try again.");
+        setMessage(copy.boardLoadFailed);
       }
       if (publicResult.status === "fulfilled") {
         setOpenPublic((publicResult.value.challenges || []).filter((c) => c.creator.id !== userId));
       } else {
         setOpenPublic([]);
         if (mineResult.status === "fulfilled") {
-          setMessage("Open challenge discovery is temporarily unavailable. Your own challenge board is still usable.");
+          setMessage(copy.discoveryUnavailable);
         }
       }
     } catch (err) {
       console.warn("[markets] challenge manager load failed", err);
-      setMessage("Could not load challenge manager. Refresh and try again.");
+      setMessage(copy.managerLoadFailed);
     } finally {
       setLoading(false);
     }
-  }, [sessionLoading, showArchived, userId]);
+  }, [copy, sessionLoading, showArchived, userId]);
 
   useEffect(() => {
     void loadChallenges();
@@ -240,7 +380,7 @@ export default function MarketsPage() {
 
   const tryMatchMe = async () => {
     if (!user) {
-      setMessage("Sign in to be matched into a challenge.");
+      setMessage(copy.signedOutMatch);
       return;
     }
     setMatching(true);
@@ -252,17 +392,17 @@ export default function MarketsPage() {
         window.location.href = tr.joinUrl || tr.challengeUrl || tr.marketUrl || "/markets";
         return;
       }
-      setMessage(tr?.message || tr?.reason || r.userVisibleReply || "No open challenges to match right now.");
+      setMessage(tr?.message || tr?.reason || r.userVisibleReply || copy.noOpenMatch);
     } catch (e) {
       console.warn("[markets] match failed", e);
-      setMessage("Matchmaking is temporarily unavailable. You can still join from a shared link or create a challenge.");
+      setMessage(copy.matchUnavailable);
     } finally {
       setMatching(false);
     }
   };
 
   const closeChallenge = async (market: ChallengeData) => {
-    const zhCopy = challengeUsesChineseCopy(market);
+    const zhCopy = pageZh;
     const action = getManageAction(market, user?.id, zhCopy);
     if (!action || action.kind === "locked") return;
     if (!window.confirm(action.confirm)) return;
@@ -295,7 +435,7 @@ export default function MarketsPage() {
         setMessage(action.success);
       }
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : zhCopy ? "无法关闭这个挑战。" : "Couldn't close this challenge");
+      setMessage(e instanceof Error ? e.message : copy.closeFailed);
     } finally {
       setClosingId(null);
     }
@@ -309,7 +449,7 @@ export default function MarketsPage() {
             Axelrod
           </Link>
           <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>
-            Manager
+            {copy.manager}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -320,21 +460,21 @@ export default function MarketsPage() {
             className="text-xs font-bold px-3 py-1.5 active:scale-95 disabled:opacity-50 transition-transform"
             style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
           >
-            {loading ? "Refreshing" : "Refresh"}
+            {loading ? copy.refreshing : copy.refresh}
           </button>
           <Link
             href="/manual-review"
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{ color: ROSE_TEXT, background: ROSE_BG, border: "1px solid #FDA4AF", borderRadius: "9999px" }}
           >
-            Review
+            {copy.review}
           </Link>
           <Link
             href="/"
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{ color: PEACH_TEXT, background: CREAM, border: "1px solid #FFE0CC", borderRadius: "9999px" }}
           >
-            + New challenge
+            {copy.newChallenge}
           </Link>
         </div>
       </header>
@@ -344,26 +484,26 @@ export default function MarketsPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MINT_TEXT }}>
-                Control room
+                {copy.controlRoom}
               </p>
               <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl" style={{ color: NAVY }}>
-                Your rooms
+                {copy.titleMine}
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed" style={{ color: NAVY_DIM }}>
-                Open rooms, clean tests, archive history.
+                {copy.subtitle}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center md:min-w-[320px]">
               <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
-                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Active</p>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>{copy.active}</p>
                 <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{grouped.active.length}</p>
               </div>
               <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
-                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Closed</p>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>{copy.closed}</p>
                 <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{grouped.closed.length}</p>
               </div>
               <div className="rounded-2xl border bg-white p-3" style={{ borderColor: NAVY_FAINT }}>
-                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>Nearby</p>
+                <p className="text-[10px] font-black uppercase" style={{ color: NAVY_DIM }}>{copy.nearby}</p>
                 <p className="mt-1 text-xl font-black" style={{ color: NAVY }}>{openPublic.length}</p>
               </div>
             </div>
@@ -371,7 +511,7 @@ export default function MarketsPage() {
           {user && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: NAVY_FAINT }}>
               <p className="text-xs font-bold" style={{ color: NAVY_DIM }}>
-                Archive hides noise. Nothing is lost.
+                {copy.archiveHint}
               </p>
               <button
                 type="button"
@@ -379,7 +519,7 @@ export default function MarketsPage() {
                 className="px-4 py-2 text-xs font-black active:scale-95 transition-transform"
                 style={{ color: showArchived ? PEACH_TEXT : NAVY, background: showArchived ? CREAM : "#FFFFFF", border: `1px solid ${showArchived ? "#FDBA74" : NAVY_FAINT}`, borderRadius: "9999px" }}
               >
-                {showArchived ? "Hide archived" : "Show archived"}
+                {showArchived ? copy.hideArchived : copy.showArchived}
               </button>
             </div>
           )}
@@ -394,10 +534,10 @@ export default function MarketsPage() {
           }}
         >
           <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: PEACH_TEXT }}>
-            Find one
+            {copy.findOne}
           </p>
           <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
-            Jump into a live room.
+            {copy.findOneBody}
           </p>
           <button
             onClick={tryMatchMe}
@@ -410,7 +550,7 @@ export default function MarketsPage() {
               border: `1.5px solid ${PEACH_TEXT}22`,
             }}
           >
-            {matching ? "Looking..." : "Match me now"}
+            {matching ? copy.looking : copy.matchMe}
           </button>
           {message && (
             <p className="text-[11px] font-semibold mt-2" style={{ color: messageColor(message) }}>{message}</p>
@@ -420,12 +560,12 @@ export default function MarketsPage() {
         {openPublic.length > 0 && (
           <section className="mb-6">
             <h2 className="text-xs font-black uppercase tracking-wider mb-3" style={{ color: MINT_TEXT }}>
-              Open for anyone - {openPublic.length} waiting
+              {copy.openForAnyone(openPublic.length)}
             </h2>
             <div className="space-y-2">
               {openPublic.slice(0, 5).map((m) => (
                 (() => {
-                  const zhCopy = challengeUsesChineseCopy(m);
+                  const zhCopy = pageZh;
                   return (
                     <Link
                       key={m.id}
@@ -437,17 +577,17 @@ export default function MarketsPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold truncate mb-0.5" style={{ color: NAVY }}>{m.title}</p>
                           <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>
-                            {zhCopy ? "来自" : "by"} {m.creator.username} / {m.type} / {m.stake > 0 ? `${m.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "free"}
+                            {copy.by} {m.creator.username} / {formatChallengeType(m.type, pageZh)} / {m.stake > 0 ? `${m.stake} ${copy.creditsShort}` : copy.freeLower}
                           </p>
                           <p className="text-[10px] font-semibold mt-0.5" style={{ color: NAVY_DIM }}>
-                            {zhCopy ? "截止：" : "Deadline: "}{formatDeadline(m.deadline, zhCopy)}
+                            {copy.deadlinePrefix}{formatDeadline(m.deadline, zhCopy)}
                           </p>
                         </div>
                         <span
                           className="shrink-0 text-[10px] font-black px-2 py-1 rounded-full"
                           style={{ background: PEACH, color: PEACH_TEXT }}
                         >
-                          {zhCopy ? "加入" : "Join"}
+                          {copy.join}
                         </span>
                       </div>
                     </Link>
@@ -461,11 +601,11 @@ export default function MarketsPage() {
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-extrabold" style={{ color: NAVY }}>
-              {sessionLoading ? "Challenges" : user ? "Your rooms" : "Open challenges"}
+              {sessionLoading ? copy.titleSessionLoading : user ? copy.titleMine : copy.titleOpen}
             </h2>
             {user && (
               <p className="mt-1 text-xs font-semibold" style={{ color: NAVY_DIM }}>
-                Active first. History below.
+                {copy.activeFirst}
               </p>
             )}
           </div>
@@ -474,7 +614,7 @@ export default function MarketsPage() {
             className="hidden shrink-0 px-4 py-2 text-xs font-black active:scale-95 transition-transform sm:inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}
           >
-            Create another
+            {copy.createAnother}
           </Link>
         </div>
 
@@ -489,43 +629,43 @@ export default function MarketsPage() {
           </div>
         ) : !user ? (
           <div className="text-center py-10">
-            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>Sign in to play.</p>
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>{copy.signInToPlay}</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
             >
-              Sign in / create
+              {copy.signInCreate}
             </Link>
           </div>
         ) : markets.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No challenges yet.</p>
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>{copy.noChallenges}</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
             >
-              Create your first challenge
+              {copy.createFirst}
             </Link>
           </div>
         ) : (
           <div className="space-y-6">
             {([
-              ["Active", grouped.active],
-              ["Closed history", grouped.closed],
-              ["Archived", grouped.archived],
+              [copy.active, grouped.active],
+              [copy.closedHistory, grouped.closed],
+              [copy.archived, grouped.archived],
             ] as const).map(([groupLabel, groupItems]) => groupItems.length > 0 && (
               <section key={groupLabel}>
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: groupLabel === "Active" ? MINT_TEXT : NAVY_DIM }}>
+                  <h3 className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: groupItems === grouped.active ? MINT_TEXT : NAVY_DIM }}>
                     {groupLabel} / {groupItems.length}
                   </h3>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
             {groupItems.map((m, i) => {
               const status = STATUS_STYLE[m.status] || STATUS_STYLE.draft;
-              const zhCopy = challengeUsesChineseCopy(m);
+              const zhCopy = pageZh;
               const pcount = m.participants?.length || 0;
               const maxP = m.maxParticipants ?? 2;
               const manageAction = getManageAction(m, user.id, zhCopy);
@@ -547,10 +687,10 @@ export default function MarketsPage() {
                           className="text-[11px] font-bold px-2 py-0.5"
                           style={{ color: PEACH_TEXT, background: CREAM, borderRadius: "9999px" }}
                         >
-                          {m.type}
+                          {formatChallengeType(m.type, pageZh)}
                         </span>
                         <span className="text-xs font-bold" style={{ color: m.stake > 0 ? PEACH_TEXT : MINT_TEXT }}>
-                          {m.stake > 0 ? `${m.stake} ${zhCopy ? "积分" : "cr"}` : zhCopy ? "免费" : "Free"}
+                          {m.stake > 0 ? `${m.stake} ${copy.creditsShort}` : copy.free}
                         </span>
                       </div>
                     </div>
@@ -563,9 +703,9 @@ export default function MarketsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-xs font-medium" style={{ color: NAVY_DIM }}>
-                    <span>{pcount}/{maxP} {zhCopy ? "人" : "players"}</span>
+                    <span>{pcount}/{maxP} {copy.players}</span>
                     <span>/</span>
-                    <span>{new Date(m.createdAt).toLocaleDateString()}</span>
+                    <span>{formatCreatedDate(m.createdAt, pageZh)}</span>
                     <span>/</span>
                     <span>{formatDeadline(m.deadline, zhCopy)}</span>
                   </div>
@@ -576,7 +716,7 @@ export default function MarketsPage() {
                       className="flex-1 text-center py-2 text-xs font-black active:scale-95 transition-transform"
                       style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}
                     >
-                      {zhCopy ? "管理" : "Manage"}
+                      {copy.manage}
                     </Link>
                     {canAct && (
                       <button
@@ -591,7 +731,7 @@ export default function MarketsPage() {
                           borderRadius: "9999px",
                         }}
                       >
-                        {closingId === m.id ? (zhCopy ? "处理中..." : "Closing...") : manageAction.label}
+                        {closingId === m.id ? copy.closing : manageAction.label}
                       </button>
                     )}
                     {manageAction?.kind === "locked" && (
