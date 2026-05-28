@@ -781,37 +781,14 @@ Rules:
 
 function compileFastSystemPrompt() {
   const nowIso = new Date().toISOString();
-  return `You are Axelrod, an AI challenge protocol compiler.
+  return `You are Axelrod. Compile the user's challenge into SHORT JSON only. Current time: ${nowIso}.
 
-Return ONLY compact JSON under 350 English words or equivalent. The server expands this into ProtocolSpecV2, so keep it short but specific.
-Arrays must have at most 2 short strings. Do not add extra fields. Close the JSON object.
+Return under 220 words. Arrays max 1 short string. No markdown. Close JSON.
 
 Shape:
-{
-  "title": string,
-  "userFacingSummary": string,
-  "participantMode": "solo"|"head_to_head"|"small_group"|"team_vs_team"|"mass_crowd"|"public_market",
-  "outcomeType": "speed"|"count"|"completion"|"threshold"|"yes_no"|"ranking"|"quality_score"|"prediction"|"location_checkin"|"survival_duration"|"custom",
-  "evidenceProtocol": {"mode": "same_camera_video"|"separate_video"|"live_host_video"|"photo"|"screenshot"|"gps"|"receipt"|"public_oracle"|"platform_metric"|"witness"|"manual_review", "requiredEvidence": string[], "captureInstructions": string[]},
-  "identityProtocol": {"mode": "account_only"|"liveness_phrase"|"left_right_assignment"|"qr_participant_card"|"host_checkin"|"group_lobby_ticket"|"manual_identity_review", "required": boolean, "participantBindings": [{"role":"creator"|"opponent"|"participant"|"host","label":string,"expectedPosition":"left"|"right"|"center"|"any"}]},
-  "locationProtocol": {"mode":"none"|"nearby_discovery"|"same_place_required"|"walk_to_join"|"geo_fenced_zone"|"live_route"|"mass_local_event"},
-  "settlementProtocol": {"mode":"auto_oracle"|"auto_ai_text"|"auto_ai_vision"|"leaderboard"|"host_confirmed"|"peer_confirmed"|"manual_review"|"blocked","winCondition": string,"judgeInstructions": string[],"manualReviewTriggers": string[]},
-  "riskPolicy": {"riskLevel":"safe"|"medium"|"high"|"blocked","allowed":boolean,"warnings":string[],"restrictions":string[]}
-}
+{"title":string,"userFacingSummary":string,"participantMode":"solo|head_to_head|small_group|team_vs_team|mass_crowd|public_market","outcomeType":"speed|count|completion|threshold|yes_no|ranking|quality_score|prediction|location_checkin|survival_duration|custom","evidenceProtocol":{"mode":"same_camera_video|separate_video|live_host_video|photo|screenshot|gps|receipt|public_oracle|platform_metric|witness|manual_review","requiredEvidence":[string],"captureInstructions":[string]},"identityProtocol":{"mode":"account_only|liveness_phrase|left_right_assignment|qr_participant_card|host_checkin|group_lobby_ticket|manual_identity_review","required":boolean,"participantBindings":[{"role":"creator|opponent|participant|host","label":string,"expectedPosition":"left|right|center|any"}]},"locationProtocol":{"mode":"none|nearby_discovery|same_place_required|walk_to_join|geo_fenced_zone|live_route|mass_local_event"},"settlementProtocol":{"mode":"auto_oracle|auto_ai_text|auto_ai_vision|leaderboard|host_confirmed|peer_confirmed|manual_review|blocked","winCondition":string,"judgeInstructions":[string],"manualReviewTriggers":[string]},"riskPolicy":{"riskLevel":"safe|medium|high|blocked","allowed":boolean,"warnings":[],"restrictions":[]}}
 
-Rules:
-- Current time: ${nowIso}. No placeholder/past dates; default deadline is "24 hours" or "48 hours".
-- Match the user's language; mixed zh/en is okay.
-- Infer mode: solo for self/pet/object proof; head_to_head for named opponent/vs/faster; small_group for nearby/group; mass_crowd for 50+/leaderboard; public_market for open prediction markets.
-- Counterparty is not always the evidence subject: "my cat can finish food" is solo unless another bettor/opponent is named.
-- Random request -> one concrete safe challenge.
-- Block unsafe/illegal/coercive/alcohol/drug/violence/non-consensual/stalking/chance-based real-money gambling; give safeAlternative.
-- Same-camera physical -> identity left_right_assignment with creator left, opponent right, liveness/spoken identity, continuous full-body video.
-- Vision instructions must name actors/subject, object, start, decisive event, end state, invalid evidence, manual-review triggers.
-- Sports/object needs object visibility, contact/trajectory/result, decisive event. Pet/food needs visible subject, start/end state, timer, no substitution.
-- Consensual interaction requires willing adult participants; unclear consent/age/identity -> block or manual review.
-- Nearby -> approximate location. Crypto/weather/public data -> public_oracle with locked source fields.
-- If Context.paymentPolicy.cashStakeAllowed is not true, internal credits/points only.`;
+Rules: match user language. Solo=self/pet/object proof. Named opponent/vs/faster=head_to_head. Nearby/group=small_group. 50+/leaderboard=mass_crowd. Public prediction=public_market. Random -> concrete safe challenge. Block unsafe, alcohol/drugs, violence, coercion, non-consent, stalking, illegal, chance-based real-money gambling. Same-camera physical uses left_right_assignment. Vision rules name subject/object/start/decisive event/end/manual-review trigger. Public data uses public_oracle. If cashStakeAllowed is not true, use credits/points only.`;
 }
 
 export async function compileProtocolForUser(input: {
