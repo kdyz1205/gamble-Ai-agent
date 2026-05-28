@@ -35,7 +35,7 @@ export class CompileRequestError extends Error {
   }
 }
 
-const COMPILE_PROVIDER_TIMEOUT_MS = 22_000;
+const COMPILE_PROVIDER_TIMEOUT_MS = 40_000;
 
 function withCompileTimeout<T>(promise: Promise<T>, providerId: string, model: string): Promise<T> {
   return Promise.race([
@@ -128,6 +128,13 @@ function compileProviderAttempts(requested?: string, tierId: 1 | 2 | 3 = 1) {
   if (requestedProvider && isProviderConfigured(requestedProvider)) {
     attempts.set(requestedProvider.id, requestedProvider);
   }
+  if (requestedProvider) {
+    if (attempts.size === 0) {
+      const label = getProviderById(requestedProvider.id)?.shortLabel ?? requestedProvider.id;
+      throw new CompileRequestError(`Selected AI provider ${label} is not configured.`, 503);
+    }
+    return [...attempts.values()];
+  }
 
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER ? getProviderById(process.env.ORACLE_DEFAULT_PROVIDER) : undefined;
   if (envProvider && isProviderConfigured(envProvider)) attempts.set(envProvider.id, envProvider);
@@ -141,9 +148,6 @@ function compileProviderAttempts(requested?: string, tierId: 1 | 2 | 3 = 1) {
 
   const providers = [...attempts.values()];
   if (providers.length === 0) {
-    if (requestedProvider) {
-      throw new CompileRequestError(`Selected AI provider ${requestedProvider.shortLabel} is not configured.`, 503);
-    }
     throw new CompileRequestError("No configured AI provider is available for protocol compilation.", 503);
   }
   return providers;
