@@ -383,6 +383,7 @@ function hasExplicitCounterparty(rawPrompt: string) {
   if (/\b(who|whose|which of us)\b.*\b(faster|more|most|longer|better|wins?|winner)\b/.test(text)) return true;
   if (/\b(faster|more|most|longer|better)\s+than\b/.test(text)) return true;
   if (/\b(beat|outlast|defeat)\s+(?!my\b|the\b|this\b|that\b|a\b|an\b)/.test(text)) return true;
+  if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:i|we)\s+(?:can|will|could|would|am|are)\b/.test(text)) return true;
   if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:my|our|the|this|that|his|her|their)\b/.test(text)) return true;
   if (/(跟|和|对战|挑战).{0,12}(朋友|对手|别人|他|她|jer|jerry|alex)/i.test(rawPrompt)) return true;
   if (/(谁|哪一方|哪个).{0,12}(更|先|赢|多|快|久)/.test(rawPrompt)) return true;
@@ -446,6 +447,7 @@ function promptHasCounterparty(rawPrompt: string) {
   if (/\b(who|whose|which of us)\b.*\b(faster|more|most|longer|better|wins?|winner)\b/.test(text)) return true;
   if (/\b(faster|more|most|longer|better)\s+than\b/.test(text)) return true;
   if (/\b(beat|outlast|defeat)\s+(?!my\b|our\b|the\b|this\b|that\b|a\b|an\b)/.test(text)) return true;
+  if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:i|we)\s+(?:can|will|could|would|am|are)\b/.test(text)) return true;
   if (/\bi\s+bet\s+(?!my\b|our\b|i\b|we\b|the\b|this\b|that\b|a\b|an\b)[a-z][\w-]*\s+(?:my|our|the|this|that|his|her|their)\b/.test(text)) return true;
   if (/(\u8ddf|\u548c|\u4e0e|\u5bf9\u6218|\u6311\u6218).{0,18}(\u670b\u53cb|\u5bf9\u624b|\u522b\u4eba|\u4ed6|\u5979|jer|jerry|alex)/i.test(rawPrompt)) return true;
   if (/(\u8c01|\u54ea\u4e00\u65b9|\u54ea\u4e2a).{0,18}(\u66f4|\u5148|\u8d62|\u591a|\u5feb|\u4e45)/.test(rawPrompt)) return true;
