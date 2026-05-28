@@ -85,6 +85,9 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const getRecognitionLanguage = useCallback(() => {
     if (voiceLang === "en") return "en-US";
     if (voiceLang === "zh") return "zh-CN";
+    if (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("zh")) {
+      return "zh-CN";
+    }
     return undefined;
   }, [voiceLang]);
 
@@ -97,9 +100,15 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   }, [voiceLang]);
 
   const stopPreviewRecognition = useCallback(() => {
-    // No browser speech preview. The mic has one source of truth:
-    // recorded audio -> backend transcription. This avoids duplicate
-    // listening/recording states and bad mixed-language guesses.
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognitionRef.current = null;
+    try {
+      recognition.onend = null;
+      recognition.stop();
+    } catch {
+      // Browser speech APIs throw if stop() races their own onend.
+    }
   }, []);
 
   const stopRecorderOnly = useCallback(() => {
@@ -134,9 +143,15 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
       const finalText = (result.transcript || previewText).trim();
       if (finalText) {
-        // Show in input box — let user review before submitting
+        // Show in input box; let user review before submitting.
         setInput(finalText);
         setInterim("");
+      } else if (result.error) {
+        setVoiceError(
+          voiceLang === "zh"
+            ? "语音服务暂时不可用。请选择中文后再试，或直接输入文字。"
+            : "Voice transcription is temporarily unavailable. Try again or type it.",
+        );
       }
     } catch {
       // Fallback: use browser preview text
@@ -148,19 +163,13 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       setIsTranscribing(false);
       audioChunksRef.current = [];
     }
-  }, [getLanguageHint, onQuotaChange]);
+  }, [getLanguageHint, onQuotaChange, voiceLang]);
 
   const startPreviewRecognition = useCallback(() => {
-    const browserPreviewEnabled = false;
-    if (!browserPreviewEnabled) return;
-    // Auto mode should not trust browser speech preview. Chrome/Edge often use
-    // the OS/browser language, so Mandarin can become English-sounding garbage.
-    // Let server transcription decide unless the user explicitly picks EN/中.
-    if (voiceLang === "auto") return;
-
     const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!RecognitionCtor) return;
 
+    stopPreviewRecognition();
     const recognition = new RecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -200,7 +209,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     } catch {
       recognitionRef.current = null;
     }
-  }, [getRecognitionLanguage, voiceLang]);
+  }, [getRecognitionLanguage, stopPreviewRecognition]);
 
   const startRecording = useCallback(async () => {
     if (isParsing || isTranscribing) return;
