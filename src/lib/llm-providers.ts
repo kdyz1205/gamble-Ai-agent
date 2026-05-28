@@ -14,6 +14,8 @@ export interface LlmProviderDefinition {
   /** Optional env override for OpenAI-compatible base URL. */
   baseUrlEnv?: string;
   envVar: string;
+  /** Optional aliases accepted for the same provider key. */
+  envVarAliases?: string[];
   /** Local providers such as Ollama can run without a paid API key. */
   apiKeyOptional?: boolean;
   defaultModel: string;
@@ -112,6 +114,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.moonshot.ai/v1",
     envVar: "MOONSHOT_API_KEY",
+    envVarAliases: ["KIMI_API_KEY"],
     defaultModel: "kimi-k2.6",
     models: ["kimi-k2.6", "kimi-k2.5", "kimi-k2-thinking", "kimi-k2-turbo-preview", "moonshot-v1-128k"],
     docsUrl: "https://platform.moonshot.ai/docs",
@@ -170,6 +173,14 @@ export function providerBaseUrl(def: LlmProviderDefinition) {
   return cleanEnvValue(def.baseUrlEnv ? process.env[def.baseUrlEnv] : undefined) || def.baseUrl || "";
 }
 
+export function providerApiKey(def: LlmProviderDefinition) {
+  for (const envVar of [def.envVar, ...(def.envVarAliases ?? [])]) {
+    const value = cleanEnvValue(process.env[envVar]);
+    if (value) return value;
+  }
+  return "";
+}
+
 export function isProviderConfigured(defOrId: LlmProviderDefinition | string | undefined) {
   const def = typeof defOrId === "string" ? getProviderById(defOrId) : defOrId;
   if (!def) return false;
@@ -177,7 +188,7 @@ export function isProviderConfigured(defOrId: LlmProviderDefinition | string | u
     return process.env.LOCAL_LLM_ENABLED === "1" || Boolean(process.env.OLLAMA_BASE_URL);
   }
   if (process.env.ALLOW_PAID_AI !== "1") return false;
-  return Boolean(cleanEnvValue(process.env[def.envVar]));
+  return Boolean(providerApiKey(def));
 }
 
 export function isPaidProvider(def: LlmProviderDefinition | undefined) {

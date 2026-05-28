@@ -6,7 +6,7 @@ import {
   type LlmCallMetadata,
   type ToolInvocation,
 } from "./llm-router";
-import { DEFAULT_LLM_PROVIDER_ID, cleanEnvValue, getProviderById, isProviderConfigured } from "./llm-providers";
+import { DEFAULT_LLM_PROVIDER_ID, getProviderById, isProviderConfigured, providerApiKey } from "./llm-providers";
 import { ORACLE_TOOLS, toAttachment, type OracleAttachment } from "./oracle-tools";
 import { extractCryptoPriceOracleSpec, judgeCryptoPriceOracle } from "./crypto-price-oracle";
 import { extractWeatherOracleSpec, judgeWeatherOracle } from "./weather-oracle";
@@ -49,7 +49,7 @@ function oracleKeyAvailable(providerId: string): boolean {
   const def = getProviderById(providerId);
   if (!def) return false;
   if (def.apiKeyOptional) return isProviderConfigured(def);
-  return Boolean(cleanEnvValue(process.env[def.envVar]));
+  return Boolean(providerApiKey(def));
 }
 
 /** A single AI-recommended stake tier with reasoning. */

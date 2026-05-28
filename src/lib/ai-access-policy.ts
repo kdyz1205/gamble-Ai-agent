@@ -59,10 +59,12 @@ const FREE_TEXT_MODELS: Record<string, string[]> = {
   local_ollama: ["llama4:latest", "qwen3:latest", "llama3.3:latest", "llama3.2-vision:latest"],
   deepseek: ["deepseek-v4-flash"],
   moonshot: ["kimi-k2.5"],
+  google: ["gemini-2.5-flash", "gemini-2.0-flash"],
 };
 
 const FREE_VISION_MODELS: Record<string, string[]> = {
   local_ollama: ["llama3.2-vision:latest"],
+  google: ["gemini-2.5-flash", "gemini-2.0-flash"],
 };
 
 function splitEnvList(name: string) {
@@ -84,10 +86,10 @@ function accessLabel(plan: AiAccessPlan): AiAccessStatus["label"] {
 function firstConfiguredFreeModel(needsVision: boolean, requestedProviderId?: string | null) {
   const modelMap = needsVision ? FREE_VISION_MODELS : FREE_TEXT_MODELS;
   const order = requestedProviderId
-    ? [requestedProviderId, "local_ollama", "deepseek", "moonshot"]
+    ? [requestedProviderId, "local_ollama", "deepseek", "moonshot", "google"]
     : needsVision
-      ? ["local_ollama"]
-      : ["local_ollama", "deepseek", "moonshot"];
+      ? ["local_ollama", "google"]
+      : ["local_ollama", "deepseek", "moonshot", "google"];
 
   for (const providerId of order) {
     const provider = getProviderById(providerId);

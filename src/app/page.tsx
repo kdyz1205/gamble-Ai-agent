@@ -41,7 +41,7 @@ const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
   maxJudgeTier: 1,
   reason: "free beta account",
   freeTextModel: { providerId: "deepseek", model: "deepseek-v4-flash" },
-  freeVisionModel: { providerId: "local_ollama", model: "llama3.2-vision:latest" },
+  freeVisionModel: { providerId: "google", model: "gemini-2.5-flash" },
   premiumTextModel: { providerId: "deepseek", model: "deepseek-v4-pro" },
   premiumVisionModel: { providerId: "openai", model: "gpt-5.2" },
   upgradeRequiredMessage:
@@ -83,6 +83,7 @@ const ROUTING_HOST_PROVIDER_IDS = ["local_ollama", "groq", "together", "firework
 const FREE_PRODUCT_MODELS: Record<string, string[]> = {
   deepseek: ["deepseek-v4-flash"],
   moonshot: ["kimi-k2.5"],
+  google: ["gemini-2.5-flash", "gemini-2.0-flash"],
 };
 
 const PROVIDER_DISPLAY_COPY: Record<string, { company: string; family: string; free?: boolean }> = {
@@ -90,7 +91,7 @@ const PROVIDER_DISPLAY_COPY: Record<string, { company: string; family: string; f
   moonshot: { company: "Kimi", family: "K2.5 free / K2.6 premium", free: true },
   openai: { company: "OpenAI", family: "GPT-5.2", free: false },
   anthropic: { company: "Anthropic", family: "Claude 4", free: false },
-  google: { company: "Google", family: "Gemini", free: false },
+  google: { company: "Google", family: "Gemini Flash free / Pro premium", free: true },
   xai: { company: "xAI", family: "Grok", free: false },
   mistral: { company: "Mistral", family: "Mistral", free: false },
 };

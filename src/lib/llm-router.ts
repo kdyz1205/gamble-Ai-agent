@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { cleanEnvValue, getProviderById, isProviderConfigured, providerBaseUrl, type LlmProviderDefinition } from "./llm-providers";
+import { cleanEnvValue, getProviderById, isProviderConfigured, providerApiKey, providerBaseUrl, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
 import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
 
@@ -121,7 +121,7 @@ async function anthropicCompleteWithMetadata(
   maxTokens: number,
   temperature?: number,
 ): Promise<LlmCallResult> {
-  const key = cleanEnvValue(process.env[def.envVar]);
+  const key = providerApiKey(def);
   if (!key) throw new Error(`${def.envVar} is not set`);
   const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
@@ -352,7 +352,7 @@ async function anthropicCompleteVisionWithMetadata(
   maxTokens: number,
   temperature?: number,
 ): Promise<LlmCallResult> {
-  const key = cleanEnvValue(process.env[def.envVar]);
+  const key = providerApiKey(def);
   if (!key) throw new Error(`${def.envVar} is not set`);
   const startedAt = Date.now();
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
@@ -501,7 +501,7 @@ export async function completeOraclePromptWithMetadata(params: LlmCompleteParams
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = cleanEnvValue(process.env[def.envVar]);
+  const key = providerApiKey(def);
 
   switch (def.kind) {
     case "anthropic":
@@ -675,7 +675,7 @@ export async function completeOraclePromptWithTools(params: {
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = cleanEnvValue(process.env[def.envVar]);
+  const key = providerApiKey(def);
 
   if (def.kind !== "openai_compat") {
     // Graceful degrade: use plain prompt, no tools.
@@ -745,7 +745,7 @@ export async function completeOracleJudgeVisionWithMetadata(params: {
 
   const maxTokens = params.maxTokens ?? 1024;
   const temperature = params.temperature;
-  const key = cleanEnvValue(process.env[def.envVar]);
+  const key = providerApiKey(def);
 
   if (params.images.length === 0) {
     return completeOraclePromptWithMetadata({
