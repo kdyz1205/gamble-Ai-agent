@@ -116,7 +116,7 @@ async function main() {
     participantAId: "creator_user",
     participantBId: "opponent_user",
     providerId: "openai",
-    model: "gpt-5.4-mini",
+    model: "gpt-5-mini",
     protocol,
   });
   assert(verdict.source === "oracle", "Judge should enter the data-source oracle path before no-evidence fallback");
@@ -160,7 +160,7 @@ async function main() {
     participantAId: "creator_user",
     participantBId: "opponent_user",
     providerId: "openai",
-    model: "gpt-5.4-mini",
+    model: "gpt-5-mini",
     protocol: platformMetricProtocol,
   });
   assert(platformMetricVerdict.source === "deterministic", "Platform metric proof tokens must not be hijacked by crypto/data-source routing");

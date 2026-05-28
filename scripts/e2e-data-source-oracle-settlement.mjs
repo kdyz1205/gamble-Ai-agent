@@ -310,7 +310,7 @@ try {
   const judged = await postJson(creator.jar, `/api/challenges/${challengeId}/judge`, {
     tier: 1,
     providerId: "openai",
-    model: "gpt-5.4-mini",
+    model: "gpt-5-mini",
   });
   proof.judgment = {
     id: judged.judgment.id,

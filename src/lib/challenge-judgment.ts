@@ -187,7 +187,7 @@ export async function executeChallengeJudgment(
         : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
     requestedModel:
       options?.model?.trim() ||
-      (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady ? "gemini-3.5-flash" : undefined),
+      (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady ? "gemini-2.5-flash" : undefined),
     requestedTierId: tierId,
     needsVision: bothHaveVideoUrl,
     allowFreeDowngrade: tierId === 1,

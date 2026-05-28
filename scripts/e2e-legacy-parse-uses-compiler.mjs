@@ -100,7 +100,7 @@ function requireCheck(proof, name, passed, detail) {
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_PARSE_PROVIDER || "openai";
-const model = process.env.E2E_PARSE_MODEL || "gpt-5.4-mini";
+const model = process.env.E2E_PARSE_MODEL || "gpt-5-mini";
 const input = `I want a safe nearby challenge where Alex and I race to finish 20 pushups. ${stamp}`;
 
 try {

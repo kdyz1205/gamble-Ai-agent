@@ -132,7 +132,7 @@ const proof = {
   commitSha: currentCommitSha(),
   stamp,
   providerId: "openai",
-  model: "gpt-5.4-mini",
+  model: "gpt-5-mini",
   checks: {},
 };
 

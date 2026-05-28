@@ -91,7 +91,7 @@ function requireCheck(proof, name, passed, detail) {
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_GENERATE_SPEC_PROVIDER || "openai";
-const model = process.env.E2E_GENERATE_SPEC_MODEL || "gpt-5.4-mini";
+const model = process.env.E2E_GENERATE_SPEC_MODEL || "gpt-5-mini";
 const inputText = `Generate a same-camera pushup challenge against Alex with video proof. ${stamp}`;
 
 try {

@@ -109,7 +109,7 @@ function requireCheck(proof, name, passed, detail) {
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const proof = { base, stamp, checks: {} };
 const providerId = process.env.E2E_COMPILE_PROVIDER || "openai";
-const model = process.env.E2E_COMPILE_MODEL || "gpt-5.4-mini";
+const model = process.env.E2E_COMPILE_MODEL || "gpt-5-mini";
 const expectedModel = process.env.E2E_COMPILE_EXPECT_MODEL || model;
 const allowFreeModelDowngrade = process.env.E2E_ALLOW_FREE_MODEL_DOWNGRADE !== "0";
 const inputText = process.env.E2E_COMPILE_INPUT ||

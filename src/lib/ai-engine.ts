@@ -645,9 +645,9 @@ function compactVisionRetryImages(images: JudgeVisionImage[]): JudgeVisionImage[
 
 function visionFallbackModel(providerId: string, primaryModel: string) {
   const def = getProviderById(providerId);
-  if (providerId === "openai") return process.env.OPENAI_JUDGE_MODEL || def?.defaultModel || "gpt-5.5";
-  if (providerId === "google") return "gemini-3.5-flash";
-  if (providerId === "anthropic") return process.env.ANTHROPIC_JUDGE_MODEL || def?.defaultModel || "claude-opus-4-7";
+  if (providerId === "openai") return process.env.OPENAI_JUDGE_MODEL || def?.defaultModel || "gpt-5.2";
+  if (providerId === "google") return "gemini-2.5-flash";
+  if (providerId === "anthropic") return process.env.ANTHROPIC_JUDGE_MODEL || def?.defaultModel || "claude-opus-4-1-20250805";
   if (providerId === "xai") return def?.defaultModel || "grok-4.3";
   if (providerId === "local_ollama") return process.env.LOCAL_VISION_MODEL || "llama3.2-vision:latest";
   return def?.defaultModel || primaryModel;
@@ -1856,13 +1856,13 @@ function escalateModelForLowConfidence(
   if (confidence >= 0.70) return null;
   const m = model.toLowerCase();
   if (providerId === "openai" && /mini|nano|fast/.test(m)) {
-    return "gpt-5.5";
+    return "gpt-5.2";
   }
   if (providerId === "anthropic" && /haiku|sonnet/.test(m)) {
-    return "claude-opus-4-7";
+    return "claude-opus-4-1-20250805";
   }
   if (providerId === "google" && m.includes("flash")) {
-    return "gemini-3.1-pro";
+    return "gemini-3-pro-preview";
   }
   if (providerId === "deepseek" && m.includes("flash")) {
     return "deepseek-v4-pro";

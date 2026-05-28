@@ -102,7 +102,7 @@ export async function POST(
         : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
     requestedModel:
       model ??
-      (!model && isVideoJudgment && googleVisionReady ? "gemini-3.5-flash" : undefined),
+      (!model && isVideoJudgment && googleVisionReady ? "gemini-2.5-flash" : undefined),
     requestedTierId: tierId,
     needsVision: isVideoJudgment,
     allowFreeDowngrade: tierId === 1,

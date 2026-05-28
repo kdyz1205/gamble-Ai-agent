@@ -116,7 +116,7 @@ const proof = {
   stamp,
   commitSha: process.env.E2E_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
   providerId: process.env.E2E_COMPILE_PROVIDER || "openai",
-  model: process.env.E2E_COMPILE_MODEL || "gpt-5.4-mini",
+  model: process.env.E2E_COMPILE_MODEL || "gpt-5-mini",
   cases: [],
   checks: {},
 };

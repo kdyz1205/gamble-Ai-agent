@@ -555,7 +555,7 @@ export async function POST(
         : process.env.ORACLE_DEFAULT_PROVIDER || DEFAULT_LLM_PROVIDER_ID),
     requestedModel:
       modelOverride ??
-      (!modelOverride && bothHaveVideoUrl && googleVisionReadyForAccess ? "gemini-3.5-flash" : undefined),
+      (!modelOverride && bothHaveVideoUrl && googleVisionReadyForAccess ? "gemini-2.5-flash" : undefined),
     requestedTierId: tierId,
     needsVision: isVideoJudgment,
     allowFreeDowngrade: tierId === 1 && !isRejudge,
@@ -670,7 +670,7 @@ export async function POST(
   const judgeModel =
     modelOverride?.trim() ||
     (!providerIdOverride && !modelOverride && bothHaveVideoUrl && googleVisionReady
-      ? "gemini-3.5-flash"
+      ? "gemini-2.5-flash"
       : pdef?.id === "anthropic"
         ? aiModel.model
         : (pdef?.defaultModel ?? aiModel.model));

@@ -151,7 +151,7 @@ async function callAgent(jar, body) {
     conversationHistory: [],
     draftState: {},
     providerId: "openai",
-    model: "gpt-5.4-mini",
+    model: "gpt-5-mini",
     ...body,
   });
 }
@@ -226,7 +226,7 @@ try {
       riskAllowed: protocol.riskPolicy?.allowed,
     } : null,
   };
-  requireCheck(proof, "compile_used_selected_provider", compiled.llmCall?.providerId === "openai" && compiled.llmCall?.model === "gpt-5.4-mini" && compiled.llmCall?.usedApi === true, proof.compile);
+  requireCheck(proof, "compile_used_selected_provider", compiled.llmCall?.providerId === "openai" && compiled.llmCall?.model === "gpt-5-mini" && compiled.llmCall?.usedApi === true, proof.compile);
   requireCheck(proof, "compile_returned_text_review_protocol", protocol?.version === "2.0" && protocol.evidenceProtocol?.mode === "platform_metric" && protocol.identityProtocol?.mode === "account_only" && protocol.identityProtocol?.required === false, proof.compile.protocol);
   requireCheck(proof, "compile_preserved_expected_answer", JSON.stringify(protocol).includes(expectedAnswer), proof.compile.protocol);
 

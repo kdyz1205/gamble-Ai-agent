@@ -4,9 +4,9 @@
  * Anthropic, Google, Kimi, DeepSeek, or a local model.
  */
 export const MODEL_TIERS = {
-  LIGHT: { id: 1, name: "Free", model: "claude-haiku-4-5-20251001", priceUsd: 0.01 },
-  PRO: { id: 2, name: "Premium", model: "claude-sonnet-4-6", priceUsd: 0.05 },
-  MAX: { id: 3, name: "Premium", model: "claude-opus-4-7", priceUsd: 0.25 },
+  LIGHT: { id: 1, name: "Free", model: "claude-3-5-haiku-20241022", priceUsd: 0.01 },
+  PRO: { id: 2, name: "Premium", model: "claude-sonnet-4-20250514", priceUsd: 0.05 },
+  MAX: { id: 3, name: "Premium", model: "claude-opus-4-1-20250805", priceUsd: 0.25 },
 } as const;
 
 export type TierName = keyof typeof MODEL_TIERS;

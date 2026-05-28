@@ -36,7 +36,7 @@ async function solidColorPng(rgb: { r: number; g: number; b: number }): Promise<
 
 async function main() {
   const providerId = process.env.ORACLE_DEFAULT_PROVIDER || "openai";
-  const model = "gpt-5.4-mini";
+  const model = "gpt-5-mini";
 
   const redB64 = await solidColorPng({ r: 220, g: 30, b: 30 });
   const blueB64 = await solidColorPng({ r: 30, g: 30, b: 220 });
