@@ -36,7 +36,7 @@ export class CompileRequestError extends Error {
 }
 
 const COMPILE_PROVIDER_TIMEOUT_MS = 40_000;
-const FAST_COMPILE_MAX_TOKENS = 650;
+const FAST_COMPILE_MAX_TOKENS = 1100;
 const FULL_COMPILE_MAX_TOKENS = 2400;
 
 function withCompileTimeout<T>(promise: Promise<T>, providerId: string, model: string): Promise<T> {
