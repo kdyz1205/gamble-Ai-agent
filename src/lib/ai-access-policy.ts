@@ -58,10 +58,10 @@ const DEFAULT_DEV_IDENTITIES = ["kdys1205", "kdyz1205", "alexl"];
 const FREE_TEXT_MODELS: Record<string, string[]> = {
   local_ollama: ["llama4:latest", "qwen3:latest", "llama3.3:latest", "llama3.2-vision:latest"],
   deepseek: ["deepseek-v4-flash"],
-  moonshot: ["kimi-k2.5", "moonshot-v1-8k"],
-  google: ["gemini-3.1-flash-lite"],
-  openai: ["gpt-5.4-nano"],
-  anthropic: ["claude-haiku-4-5-20251001"],
+  moonshot: ["kimi-k2.5", "moonshot-v1-128k"],
+  google: ["gemini-2.5-flash"],
+  openai: ["gpt-5-nano"],
+  anthropic: ["claude-3-5-haiku-20241022"],
   groq: ["openai/gpt-oss-20b", "llama-3.1-8b-instant"],
   mistral: ["mistral-small-latest"],
   fireworks: ["accounts/fireworks/models/llama4-maverick-instruct-basic"],
@@ -69,8 +69,8 @@ const FREE_TEXT_MODELS: Record<string, string[]> = {
 
 const FREE_VISION_MODELS: Record<string, string[]> = {
   local_ollama: ["llama3.2-vision:latest"],
-  google: ["gemini-3.1-flash-lite"],
-  openai: ["gpt-5.4-nano"],
+  google: ["gemini-2.5-flash"],
+  openai: ["gpt-5-nano"],
 };
 
 function splitEnvList(name: string) {

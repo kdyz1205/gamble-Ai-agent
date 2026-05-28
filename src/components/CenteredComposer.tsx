@@ -40,6 +40,20 @@ const LANGUAGE_OPTIONS: Array<{
   },
 ];
 
+function detectTextLanguage(value: string): VoiceLang | null {
+  if (/[\u3400-\u9FFF]/.test(value)) return "zh";
+  if (/[A-Za-z]/.test(value)) return "en";
+  return null;
+}
+
+function browserLanguagePrefersChinese() {
+  if (typeof navigator === "undefined") return false;
+  const languages = [navigator.language, ...(navigator.languages ?? [])]
+    .filter(Boolean)
+    .map((item) => String(item).toLowerCase());
+  return languages.some((item) => item.startsWith("zh"));
+}
+
 export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue, onQuotaChange }: Props) {
   const [input, setInput] = useState(initialValue || "");
   const [listening, setListening] = useState(false);
@@ -85,9 +99,10 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
   const getRecognitionLanguage = useCallback(() => {
     if (voiceLang === "en") return "en-US";
     if (voiceLang === "zh") return "zh-CN";
-    if (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("zh")) {
-      return "zh-CN";
-    }
+    const detected = detectTextLanguage(`${latestInputRef.current} ${latestInterimRef.current}`);
+    if (detected === "zh") return "zh-CN";
+    if (detected === "en") return "en-US";
+    if (browserLanguagePrefersChinese()) return "zh-CN";
     return undefined;
   }, [voiceLang]);
 
@@ -146,6 +161,13 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
         // Show in input box; let user review before submitting.
         setInput(finalText);
         setInterim("");
+        if (result.usedFallback && result.error) {
+          setVoiceError(
+            voiceLang === "zh"
+              ? "AI transcription failed, so this is browser speech preview. Check it before sending."
+              : "AI transcription failed, so this is browser speech preview. Check it before sending.",
+          );
+        }
       } else if (result.error) {
         setVoiceError(
           voiceLang === "zh"

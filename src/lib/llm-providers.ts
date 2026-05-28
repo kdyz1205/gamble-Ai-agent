@@ -46,8 +46,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Anthropic",
     kind: "anthropic",
     envVar: "ANTHROPIC_API_KEY",
-    defaultModel: "claude-opus-4-7",
-    models: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    defaultModel: "claude-opus-4-1-20250805",
+    models: ["claude-opus-4-1-20250805", "claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
     docsUrl: "https://docs.anthropic.com",
   },
   {
@@ -57,8 +57,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     kind: "openai_compat",
     baseUrl: "https://api.openai.com/v1",
     envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-5.5",
-    models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4.1", "gpt-4o"],
+    defaultModel: "gpt-5.2",
+    models: ["gpt-5.2", "gpt-5.2-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4o"],
     docsUrl: "https://platform.openai.com/docs",
   },
   {
@@ -69,7 +69,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     /** Router uses env AZURE_OPENAI_BASE_URL (deployment path + api-version), not this field. */
     baseUrl: "",
     envVar: "AZURE_OPENAI_API_KEY",
-    defaultModel: "gpt-5.5",
+    defaultModel: "gpt-5.2",
     models: [],
     docsUrl: "https://learn.microsoft.com/azure/ai-services/openai/",
   },
@@ -79,14 +79,14 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Google",
     kind: "google",
     envVar: "GOOGLE_AI_API_KEY",
-    defaultModel: "gemini-3.5-flash",
-    models: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite", "gemini-2.5-pro"],
+    defaultModel: "gemini-3-pro-preview",
+    models: ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
     docsUrl: "https://ai.google.dev/docs",
   },
   {
     id: "groq",
-    label: "Groq",
-    shortLabel: "Groq",
+    label: "Groq routing host",
+    shortLabel: "Groq host",
     kind: "openai_compat",
     baseUrl: "https://api.groq.com/openai/v1",
     envVar: "GROQ_API_KEY",
@@ -113,7 +113,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     baseUrl: "https://api.moonshot.ai/v1",
     envVar: "MOONSHOT_API_KEY",
     defaultModel: "kimi-k2.6",
-    models: ["kimi-k2.6", "kimi-k2.5", "moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
+    models: ["kimi-k2.6", "kimi-k2.5", "kimi-k2-thinking", "kimi-k2-turbo-preview", "moonshot-v1-128k"],
     docsUrl: "https://platform.moonshot.ai/docs",
   },
   {
@@ -135,13 +135,13 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     baseUrl: "https://api.x.ai/v1",
     envVar: "XAI_API_KEY",
     defaultModel: "grok-4.3",
-    models: ["grok-4.3", "grok-4.20", "grok-2-vision-latest"],
+    models: ["grok-4.3", "grok-4-latest", "grok-4-0709"],
     docsUrl: "https://docs.x.ai",
   },
   {
     id: "together",
-    label: "Together AI",
-    shortLabel: "Together",
+    label: "Together routing host",
+    shortLabel: "Together host",
     kind: "openai_compat",
     baseUrl: "https://api.together.xyz/v1",
     envVar: "TOGETHER_API_KEY",
@@ -151,8 +151,8 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
   },
   {
     id: "fireworks",
-    label: "Fireworks AI",
-    shortLabel: "Fireworks",
+    label: "Fireworks routing host",
+    shortLabel: "Fireworks host",
     kind: "openai_compat",
     baseUrl: "https://api.fireworks.ai/inference/v1",
     envVar: "FIREWORKS_API_KEY",
@@ -217,7 +217,7 @@ export function resolveTierModel(provider: LlmProviderDefinition | undefined, ti
     if (needsVision && process.env.LOCAL_VISION_MODEL) return process.env.LOCAL_VISION_MODEL;
     return process.env.LOCAL_LLM_MODEL || provider.defaultModel;
   }
-  if (provider.id === "google" && needsVision) return "gemini-3.5-flash";
+  if (provider.id === "google" && needsVision) return "gemini-2.5-flash";
   if (provider.id === "openai" && tierId === 3) return process.env.OPENAI_JUDGE_MODEL || provider.defaultModel;
   if (provider.id === "anthropic" && tierId === 3) return process.env.ANTHROPIC_JUDGE_MODEL || provider.defaultModel;
   return provider.defaultModel;

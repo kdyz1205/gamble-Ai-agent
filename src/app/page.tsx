@@ -41,9 +41,9 @@ const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
   maxJudgeTier: 1,
   reason: "free beta account",
   freeTextModel: { providerId: "deepseek", model: "deepseek-v4-flash" },
-  freeVisionModel: { providerId: "google", model: "gemini-3.1-flash-lite" },
+  freeVisionModel: { providerId: "google", model: "gemini-2.5-flash" },
   premiumTextModel: { providerId: "deepseek", model: "deepseek-v4-pro" },
-  premiumVisionModel: { providerId: "openai", model: "gpt-5.5" },
+  premiumVisionModel: { providerId: "openai", model: "gpt-5.2" },
   upgradeRequiredMessage:
     "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
 };
@@ -59,20 +59,36 @@ const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
 ];
 
 const PREFERRED_MODEL_REPLACEMENTS: Record<string, string> = {
-  "gpt-4o-mini": "gpt-5.4-mini",
-  "gpt-4o": "gpt-5.5",
-  "o4-mini": "gpt-5.4-mini",
-  "o3-mini": "gpt-5.4-mini",
-  "claude-sonnet-4-20250514": "claude-sonnet-4-6",
-  "claude-opus-4-20250514": "claude-opus-4-7",
-  "gemini-2.0-flash": "gemini-3.5-flash",
-  "gemini-2.5-flash": "gemini-3.5-flash",
-  "gemini-2.5-pro": "gemini-3.1-pro",
-  "gemini-2.5-pro-preview-05-06": "gemini-3.1-pro",
+  "gpt-4o-mini": "gpt-5-mini",
+  "gpt-4o": "gpt-5.2",
+  "o4-mini": "gpt-5-mini",
+  "o3-mini": "gpt-5-mini",
+  "claude-sonnet-4-6": "claude-sonnet-4-20250514",
+  "claude-opus-4-7": "claude-opus-4-1-20250805",
+  "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
+  "claude-opus-4-20250514": "claude-opus-4-20250514",
+  "gemini-3.5-flash": "gemini-3-pro-preview",
+  "gemini-3.1-pro": "gemini-3-pro-preview",
+  "gemini-3-flash": "gemini-2.5-flash",
+  "gemini-3.1-flash-lite": "gemini-2.5-flash",
+  "gemini-2.5-pro-preview-05-06": "gemini-2.5-pro",
   "kimi-k2-0711-preview": "kimi-k2.6",
   "deepseek-chat": "deepseek-v4-flash",
   "deepseek-reasoner": "deepseek-v4-pro",
-  "deepseek-v4-flash": "deepseek-v4-pro",
+};
+
+const PRODUCT_PROVIDER_IDS = ["deepseek", "moonshot", "openai", "anthropic", "google", "xai", "mistral"] as const;
+const ROUTING_HOST_PROVIDER_IDS = ["local_ollama", "groq", "together", "fireworks", "azure_openai"] as const;
+const FREE_PRODUCT_PROVIDER_IDS = new Set<string>(["deepseek", "moonshot"]);
+
+const PROVIDER_DISPLAY_COPY: Record<string, { company: string; family: string; free?: boolean }> = {
+  deepseek: { company: "DeepSeek", family: "V4 Flash / V4 Pro", free: true },
+  moonshot: { company: "Kimi", family: "K2.5 / K2.6", free: true },
+  openai: { company: "OpenAI", family: "GPT-5.2", free: false },
+  anthropic: { company: "Anthropic", family: "Claude 4", free: false },
+  google: { company: "Google", family: "Gemini", free: false },
+  xai: { company: "xAI", family: "Grok", free: false },
+  mistral: { company: "Mistral", family: "Mistral", free: false },
 };
 
 const REFERRAL_STORAGE_KEY = "axelrod_referral";
@@ -209,8 +225,10 @@ function detectPromptLanguage(input: string): LanguageMode {
 }
 
 function resolveCompileLanguage(input: string, languageMode?: LanguageMode): LanguageMode {
+  const detected = detectPromptLanguage(input);
+  if (detected !== "auto") return detected;
   if (languageMode && languageMode !== "auto") return languageMode;
-  return detectPromptLanguage(input);
+  return "auto";
 }
 
 function protocolLanguageLabel(language: LanguageMode | null | undefined) {
@@ -223,6 +241,53 @@ function protocolLanguageStatus(language: LanguageMode | null | undefined) {
   if (language === "zh") return "Chinese";
   if (language === "en") return "English";
   return "Auto";
+}
+
+function productProviderTier(providerId: string | null | undefined): ModelAccessChoice {
+  return providerId && FREE_PRODUCT_PROVIDER_IDS.has(providerId) ? "free" : "premium";
+}
+
+function displayProviderCompany(providerId: string | null | undefined) {
+  return PROVIDER_DISPLAY_COPY[String(providerId ?? "")]?.company ?? getProviderById(String(providerId ?? ""))?.shortLabel ?? "AI";
+}
+
+function displayModelName(providerId: string | null | undefined, model: string | null | undefined) {
+  const value = String(model ?? "").trim();
+  if (!value) return "Default";
+  if (providerId === "deepseek") {
+    if (value === "deepseek-v4-flash") return "DeepSeek V4 Flash";
+    if (value === "deepseek-v4-pro") return "DeepSeek V4 Pro";
+  }
+  if (providerId === "moonshot") {
+    if (value === "kimi-k2.6") return "Kimi K2.6";
+    if (value === "kimi-k2.5") return "Kimi K2.5";
+    if (value === "kimi-k2-thinking") return "Kimi K2 Thinking";
+    if (value === "kimi-k2-turbo-preview") return "Kimi K2 Turbo";
+  }
+  if (providerId === "openai") {
+    if (value === "gpt-5.2") return "GPT-5.2";
+    if (value === "gpt-5.2-pro") return "GPT-5.2 Pro";
+    if (value === "gpt-5-mini") return "GPT-5 mini";
+    if (value === "gpt-5-nano") return "GPT-5 nano";
+  }
+  if (providerId === "anthropic") {
+    if (value === "claude-opus-4-1-20250805") return "Claude Opus 4.1";
+    if (value === "claude-opus-4-20250514") return "Claude Opus 4";
+    if (value === "claude-sonnet-4-20250514") return "Claude Sonnet 4";
+    if (value === "claude-3-5-haiku-20241022") return "Claude Haiku 3.5";
+  }
+  if (providerId === "google") {
+    if (value === "gemini-3-pro-preview") return "Gemini 3 Pro";
+    if (value === "gemini-2.5-pro") return "Gemini 2.5 Pro";
+    if (value === "gemini-2.5-flash") return "Gemini 2.5 Flash";
+    if (value === "gemini-2.0-flash") return "Gemini 2.0 Flash";
+  }
+  if (providerId === "xai") {
+    if (value === "grok-4.3") return "Grok 4.3";
+    if (value === "grok-4-latest") return "Grok 4 latest";
+    if (value === "grok-4-0709") return "Grok 4";
+  }
+  return value;
 }
 
 function requestBrowserLocation(timeoutMs = 3500): Promise<{
@@ -310,6 +375,13 @@ export default function Home() {
   const visibleAiAccess = aiAccess ?? FREE_FALLBACK_AI_ACCESS;
   const effectiveOraclePrefs = useMemo<OraclePrefs>(() => {
     if ((visibleAiAccess.isDeveloper || visibleAiAccess.role === "admin") && debugModelOverride) {
+      return oraclePrefs;
+    }
+    const chosenTier = productProviderTier(oraclePrefs.providerId);
+    if (modelAccessChoice === "premium" && visibleAiAccess.canUsePremiumModels && chosenTier === "premium") {
+      return oraclePrefs;
+    }
+    if (modelAccessChoice === "free" && chosenTier === "free") {
       return oraclePrefs;
     }
     if (modelAccessChoice === "premium" && visibleAiAccess.canUsePremiumModels) {
@@ -536,7 +608,7 @@ export default function Home() {
     void handleGenerate(value);
   }, [handleGenerate]);
 
-  const handleSelectOracle = useCallback((providerId: string, model?: string | null) => {
+  const handleSelectOracle = useCallback((providerId: string, model?: string | null, options?: { debug?: boolean }) => {
     const provider = getProviderById(providerId);
     if (!provider) return;
     const requestedModel = model?.trim() || provider.defaultModel;
@@ -547,7 +619,7 @@ export default function Home() {
         : provider.defaultModel;
     const nextPrefs = { providerId, model: safeModel };
     setOraclePrefs(nextPrefs);
-    setDebugModelOverride(true);
+    setDebugModelOverride(options?.debug === true);
     writeOracleLlmPrefs(nextPrefs.providerId, nextPrefs.model);
   }, []);
 
@@ -1433,29 +1505,33 @@ function ModelModeBar({
   selectedTier: ModelAccessChoice;
   debugModelOverride: boolean;
   onSelectTier: (tier: ModelAccessChoice) => void;
-  onChange: (providerId: string, model?: string | null) => void;
+  onChange: (providerId: string, model?: string | null, options?: { debug?: boolean }) => void;
 }) {
   const selectedProvider = getProviderById(prefs.providerId) ?? getProviderById(DEFAULT_LLM_PROVIDER_ID);
   const selectedModel = prefs.model || selectedProvider?.defaultModel || "";
   const canUsePremium = Boolean(aiAccess?.canUsePremiumModels);
   const activeTier: ModelAccessChoice = selectedTier === "premium" && canUsePremium ? "premium" : "free";
-  const planLabel = debugModelOverride ? "Custom" : activeTier === "premium" ? "Premium" : "Free";
-  const planCopy = debugModelOverride ? "Developer routing" : activeTier === "premium" ? "Best judge" : "Basic judge";
+  const planLabel = activeTier === "premium" ? "Premium" : "Free";
+  const selectedCompany = displayProviderCompany(selectedProvider?.id);
+  const selectedModelLabel = displayModelName(selectedProvider?.id, selectedModel);
+  const planCopy = debugModelOverride
+    ? "Advanced routing override"
+    : `${selectedCompany} / ${selectedModelLabel}`;
   const canDebugRouting = process.env.NODE_ENV !== "production" || aiAccess?.isDeveloper || aiAccess?.role === "admin";
-  const visibleProviders = ["local_ollama", "deepseek", "moonshot", "openai", "anthropic", "google", "xai", "groq", "mistral", "together", "fireworks"]
+  const productProviders = PRODUCT_PROVIDER_IDS
+    .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
+    .filter(Boolean) as typeof LLM_PROVIDERS;
+  const routingProviders = ROUTING_HOST_PROVIDER_IDS
     .map((id) => LLM_PROVIDERS.find((provider) => provider.id === id))
     .filter(Boolean) as typeof LLM_PROVIDERS;
   const modelOptions = selectedProvider?.models?.length ? selectedProvider.models : selectedModel ? [selectedModel] : [];
   const hasCustomSelectedModel = selectedModel && !modelOptions.includes(selectedModel);
-  const tierChoices: Array<{
-    id: ModelAccessChoice;
-    label: string;
-    kicker: string;
-    disabled: boolean;
-  }> = [
-    { id: "free", label: "Free AI", kicker: "basic", disabled: false },
-    { id: "premium", label: "Premium AI", kicker: canUsePremium ? "best" : "locked", disabled: !canUsePremium },
-  ];
+  const selectProductModel = (providerId: string, model?: string | null) => {
+    const tier = productProviderTier(providerId);
+    if (tier === "premium" && !canUsePremium) return;
+    onSelectTier(tier);
+    onChange(providerId, model, { debug: false });
+  };
 
   return (
     <details className="group mt-3 w-fit">
@@ -1485,34 +1561,70 @@ function ModelModeBar({
             {planLabel}
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {tierChoices.map((choice) => {
-            const selected = !debugModelOverride && activeTier === choice.id;
+        <div className="grid gap-2">
+          {productProviders.map((provider) => {
+            const tier = productProviderTier(provider.id);
+            const locked = tier === "premium" && !canUsePremium;
+            const selected = selectedProvider?.id === provider.id && !debugModelOverride;
+            const copy = PROVIDER_DISPLAY_COPY[provider.id] ?? { company: provider.shortLabel, family: provider.defaultModel };
             return (
               <button
-                key={choice.id}
+                key={provider.id}
                 type="button"
-                disabled={choice.disabled}
-                onClick={() => onSelectTier(choice.id)}
-                className="rounded-[16px] border px-3 py-3 text-left transition disabled:cursor-not-allowed"
+                disabled={locked}
+                onClick={() => selectProductModel(provider.id, provider.defaultModel)}
+                className="flex items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition disabled:cursor-not-allowed"
                 style={{
                   borderColor: selected ? "#10B981" : "rgba(148,163,184,0.28)",
-                  background: choice.disabled ? "#F1F5F9" : selected ? "#ECFDF5" : "#FFFFFF",
-                  color: choice.disabled ? "#94A3B8" : selected ? "#047857" : "#172033",
-                  opacity: choice.disabled ? 0.58 : 1,
+                  background: locked ? "#F1F5F9" : selected ? "#ECFDF5" : "#FFFFFF",
+                  color: locked ? "#94A3B8" : selected ? "#047857" : "#172033",
+                  opacity: locked ? 0.58 : 1,
                 }}
-                aria-disabled={choice.disabled}
+                aria-disabled={locked}
               >
-                <span className="block text-sm font-black">{choice.label}</span>
-                <span className="mt-1 block text-[10px] font-black uppercase tracking-wide">{choice.kicker}</span>
+                <span>
+                  <span className="block text-sm font-black">{copy.company}</span>
+                  <span className="mt-1 block text-[10px] font-black uppercase tracking-wide">{copy.family}</span>
+                </span>
+                <span
+                  className="rounded-full px-2.5 py-1 text-[10px] font-black"
+                  style={{
+                    background: locked ? "#E2E8F0" : tier === "premium" ? "#DBEAFE" : "#DCFCE7",
+                    color: locked ? "#64748B" : tier === "premium" ? "#1D4ED8" : "#047857",
+                  }}
+                >
+                  {tier === "premium" ? "Premium" : "Free"}
+                </span>
               </button>
             );
           })}
         </div>
+        {selectedProvider && PRODUCT_PROVIDER_IDS.includes(selectedProvider.id as typeof PRODUCT_PROVIDER_IDS[number]) && (
+          <label className="grid gap-1">
+            <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: "#64748B" }}>
+              {selectedCompany} model
+            </span>
+            <select
+              value={selectedModel}
+              disabled={productProviderTier(selectedProvider.id) === "premium" && !canUsePremium}
+              onChange={(event) => selectProductModel(selectedProvider.id, event.target.value)}
+              className="w-full rounded-xl border px-3 py-2 text-xs font-bold outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: "#DDE7F0", color: "#172033", background: "#FFFFFF" }}
+              aria-label={`${selectedCompany} model`}
+            >
+              {hasCustomSelectedModel && <option value={selectedModel}>{displayModelName(selectedProvider.id, selectedModel)}</option>}
+              {modelOptions.map((model) => (
+                <option key={model} value={model}>
+                  {displayModelName(selectedProvider.id, model)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {canDebugRouting && (
           <details className="rounded-[18px] border bg-slate-50 p-3" style={{ borderColor: "#E2E8F0" }}>
             <summary className="cursor-pointer list-none text-[11px] font-black uppercase tracking-wide" style={{ color: "#334155" }}>
-              Debug model routing
+              Advanced routing hosts
             </summary>
             <div className="mt-3 grid gap-2">
               {aiAccess?.isDeveloper && (
@@ -1524,13 +1636,13 @@ function ModelModeBar({
                 value={selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID}
                 onChange={(event) => {
                   const provider = getProviderById(event.target.value);
-                  onChange(event.target.value, provider?.defaultModel ?? null);
+                  onChange(event.target.value, provider?.defaultModel ?? null, { debug: true });
                 }}
                 className="w-full rounded-xl border px-3 py-2 text-xs font-extrabold outline-none"
                 style={{ borderColor: "#DDE7F0", color: "#172033", background: "#FFFFFF" }}
                 aria-label="Debug AI provider"
               >
-                {visibleProviders.map((provider) => (
+                {[...productProviders, ...routingProviders].map((provider) => (
                   <option key={provider.id} value={provider.id}>
                     {provider.shortLabel}
                   </option>
@@ -1538,7 +1650,7 @@ function ModelModeBar({
               </select>
               <select
                 value={selectedModel}
-                onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value)}
+                onChange={(event) => onChange(selectedProvider?.id ?? DEFAULT_LLM_PROVIDER_ID, event.target.value, { debug: true })}
                 className="w-full rounded-xl border px-3 py-2 text-xs font-bold outline-none"
                 style={{ borderColor: "#DDE7F0", color: "#526078", background: "#FFFFFF" }}
                 aria-label="Debug AI model"
