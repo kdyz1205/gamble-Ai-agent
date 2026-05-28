@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut, useSession } from "next-auth/react";
@@ -47,6 +47,8 @@ const FREE_FALLBACK_AI_ACCESS: api.AiAccessStatus = {
   upgradeRequiredMessage:
     "This challenge needs a Premium judge model. Free mode uses slower low-cost models and may ask for manual review instead of forcing a weak verdict.",
 };
+
+const COMPILE_REQUEST_TIMEOUT_MS = 45_000;
 
 const MODEL_TEXT_ALIASES: Array<{ pattern: RegExp; providerId: string }> = [
   { pattern: /^(?:local|llama|ollama)$/i, providerId: "local_ollama" },
@@ -168,8 +170,11 @@ function shortAiError(error: unknown) {
   if (/rate limit|429/i.test(message)) {
     return "AI is rate limited. Try again shortly.";
   }
+  if (/AbortError|aborted|cancelled|canceled/i.test(message)) {
+    return "AI draft request stopped before it finished. Try again, or refresh if the page was open during a deploy.";
+  }
   if (/timed out|timeout/i.test(message)) {
-    return "AI took too long. Try a shorter prompt or another model.";
+    return "AI draft request timed out before the server returned a result. Try again, or refresh if the page was open during a deploy.";
   }
   return message || "Could not generate challenge.";
 }
@@ -323,8 +328,11 @@ export default function Home() {
     inviteLink: string | null;
   } | null>(null);
   const [paymentPolicy, setPaymentPolicy] = useState<api.PaymentPolicyStatus | null>(null);
+  const compileAbortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
+    compileAbortRef.current?.abort();
+    compileAbortRef.current = null;
     setAppState("idle");
     setPrompt("");
     setProtocol(null);
@@ -475,6 +483,13 @@ export default function Home() {
     setPrompt(directive.prompt);
     setError(null);
     setAppState("generating");
+    compileAbortRef.current?.abort();
+    const controller = new AbortController();
+    compileAbortRef.current = controller;
+    const timeout = window.setTimeout(
+      () => controller.abort(new DOMException("AI compile request timed out", "TimeoutError")),
+      COMPILE_REQUEST_TIMEOUT_MS,
+    );
     try {
       const res = await api.compileChallengeProtocol(directive.prompt, {
         ...nextPrefs,
@@ -483,6 +498,7 @@ export default function Home() {
           surface: "homepage_composer",
           flow: "draft_before_create",
         },
+        signal: controller.signal,
       });
       if (!res.protocol || res.source === "error") {
         throw new Error("AI protocol compilation did not complete with the selected provider/model. No draft was created.");
@@ -502,8 +518,18 @@ export default function Home() {
     } catch (err) {
       setError(shortAiError(err));
       setAppState("idle");
+    } finally {
+      window.clearTimeout(timeout);
+      if (compileAbortRef.current === controller) compileAbortRef.current = null;
     }
   }, [effectiveOraclePrefs, user]);
+
+  const handleCancelGenerate = useCallback(() => {
+    compileAbortRef.current?.abort(new DOMException("AI draft generation cancelled", "AbortError"));
+    compileAbortRef.current = null;
+    setError("AI draft generation was stopped. Try again when you are ready.");
+    setAppState("idle");
+  }, []);
 
   const handleLaunchPrompt = useCallback((value: string) => {
     setPrompt(value);
@@ -964,7 +990,7 @@ export default function Home() {
           )}
 
           {appState === "generating" && (
-            <LoadingCard title="Building challenge..." body={prompt} />
+            <LoadingCard title="Building challenge..." body={prompt} onCancel={handleCancelGenerate} />
           )}
 
           {appState === "preview" && protocol && (
@@ -1374,12 +1400,22 @@ function ErrorBox({ message }: { message: string }) {
   );
 }
 
-function LoadingCard({ title, body }: { title: string; body: string }) {
+function LoadingCard({ title, body, onCancel }: { title: string; body: string; onCancel?: () => void }) {
   return (
     <motion.div className="text-center py-16" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <motion.div className="w-12 h-12 mx-auto mb-4 rounded-full border-[3px] border-t-transparent" style={{ borderColor: "#10B981", borderTopColor: "transparent" }} animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
       <p className="text-base font-extrabold" style={{ color: "#172033" }}>{title}</p>
       <p className="line-clamp-1 text-sm font-medium mt-2 max-w-lg mx-auto px-4 py-2 bg-white border" style={{ color: "#526078", borderColor: "#E2E8F0", borderRadius: "999px" }}>{body}</p>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-4 px-5 py-2 text-xs font-extrabold rounded-full bg-white border shadow-sm active:scale-95 transition"
+          style={{ color: "#526078", borderColor: "#E2E8F0" }}
+        >
+          Stop
+        </button>
+      )}
     </motion.div>
   );
 }

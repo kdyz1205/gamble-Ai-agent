@@ -551,6 +551,7 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   model?: string | null;
   language?: "en" | "zh" | "auto";
   context?: Record<string, unknown>;
+  signal?: AbortSignal;
 }): Promise<{
   rawPrompt: string;
   protocol: ProtocolSpecV2;
@@ -566,9 +567,11 @@ export async function compileChallengeProtocol(inputText: string, prefs?: {
   modelAccess?: ModelAccessSummary;
   agentGraph?: AgentGraphTrace;
 }> {
+  const { signal, ...bodyPrefs } = prefs ?? {};
   return apiFetch("/challenges/compile", {
     method: "POST",
-    body: JSON.stringify({ inputText, ...prefs }),
+    signal,
+    body: JSON.stringify({ inputText, ...bodyPrefs }),
   });
 }
 
