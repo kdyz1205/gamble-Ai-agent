@@ -36,6 +36,8 @@ export class CompileRequestError extends Error {
 }
 
 const COMPILE_PROVIDER_TIMEOUT_MS = 40_000;
+const FAST_COMPILE_MAX_TOKENS = 950;
+const FULL_COMPILE_MAX_TOKENS = 2400;
 
 function withCompileTimeout<T>(promise: Promise<T>, providerId: string, model: string): Promise<T> {
   return Promise.race([
@@ -775,6 +777,43 @@ Rules:
 - If cashStakeAllowed is true, you may describe the challenge as cash-compatible, but still require protocol/evidence/identity/risk gates and do not bypass manual review triggers for high stakes.`;
 }
 
+function compileFastSystemPrompt() {
+  const nowIso = new Date().toISOString();
+  return `You are Axelrod, an AI challenge protocol compiler.
+
+Return ONLY compact JSON. Do not output the full ProtocolSpecV2 boilerplate; the server expands your draft into the canonical protocol.
+
+Required compact shape:
+{
+  "title": string,
+  "userFacingSummary": string,
+  "participantMode": "solo"|"head_to_head"|"small_group"|"team_vs_team"|"mass_crowd"|"public_market",
+  "outcomeType": "speed"|"count"|"completion"|"threshold"|"yes_no"|"ranking"|"quality_score"|"prediction"|"location_checkin"|"survival_duration"|"custom",
+  "evidenceProtocol": {"mode": "same_camera_video"|"separate_video"|"live_host_video"|"photo"|"screenshot"|"gps"|"receipt"|"public_oracle"|"platform_metric"|"witness"|"manual_review", "requiredEvidence": string[], "captureInstructions": string[], "invalidEvidenceRules": string[], "requiredMetadata": string[]},
+  "identityProtocol": {"mode": "account_only"|"liveness_phrase"|"left_right_assignment"|"qr_participant_card"|"host_checkin"|"group_lobby_ticket"|"manual_identity_review", "required": boolean, "participantBindings": [{"role":"creator"|"opponent"|"participant"|"host","label":string,"expectedPosition":"left"|"right"|"center"|"any","requiredQrOrCode":boolean}]},
+  "locationProtocol": {"mode":"none"|"nearby_discovery"|"same_place_required"|"walk_to_join"|"geo_fenced_zone"|"live_route"|"mass_local_event","locationPrivacy":"hidden"|"approximate"|"precise_until_challenge_ends"|"precise_live_only"},
+  "timingProtocol": {"startCondition": string, "endCondition": string, "deadline": string, "tieBreaker": string, "allowedAttempts": string},
+  "settlementProtocol": {"mode":"auto_oracle"|"auto_ai_text"|"auto_ai_vision"|"leaderboard"|"host_confirmed"|"peer_confirmed"|"manual_review"|"blocked","winCondition": string,"judgeInstructions": string[],"manualReviewTriggers": string[]},
+  "riskPolicy": {"riskLevel":"safe"|"medium"|"high"|"blocked","allowed":boolean,"warnings":string[],"restrictions":string[],"safeAlternative":string,"blockedReason":string}
+}
+
+Rules:
+- Current server time is ${nowIso}. Never use placeholder or past absolute dates. If the user gives no date, use "24 hours" or "48 hours".
+- Match the user's language. Mixed Chinese/English can stay mixed if that is the clearest user-facing wording.
+- Choose participantMode from intent. Solo/pet/object self-proof does not need an opponent. A named opponent, "vs", "against", or "who is faster" is head_to_head. Nearby/group prompts are small_group. 50+ or leaderboard prompts are mass_crowd. Open prediction markets are public_market.
+- Distinguish counterparty from evidence subject. "I bet my cat can finish food under one minute" is solo unless another bettor/opponent is named.
+- Random challenge requests must become one concrete safe playable challenge.
+- Unsafe/illegal/coercive/alcohol/drug/violence/non-consensual/stalking/chance-based real-money gambling must set riskPolicy.allowed=false and settlementProtocol.mode="blocked"; include a safe alternative.
+- Same-camera physical challenges require left_right_assignment, creator left, opponent right, liveness/QR or spoken identity, and clear full-body continuous video.
+- Video/photo judge instructions must be concrete: actors/subjects, object, start event, decisive event, end state, invalid evidence, and manual-review triggers.
+- Sports/object challenges must require visibility of the object, contact/trajectory/result area, and the decisive event.
+- Pet/feeding challenges must require visible subject, starting state, end state, timer/deadline, and no hidden substitution.
+- Consensual human-interaction challenges must require willing adult participants; unclear consent/age/identity means block or manual review.
+- Nearby prompts use approximate location privacy.
+- Crypto price/weather/public data prompts use public_oracle and include locked source fields in judgeInstructions.
+- If Context.paymentPolicy.cashStakeAllowed is not true, use internal credits/points only.`;
+}
+
 export async function compileProtocolForUser(input: {
   userId: string;
   inputText: string;
@@ -906,20 +945,21 @@ export async function compileProtocolForUser(input: {
       const responseModelAccess =
         provider.id === modelAccess.providerId ? modelAccess : providerDecision;
       const selectedModel = compileModelForProvider(provider, providerDecision.model, providerDecision.tierId);
+      const useFullCompile = process.env.ENABLE_FULL_PROTOCOL_COMPILE === "true";
       try {
-        console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length}`);
+        console.log(`[compile-protocol] calling provider=${provider.id} model=${selectedModel} promptChars=${inputText.length} mode=${useFullCompile ? "full" : "fast"}`);
         const completion = await withCompileTimeout(
           completeOraclePromptWithMetadata({
             providerId: provider.id,
             model: selectedModel,
-            system: compileSystemPrompt(),
+            system: useFullCompile ? compileSystemPrompt() : compileFastSystemPrompt(),
             user: [
               `User prompt: ${inputText}`,
               `Language hint: ${language}`,
               input.context ? `Context: ${JSON.stringify(input.context)}` : null,
-              "Compile the protocol. Return JSON only.",
+              useFullCompile ? "Compile the protocol. Return JSON only." : "Compile the compact protocol draft. Return compact JSON only.",
             ].filter(Boolean).join("\n\n"),
-            maxTokens: 2400,
+            maxTokens: useFullCompile ? FULL_COMPILE_MAX_TOKENS : FAST_COMPILE_MAX_TOKENS,
             temperature: 0.15,
           }),
           provider.id,
@@ -929,7 +969,7 @@ export async function compileProtocolForUser(input: {
           userId: input.userId,
           route: input.route ?? "/api/challenges/compile",
           metadata: completion.metadata,
-          extra: { surface: input.context?.surface ?? null, rawPromptChars: inputText.length },
+          extra: { surface: input.context?.surface ?? null, rawPromptChars: inputText.length, compileMode: useFullCompile ? "full" : "fast" },
         });
 
         let parsed: unknown = null;
