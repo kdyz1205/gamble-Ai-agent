@@ -54,6 +54,23 @@ function browserLanguagePrefersChinese() {
   return languages.some((item) => item.startsWith("zh"));
 }
 
+function voiceMessageLanguage(mode: VoiceLang, text: string): VoiceLang {
+  const detected = detectTextLanguage(text);
+  if (detected) return detected;
+  if (mode !== "auto") return mode;
+  return browserLanguagePrefersChinese() ? "zh" : "en";
+}
+
+function normalizeVoiceTranscript(value: string) {
+  const pushup = "\u4fef\u5367\u6491";
+  return value
+    .replace(/(\d+)\s*\u4e2a\s*push[\s-]*ups?\b/gi, `$1\u4e2a${pushup}`)
+    .replace(/(\d+)\s*\u4e2a\s*push\s*up\b/gi, `$1\u4e2a${pushup}`)
+    .replace(/(\d+)\s*\u4e2a\s*pose\b/gi, `$1\u4e2a${pushup}`)
+    .replace(/(\d+)\s*\u4e2a\s*post\b/gi, `$1\u4e2a${pushup}`)
+    .replace(/\bpush[\s-]*ups?\b/gi, pushup);
+}
+
 export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue, onQuotaChange }: Props) {
   const [input, setInput] = useState(initialValue || "");
   const [listening, setListening] = useState(false);
@@ -103,7 +120,10 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     if (detected === "zh") return "zh-CN";
     if (detected === "en") return "en-US";
     if (browserLanguagePrefersChinese()) return "zh-CN";
-    return undefined;
+    // Auto is optimized for the product's common mixed prompt pattern:
+    // Mandarin sentence + English name/action words ("Jerry", "push-up").
+    // Explicit EN is still available for pure English dictation.
+    return "zh-CN";
   }, [voiceLang]);
 
   const getLanguageHint = useCallback((): "en" | "zh" | undefined => {
@@ -156,21 +176,23 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       });
       if (result.dailyQuota) onQuotaChange?.(result.dailyQuota);
 
-      const finalText = (result.transcript || previewText).trim();
+      const finalText = normalizeVoiceTranscript(result.transcript || previewText).trim();
       if (finalText) {
         // Show in input box; let user review before submitting.
         setInput(finalText);
         setInterim("");
         if (result.usedFallback && result.error) {
+          const messageLang = voiceMessageLanguage(voiceLang, finalText);
           setVoiceError(
-            voiceLang === "zh"
-              ? "AI transcription failed, so this is browser speech preview. Check it before sending."
+            messageLang === "zh"
+              ? "AI 转写暂时失败，现在用的是浏览器预览。请看一眼再发送。"
               : "AI transcription failed, so this is browser speech preview. Check it before sending.",
           );
         }
       } else if (result.error) {
+        const messageLang = voiceMessageLanguage(voiceLang, previewText);
         setVoiceError(
-          voiceLang === "zh"
+          messageLang === "zh"
             ? "语音服务暂时不可用。请选择中文后再试，或直接输入文字。"
             : "Voice transcription is temporarily unavailable. Try again or type it.",
         );
@@ -178,7 +200,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
     } catch {
       // Fallback: use browser preview text
       if (previewText) {
-        setInput(previewText);
+        setInput(normalizeVoiceTranscript(previewText));
         setInterim("");
       }
     } finally {
@@ -212,9 +234,10 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       }
 
       if (finalText) {
-        setInput(prev => prev ? `${prev.trimEnd()} ${finalText.trim()}` : finalText.trim());
+        const normalizedFinal = normalizeVoiceTranscript(finalText.trim());
+        setInput(prev => prev ? `${prev.trimEnd()} ${normalizedFinal}` : normalizedFinal);
       }
-      setInterim(interimText.trim());
+      setInterim(normalizeVoiceTranscript(interimText.trim()));
     };
 
     recognition.onerror = () => {
