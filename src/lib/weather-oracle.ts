@@ -34,6 +34,11 @@ function detectDate(text: string, now = new Date()): { date: string; settlementT
     return { date: iso, settlementTime: settle };
   }
   const lower = text.toLowerCase();
+  if (/\u660e\u5929/.test(lower)) {
+    out.setDate(out.getDate() + 1);
+    out.setHours(23, 59, 0, 0);
+    return { date: dateString(out), settlementTime: out };
+  }
   if (/\btomorrow\b|明天/.test(lower)) out.setDate(out.getDate() + 1);
   else if (/\bthis weekend\b|\bweekend\b/.test(lower)) {
     const day = out.getDay();
@@ -48,12 +53,28 @@ function detectLocation(text: string): string | null {
   const patterns = [
     /\bin\s+([A-Za-z][A-Za-z .'-]{1,60}?)(?:\s+(?:today|tomorrow|this weekend|weekend|next|on|by|over|above|below|under|at|before|\d{4}-\d{2}-\d{2})|[?.!,]|$)/i,
     /\bat\s+([A-Za-z][A-Za-z .'-]{1,60}?)(?:\s+(?:today|tomorrow|this weekend|weekend|next|on|by|over|above|below|under|before|\d{4}-\d{2}-\d{2})|[?.!,]|$)/i,
+    /\b(?:today|tomorrow|weekend|this weekend|next|\u4eca\u5929|\u660e\u5929)\s+([A-Za-z][A-Za-z .'-]{1,60}?)(?:\s*(?:weather|temperature|temp|rain|raining|\u5929\u6c14|\u6c14\u6e29|\u6e29\u5ea6|\u4e0b\u96e8|\u964d\u96e8)|[?.!,]|$)/i,
+    /\b([A-Za-z][A-Za-z .'-]{1,60}?)(?:\s*(?:weather|temperature|temp|rain|raining|\u5929\u6c14|\u6c14\u6e29|\u6e29\u5ea6|\u4e0b\u96e8|\u964d\u96e8))(?:\s|[?.!,]|$)/i,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern)?.[1]?.trim();
     if (match) return match.replace(/\s+/g, " ");
   }
   return null;
+}
+
+function detectInlineAsciiLocation(text: string): string | null {
+  const weatherWord = /weather|temperature|temp|rain|raining|\u5929\u6c14|\u6c14\u6e29|\u6e29\u5ea6|\u4e0b\u96e8|\u964d\u96e8/i;
+  if (!weatherWord.test(text)) return null;
+  const cleaned = text
+    .replace(/\b(today|tomorrow|weekend|this weekend|next|will|it|in|at|on|by|over|under|below|above|not|exceed|no more than|at most|temperature|temp|weather|rain|raining)\b/gi, " ")
+    .replace(/[\u4e00-\u9fff]+/g, " ")
+    .replace(/\d+(?:\.\d+)?\s*(?:degrees?|degree|[fFcC])?/g, " ");
+  const matches = cleaned.match(/[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,4}/g) ?? [];
+  const candidate = matches
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .find((item) => item.length >= 2);
+  return candidate ?? null;
 }
 
 function fahrenheitToCelsius(value: number) {
@@ -98,6 +119,44 @@ function formatValue(value: number, unit: "mm" | "c") {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })}C`;
 }
 
+function detectWeatherMetricLoose(text: string): {
+  metric: WeatherOracleMetric;
+  condition: WeatherOracleCondition;
+  targetValue: number;
+  targetUnit: "mm" | "c";
+} | null {
+  if (!/weather|temperature|temp|high|low|\u5929\u6c14|\u6c14\u6e29|\u6e29\u5ea6/i.test(text)) return null;
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(?:degrees?|degree|Â°?\s*[fFcC]|\u5ea6)?/i);
+  if (!match) return null;
+  const rawValue = Number(match[1]);
+  if (!Number.isFinite(rawValue)) return null;
+  const unitText = (match[0] ?? "c").toLowerCase();
+  const inclusiveBelow = /no more than|not exceed|at most|<=|\u4e0d\u8d85\u8fc7|\u4e0d\u9ad8\u4e8e/.test(text);
+  const condition = /below|under|less than|no more than|not exceed|at most|<=|<|\u4e0d\u8d85\u8fc7|\u4e0d\u9ad8\u4e8e|\u4f4e\u4e8e|\u5c11\u4e8e|\u4e0d\u5230/i.test(text)
+    ? "below"
+    : "above";
+  const target = unitText.includes("f") ? fahrenheitToCelsius(rawValue) : rawValue;
+  return {
+    metric: "temperature_2m_max_c",
+    condition,
+    targetValue: condition === "below" && inclusiveBelow ? target + 0.000001 : target,
+    targetUnit: "c",
+  };
+}
+
+function looksLikeWeatherOracleProtocol(protocol: ProtocolSpecV2) {
+  const text = oracleText([
+    protocol.rawPrompt,
+    protocol.title,
+    protocol.userFacingSummary,
+    protocol.evidenceProtocol.mode,
+    protocol.settlementProtocol.mode,
+    protocol.settlementProtocol.winCondition,
+    ...(protocol.settlementProtocol.judgeInstructions ?? []),
+  ]);
+  return /weather|open-meteo|weather_open_meteo|temperature|temp|rain|raining|\u5929\u6c14|\u6c14\u6e29|\u6e29\u5ea6|\u4e0b\u96e8|\u964d\u96e8/i.test(text);
+}
+
 export function extractWeatherOracleSpec(input: {
   protocol?: ProtocolSpecV2 | null;
   title?: string | null;
@@ -130,7 +189,7 @@ export function extractWeatherOracleSpec(input: {
   const explicitUnit = text.match(/ORACLE_WEATHER_TARGET_UNIT:\s*(mm|c)/i)?.[1] as "mm" | "c" | undefined;
   const explicitSettlementTime = text.match(/ORACLE_SETTLEMENT_TIME:\s*([^\n]+)/i)?.[1]?.trim();
 
-  const detected = detectWeatherMetric(text);
+  const detected = detectWeatherMetricLoose(text) ?? detectWeatherMetric(text);
   const locationName = explicitLocation ?? detectLocation(text);
   const date = explicitDate
     ? { date: explicitDate, settlementTime: new Date(`${explicitDate}T23:59:00.000Z`) }
@@ -163,8 +222,8 @@ export async function weatherProtocolFromPrompt(
   language: ProtocolSpecV2["language"],
   now = new Date(),
 ): Promise<ProtocolSpecV2 | null> {
-  const detected = detectWeatherMetric(rawPrompt);
-  const locationQuery = detectLocation(rawPrompt);
+  const detected = detectWeatherMetricLoose(rawPrompt) ?? detectWeatherMetric(rawPrompt);
+  const locationQuery = detectLocation(rawPrompt) ?? detectInlineAsciiLocation(rawPrompt);
   if (!detected || !locationQuery) return null;
   const location = await resolveWeatherLocation(locationQuery);
   if (!location.ok) {
@@ -332,6 +391,20 @@ export async function judgeWeatherOracle(input: {
         `Open-Meteo snapshot for ${input.spec.locationName} on ${input.spec.date} returned ${input.spec.metric}=${actual}. ` +
         `The locked condition was ${input.spec.condition} ${input.spec.targetValue}. ` +
         `The condition was ${conditionMet ? "true" : "false"}, so ${conditionMet ? "the creator/YES side wins" : "the opponent/NO side wins"}.`,
+      eventMetrics: {
+        source: "Open-Meteo",
+        locationName: input.spec.locationName,
+        latitude: input.spec.latitude,
+        longitude: input.spec.longitude,
+        date: input.spec.date,
+        metric: input.spec.metric,
+        actualValue: actual,
+        targetValue: input.spec.targetValue,
+        targetUnit: input.spec.targetUnit,
+        condition: input.spec.condition,
+        conditionMet,
+        forecast: first,
+      },
       providerCall: {
         providerId: "open-meteo",
         providerLabel: "Open-Meteo",
@@ -346,5 +419,52 @@ export async function judgeWeatherOracle(input: {
         responseFormat: "json",
       },
     },
+  };
+}
+
+export async function normalizeWeatherOracleProtocol(
+  protocol: ProtocolSpecV2,
+  now = new Date(),
+): Promise<ProtocolSpecV2> {
+  const existing = extractWeatherOracleSpec({ protocol, now });
+  if (existing || !looksLikeWeatherOracleProtocol(protocol)) return protocol;
+
+  const compiled = await weatherProtocolFromPrompt(
+    oracleText([
+      protocol.rawPrompt,
+      protocol.title,
+      protocol.userFacingSummary,
+      protocol.settlementProtocol.winCondition,
+      ...(protocol.settlementProtocol.judgeInstructions ?? []),
+    ]),
+    protocol.language,
+    now,
+  );
+  if (!compiled) return protocol;
+
+  return {
+    ...protocol,
+    outcomeType: "prediction",
+    evidenceProtocol: compiled.evidenceProtocol,
+    timingProtocol: {
+      ...protocol.timingProtocol,
+      endCondition: compiled.timingProtocol.endCondition,
+      deadline: compiled.timingProtocol.deadline,
+      tieBreaker: compiled.timingProtocol.tieBreaker,
+      allowedAttempts: compiled.timingProtocol.allowedAttempts,
+    },
+    settlementProtocol: compiled.settlementProtocol,
+    riskPolicy: {
+      ...protocol.riskPolicy,
+      warnings: Array.from(new Set([
+        ...protocol.riskPolicy.warnings,
+        ...compiled.riskPolicy.warnings,
+      ])),
+      restrictions: Array.from(new Set([
+        ...protocol.riskPolicy.restrictions,
+        ...compiled.riskPolicy.restrictions,
+      ])),
+    },
+    aiBudgetPolicy: compiled.aiBudgetPolicy,
   };
 }

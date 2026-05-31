@@ -19,6 +19,10 @@ export const eventPublicInclude = {
     },
   },
   _count: { select: { entries: true, leaderboardEntries: true } },
+  resolutions: {
+    orderBy: { updatedAt: "desc" },
+    take: 1,
+  },
 } satisfies Prisma.ChallengeEventInclude;
 
 export function isEventProtocol(protocol: ProtocolSpecV2 | null | undefined) {

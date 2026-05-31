@@ -19,6 +19,9 @@ const LAVENDER = "#E9D5FF";
 const PINK = "#FFD1DC";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const RECOMMENDED_VIDEO_SECONDS = 60;
 
 type Mode = null | "upload" | "record" | "photo" | "url";
 
@@ -35,6 +38,16 @@ function sanitizeFilename(name: string): string {
 function evidenceBlobPathname(challengeId: string, filename: string): string {
   const safe = sanitizeFilename(filename);
   return `evidence/${challengeId}/${Date.now()}-${safe}`;
+}
+
+function validateEvidenceFile(file: File): string | null {
+  if (file.type.startsWith("video") && file.size > MAX_VIDEO_BYTES) {
+    return "Video is too large for this beta. Keep it under 100 MB or trim/compress it first.";
+  }
+  if (file.type.startsWith("image") && file.size > MAX_IMAGE_BYTES) {
+    return "Image is too large for this beta. Keep it under 20 MB or compress it first.";
+  }
+  return null;
 }
 
 function supportedRecordingMimeType(): string | undefined {
@@ -173,6 +186,11 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     input.onchange = () => {
       const f = input.files?.[0];
       if (!f) return;
+      const validationError = validateEvidenceFile(f);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(f);
       setPreviewUrl(URL.createObjectURL(f));
@@ -237,8 +255,16 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType || recorder.mimeType || "video/webm" });
-      setRecordedBlob(blob);
-      setRecordedDuration((Date.now() - recordStartRef.current) / 1000);
+      const durationSec = (Date.now() - recordStartRef.current) / 1000;
+      if (blob.size > MAX_VIDEO_BYTES) {
+        setError("Recording is too large for this beta. Keep clips under 100 MB or upload a compressed file.");
+      } else if (durationSec > RECOMMENDED_VIDEO_SECONDS) {
+        setError("Recording saved, but clips over 60 seconds may be slower and may need manual review.");
+        setRecordedBlob(blob);
+      } else {
+        setRecordedBlob(blob);
+      }
+      setRecordedDuration(durationSec);
       chunksRef.current = [];
     };
     mediaRecorderRef.current = recorder;
@@ -285,6 +311,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const getFileToUpload = (): File | null => {
     if (file) return file;
     if (recordedBlob) {
+      if (recordedBlob.size > MAX_VIDEO_BYTES) return null;
       return new File([recordedBlob], `recording-${Date.now()}.webm`, { type: recordedBlob.type || "video/webm" });
     }
     return null;
@@ -309,6 +336,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
 
       // Try S3/R2-style direct upload first, then fall back to Vercel Blob.
       if (f) {
+        const validationError = validateEvidenceFile(f);
+        if (validationError) throw new Error(validationError);
         setUploading(true);
         setUploadProgress(0);
         try {

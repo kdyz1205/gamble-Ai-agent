@@ -8,6 +8,7 @@ import {
   isEventProtocol,
 } from "@/lib/challenge-events";
 import { parseProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { normalizeWeatherOracleProtocol } from "@/lib/weather-oracle";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -49,10 +50,11 @@ export async function POST(req: NextRequest) {
   const source = body && typeof body === "object" && !Array.isArray(body)
     ? body as Record<string, unknown>
     : {};
-  const protocol = parseProtocolSpecV2(source.protocol);
-  if (!protocol) {
+  const parsedProtocol = parseProtocolSpecV2(source.protocol);
+  if (!parsedProtocol) {
     return Response.json({ error: "ProtocolSpecV2 protocol is required." }, { status: 400 });
   }
+  const protocol = await normalizeWeatherOracleProtocol(parsedProtocol);
   if (!protocol.riskPolicy.allowed) {
     return Response.json({
       error: protocol.riskPolicy.blockedReason || "This event protocol is blocked by safety policy.",

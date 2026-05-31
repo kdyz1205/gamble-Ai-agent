@@ -498,9 +498,32 @@ model ChallengeEvent {
   creator            User               @relation("ChallengeEventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   entries            EventEntry[]
   leaderboardEntries LeaderboardEntry[]
+  resolutions        EventResolution[]
 
   @@index([creatorId, createdAt])
   @@index([status, createdAt])
+}
+
+model EventResolution {
+  id                 String    @id @default(cuid())
+  eventId            String    @unique
+  source             String
+  status             String
+  winnerId           String?
+  confidence         Float?
+  recommendation     String?
+  evidenceQuality    String?
+  reasoning          String?
+  oracleSnapshotJson String?
+  blockingIssues     String?
+  resolvedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  event ChallengeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+  @@index([winnerId])
 }
 
 model EventEntry {

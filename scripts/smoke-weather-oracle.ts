@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import {
   extractWeatherOracleSpec,
   judgeWeatherOracle,
+  normalizeWeatherOracleProtocol,
   weatherProtocolFromPrompt,
 } from "../src/lib/weather-oracle";
+import type { ProtocolSpecV2 } from "../src/lib/protocol-spec-v2";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -33,6 +35,88 @@ async function main() {
   assert.equal(extracted.source, "Open-Meteo");
   assert.equal(extracted.metric, "precipitation_sum_mm");
   assert.equal(extracted.condition, "above");
+
+  const chineseProtocol = await weatherProtocolFromPrompt("明天 San Jose 温度不超过 30 度", "zh", compileNow);
+  assert.ok(chineseProtocol, "Chinese mixed weather prompt should compile to Open-Meteo oracle protocol");
+  const chineseExtracted = extractWeatherOracleSpec({ protocol: chineseProtocol });
+  assert.ok(chineseExtracted, "Chinese weather protocol should extract locked oracle fields");
+  assert.equal(chineseExtracted.locationName.includes("San Jose"), true);
+  assert.equal(chineseExtracted.metric, "temperature_2m_max_c");
+  assert.equal(chineseExtracted.condition, "below");
+  assert.ok(
+    chineseExtracted.targetValue > 30 && chineseExtracted.targetValue < 30.001,
+    "not exceed 30C should be represented as an inclusive <= 30 threshold",
+  );
+
+  const genericWeatherEvent: ProtocolSpecV2 = {
+    version: "2.0",
+    title: "San Jose明天温度不超过30度",
+    userFacingSummary: "预测明天 San Jose 的最高温度是否不超过30摄氏度。",
+    rawPrompt: "明天 San Jose 温度不超过 30 度",
+    language: "zh",
+    participantMode: "public_market",
+    outcomeType: "yes_no",
+    evidenceProtocol: {
+      mode: "public_oracle",
+      requiredEvidence: ["Official weather data for San Jose."],
+      captureInstructions: ["Resolve from official weather data."],
+      invalidEvidenceRules: ["Screenshots do not override the oracle."],
+      requiredMetadata: ["created_at"],
+    },
+    identityProtocol: {
+      mode: "account_only",
+      required: true,
+      participantBindings: [
+        { role: "creator", label: "Creator", expectedPosition: "any" },
+        { role: "participant", label: "Participant", expectedPosition: "any" },
+      ],
+      autoSettlementRequiresIdentityConfidence: 0.85,
+    },
+    locationProtocol: {
+      mode: "nearby_discovery",
+      joinRadiusMeters: 500,
+      challengeRadiusMeters: 500,
+      requiresLiveLocation: true,
+      requiresCoPresence: false,
+      locationPrivacy: "approximate",
+    },
+    timingProtocol: {
+      startCondition: "Published.",
+      endCondition: "Weather data is available.",
+      deadline: "48 hours",
+      allowedAttempts: "One prediction.",
+    },
+    settlementProtocol: {
+      mode: "auto_oracle",
+      winCondition: "Temperature in San Jose tomorrow is 30C or below.",
+      judgeInstructions: [
+        "DATA_SOURCE_KEY: weather_open_meteo",
+        "DATA_SOURCE_PROVIDER: Open-Meteo",
+      ],
+      autoSettleConfidenceThreshold: 0.85,
+      manualReviewTriggers: ["Ambiguous weather data."],
+    },
+    riskPolicy: {
+      riskLevel: "safe",
+      allowed: true,
+      warnings: [],
+      restrictions: [],
+    },
+    aiBudgetPolicy: {
+      compileMaxTokens: 1800,
+      judgeMaxTokens: 1200,
+      maxVisionFrames: 0,
+      allowEscalation: false,
+      estimatedCostTier: "low",
+    },
+  };
+  const normalized = await normalizeWeatherOracleProtocol(genericWeatherEvent, compileNow);
+  const normalizedSpec = extractWeatherOracleSpec({ protocol: normalized });
+  assert.ok(normalizedSpec, "generic event weather protocol should normalize into locked oracle fields");
+  assert.ok(
+    normalized.settlementProtocol.judgeInstructions.some((line) => line.startsWith("ORACLE_WEATHER_LATITUDE:")),
+    "normalized event must lock latitude",
+  );
 
   const judgeSpec = {
     ...extracted,

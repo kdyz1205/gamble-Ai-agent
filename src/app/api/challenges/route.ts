@@ -9,6 +9,7 @@ import { generateLivenessPhrase } from "@/lib/liveness";
 import type { ChallengeSpec } from "@/lib/challenge-spec";
 import { createChallengeEventFromProtocol, isEventProtocol } from "@/lib/challenge-events";
 import { parseProtocolSpecV2, protocolSpecFromChallengeSpec, protocolToLegacyChallengeFields, type ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
+import { normalizeWeatherOracleProtocol } from "@/lib/weather-oracle";
 import { legacyProtocolSpecFromRequest } from "@/lib/legacy-protocol";
 import { isStakeTokenAllowed, moneyModeBlock, normalizeStakeToken, paymentJurisdictionFromRequest } from "@/lib/payment-policy";
 import { parseChallengeDeadline } from "@/lib/challenge-time";
@@ -160,6 +161,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     let protocolSpec = protocolFromRequest(body as Record<string, unknown>);
+    if (protocolSpec) protocolSpec = await normalizeWeatherOracleProtocol(protocolSpec);
     if (protocolSpec && !protocolSpec.riskPolicy.allowed) {
       return Response.json(
         {

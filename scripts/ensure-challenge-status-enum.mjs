@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Client } from "pg";
 
 const STATUSES = [
@@ -283,6 +284,38 @@ async function main() {
         END IF;
       END $$
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "EventResolution" (
+        "id" TEXT NOT NULL,
+        "eventId" TEXT NOT NULL,
+        "source" TEXT NOT NULL,
+        "status" TEXT NOT NULL,
+        "winnerId" TEXT,
+        "confidence" DOUBLE PRECISION,
+        "recommendation" TEXT,
+        "evidenceQuality" TEXT,
+        "reasoning" TEXT,
+        "oracleSnapshotJson" TEXT,
+        "blockingIssues" TEXT,
+        "resolvedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EventResolution_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "EventResolution_eventId_key" ON "EventResolution" ("eventId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EventResolution_status_updatedAt_idx" ON "EventResolution" ("status", "updatedAt")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS "EventResolution_winnerId_idx" ON "EventResolution" ("winnerId")`);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EventResolution_eventId_fkey') THEN
+          ALTER TABLE "EventResolution" ADD CONSTRAINT "EventResolution_eventId_fkey"
+          FOREIGN KEY ("eventId") REFERENCES "ChallengeEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+    console.log("[status-enum] ensured EventResolution table.");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS "EventEntry" (

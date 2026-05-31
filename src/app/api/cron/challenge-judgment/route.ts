@@ -5,6 +5,7 @@ import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import { AI_REVIEW_STATUSES, EVIDENCE_WINDOW_STATUSES } from "@/lib/challenge-state-machine";
+import { resolveOracleEvent } from "@/lib/event-resolution";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,7 +25,7 @@ function authorize(req: NextRequest, secret: string): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-async function runCron() {
+export async function runCron() {
   const now = new Date();
 
   // (1) Sweep stuck async JudgeJobs first so their status stops blocking
@@ -83,11 +84,64 @@ async function runCron() {
     }
   }
 
+  const dueOracleEvents = await prisma.challengeEvent.findMany({
+    where: { status: { in: ["open", "submissions_open", "closed", "needs_review"] } },
+    select: {
+      id: true,
+      title: true,
+    },
+    take: 20,
+    orderBy: { updatedAt: "asc" },
+  });
+
+  const eventOutcomes: Array<{
+    eventId: string;
+    title: string;
+    status: "skipped" | "finalized" | "not_due" | "needs_review" | "needs_repair" | "error";
+    detail?: unknown;
+  }> = [];
+
+  for (const event of dueOracleEvents) {
+    try {
+      const result = await resolveOracleEvent(event.id, {
+        kind: "cron",
+      }, now);
+      if (!result.ok) {
+        eventOutcomes.push({
+          eventId: event.id,
+          title: event.title,
+          status: result.status === "not_oracle" ? "skipped" : "error",
+          detail: result.error,
+        });
+        continue;
+      }
+      eventOutcomes.push({
+        eventId: event.id,
+        title: event.title,
+        status: result.status === "resolved" ? "finalized" : result.status,
+        detail: {
+          winnerId: result.resolution.winnerId,
+          recommendation: result.resolution.recommendation,
+          confidence: result.resolution.confidence,
+          resolutionStatus: result.resolution.status,
+        },
+      });
+    } catch (e) {
+      eventOutcomes.push({
+        eventId: event.id,
+        title: event.title,
+        status: "error",
+        detail: e instanceof Error ? e.message.slice(0, 200) : "unknown",
+      });
+    }
+  }
+
   return {
     sweptStuckJobs: sweepResult.swept,
     transitionedToJudging: transitioned.count,
     pendingCount: pending.length,
     outcomes,
+    eventOutcomes,
   };
 }
 
