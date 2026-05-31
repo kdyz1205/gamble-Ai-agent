@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
 
-// Axelrod palette — only the tokens this component actually uses.
+// StepOne palette — only the tokens this component actually uses.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";

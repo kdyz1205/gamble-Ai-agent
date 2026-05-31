@@ -152,7 +152,7 @@ export default function RadarPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 md:px-8">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#047857]">Axelrod</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#047857]">StepOne</p>
             <h1 className="text-2xl font-black md:text-3xl">{labels.title}</h1>
           </div>
           <div className="flex items-center gap-2">

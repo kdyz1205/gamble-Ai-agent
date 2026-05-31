@@ -130,7 +130,7 @@ async function runCoreNavSuite(proof, page, labelPrefix = "") {
   ], labelPrefix);
 
   await checkRoute(proof, page, "/calculator", [
-    "Will Axelrod make money?",
+    "Will StepOne make money?",
     "Founder math",
   ], labelPrefix);
   await page.getByRole("button", { name: "Growth" }).click();

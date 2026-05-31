@@ -30,7 +30,7 @@ interface Props {
   onActionItem?: (a: ActionItem) => void;
 }
 
-// Axelrod canonical palette.
+// StepOne canonical palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";

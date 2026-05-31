@@ -240,7 +240,7 @@ function toMarkdown(results: Array<Awaited<ReturnType<typeof evaluateCase>>>) {
   }, {});
   const failed = results.filter((row) => !row.pass);
   return [
-    "# GambleAI 100 Challenge Crack Matrix",
+    "# StepOne 100 Challenge Crack Matrix",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
@@ -275,7 +275,7 @@ async function main() {
   }
 
   const failed = results.filter((row) => !row.pass);
-  const reportPath = "docs/evals/gambleai-100-challenge-crack-matrix-2026-05-23.md";
+  const reportPath = "docs/evals/StepOne-100-challenge-crack-matrix-2026-05-23.md";
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, toMarkdown(results), "utf8");
 

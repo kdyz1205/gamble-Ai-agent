@@ -11,11 +11,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     where: { id },
     select: { id: true, title: true, description: true, proposition: true, isPublic: true },
   }).catch(() => null);
-  if (!challenge) return { title: "Challenge not found - Axelrod" };
-  const description = challenge.proposition || challenge.description || "Join an AI-refereed challenge on Axelrod.";
+  if (!challenge) return { title: "Challenge not found - StepOne" };
+  const description = challenge.proposition || challenge.description || "Join an AI-refereed challenge on StepOne.";
   const url = `${APP_URL}/challenge/${challenge.id}`;
   return {
-    title: `${challenge.title} - Axelrod Challenge`,
+    title: `${challenge.title} - StepOne Challenge`,
     description,
     alternates: { canonical: url },
     robots: challenge.isPublic ? { index: true, follow: true } : { index: false, follow: false },
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title: challenge.title,
       description,
       url,
-      siteName: "Axelrod",
+      siteName: "StepOne",
       type: "website",
     },
     twitter: {

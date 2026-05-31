@@ -227,7 +227,7 @@ function normalizeVerdict(value: unknown): LlmVerdict | null {
   };
 }
 
-const SYSTEM = `You are evaluating GambleAI challenge prompts against the current product architecture.
+const SYSTEM = `You are evaluating StepOne challenge prompts against the current product architecture.
 
 This is a deliberately wide-spectrum eval. The 140 prompts are intentionally different domains, evidence types, risk profiles, oracle needs, and settlement modes. Do not assume one prompt's answer from another prompt.
 
@@ -336,7 +336,7 @@ function renderMarkdown(cases: EvalCase[], results: LlmVerdict[], metadata: unkn
   const byId = new Map(results.map((row) => [row.id, row]));
   const summary = summarize(results);
   return [
-    "# GambleAI Diverse 140 Judgeability Eval",
+    "# StepOne Diverse 140 Judgeability Eval",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
@@ -383,7 +383,7 @@ async function main() {
   const providerId = process.env.LLM_EVAL_PROVIDER || process.env.ORACLE_DEFAULT_PROVIDER?.replaceAll('"', "") || "openai";
   const model = process.env.LLM_EVAL_MODEL || "gpt-5-mini";
   const batchSize = Math.max(1, Number(process.env.LLM_EVAL_BATCH_SIZE ?? 10));
-  const reportPath = process.env.LLM_EVAL_REPORT_PATH || "docs/evals/gambleai-140-diverse-judgeability-2026-05-24.md";
+  const reportPath = process.env.LLM_EVAL_REPORT_PATH || "docs/evals/StepOne-140-diverse-judgeability-2026-05-24.md";
 
   if (!live) {
     console.log(JSON.stringify({

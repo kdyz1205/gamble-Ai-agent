@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 const TEST_PREFIX_RE =
   /^(codex|test|e2e|radar|agent|rob|rej|vid|video|discover|close|manual|smoke|diag|load|lt|luckyplay)[._-]?/i;
-const INTERNAL_TEST_DOMAINS = new Set(["example.com", "luckyplay.test", "test.local", "gambleai.local", "t.io"]);
+const INTERNAL_TEST_DOMAINS = new Set(["example.com", "luckyplay.test", "test.local", "StepOne.local", "t.io"]);
 
 function redactEmail(email: string) {
   const [local = "", domain = ""] = email.split("@");

@@ -1,8 +1,8 @@
-# Axelrod
+# StepOne
 
 Proprietary / confidential. See [LICENSE](./LICENSE). Do not share, fork, or mirror.
 
-Axelrod is a chat-first AI referee for real-world challenges. Users describe a
+StepOne is a chat-first AI referee for real-world challenges. Users describe a
 challenge in natural language, AI compiles it into a structured protocol with
 rules, evidence, identity checks, and oracle attachments when relevant. An
 opponent accepts via a shareable link, both sides submit evidence, and the AI

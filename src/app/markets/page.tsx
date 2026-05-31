@@ -446,7 +446,7 @@ export default function MarketsPage() {
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-            Axelrod
+            StepOne
           </Link>
           <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>
             {copy.manager}

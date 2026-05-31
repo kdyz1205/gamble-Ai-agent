@@ -11,7 +11,7 @@ interface Props {
   onSuccess: () => void;
 }
 
-// Axelrod canonical palette.
+// StepOne canonical palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -206,7 +206,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <BrandMark className="h-16 w-16" label="Axelrod ready" />
+                        <BrandMark className="h-16 w-16" label="StepOne ready" />
                       </motion.div>
                       <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
                         You&apos;re in! Let&apos;s play
@@ -241,7 +241,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       transition={{ duration: 0.25 }}
                     >
                       <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join Axelrod" : "Welcome back"}
+                        {mode === "register" ? "Join StepOne" : "Welcome back"}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"

@@ -294,7 +294,7 @@ function normalizeVerdict(value: unknown): LlmVerdict | null {
   };
 }
 
-const SYSTEM = `You are evaluating GambleAI challenge prompts against the current product architecture.
+const SYSTEM = `You are evaluating StepOne challenge prompts against the current product architecture.
 
 Current implemented product capabilities:
 - Protocol compiler can represent AI vision challenges, same-camera challenges, solo/pet claims, screenshot/platform evidence, GPS/location protocols, crypto price oracle protocols, manual review, mass-event leaderboards, and blocked challenges.
@@ -405,7 +405,7 @@ function renderMarkdown(cases: EvalCase[], results: LlmVerdict[], metadata: unkn
   const byId = new Map(results.map((row) => [row.id, row]));
   const summary = summarize(results);
   return [
-    "# GambleAI 140 LLM Judgeability Eval",
+    "# StepOne 140 LLM Judgeability Eval",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
@@ -448,7 +448,7 @@ async function main() {
   const providerId = process.env.LLM_EVAL_PROVIDER || process.env.ORACLE_DEFAULT_PROVIDER?.replaceAll('"', "") || "openai";
   const model = process.env.LLM_EVAL_MODEL || "gpt-5-mini";
   const batchSize = Math.max(1, Number(process.env.LLM_EVAL_BATCH_SIZE ?? 10));
-  const reportPath = process.env.LLM_EVAL_REPORT_PATH || "docs/evals/gambleai-140-llm-judgeability-2026-05-23.md";
+  const reportPath = process.env.LLM_EVAL_REPORT_PATH || "docs/evals/StepOne-140-llm-judgeability-2026-05-23.md";
 
   if (!live) {
     const dry = {

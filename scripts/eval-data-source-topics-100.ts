@@ -43,7 +43,7 @@ function summarize() {
 function renderMarkdown() {
   const summary = summarize();
   return [
-    "# GambleAI 100 New Topic Data Source Catalog",
+    "# StepOne 100 New Topic Data Source Catalog",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
@@ -68,7 +68,7 @@ function renderMarkdown() {
 
 function main() {
   validateTopics();
-  const reportPath = "docs/evals/gambleai-100-new-topic-data-sources-2026-05-24.md";
+  const reportPath = "docs/evals/StepOne-100-new-topic-data-sources-2026-05-24.md";
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, renderMarkdown(), "utf8");
   console.log(JSON.stringify({

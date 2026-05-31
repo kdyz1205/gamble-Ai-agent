@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-// Axelrod palette
+// StepOne palette
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -184,7 +184,7 @@ export default function CalculatorPage() {
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          Axelrod
+          StepOne
         </Link>
         <span className="text-xs font-semibold px-3 py-1.5"
           style={{ color: NAVY_DIM, background: NAVY_HAIR, borderRadius: "9999px" }}>
@@ -196,10 +196,10 @@ export default function CalculatorPage() {
         {/* Intro — plain language explainer */}
         <section>
           <h1 className="text-3xl font-extrabold mb-2 tracking-tight" style={{ color: NAVY }}>
-            Will Axelrod make money?
+            Will StepOne make money?
           </h1>
           <p className="text-base font-medium leading-relaxed" style={{ color: NAVY_DIM }}>
-            Play with the sliders below to model Axelrod&apos;s economics.
+            Play with the sliders below to model StepOne&apos;s economics.
             The calculator tells you if the business is profitable at those numbers,
             and breaks down exactly where revenue comes from and where money is spent.
           </p>
@@ -276,7 +276,7 @@ export default function CalculatorPage() {
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Growth</p>
             <Slider
               label="Monthly active users"
-              explain="How many unique people use Axelrod in a month."
+              explain="How many unique people use StepOne in a month."
               value={inputs.mau}
               min={100} max={10_000_000} step={100}
               format={fmtInt}

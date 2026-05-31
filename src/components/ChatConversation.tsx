@@ -6,7 +6,7 @@ import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
 import BrandMark from "@/components/BrandMark";
 
 /**
- * Axelrod chat thread. Each Turn is either a plain user message, a plain
+ * StepOne chat thread. Each Turn is either a plain user message, a plain
  * AI message, or an AI message with an inline structured card slotted below
  * the text (used for the current / updated draft).
  *
@@ -29,7 +29,7 @@ interface Props {
   isAiThinking: boolean; // shows the typing indicator as the final row
 }
 
-// Axelrod palette
+// StepOne palette
 const PEACH = "#FED7AA";
 const PEACH_DARK = "#FDBA74";
 const PEACH_TEXT = "#7C2D12";
@@ -48,9 +48,9 @@ function AIAvatar({ animate }: { animate: boolean }) {
       }}
       animate={animate ? { scale: [1, 1.04, 1] } : { scale: 1 }}
       transition={animate ? { duration: 3, repeat: Infinity, ease: "easeInOut" } : { duration: 0 }}
-      aria-label="Axelrod AI"
+      aria-label="StepOne AI"
     >
-      <BrandMark className="h-7 w-7" label="Axelrod AI" />
+      <BrandMark className="h-7 w-7" label="StepOne AI" />
     </motion.div>
   );
 }

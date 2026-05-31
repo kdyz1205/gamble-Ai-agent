@@ -96,9 +96,9 @@ const PROVIDER_DISPLAY_COPY: Record<string, { company: string; family: string; f
   mistral: { company: "Mistral", family: "Mistral", free: false },
 };
 
-const REFERRAL_STORAGE_KEY = "axelrod_referral";
-const GTM_STORAGE_KEY = "axelrod_gtm";
-const MODEL_TIER_STORAGE_KEY = "axelrod_model_tier";
+const REFERRAL_STORAGE_KEY = "StepOne_referral";
+const GTM_STORAGE_KEY = "StepOne_gtm";
+const MODEL_TIER_STORAGE_KEY = "StepOne_model_tier";
 
 function withLaunchTracking(path: string, username?: string | null) {
   if (typeof window === "undefined") return path;
@@ -954,7 +954,7 @@ export default function Home() {
       <header className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
         <button onClick={reset} className="flex items-center gap-2 text-base font-black tracking-tight" style={{ color: "#172033" }}>
           <BrandMark className="h-9 w-9" />
-          <span>Axelrod</span>
+          <span>StepOne</span>
         </button>
         <div className="flex items-center gap-2 sm:gap-3">
           {appState !== "idle" && (
@@ -1043,7 +1043,7 @@ export default function Home() {
                   Bet anything you can prove.
                 </h1>
                 <p className="mt-5 max-w-2xl text-base font-semibold leading-relaxed sm:text-xl" style={{ color: "#526078" }}>
-                  Say it once. Axelrod turns it into a challenge your friend can join, record, and settle.
+                  Say it once. StepOne turns it into a challenge your friend can join, record, and settle.
                 </p>
                 <div className="mt-7">
                   {error && <ErrorBox message={error} />}
@@ -1277,7 +1277,7 @@ function PublishedLaunchKit({
         },
         {
           label: "公开发布",
-          body: `来试试我的 Axelrod 挑战：${title}\n${shareLink}`,
+          body: `来试试我的 StepOne 挑战：${title}\n${shareLink}`,
         },
       ]
     : [
@@ -1291,7 +1291,7 @@ function PublishedLaunchKit({
         },
         {
           label: "Public post",
-          body: `Try my Axelrod challenge: ${title}\n${shareLink}`,
+          body: `Try my StepOne challenge: ${title}\n${shareLink}`,
         },
       ];
 

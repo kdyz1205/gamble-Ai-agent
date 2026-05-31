@@ -702,7 +702,7 @@ function repairRandomProtocolIfGeneric(protocol: ProtocolSpecV2, language: Proto
 
 function compileSystemPrompt() {
   const nowIso = new Date().toISOString();
-  return `You are Axelrod, an AI challenge protocol compiler.
+  return `You are StepOne, an AI challenge protocol compiler.
 
 You do not generate only a title or casual rules. You compile a natural-language challenge idea into ProtocolSpecV2 JSON.
 
@@ -781,7 +781,7 @@ Rules:
 
 function compileFastSystemPrompt() {
   const nowIso = new Date().toISOString();
-  return `You are Axelrod. Compile the user's challenge into SHORT JSON only. Current time: ${nowIso}.
+  return `You are StepOne. Compile the user's challenge into SHORT JSON only. Current time: ${nowIso}.
 
 Return under 220 words. Arrays max 1 short string. No markdown. Close JSON.
 

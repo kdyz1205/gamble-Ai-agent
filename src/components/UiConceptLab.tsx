@@ -127,7 +127,7 @@ const states: LabStateOption[] = [
 ];
 
 const fixture = {
-  appName: "Axelrod",
+  appName: "StepOne",
   prompt: "Challenge Jerry: I can do 20 pushups in one minute.",
   title: "Push-up sprint",
   summary: "Alex and Jerry compete to finish 20 valid pushups. Fastest valid finish wins.",
@@ -160,7 +160,7 @@ const stateCopy: Record<LabState, { headline: string; detail: string; action: st
   },
   loading: {
     headline: "Building challenge",
-    detail: "Axelrod is turning the prompt into a playable challenge.",
+    detail: "StepOne is turning the prompt into a playable challenge.",
     action: "Building",
   },
   logged_out: {
@@ -254,7 +254,7 @@ export default function UiConceptLab() {
             <BrandMark className="h-10 w-10 rounded-2xl border border-emerald-100 bg-emerald-50 p-1.5 shadow-sm" />
             <div className="min-w-0">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700">UI Lab</p>
-              <h1 className="truncate text-lg font-black tracking-[-0.03em]">Axelrod screens</h1>
+              <h1 className="truncate text-lg font-black tracking-[-0.03em]">StepOne screens</h1>
             </div>
           </div>
 

@@ -7,7 +7,7 @@ import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
  * Floating pastel light orbs that drift slowly across the page.
  * Mounted globally in layout.tsx; sits at z-index -1 so all content layers above.
  *
- * Per Axelrod design spec — replaces hard-edged ambient blobs with breathing,
+ * Per StepOne design spec — replaces hard-edged ambient blobs with breathing,
  * cotton-candy gradient halos that hint at depth without a busy texture.
  *
  * Performance note: the 4 overlapping blur(90-150px) filters running at 60fps

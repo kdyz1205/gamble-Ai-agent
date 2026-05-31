@@ -89,7 +89,7 @@ h1{font-size:58px;letter-spacing:-.052em;line-height:.96;margin:0}.thesis{font-s
 .glass{background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.9);box-shadow:0 28px 90px rgba(15,23,42,.10);backdrop-filter:blur(22px)}.card{border:1px solid ${base.border};background:#fff;border-radius:24px;box-shadow:0 20px 70px rgba(15,23,42,.08)}
 .label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#059669;font-weight:950}.muted{color:#64748B}.btn{border:0;border-radius:999px;background:#34D399;color:#052E1A;padding:13px 20px;font-weight:950}.btn2{border:1px solid ${base.border};border-radius:999px;background:#fff;color:#111827;padding:12px 18px;font-weight:900}
 ${theme}
-</style></head><body><main class="screen"><div class="top"><div class="brand"><div class="logo">A</div><span>Axelrod</span></div><div class="tag">${title}</div></div>${body}<div style="position:absolute;right:38px;bottom:24px;color:#94A3B8;font-size:12px;font-weight:800">${thesis}</div></main></body></html>`;
+</style></head><body><main class="screen"><div class="top"><div class="brand"><div class="logo">A</div><span>StepOne</span></div><div class="tag">${title}</div></div>${body}<div style="position:absolute;right:38px;bottom:24px;color:#94A3B8;font-size:12px;font-weight:800">${thesis}</div></main></body></html>`;
 }
 
 function commandCenter() {
@@ -164,7 +164,7 @@ function cameraFirst() {
   <aside class="card" style="padding:24px;background:#F8FAFC;color:#111827">
     <div class="label">Identity sentence</div>
     <h1 style="font-size:42px;margin:12px 0">One line, no codes.</h1>
-    <p class="thesis">“I am Kevin on the left. Jerry is on the right. Axelrod start.”</p>
+    <p class="thesis">“I am Kevin on the left. Jerry is on the right. StepOne start.”</p>
     ${miniRows(["full body visible", "no cuts", "say names", "show timer", "AI review"])}
   </aside>
 </section>`,
@@ -222,7 +222,7 @@ function cardStack() {
     body: `
 <section style="display:grid;grid-template-columns:520px 1fr;gap:44px;align-items:center;height:760px">
   <div>
-    <h1>Less text.<br/>One choice.</h1><p class="thesis">Instead of dumping rules, Axelrod shows a stack: who, proof, identity, judge, settle.</p>
+    <h1>Less text.<br/>One choice.</h1><p class="thesis">Instead of dumping rules, StepOne shows a stack: who, proof, identity, judge, settle.</p>
   </div>
   <div style="position:relative;height:620px">
     ${stackCard(40, 24, "5", "Settle", "Auto only if gates pass", "#E0F2FE")}
