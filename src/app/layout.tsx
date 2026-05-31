@@ -5,11 +5,11 @@ import SoftBackground from "@/components/SoftBackground";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "StepOne - AI Referee for Real-World Challenges",
+  title: "stubborn - AI Referee for Real-World Challenges",
   description:
     "Turn real-world challenges into playable, provable games with rules, evidence, AI judging, and credits.",
   icons: {
-    icon: "/brand/stepone-mark.svg",
+    icon: "/brand/stubborn-mark.svg",
   },
 };
 

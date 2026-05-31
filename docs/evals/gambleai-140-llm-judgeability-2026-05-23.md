@@ -1,4 +1,4 @@
-# GambleAI 140 LLM Judgeability Eval
+# stubborn 140 LLM Judgeability Eval
 
 Generated: 2026-05-24T02:33:39.974Z
 

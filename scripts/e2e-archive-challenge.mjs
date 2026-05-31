@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { chromium } from "@playwright/test";
 
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 
 class Jar {
   constructor(name) {

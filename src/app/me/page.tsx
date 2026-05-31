@@ -10,7 +10,7 @@ import { challengeUsesChineseCopy } from "@/lib/challenge-display";
 import { formatChallengeDeadline } from "@/lib/challenge-time";
 import { isAiReviewStatus, isEvidenceWindowStatus, isOpenForOpponentStatus, isTerminalStatus, statusLabel } from "@/lib/challenge-state-machine";
 
-// StepOne status palette — canonical pastels
+// stubborn status palette — canonical pastels
 const STATUS_COLOR: Record<string, string> = {
   open:      "#FED7AA", // orange-200 — accepting joiners
   live:      "#A7F3D0", // mint-200 — in progress
@@ -21,7 +21,7 @@ const STATUS_COLOR: Record<string, string> = {
   draft:     "#E2E8F0", // slate-200 — neutral
 };
 
-// StepOne canonical palette — see project_luckyplay_design_system memory
+// stubborn canonical palette — see project_luckyplay_design_system memory
 const NAVY = "#1E293B";        // slate-800 headlines
 const NAVY_DIM = "#64748B";    // slate-500 muted text
 const NAVY_FAINT = "#E2E8F0";  // slate-200 hairline borders
@@ -151,7 +151,7 @@ export default function MePage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>StepOne</Link>
+        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>stubborn</Link>
         <div className="flex items-center gap-2">
           <button
             type="button"

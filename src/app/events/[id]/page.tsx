@@ -13,7 +13,7 @@ import EventScorePanel from "./EventScorePanel";
 
 export const dynamic = "force-dynamic";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://gamble-ai-agent.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://stubborn-ai.vercel.app";
 
 function parseProtocol(value: string): ProtocolSpecV2 | null {
   try {
@@ -57,12 +57,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     where: { id },
     select: { id: true, title: true, protocolJson: true, status: true },
   }).catch(() => null);
-  if (!event) return { title: "Event not found - StepOne" };
+  if (!event) return { title: "Event not found - stubborn" };
   const protocol = parseProtocol(event.protocolJson);
-  const description = protocol?.userFacingSummary || "Join a public AI-refereed challenge event on StepOne.";
+  const description = protocol?.userFacingSummary || "Join a public AI-refereed challenge event on stubborn.";
   const url = `${APP_URL}/events/${event.id}`;
   return {
-    title: `${event.title} - StepOne Event`,
+    title: `${event.title} - stubborn Event`,
     description,
     alternates: { canonical: url },
     robots: event.status === "open" ? { index: true, follow: true } : { index: false, follow: true },
@@ -70,7 +70,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title: event.title,
       description,
       url,
-      siteName: "StepOne",
+      siteName: "stubborn",
       type: "website",
     },
     twitter: {
@@ -137,7 +137,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="text-base font-black tracking-tight" style={{ color: "#172033" }}>
-            StepOne
+            stubborn
           </Link>
           <div className="flex flex-wrap gap-2">
             <Link href="/markets" className="inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold shadow-sm" style={{ color: "#172033" }}>

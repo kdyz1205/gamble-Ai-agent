@@ -21,7 +21,7 @@ import "dotenv/config";
 import { config as dotenvLocal } from "dotenv";
 dotenvLocal({ path: ".env.local" });
 
-const BASE = process.env.LOAD_BASE || "https://gamble-ai-agent.vercel.app";
+const BASE = process.env.LOAD_BASE || "https://stubborn-ai.vercel.app";
 const N_CHALLENGES = Number(process.env.N_CHALLENGES || "10");
 const STAKE = Number(process.env.STAKE || "5");
 const RUN_ID = Math.random().toString(36).slice(2, 8);

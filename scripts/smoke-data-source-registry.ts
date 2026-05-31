@@ -198,7 +198,7 @@ async function main() {
     example("Will pandas publish a new PyPI release before next Monday?", "pypi_json", true),
     example("Will Docker Hub publish a python image tag named 3.13-alpine this week?", "dockerhub_tags", true),
     example("Will invoice in_123 be marked paid before 5 PM?", "stripe_invoice", false),
-    example("Will domain example.com publish a TXT record containing verify-StepOne by midnight?", "cloudflare_dns_over_https", true),
+    example("Will domain example.com publish a TXT record containing verify-stubborn by midnight?", "cloudflare_dns_over_https", true),
   ];
 
   console.log(JSON.stringify({

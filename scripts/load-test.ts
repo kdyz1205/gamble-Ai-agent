@@ -17,7 +17,7 @@
  * Exits non-zero if any pair failed so this can gate the next deploy.
  *
  * Run:  npx tsx scripts/load-test.ts
- * Env:  BASE (default https://gamble-ai-agent.vercel.app)
+ * Env:  BASE (default https://stubborn-ai.vercel.app)
  *       N_PAIRS (default 20)
  *       STAKE (default 5 — must be ≤ signup bonus for both users)
  */
@@ -25,7 +25,7 @@ import "dotenv/config";
 import { config as dotenvLocal } from "dotenv";
 dotenvLocal({ path: ".env.local" });
 
-const BASE = process.env.LOAD_BASE || "https://gamble-ai-agent.vercel.app";
+const BASE = process.env.LOAD_BASE || "https://stubborn-ai.vercel.app";
 const N_PAIRS = Number(process.env.N_PAIRS || "20");
 const STAKE = Number(process.env.STAKE || "5");
 const RUN_ID = process.env.LOAD_RUN_ID || Math.random().toString(36).slice(2, 8);

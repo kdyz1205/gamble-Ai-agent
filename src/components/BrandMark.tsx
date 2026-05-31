@@ -5,10 +5,10 @@ type BrandMarkProps = {
   label?: string;
 };
 
-export default function BrandMark({ className = "h-9 w-9", label = "StepOne" }: BrandMarkProps) {
+export default function BrandMark({ className = "h-9 w-9", label = "stubborn" }: BrandMarkProps) {
   const id = useId().replace(/:/g, "");
-  const bgId = `StepOne-bg-${id}`;
-  const coreId = `StepOne-core-${id}`;
+  const bgId = `stubborn-bg-${id}`;
+  const coreId = `stubborn-core-${id}`;
 
   return (
     <svg

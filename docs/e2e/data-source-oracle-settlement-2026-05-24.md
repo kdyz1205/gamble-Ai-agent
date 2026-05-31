@@ -4,10 +4,10 @@ This proof verifies that a public data-source challenge can use the live router/
 
 ## Proof Run
 
-- Production URL: https://gamble-ai-agent.vercel.app
+- Production URL: https://stubborn-ai.vercel.app
 - Challenge ID: `cmpjdly4b000904jvgf4zn7l9`
-- Challenge URL: https://gamble-ai-agent.vercel.app/challenge/cmpjdly4b000904jvgf4zn7l9
-- Join URL: https://gamble-ai-agent.vercel.app/join/cmpjdly4b000904jvgf4zn7l9
+- Challenge URL: https://stubborn-ai.vercel.app/challenge/cmpjdly4b000904jvgf4zn7l9
+- Join URL: https://stubborn-ai.vercel.app/join/cmpjdly4b000904jvgf4zn7l9
 - Evidence IDs: `cmpjdlzhf000004jxmd1dq7bw`, `cmpjdlzuj000404jxps4ipygv`
 - Judgment ID: `cmpjdm386000l04jv8agn97qs`
 - Proof run commit: `9438388c3966895d8bf936d4bbcb0a8417cb1d57`

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import prisma from "@/lib/db";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://gamble-ai-agent.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://stubborn-ai.vercel.app";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [challenges, events] = await Promise.all([

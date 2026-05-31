@@ -7,8 +7,8 @@ Proof run commit: `2f342bcfb72fd1ab2ad7506568b3c06977bd571b`
 Docs/current HEAD commit when this proof was recorded: `20d4e9bbbed9323a6e620da1660f699cc5f84c68`
 
 Production deployment:
-- Alias: `https://gamble-ai-agent.vercel.app`
-- Deployment URL: `https://gamble-ai-agent-d7pjm38sw-kdyz1205s-projects.vercel.app`
+- Alias: `https://stubborn-ai.vercel.app`
+- Deployment URL: `https://stubborn-d7pjm38sw-kdyz1205s-projects.vercel.app`
 
 Environment note:
 - `ALLOW_PAID_AI=1` was required in Vercel Production so the real OpenAI vision provider is enabled.
@@ -28,7 +28,7 @@ This proof used generated fixture videos and does not prove arbitrary real phone
 ## Challenge
 
 - Challenge ID: `cmpb3e6zo000704ktxeo8dfem`
-- URL: `https://gamble-ai-agent.vercel.app/challenge/cmpb3e6zo000704ktxeo8dfem`
+- URL: `https://stubborn-ai.vercel.app/challenge/cmpb3e6zo000704ktxeo8dfem`
 - Created status: `waiting_for_opponent`
 - Opponent accepted status: `evidence_window_open`
 - Stake: `1` credit each
@@ -166,8 +166,8 @@ Date: 2026-05-18
 Code commit: `3c594ad80909880fc5128b1057b0791939281e7f`
 
 Production deployment:
-- Alias: `https://gamble-ai-agent.vercel.app`
-- Deployment URL: `https://gamble-ai-agent-7jw9rmog2-kdyz1205s-projects.vercel.app`
+- Alias: `https://stubborn-ai.vercel.app`
+- Deployment URL: `https://stubborn-7jw9rmog2-kdyz1205s-projects.vercel.app`
 - Vercel deployment ID: `dpl_ENq1PYVk1Crb3X3LkFVFieyg7sbP`
 
 Scope:
@@ -204,7 +204,7 @@ node scripts\e2e-video-winner-settlement.mjs
 
 Result:
 - Challenge ID: `cmpbmt8no000705jmyb3wavyo`
-- URL: `https://gamble-ai-agent.vercel.app/challenge/cmpbmt8no000705jmyb3wavyo`
+- URL: `https://stubborn-ai.vercel.app/challenge/cmpbmt8no000705jmyb3wavyo`
 - Creator evidence ID: `cmpbmtjtp000004jssml8prqy`
 - Opponent evidence ID: `cmpbmtk05000204jsoz3nwwfu`
 - Judgment ID: `cmpbmu878000104l10tjipp27`

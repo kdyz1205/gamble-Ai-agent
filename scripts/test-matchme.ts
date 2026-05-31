@@ -86,7 +86,7 @@ async function main() {
     const draft: DraftState = emptyDraftState();
     const r = await runAgentTurn({
       userId: opp.id,
-      baseUrl: "https://gamble-ai-agent.vercel.app",
+      baseUrl: "https://stubborn-ai.vercel.app",
       message: "给我匹配一个挑战",
       history,
       draftState: draft,
@@ -164,7 +164,7 @@ async function main() {
     const draft: DraftState = emptyDraftState();
     const r = await runAgentTurn({
       userId: opp2.id,
-      baseUrl: "https://gamble-ai-agent.vercel.app",
+      baseUrl: "https://stubborn-ai.vercel.app",
       message: "有什么可以玩的?",
       history,
       draftState: draft,

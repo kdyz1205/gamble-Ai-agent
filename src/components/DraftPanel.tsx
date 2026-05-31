@@ -30,7 +30,7 @@ interface Props {
   onActionItem?: (a: ActionItem) => void;
 }
 
-// StepOne canonical palette.
+// stubborn canonical palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";

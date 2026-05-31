@@ -12,8 +12,8 @@ import {
 import type { ProtocolSpecV2 } from "@/lib/protocol-spec-v2";
 
 export const metadata = {
-  title: "StepOne Agent Workflow",
-  description: "Internal agent graph and routing view for StepOne challenge protocols.",
+  title: "stubborn Agent Workflow",
+  description: "Internal agent graph and routing view for stubborn challenge protocols.",
 };
 
 const nodeById = new Map(AGENT_GRAPH_REGISTRY.map((node) => [node.id, node]));
@@ -295,7 +295,7 @@ export default function WorkflowPage() {
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
             <div>
               <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-700">
-                StepOne agent graph, not a completion claim
+                stubborn agent graph, not a completion claim
               </div>
               <h1 className="mt-3 max-w-4xl text-4xl font-black leading-tight text-slate-950 sm:text-6xl">
                 Prompt in. Protocol, evidence, verdict, payout out.

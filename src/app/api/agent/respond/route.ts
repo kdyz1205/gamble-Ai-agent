@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
   // point at the right host.
   const proto = req.headers.get("x-forwarded-proto") || "https";
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
-  const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://gamble-ai-agent.vercel.app");
+  const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://stubborn-ai.vercel.app");
 
   if (shouldDirectPublish(message, draftState)) {
     const result = await executeAgentTool(

@@ -115,7 +115,7 @@ export default function ManualReviewPage() {
     return (
       <div className="min-h-screen px-5 py-4">
         <header className="flex items-center justify-between">
-          <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>StepOne</Link>
+          <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>stubborn</Link>
           <Link href="/" className="px-4 py-2 text-xs font-black" style={{ color: PEACH_TEXT, background: CREAM, borderRadius: "9999px" }}>
             Sign in
           </Link>
@@ -133,7 +133,7 @@ export default function ManualReviewPage() {
     <div className="relative min-h-screen">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>StepOne</Link>
+          <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>stubborn</Link>
           <span className="hidden text-xs font-bold sm:inline" style={{ color: NAVY_DIM }}>Review queue</span>
         </div>
         <div className="flex items-center gap-2">

@@ -17,7 +17,7 @@ async function main() {
     const t0 = Date.now();
     const r = await runAgentTurn({
       userId: "test-no-db",
-      baseUrl: "https://gamble-ai-agent.vercel.app",
+      baseUrl: "https://stubborn-ai.vercel.app",
       message: msg, history, draftState: draft,
     });
     const ms = Date.now() - t0;

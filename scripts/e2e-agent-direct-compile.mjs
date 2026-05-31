@@ -1,4 +1,4 @@
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 const providerId = process.env.E2E_AGENT_PROVIDER || "openai";
 const model = process.env.E2E_AGENT_MODEL || "gpt-5-mini";
 

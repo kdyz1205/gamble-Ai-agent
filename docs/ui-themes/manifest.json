@@ -12,8 +12,8 @@
     "accent2": "#F59E0B",
     "border": "rgba(255,255,255,0.12)",
     "gradient": "radial-gradient(circle at 12% 15%, rgba(52,211,153,.22), transparent 32%), radial-gradient(circle at 84% 18%, rgba(245,158,11,.16), transparent 28%), #070A0F",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\01-obsidian-command.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\01-obsidian-command.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\01-obsidian-command.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\01-obsidian-command.html"
   },
   {
     "slug": "02-porcelain-mint",
@@ -28,8 +28,8 @@
     "accent2": "#F97316",
     "border": "#DCE9E2",
     "gradient": "linear-gradient(135deg, #F8FFFB 0%, #EEF7FF 48%, #FFF4EF 100%)",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\02-porcelain-mint.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\02-porcelain-mint.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\02-porcelain-mint.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\02-porcelain-mint.html"
   },
   {
     "slug": "03-liquid-glass",
@@ -44,8 +44,8 @@
     "accent2": "#14B8A6",
     "border": "rgba(255,255,255,0.85)",
     "gradient": "radial-gradient(circle at 8% 18%, rgba(20,184,166,.22), transparent 28%), radial-gradient(circle at 78% 8%, rgba(168,85,247,.16), transparent 30%), linear-gradient(135deg,#ECFEFF,#F8FAFC,#FFF7ED)",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\03-liquid-glass.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\03-liquid-glass.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\03-liquid-glass.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\03-liquid-glass.html"
   },
   {
     "slug": "04-graphite-mint",
@@ -60,8 +60,8 @@
     "accent2": "#A78BFA",
     "border": "#2A2F39",
     "gradient": "linear-gradient(135deg, #101216 0%, #161B22 55%, #0B1118 100%)",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\04-graphite-mint.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\04-graphite-mint.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\04-graphite-mint.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\04-graphite-mint.html"
   },
   {
     "slug": "05-radar-sport",
@@ -77,8 +77,8 @@
     "border": "rgba(110,231,183,0.18)",
     "gradient": "radial-gradient(circle at 50% 45%, rgba(34,197,94,.18), transparent 25%), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.035) 1px, transparent 1px), #07130E",
     "bgSize": "auto, 64px 64px, 64px 64px, auto",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\05-radar-sport.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\05-radar-sport.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\05-radar-sport.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\05-radar-sport.html"
   },
   {
     "slug": "06-ink-signal",
@@ -93,8 +93,8 @@
     "accent2": "#16A34A",
     "border": "#E5E7EB",
     "gradient": "linear-gradient(135deg, #FBFAF7 0%, #F3F6F1 100%)",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\06-ink-signal.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\06-ink-signal.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\06-ink-signal.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\06-ink-signal.html"
   },
   {
     "slug": "07-neon-night",
@@ -109,8 +109,8 @@
     "accent2": "#00E5FF",
     "border": "rgba(255,255,255,0.12)",
     "gradient": "radial-gradient(circle at 20% 20%, rgba(255,79,216,.23), transparent 25%), radial-gradient(circle at 80% 25%, rgba(0,229,255,.18), transparent 24%), #060712",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\07-neon-night.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\07-neon-night.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\07-neon-night.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\07-neon-night.html"
   },
   {
     "slug": "08-calm-lab",
@@ -125,8 +125,8 @@
     "accent2": "#10B981",
     "border": "#DDE8F0",
     "gradient": "linear-gradient(135deg, #F8FBFF 0%, #EEF7F2 100%)",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\08-calm-lab.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\08-calm-lab.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\08-calm-lab.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\08-calm-lab.html"
   },
   {
     "slug": "09-street-arena",
@@ -141,8 +141,8 @@
     "accent2": "#22D3EE",
     "border": "rgba(255,247,237,0.16)",
     "gradient": "radial-gradient(circle at 15% 22%, rgba(251,146,60,.22), transparent 25%), radial-gradient(circle at 85% 20%, rgba(34,211,238,.12), transparent 24%), #14110F",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\09-street-arena.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\09-street-arena.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\09-street-arena.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\09-street-arena.html"
   },
   {
     "slug": "10-zen-radar",
@@ -157,7 +157,7 @@
     "accent2": "#06B6D4",
     "border": "#D9ECD8",
     "gradient": "radial-gradient(circle at 20% 25%, rgba(132,204,22,.20), transparent 28%), radial-gradient(circle at 75% 40%, rgba(6,182,212,.14), transparent 30%), #F7FFF7",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\10-zen-radar.png",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-themes\\10-zen-radar.html"
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\10-zen-radar.png",
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-themes\\10-zen-radar.html"
   }
 ]

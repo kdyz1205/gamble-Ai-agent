@@ -79,7 +79,7 @@ Escrow ABI changed from `bytes32` + `settle(bytes32,address)` to **`uint256` key
 
 ### Related sites / consoles (checklist)
 
-**This app on Vercel (dashboard):** [gamble-ai-agent — kdyz1205s-projects](https://vercel.com/kdyz1205s-projects/gamble-ai-agent) — use **Settings → Environment Variables**, **Deployments** (production URL for `NEXTAUTH_URL`), and connect **Git** to `kdyz1205/gamble-Ai-agent` if the checklist still shows “Connect Git Repository”.
+**This app on Vercel (dashboard):** [stubborn — kdyz1205s-projects](https://vercel.com/kdyz1205s-projects/stubborn) — use **Settings → Environment Variables**, **Deployments** (production URL for `NEXTAUTH_URL`), and connect **Git** to `kdyz1205/stubborn` if the checklist still shows “Connect Git Repository”.
 
 | Where | What to align with production |
 |--------|-------------------------------|

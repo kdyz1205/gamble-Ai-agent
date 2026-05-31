@@ -389,7 +389,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
   const busy = Boolean(isParsing || isTranscribing || listening);
 
-  // StepOne canonical palette.
+  // stubborn canonical palette.
   const NAVY = "#1E293B";
   const NAVY_DIM = "#64748B";
   const NAVY_FAINT = "rgba(148,163,184,0.28)";

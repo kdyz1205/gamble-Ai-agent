@@ -114,7 +114,7 @@ async function runScenario(s: Scenario): Promise<{ name: string; passed: boolean
     const t = s.turns[i];
     const res = await runAgentTurn({
       userId: "test-agent-user",
-      baseUrl: "https://gamble-ai-agent.vercel.app",
+      baseUrl: "https://stubborn-ai.vercel.app",
       message: t.user,
       history,
       draftState,

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      E2E_BASE_URL: https://gamble-ai-agent.vercel.app
+      E2E_BASE_URL: https://stubborn-ai.vercel.app
       E2E_COMMIT_SHA: ${{ github.sha }}
       RUN_CORE_SETTLEMENT_CASES: ${{ github.event.inputs.cases }}
     steps:

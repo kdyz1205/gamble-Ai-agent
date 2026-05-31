@@ -1,5 +1,5 @@
 /**
- * StepOne Agent Orchestrator.
+ * stubborn Agent Orchestrator.
  *
  * One turn = one user message + current conversation history + current hidden
  * draft state → one LLM call → structured JSON → merge draftPatch → optionally

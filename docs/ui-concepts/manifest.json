@@ -3,70 +3,70 @@
     "slug": "01-command-center",
     "name": "Command Center",
     "thesis": "Raycast-style: everything starts from one command bar, then AI returns a compact protocol.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\01-command-center.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\01-command-center.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\01-command-center.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\01-command-center.png"
   },
   {
     "slug": "02-radar-first",
     "name": "Radar First",
     "thesis": "Zenly-lite: nearby challenges are the first screen; composer floats over the map.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\02-radar-first.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\02-radar-first.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\02-radar-first.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\02-radar-first.png"
   },
   {
     "slug": "03-camera-first",
     "name": "Camera First",
     "thesis": "For physical challenges: start from proof capture, with identity instructions embedded.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\03-camera-first.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\03-camera-first.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\03-camera-first.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\03-camera-first.png"
   },
   {
     "slug": "04-chat-timeline",
     "name": "Chat Timeline",
     "thesis": "ChatGPT-like: AI asks only missing protocol questions and builds the room inline.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\04-chat-timeline.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\04-chat-timeline.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\04-chat-timeline.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\04-chat-timeline.png"
   },
   {
     "slug": "05-battle-room",
     "name": "Battle Room",
     "thesis": "Versus screen first: left/right identity, evidence, and verdict path are visually obvious.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\05-battle-room.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\05-battle-room.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\05-battle-room.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\05-battle-room.png"
   },
   {
     "slug": "06-card-stack",
     "name": "Protocol Card Stack",
     "thesis": "Swipe stack: one decision at a time, lower cognitive load for new users.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\06-card-stack.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\06-card-stack.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\06-card-stack.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\06-card-stack.png"
   },
   {
     "slug": "07-bento-dashboard",
     "name": "Bento Home",
     "thesis": "Operational but clean: user sees create, join, pending, and credits in one scanning surface.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\07-bento-dashboard.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\07-bento-dashboard.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\07-bento-dashboard.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\07-bento-dashboard.png"
   },
   {
     "slug": "08-story-onboarding",
     "name": "Story Onboarding",
     "thesis": "Consumer/social style: one-screen guided story before entering the composer.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\08-story-onboarding.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\08-story-onboarding.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\08-story-onboarding.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\08-story-onboarding.png"
   },
   {
     "slug": "09-market-feed",
     "name": "Challenge Feed",
     "thesis": "TikTok/market style: browse challenges first, create from a sticky bottom composer.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\09-market-feed.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\09-market-feed.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\09-market-feed.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\09-market-feed.png"
   },
   {
     "slug": "10-agent-flow",
     "name": "Agent Flow",
     "thesis": "Shows the AI agents as a live pipeline without dumping workflow text on normal users.",
-    "html": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\10-agent-flow.html",
-    "screenshot": "C:\\Users\\alexl\\gamble-Ai-agent\\docs\\ui-concepts\\10-agent-flow.png"
+    "html": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\10-agent-flow.html",
+    "screenshot": "C:\\Users\\alexl\\stubborn\\docs\\ui-concepts\\10-agent-flow.png"
   }
 ]

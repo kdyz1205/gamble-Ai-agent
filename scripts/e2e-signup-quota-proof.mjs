@@ -2,7 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 const expectedSignupBonus = Number.parseInt(process.env.E2E_EXPECT_SIGNUP_BONUS || "50", 10);
 const expectedSpecLimit = Number.parseInt(process.env.E2E_EXPECT_DAILY_SPEC_LIMIT || "10", 10);
 const expectedJudgeLimit = Number.parseInt(process.env.E2E_EXPECT_DAILY_JUDGE_LIMIT || "3", 10);

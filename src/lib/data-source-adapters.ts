@@ -136,7 +136,7 @@ const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
       const cik = (stringParam(params, "cik") ?? "").replace(/\D/g, "").padStart(10, "0");
       return `https://data.sec.gov/submissions/CIK${cik}.json`;
     },
-    headers: () => ({ "user-agent": process.env.SEC_USER_AGENT || "StepOneChallenge/0.1 contact@example.com" }),
+    headers: () => ({ "user-agent": process.env.SEC_USER_AGENT || "stubbornChallenge/0.1 contact@example.com" }),
   },
   bls_cpi: {
     required: [],
@@ -220,7 +220,7 @@ const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   github_releases: {
     required: ["owner", "repo"],
     buildUrl: (params) => `https://api.github.com/repos/${encode(stringParam(params, "owner") ?? "")}/${encode(stringParam(params, "repo") ?? "")}/releases`,
-    headers: () => ({ "user-agent": "StepOneChallenge/0.1" }),
+    headers: () => ({ "user-agent": "stubbornChallenge/0.1" }),
   },
   cloudflare_dns_over_https: {
     required: ["domain", "record_type"],

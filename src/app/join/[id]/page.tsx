@@ -270,7 +270,7 @@ export default function JoinPage() {
     <div className="min-h-screen relative">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          StepOne
+          stubborn
         </Link>
         <div className="flex items-center gap-2">
           <Link

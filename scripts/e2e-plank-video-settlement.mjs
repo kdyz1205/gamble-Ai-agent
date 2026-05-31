@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { plankVisionProtocol } from "./e2e-protocol-fixtures.mjs";
 
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
-const livenessPhrase = "StepOne PLANK-E2E-STATIC";
+const livenessPhrase = "stubborn PLANK-E2E-STATIC";
 
 class Jar {
   constructor(name) {

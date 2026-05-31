@@ -1,4 +1,4 @@
-# GambleAI Diverse 140 Judgeability Eval
+# stubborn Diverse 140 Judgeability Eval
 
 Generated: 2026-05-24T02:49:13.395Z
 

@@ -1108,7 +1108,7 @@ export function emptyAgentDraftState(): AgentDraftState {
 }
 
 /**
- * One conversational turn with StepOne. Frontend keeps conversationHistory
+ * One conversational turn with stubborn. Frontend keeps conversationHistory
  * and draftState in React; each call sends them back for server-side merge.
  */
 export async function agentRespond(

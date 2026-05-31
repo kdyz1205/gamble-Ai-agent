@@ -2,7 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 
 class Jar {
   constructor(name) {

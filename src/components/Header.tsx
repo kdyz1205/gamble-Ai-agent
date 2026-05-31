@@ -13,7 +13,7 @@ export default function Header() {
         <div className="flex items-center gap-2.5">
           <BrandMark className="h-9 w-9" />
           <span className="text-lg font-bold tracking-tight text-text-primary">
-            StepOne
+            stubborn
           </span>
         </div>
 

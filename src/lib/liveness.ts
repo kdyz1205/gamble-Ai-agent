@@ -19,7 +19,7 @@ export function generateLivenessPrompt(): string {
 
 export function generateLivenessPhrase(): string {
   const code = randomBytes(3).toString("hex").toUpperCase();
-  return `StepOne ${code}`;
+  return `stubborn ${code}`;
 }
 
 /* ── Screen-flash color sequence (layer 2 — anti-splice) ── */

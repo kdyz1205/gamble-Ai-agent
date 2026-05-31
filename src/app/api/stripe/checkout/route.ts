@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "usd");
   params.set("line_items[0][price_data][unit_amount]", String(amountCents));
-  params.set("line_items[0][price_data][product_data][name]", "StepOne beta supporter");
+  params.set("line_items[0][price_data][product_data][name]", "stubborn beta supporter");
   params.set(
     "line_items[0][price_data][product_data][description]",
     "Non-wagering beta support payment. Does not buy stake credits, cash balance, or payout rights.",

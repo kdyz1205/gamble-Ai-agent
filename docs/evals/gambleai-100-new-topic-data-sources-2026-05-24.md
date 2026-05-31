@@ -1,4 +1,4 @@
-# GambleAI 100 New Topic Data Source Catalog
+# stubborn 100 New Topic Data Source Catalog
 
 Generated: 2026-05-24T04:24:15.648Z
 

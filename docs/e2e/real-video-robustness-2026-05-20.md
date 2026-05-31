@@ -1,10 +1,10 @@
 # Real Video Robustness E2E - 2026-05-20
 
-Production-equivalent target: `https://gamble-ai-agent.vercel.app`
+Production-equivalent target: `https://stubborn-ai.vercel.app`
 
 Commit under test: `0bbbab82a06e079ecc3a7dedb0bbc21197c22a03`
 
-Deployment URL: `https://gamble-ai-agent-oo7tik3ye-kdyz1205s-projects.vercel.app`
+Deployment URL: `https://stubborn-oo7tik3ye-kdyz1205s-projects.vercel.app`
 
 Command:
 
@@ -64,18 +64,18 @@ Important limitation: this proof uses controlled generated/public fixture videos
 
 ## 2026-05-22 Re-Proof After No-Label Fixture Hardening
 
-Production target: `https://gamble-ai-agent.vercel.app`
+Production target: `https://stubborn-ai.vercel.app`
 
 Commit under test: `4975c9152e2715f3b3573a7e2ebe7cc1c81965e7`
 
-Deployment URL: `https://gamble-ai-agent-2c567fi5d-kdyz1205s-projects.vercel.app`
+Deployment URL: `https://stubborn-2c567fi5d-kdyz1205s-projects.vercel.app`
 
 Deployment ID: `dpl_E1MFQEpjkv9XxQpjyvK65D6mE3g1`
 
 Command:
 
 ```powershell
-$env:E2E_BASE_URL='https://gamble-ai-agent.vercel.app'
+$env:E2E_BASE_URL='https://stubborn-ai.vercel.app'
 $env:E2E_JUDGE_PROVIDER='openai'
 $env:E2E_JUDGE_MODEL='gpt-4o'
 Remove-Item Env:RUN_ROBUSTNESS_CASES -ErrorAction SilentlyContinue

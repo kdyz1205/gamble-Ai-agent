@@ -10,12 +10,12 @@ import sharp from "sharp";
 import { pushupVisionProtocol } from "./e2e-protocol-fixtures.mjs";
 
 const execFile = promisify(execFileCallback);
-const base = process.env.E2E_BASE_URL || "https://gamble-ai-agent.vercel.app";
+const base = process.env.E2E_BASE_URL || "https://stubborn-ai.vercel.app";
 const judgeProvider = process.env.E2E_JUDGE_PROVIDER || "openai";
 const judgeModel = process.env.E2E_JUDGE_MODEL || "gpt-4o";
 const expectPreextract = process.env.E2E_EXPECT_PREEXTRACT === "1" || process.env.ENABLE_EVIDENCE_PREEXTRACT === "true";
 const videoStorage = process.env.E2E_VIDEO_STORAGE || "public_fixture";
-const publicFixtureLivenessPhrase = "StepOne VIDEO-E2E-STATIC";
+const publicFixtureLivenessPhrase = "stubborn VIDEO-E2E-STATIC";
 
 class Jar {
   constructor(name) {
@@ -360,7 +360,7 @@ try {
     visibility: "private",
   });
   const challengeId = created.challenge.id;
-  const livenessPhrase = created.challenge.livenessPrompt || `StepOne video proof ${stamp}`;
+  const livenessPhrase = created.challenge.livenessPrompt || `stubborn video proof ${stamp}`;
   proof.challenge = {
     id: challengeId,
     url: `${base}/challenge/${challengeId}`,

@@ -1,10 +1,10 @@
-# StepOne YC Late Application Packet
+# stubborn YC Late Application Packet
 
 Status: draft ready for founder review before submission  
 Prepared: 2026-05-20  
 Batch target: YC Summer 2026 late application, or the next available batch if YC rolls it forward  
 Apply URL: https://apply.ycombinator.com/  
-Product URL: https://gamble-ai-agent.vercel.app/  
+Product URL: https://stubborn-ai.vercel.app/  
 
 ## Submission Notes
 
@@ -19,7 +19,7 @@ Do not submit until the remaining fields are replaced:
 
 The product claims below are evidence-backed from the current repository and production API:
 
-- Live production web app: `https://gamble-ai-agent.vercel.app/`
+- Live production web app: `https://stubborn-ai.vercel.app/`
 - Production homepage returns 200 and exposes the challenge composer.
 - Production API returned `total=182` challenge records on 2026-05-20. Treat these as build/test/product records unless real user usage is separately confirmed.
 - The repo implements chat intake, challenge creation, opponent join, evidence upload, AI judging, manual review, credits ledger, and settlement confirmation paths.
@@ -28,19 +28,19 @@ The product claims below are evidence-backed from the current repository and pro
 
 ### One-line pitch
 
-StepOne is the AI-native marketplace where anyone can turn a real-world challenge into an evidence-backed market from one sentence.
+stubborn is the AI-native marketplace where anyone can turn a real-world challenge into an evidence-backed market from one sentence.
 
 ### Very short description
 
-StepOne lets users type a challenge in natural language, have AI turn it into enforceable rules, invite an opponent or audience, collect video/photo evidence, get an AI verdict, and settle credits.
+stubborn lets users type a challenge in natural language, have AI turn it into enforceable rules, invite an opponent or audience, collect video/photo evidence, get an AI verdict, and settle credits.
 
 ### Market vision
 
-Pump.fun made asset creation feel instant and social. StepOne applies that same "anyone can create a market" idea to real-world human challenges: fitness dares, creator competitions, local games, prediction contests, skill battles, and community events. The long-term product is a marketplace of user-created challenge markets, where the hardest parts - rule writing, evidence standards, judging, and settlement - are handled by AI.
+Pump.fun made asset creation feel instant and social. stubborn applies that same "anyone can create a market" idea to real-world human challenges: fitness dares, creator competitions, local games, prediction contests, skill battles, and community events. The long-term product is a marketplace of user-created challenge markets, where the hardest parts - rule writing, evidence standards, judging, and settlement - are handled by AI.
 
 ### YC-safe phrasing
 
-We should not describe StepOne primarily as gambling. The stronger and safer framing is:
+We should not describe stubborn primarily as gambling. The stronger and safer framing is:
 
 "AI-created challenge markets with evidence-based outcomes and internal credits first."
 
@@ -48,15 +48,15 @@ We should not describe StepOne primarily as gambling. The stronger and safer fra
 
 ### Company name
 
-StepOne
+stubborn
 
 ### Company URL
 
-https://gamble-ai-agent.vercel.app/
+https://stubborn-ai.vercel.app/
 
 ### What is your company going to make?
 
-StepOne is a chat-first marketplace for real-world challenges. A user types something like "I bet I can do more push-ups than Alex on camera by tonight"; our AI turns it into a structured challenge contract with rules, stake, evidence requirements, deadline, and judging rubric. The opponent joins from a link, both sides submit video/photo evidence, an AI judge recommends a verdict with reasoning, and credits settle after confirmation.
+stubborn is a chat-first marketplace for real-world challenges. A user types something like "I bet I can do more push-ups than Alex on camera by tonight"; our AI turns it into a structured challenge contract with rules, stake, evidence requirements, deadline, and judging rubric. The opponent joins from a link, both sides submit video/photo evidence, an AI judge recommends a verdict with reasoning, and credits settle after confirmation.
 
 Today it works as a challenge app. The larger product is a market factory: anyone can create a challenge market from a sentence, and communities can discover, join, compete in, and eventually trade around these outcomes.
 
@@ -80,7 +80,7 @@ Fremont, California. I can relocate to San Francisco for YC and would likely bui
 
 ### If you have already started working on it, how long have you been working and how much of that has been full-time?
 
-I started building StepOne as a real product in 2026. I have been moving it from prototype to production web app, focusing on the hard parts that make this more than a normal social app: challenge state, evidence submission, AI judgment, internal credits, and settlement safety. I am ready to work on it full-time.
+I started building stubborn as a real product in 2026. I have been moving it from prototype to production web app, focusing on the hard parts that make this more than a normal social app: challenge state, evidence submission, AI judgment, internal credits, and settlement safety. I am ready to work on it full-time.
 
 Replace with exact date/full-time status:
 
@@ -94,7 +94,7 @@ The production backend currently has 182 challenge records from build/test/produ
 
 ### How many active users or customers do you have?
 
-Pre-launch. We have a live product and internal/test challenge activity, but we should not count test records as active users. The next milestone is 10-20 communities or creator groups running real challenges on StepOne every week.
+Pre-launch. We have a live product and internal/test challenge activity, but we should not count test records as active users. The next milestone is 10-20 communities or creator groups running real challenges on stubborn every week.
 
 If real usage exists, replace with:
 
@@ -110,7 +110,7 @@ Initial monetization will come from a take rate on paid challenge settlement, cr
 
 The new thing is that AI makes small, user-created outcome markets cheap enough to create and judge.
 
-Before multimodal AI, a challenge market needed humans to write rules, decide what evidence counts, judge disputes, and settle outcomes. That overhead only made sense for large markets like sports betting or public prediction markets. StepOne collapses that overhead. The user writes one sentence; AI drafts the contract, decides what evidence is needed, interprets media, explains a verdict, and routes uncertain cases to review.
+Before multimodal AI, a challenge market needed humans to write rules, decide what evidence counts, judge disputes, and settle outcomes. That overhead only made sense for large markets like sports betting or public prediction markets. stubborn collapses that overhead. The user writes one sentence; AI drafts the contract, decides what evidence is needed, interprets media, explains a verdict, and routes uncertain cases to review.
 
 That means markets can exist for tiny, social, local, creator-driven, and weirdly specific outcomes that were never worth formalizing before.
 
@@ -128,7 +128,7 @@ The obvious competitors are Polymarket, fantasy/sportsbook products, Strava and 
 
 Polymarket is great for public prediction markets, but it is not designed for one-sentence creation of personal or local human challenges. Fitness apps have challenges, but they are tied to their own data sources and narrow activity types. Social apps have distribution, but not enforceable rules, evidence standards, or settlement. Sportsbooks have liquidity and payments, but not user-generated market creation.
 
-StepOne's wedge is that the AI contract/evidence/judge loop lets a normal person create a market that previously required an operator.
+stubborn's wedge is that the AI contract/evidence/judge loop lets a normal person create a market that previously required an operator.
 
 ### How do or will you make money?
 
@@ -136,7 +136,7 @@ First, we can charge a small platform fee on internal-credit challenge settlemen
 
 Second, we can charge for AI judging and premium market tooling: better evidence processing, creator moderation, community leaderboards, private groups, and market templates.
 
-Longer term, if the compliance path supports it, StepOne can expand into regulated paid challenge markets, creator outcome markets, or on-chain settlement rails. We do not need to start there. The first version should prove daily market creation and repeat participation without taking avoidable regulatory risk.
+Longer term, if the compliance path supports it, stubborn can expand into regulated paid challenge markets, creator outcome markets, or on-chain settlement rails. We do not need to start there. The first version should prove daily market creation and repeat participation without taking avoidable regulatory risk.
 
 ### How will you get users?
 
@@ -164,13 +164,13 @@ The old version of this required a human operator. The new version can be AI-nat
 
 I keep seeing people create informal bets and challenges in chats, but the moment money, pride, or public reputation is involved, the ambiguity breaks the fun: unclear rules, fake evidence, disputes, and no clean settlement.
 
-At the same time, AI agents are getting good enough to turn natural language into structured workflows and inspect real-world evidence. StepOne is the product that makes that feel consumer-simple: say the challenge, invite people, prove it, settle it.
+At the same time, AI agents are getting good enough to turn natural language into structured workflows and inspect real-world evidence. stubborn is the product that makes that feel consumer-simple: say the challenge, invite people, prove it, settle it.
 
 ### What is the most impressive thing each founder has built or achieved?
 
-Zhiwen Luo built StepOne as a full-stack production web app with a chat-first challenge compiler, participant flow, evidence upload, AI judging path, manual review path, credits ledger, and settlement confirmation. The system is not a toy UI; it includes state-machine and ledger logic for a product where incorrect outcomes matter.
+Zhiwen Luo built stubborn as a full-stack production web app with a chat-first challenge compiler, participant flow, evidence upload, AI judging path, manual review path, credits ledger, and settlement confirmation. The system is not a toy UI; it includes state-machine and ledger logic for a product where incorrect outcomes matter.
 
-Replace or strengthen with one specific non-StepOne achievement:
+Replace or strengthen with one specific non-stubborn achievement:
 
 `[PERSONAL IMPRESSIVE ACHIEVEMENT: e.g. built X used by Y people, shipped Z, won A, published B, earned C, built a trading/agent system with concrete proof.]`
 
@@ -214,11 +214,11 @@ People already spend huge amounts of time on games, competitions, sports, fantas
 
 The limiting factor has been market creation. If only platforms can create markets, the market is limited to sports, elections, crypto prices, and generic prediction topics. If any creator, local group, friend group, or community can create a challenge market from one sentence, the number of possible markets explodes.
 
-StepOne starts with simple real-world challenges because they are emotionally immediate and easy to share. But the end state is a consumer market layer for anything people can define, prove, judge, and settle.
+stubborn starts with simple real-world challenges because they are emotionally immediate and easy to share. But the end state is a consumer market layer for anything people can define, prove, judge, and settle.
 
 ### What is your insight about marketplace liquidity?
 
-Most marketplaces die because supply and demand have to be created separately. StepOne's first markets are naturally two-sided because challenge creation names the counterparty or audience. A user does not publish an empty listing and hope liquidity appears; they challenge a person or community directly, and the join link brings the other side in.
+Most marketplaces die because supply and demand have to be created separately. stubborn's first markets are naturally two-sided because challenge creation names the counterparty or audience. A user does not publish an empty listing and hope liquidity appears; they challenge a person or community directly, and the join link brings the other side in.
 
 Over time, successful challenge templates become reusable markets. That creates marketplace liquidity from repeated formats: weekly gym challenges, creator dares, local tournaments, game score battles, prediction contests, and community leaderboards.
 
@@ -238,7 +238,7 @@ Compliance: any move from internal credits or non-cash rewards into real-money m
 
 Suggested if first application:
 
-This is our first YC application for StepOne.
+This is our first YC application for stubborn.
 
 ### What other ideas did you consider?
 
@@ -249,7 +249,7 @@ Related ideas:
 - A local challenge app for gyms and campus groups.
 - An evidence oracle API for consumer apps that need photo/video verification.
 
-StepOne combines these into the clearest consumer wedge: AI-created challenge markets.
+stubborn combines these into the clearest consumer wedge: AI-created challenge markets.
 
 ### Why YC?
 
@@ -267,7 +267,7 @@ YC's network is unusually strong for consumer marketplaces, fintech-adjacent pro
 
 This is not intended to be just another betting app. The bet is that AI will make market creation as easy as posting a video.
 
-Today, StepOne turns a sentence into a challenge contract and uses evidence plus AI judgment to settle credits. If that loop works, the product can become a marketplace where every creator and community can launch their own outcome markets.
+Today, stubborn turns a sentence into a challenge contract and uses evidence plus AI judgment to settle credits. If that loop works, the product can become a marketplace where every creator and community can launch their own outcome markets.
 
 The first version is intentionally narrow and playful. The ambition is much bigger: a consumer market layer for real-world actions.
 
@@ -277,11 +277,11 @@ Target length: 60 seconds. Record as founder talking over a live screen recordin
 
 ### Script
 
-Hi, I'm Zhiwen Luo, founder of StepOne.
+Hi, I'm Zhiwen Luo, founder of stubborn.
 
-StepOne lets anyone create a real-world challenge market from one sentence.
+stubborn lets anyone create a real-world challenge market from one sentence.
 
-I start here in the chat composer and type: "I bet Alex I can do more push-ups than him on camera by tonight." StepOne turns that into structured rules: who is competing, what evidence is required, the deadline, the stake, and how the winner will be judged.
+I start here in the chat composer and type: "I bet Alex I can do more push-ups than him on camera by tonight." stubborn turns that into structured rules: who is competing, what evidence is required, the deadline, the stake, and how the winner will be judged.
 
 Now I publish it and send this link to the opponent. The opponent joins, the challenge moves into the evidence window, and both sides upload video or photo proof.
 
@@ -291,7 +291,7 @@ After the verdict is confirmed, credits settle through the ledger.
 
 The bigger idea is that this is a market factory. Today it works for friend challenges. Eventually any creator, gym, campus club, or online community can create their own challenge market from a sentence.
 
-Pump.fun made creation instant for tokens. StepOne makes creation instant for real-world outcome markets.
+Pump.fun made creation instant for tokens. stubborn makes creation instant for real-world outcome markets.
 
 ## Interview Prep
 
@@ -305,7 +305,7 @@ The first product is internal-credit and challenge-based, closer to social compe
 
 ### Why will anyone use this repeatedly?
 
-Challenges are already repeat behavior in friend groups, gyms, campuses, games, and creator communities. The problem is that today they are informal and disputed. StepOne makes them easy to create, share, prove, and finish.
+Challenges are already repeat behavior in friend groups, gyms, campuses, games, and creator communities. The problem is that today they are informal and disputed. stubborn makes them easy to create, share, prove, and finish.
 
 ### What is the wedge?
 
@@ -350,4 +350,4 @@ Start with the concrete product in one sentence. Then add the market ambition. D
 
 Example:
 
-"StepOne lets users create AI-judged challenge markets from one sentence. The long-term goal is a marketplace where creators and communities can launch real-world outcome markets without writing rules, hiring judges, or building payment/settlement infrastructure."
+"stubborn lets users create AI-judged challenge markets from one sentence. The long-term goal is a marketplace where creators and communities can launch real-world outcome markets without writing rules, hiring judges, or building payment/settlement infrastructure."

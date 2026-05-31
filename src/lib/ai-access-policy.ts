@@ -163,10 +163,10 @@ function buildStatus(input: {
 }
 
 export async function getAiAccessForUser(userId: string): Promise<AiAccessStatus> {
-  if (process.env.StepOne_FORCE_PREMIUM_ALL === "1") {
+  if (process.env.STUBBORN_FORCE_PREMIUM_ALL === "1" || process.env.StepOne_FORCE_PREMIUM_ALL === "1") {
     return buildStatus({
       plan: "premium",
-      reason: "StepOne_FORCE_PREMIUM_ALL enabled",
+      reason: "STUBBORN_FORCE_PREMIUM_ALL enabled",
       internalFlags: { forcePremiumAll: true, premiumOverride: true },
     });
   }
@@ -182,10 +182,17 @@ export async function getAiAccessForUser(userId: string): Promise<AiAccessStatus
 
   const devIdentities = [
     ...DEFAULT_DEV_IDENTITIES,
+    ...splitEnvList("STUBBORN_DEV_USERS"),
     ...splitEnvList("StepOne_DEV_USERS"),
   ];
-  const adminIdentities = splitEnvList("StepOne_ADMIN_USERS");
-  const premiumIdentities = splitEnvList("StepOne_PREMIUM_USERS");
+  const adminIdentities = [
+    ...splitEnvList("STUBBORN_ADMIN_USERS"),
+    ...splitEnvList("StepOne_ADMIN_USERS"),
+  ];
+  const premiumIdentities = [
+    ...splitEnvList("STUBBORN_PREMIUM_USERS"),
+    ...splitEnvList("StepOne_PREMIUM_USERS"),
+  ];
 
   if (
     identityMatches(user?.email, adminIdentities) ||
