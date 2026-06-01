@@ -34,6 +34,10 @@ function supportedRecordingMimeType(): string | undefined {
   ].find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+function recordingFileExtension(mimeType: string): "webm" | "mp4" {
+  return mimeType.toLowerCase().includes("mp4") ? "mp4" : "webm";
+}
+
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Free", 2: "Premium", 3: "Premium" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
@@ -648,7 +652,9 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const submitRecordedVideo = async () => {
     if (!recordedBlob) return;
-    const file = new File([recordedBlob], `evidence-${Date.now()}.webm`, { type: "video/webm" });
+    const mimeType = recordedBlob.type || "video/webm";
+    const ext = recordingFileExtension(mimeType);
+    const file = new File([recordedBlob], `evidence-${Date.now()}.${ext}`, { type: mimeType });
     setRecordedBlob(null);
     await uploadFile(file);
   };

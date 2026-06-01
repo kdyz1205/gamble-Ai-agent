@@ -61,6 +61,10 @@ function supportedRecordingMimeType(): string | undefined {
   ].find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+function recordingFileExtension(mimeType: string): "webm" | "mp4" {
+  return mimeType.toLowerCase().includes("mp4") ? "mp4" : "webm";
+}
+
 export default function EvidenceUploader({ challengeId, evidenceType, onSubmitted }: Props) {
   const sameCameraEvidenceType = /same[_ -]?camera|one phone|single phone|shared video|same video/i.test(evidenceType);
   const [mode, setMode] = useState<Mode>(null);
@@ -312,7 +316,9 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     if (file) return file;
     if (recordedBlob) {
       if (recordedBlob.size > MAX_VIDEO_BYTES) return null;
-      return new File([recordedBlob], `recording-${Date.now()}.webm`, { type: recordedBlob.type || "video/webm" });
+      const mimeType = recordedBlob.type || "video/webm";
+      const ext = recordingFileExtension(mimeType);
+      return new File([recordedBlob], `recording-${Date.now()}.${ext}`, { type: mimeType });
     }
     return null;
   };
