@@ -265,14 +265,23 @@ function isObjectiveTextAnswerProtocol(protocol: ProtocolSpecV2) {
     /\btext[- ]?answer\b/.test(text) ||
     /\bsubmit(?:s| one)? text evidence\b/.test(text);
   const mediaOrOracleMode =
-    isVisionEvidenceMode(mode) ||
-    mode === "screenshot" ||
-    mode === "receipt" ||
     mode === "gps" ||
     mode === "public_oracle";
-  return protocol.settlementProtocol.mode === "auto_ai_text" &&
-    explicitlyTextAnswer &&
-    !mediaOrOracleMode;
+  return explicitlyTextAnswer && !mediaOrOracleMode;
+}
+
+function shouldForceNoLocation(protocol: ProtocolSpecV2, objectiveTextAnswer: boolean) {
+  const text = protocolTextForDetection(protocol).toLowerCase();
+  return objectiveTextAnswer ||
+    /\b(no location|without location|location none|no gps|not location[- ]?based)\b/.test(text) ||
+    /不需要位置|无需位置|不要定位|没有位置|无定位/.test(text);
+}
+
+function objectiveTextAnswerTitle(protocol: ProtocolSpecV2, expectedAnswer: string | null) {
+  const marker = protocol.rawPrompt.match(/\bmarker\s+([a-z0-9._-]{4,80})\b/i)?.[1];
+  if (marker) return `Objective Answer Challenge ${marker}`;
+  if (expectedAnswer) return "Objective Answer Challenge";
+  return protocol.title || "Objective Answer Challenge";
 }
 
 function addUniqueText(items: Iterable<string>, additions: string[]) {
@@ -525,6 +534,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const desiredSettlementMode: ProtocolSpecV2["settlementProtocol"]["mode"] =
     riskBlocked ? "blocked" :
       massCrowd ? "leaderboard" :
+        objectiveTextAnswer ? "auto_ai_text" :
         visionEvidence ? "auto_ai_vision" :
           oracleEvidence ? "auto_oracle" :
             protocol.settlementProtocol.mode;
@@ -533,7 +543,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
   const identityThreshold = objectiveTextAnswer
     ? 0
     : Math.max(0.85, Math.min(1, protocol.identityProtocol.autoSettlementRequiresIdentityConfidence || 0.85));
-  const requiredMetadata = new Set(protocol.evidenceProtocol.requiredMetadata);
+  const requiredMetadata = new Set(objectiveTextAnswer ? ["answer"] : protocol.evidenceProtocol.requiredMetadata);
   if (objectiveTextAnswer) {
     requiredMetadata.add("answer");
   }
@@ -600,36 +610,40 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     });
   }
   const requiredEvidence = objectiveTextAnswer
-    ? addUniqueText(protocol.evidenceProtocol.requiredEvidence, [
+    ? [
       "Submit one text answer in the evidence description or metadata.answer.",
-    ])
+    ]
     : universalVision
       ? addUniqueText(protocol.evidenceProtocol.requiredEvidence, universalVision.requiredEvidence)
       : protocol.evidenceProtocol.requiredEvidence;
   const captureInstructions = objectiveTextAnswer
-    ? addUniqueText(protocol.evidenceProtocol.captureInstructions, [
+    ? [
       "Submit exactly one answer before the deadline.",
-    ])
+    ]
     : universalVision
       ? addUniqueText(protocol.evidenceProtocol.captureInstructions, universalVision.captureInstructions)
       : protocol.evidenceProtocol.captureInstructions;
   const invalidEvidenceRules = objectiveTextAnswer
-    ? addUniqueText(protocol.evidenceProtocol.invalidEvidenceRules, [
+    ? [
       "Missing, empty, or conflicting answers are invalid.",
-    ])
+    ]
     : universalVision
       ? addUniqueText(protocol.evidenceProtocol.invalidEvidenceRules, universalVision.invalidEvidenceRules)
       : protocol.evidenceProtocol.invalidEvidenceRules;
   const expectedAnswerInstruction = expectedAnswer ? `Correct answer: ${expectedAnswer}` : null;
-  const winCondition = expectedAnswer && !/\bexpected[_ -]?answer\b/i.test(protocol.settlementProtocol.winCondition)
-    ? `EXPECTED_ANSWER: ${expectedAnswer}. ${protocol.settlementProtocol.winCondition}`
-    : protocol.settlementProtocol.winCondition;
+  const winCondition = objectiveTextAnswer
+    ? expectedAnswer
+      ? `EXPECTED_ANSWER: ${expectedAnswer}. Exactly one accepted participant must submit this answer to win. If both or neither match, send to manual review.`
+      : "Exactly one accepted participant must submit the locked expected answer to win. If both or neither match, send to manual review."
+    : expectedAnswer && !/\bexpected[_ -]?answer\b/i.test(protocol.settlementProtocol.winCondition)
+      ? `EXPECTED_ANSWER: ${expectedAnswer}. ${protocol.settlementProtocol.winCondition}`
+      : protocol.settlementProtocol.winCondition;
   const judgeInstructions = objectiveTextAnswer
-    ? addUniqueText(protocol.settlementProtocol.judgeInstructions, [
+    ? [
       "Read each participant answer from evidence metadata.answer first, then from text evidence.",
       ...(expectedAnswerInstruction ? [expectedAnswerInstruction] : []),
       "Return settle_winner only when exactly one participant matches the expected answer.",
-    ])
+    ]
     : universalVision
       ? addUniqueText(protocol.settlementProtocol.judgeInstructions, universalVision.judgeInstructions)
       : protocol.settlementProtocol.judgeInstructions;
@@ -640,15 +654,25 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
     Number.isFinite(rawAbsoluteDeadline.getTime()) || /^(none|no deadline|open|open ended|open-ended|n\/a|null)$/i.test(rawDeadline)
       ? parsedDeadline?.toISOString() ?? "48 hours"
       : rawDeadline;
-  const endCondition = stripDeadlineArtifacts(protocol.timingProtocol.endCondition) || "When the attempt ends.";
+  const endCondition = objectiveTextAnswer
+    ? "The evidence window ends at the locked deadline."
+    : stripDeadlineArtifacts(protocol.timingProtocol.endCondition) || "When the attempt ends.";
 
   return {
     ...protocol,
+    title: objectiveTextAnswer ? objectiveTextAnswerTitle(protocol, expectedAnswer) : protocol.title,
+    userFacingSummary: objectiveTextAnswer
+      ? "Each participant submits one text answer. The system settles only when exactly one accepted participant matches the locked expected answer."
+      : protocol.userFacingSummary,
     participantMode,
+    outcomeType: objectiveTextAnswer ? "yes_no" : protocol.outcomeType,
     timingProtocol: {
       ...protocol.timingProtocol,
+      startCondition: objectiveTextAnswer ? "Challenge starts after both participants accept the locked terms." : protocol.timingProtocol.startCondition,
       endCondition,
       deadline: normalizedDeadline,
+      tieBreaker: objectiveTextAnswer ? "No tie-breaker. Both matching or neither matching goes to manual review." : protocol.timingProtocol.tieBreaker,
+      allowedAttempts: objectiveTextAnswer ? "One submitted answer per participant." : protocol.timingProtocol.allowedAttempts,
     },
     identityProtocol: {
       ...protocol.identityProtocol,
@@ -667,6 +691,17 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       invalidEvidenceRules,
       requiredMetadata: [...requiredMetadata],
     },
+    locationProtocol: shouldForceNoLocation(protocol, objectiveTextAnswer)
+      ? {
+          ...protocol.locationProtocol,
+          mode: "none",
+          joinRadiusMeters: undefined,
+          challengeRadiusMeters: undefined,
+          requiresLiveLocation: false,
+          requiresCoPresence: false,
+          locationPrivacy: "hidden",
+        }
+      : protocol.locationProtocol,
     settlementProtocol: {
       ...protocol.settlementProtocol,
       mode: desiredSettlementMode,
@@ -675,7 +710,14 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
       autoSettleConfidenceThreshold: threshold,
       manualReviewTriggers: [...manualReviewTriggers],
     },
-    riskPolicy,
+    riskPolicy: objectiveTextAnswer && riskPolicy.allowed
+      ? {
+          ...riskPolicy,
+          riskLevel: "safe",
+          warnings: [],
+          restrictions: [],
+        }
+      : riskPolicy,
     aiBudgetPolicy: {
       ...protocol.aiBudgetPolicy,
       estimatedCostTier: massCrowd ? "high" : visionEvidence ? "medium" : protocol.aiBudgetPolicy.estimatedCostTier,

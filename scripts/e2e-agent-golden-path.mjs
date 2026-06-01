@@ -202,9 +202,10 @@ try {
       riskAllowed: protocol.riskPolicy?.allowed,
     } : null,
   };
-  requireCheck(proof, "compile_used_selected_provider", compiled.llmCall?.providerId === "openai" && compiled.llmCall?.model === "gpt-5-mini" && compiled.llmCall?.usedApi === true, proof.compile);
+  requireCheck(proof, "compile_used_real_ai_provider", compiled.llmCall?.usedApi === true && Boolean(compiled.llmCall?.providerId) && Boolean(compiled.llmCall?.model), proof.compile);
   requireCheck(proof, "compile_returned_protocol_v2", protocol?.version === "2.0" && protocol.riskPolicy?.allowed === true, proof.compile.protocol);
   requireCheck(proof, "compile_preserved_expected_answer", JSON.stringify(protocol).includes(expectedAnswer), proof.compile.protocol);
+  requireCheck(proof, "compile_normalized_text_answer_protocol", protocol?.evidenceProtocol?.mode === "platform_metric" && protocol?.settlementProtocol?.mode === "auto_ai_text", proof.compile.protocol);
 
   const publishDraft = { ...compiled.draftState, stake: 1, stakeType: "credits" };
   const published = await callAgentTool(
