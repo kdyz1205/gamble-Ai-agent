@@ -575,6 +575,7 @@ function normalizeCompiledProtocol(protocol: ProtocolSpecV2): ProtocolSpecV2 {
 
   const participantBindings = protocol.identityProtocol.participantBindings
     .filter((binding) => participantMode !== "solo" || binding.role !== "opponent")
+    .filter((binding) => !(objectiveTextAnswer && participantMode === "head_to_head") || binding.role === "creator" || binding.role === "opponent")
     .map((binding) => ({
       ...binding,
       expectedPosition: objectiveTextAnswer ? "any" : sameCamera
