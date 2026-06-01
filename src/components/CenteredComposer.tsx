@@ -36,7 +36,7 @@ const LANGUAGE_OPTIONS: Array<{
     value: "zh",
     shortLabel: "中文",
     label: "中文",
-    status: "中文输出。",
+    status: "",
   },
 ];
 
@@ -181,13 +181,9 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
         // Show in input box; let user review before submitting.
         setInput(finalText);
         setInterim("");
-        if (result.usedFallback && result.error) {
-          const messageLang = voiceMessageLanguage(voiceLang, finalText);
-          setVoiceError(
-            messageLang === "zh"
-              ? "AI 转写暂时失败，现在用的是浏览器预览。请看一眼再发送。"
-              : "AI transcription failed, so this is browser speech preview. Check it before sending.",
-          );
+        setVoiceError("");
+        if (result.usedFallback && result.error && typeof console !== "undefined") {
+          console.warn("[mic] AI transcription fallback used browser preview:", result.error);
         }
       } else if (result.error) {
         const messageLang = voiceMessageLanguage(voiceLang, previewText);
@@ -202,6 +198,13 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       if (previewText) {
         setInput(normalizeVoiceTranscript(previewText));
         setInterim("");
+        setVoiceError("");
+      } else {
+        setVoiceError(
+          voiceLang === "zh"
+            ? "语音服务暂时不可用。请再试一次，或直接输入文字。"
+            : "Voice transcription is temporarily unavailable. Try again or type it.",
+        );
       }
     } finally {
       setIsTranscribing(false);
