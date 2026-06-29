@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 
 const liveEvents = [
-  { id: 1, text: "Alex won $50 in Push-up Challenge", time: "2m ago" },
-  { id: 2, text: "New challenge: 10K run under 50 min", time: "5m ago" },
+  { id: 1, text: "Alex earned +50 XP in Push-up Quest", time: "2m ago" },
+  { id: 2, text: "New quest: 10K run under 50 min", time: "5m ago" },
   { id: 3, text: "Jamie vs Sam — Video proof submitted", time: "8m ago" },
-  { id: 4, text: "AI judging complete: Chess Speed Match", time: "12m ago" },
-  { id: 5, text: "Morgan staked $100 on Weekend 5K", time: "15m ago" },
+  { id: 4, text: "Familiar result ready: Chess Speed Match", time: "12m ago" },
+  { id: 5, text: "Morgan joined Weekend 5K with 100 credits", time: "15m ago" },
 ];
 
 export default function LiveTicker() {
@@ -21,11 +21,11 @@ export default function LiveTicker() {
   }, []);
 
   return (
-    <div className="bg-white rounded-2xl border border-border-subtle p-4 overflow-hidden">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-        <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
-          Live Activity
+    <div className="sum-map-world sum-quest-card p-4 overflow-hidden">
+      <div className="sum-sticker-badge px-3 py-1.5 mb-3 text-xs font-bold uppercase tracking-wider">
+        <span className="sum-quest-orb" />
+        <span>
+          Quest Activity
         </span>
       </div>
       <div className="relative h-8 overflow-hidden">
@@ -38,10 +38,10 @@ export default function LiveTicker() {
                 : "opacity-0 translate-y-4"
             }`}
           >
-            <span className="text-sm text-text-secondary truncate pr-4">
+            <span className="text-sm truncate pr-4" style={{ color: "var(--sum-ink)" }}>
               {event.text}
             </span>
-            <span className="text-xs text-text-tertiary whitespace-nowrap">
+            <span className="text-xs whitespace-nowrap" style={{ color: "var(--sum-muted)" }}>
               {event.time}
             </span>
           </div>

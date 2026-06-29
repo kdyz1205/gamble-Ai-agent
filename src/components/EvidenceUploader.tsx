@@ -237,14 +237,14 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       await api.submitEvidence(challengeId, {
         type: finalType,
         url: finalUrl,
-        description: trimmedDescription || (f ? `Uploaded: ${f.name}` : "Evidence submitted"),
+        description: trimmedDescription || (f ? `Uploaded: ${f.name}` : "Proof submitted"),
       });
       resetAll();
       setMode(null);
       setDescription("");
       await onSubmitted();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not submit evidence");
+      setError(e instanceof Error ? e.message : "Could not submit proof");
     } finally {
       setSubmitting(false);
     }
@@ -264,8 +264,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
           📸
         </div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: PEACH_DARK }}>Your evidence</p>
-          <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>Record live, upload, or paste — AI will judge.</p>
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: PEACH_DARK }}>Your proof</p>
+          <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>Record live, upload, or paste so the Familiar can referee.</p>
         </div>
       </div>
 
@@ -337,7 +337,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
           {file.type.startsWith("video") ? (
             <video controls src={previewUrl} className="w-full rounded-2xl" style={{ background: "#000", maxHeight: 300 }} />
           ) : (
-            <img src={previewUrl} alt="evidence preview" className="w-full rounded-2xl" style={{ maxHeight: 300, objectFit: "cover" }} />
+            <img src={previewUrl} alt="proof preview" className="w-full rounded-2xl" style={{ maxHeight: 300, objectFit: "cover" }} />
           )}
           <p className="text-xs font-semibold mt-2 px-3 py-1.5 inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}>
@@ -371,7 +371,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       <textarea
         value={description}
         onChange={e => setDescription(e.target.value)}
-        placeholder="Describe what you did — the AI uses this + any media to judge. Be specific: reps, times, exact actions."
+        placeholder="Describe what you did. The Familiar uses this plus any media to judge. Be specific: reps, times, exact actions."
         rows={3}
         className="w-full px-4 py-3 text-sm font-medium bg-white focus:outline-none resize-y"
         style={{ color: NAVY, border: `1.5px solid ${NAVY_FAINT}`, borderRadius: "16px", minHeight: 80 }}
@@ -421,7 +421,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
           boxShadow: submitting || !hasContent ? "none" : `0 4px 14px 0 ${ORANGE_GLOW}`,
         }}
       >
-        {submitting ? (uploading ? "Uploading…" : "Submitting…") : "Submit evidence 🚀"}
+        {submitting ? (uploading ? "Uploading..." : "Submitting...") : "Submit proof"}
       </motion.button>
     </motion.div>
   );

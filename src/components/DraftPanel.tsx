@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import type { ParsedChallenge, ActionItem } from "@/lib/api-client";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import type { ActionItem, ParsedChallenge } from "@/lib/api-client";
 
 export interface ChallengeDraft {
   title: string;
@@ -20,35 +20,153 @@ export interface ChallengeDraft {
 
 interface Props {
   draft: ChallengeDraft;
-  /** AI's rich parsed output — when present, we render chip dropdowns per field with reasoning. */
   rich?: ParsedChallenge | null;
   onPublish: (editedDraft: ChallengeDraft) => void;
   onEdit: () => void;
-  /** Called when user picks a different stake/evidence/deadline option from AI's list. */
   onFieldChange?: (patch: Partial<ChallengeDraft>) => void;
-  /** Called when the user clicks one of AI's proactive action suggestions (top up, reduce scope, …). */
   onActionItem?: (a: ActionItem) => void;
 }
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
-const NAVY = "#1E293B";
-const NAVY_DIM = "#64748B";
-const NAVY_FAINT = "#E2E8F0";
-const PEACH = "#FED7AA";
-const PEACH_DARK = "#FDBA74";
-const PEACH_TEXT = "#7C2D12";
-const ORANGE_GLOW = "rgba(251,146,60,0.39)";
-const MINT = "#A7F3D0";
-const MINT_TEXT = "#065F46";
-const LAVENDER = "#E9D5FF";
-const CREAM = "#FFEDD5";
-const ROSE_BG = "#FECACA";
-const ROSE_TEXT = "#991B1B";
+type ProtocolValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ProtocolRecord
+  | ProtocolValue[];
+
+interface ProtocolRecord {
+  [key: string]: ProtocolValue;
+}
+
+type QuestProtocolView = ParsedChallenge & {
+  userFacingSummary?: string;
+  participantMode?: ProtocolValue;
+  outcomeType?: ProtocolValue;
+  evidenceProtocol?: ProtocolValue;
+  timingProtocol?: ProtocolValue;
+  settlementProtocol?: ProtocolValue;
+  riskPolicy?: ProtocolValue;
+};
+
+const SUM_INK = "#153047";
+const SUM_MUTED = "#60758A";
+const SUM_SKY = "#DFF5FF";
+const SUM_MINT = "#8FE6C1";
+const SUM_PEACH = "#FFB978";
+const SUM_SUN = "#FFD86B";
+const SUM_BORDER = "rgba(41,112,142,0.16)";
+const SUM_CARD = "rgba(255,255,255,0.9)";
+const SUM_SHADOW = "0 18px 44px rgba(40,102,133,0.14)";
+const SUM_DANGER = "#B4234A";
+const SUM_DANGER_BG = "#FFE4EA";
+
+function isRecord(value: ProtocolValue): value is ProtocolRecord {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function humanize(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const spaced = trimmed
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function protocolText(value: ProtocolValue, preferredKeys: string[] = []): string {
+  if (value == null) return "";
+  if (typeof value === "string") return humanize(value);
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) {
+    return value.map((item) => protocolText(item, preferredKeys)).filter(Boolean).join("; ");
+  }
+  if (isRecord(value)) {
+    const fallbackKeys = [
+      "userFacingSummary",
+      "summary",
+      "label",
+      "description",
+      "required",
+      "requirement",
+      "rule",
+      "judgeRule",
+      "proof",
+      "window",
+      "deadline",
+      "timing",
+      "note",
+      "policy",
+      "type",
+    ];
+    for (const key of [...preferredKeys, ...fallbackKeys]) {
+      const text = protocolText(value[key]);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function firstText(...values: Array<string | null | undefined>) {
+  return values.find((value) => value && value.trim().length > 0)?.trim() ?? "";
+}
+
+function participantText(protocol: QuestProtocolView | null, draft: ChallengeDraft) {
+  const fromProtocol = protocolText(protocol?.participantMode, ["summary", "label", "mode", "participants"]);
+  if (fromProtocol) return fromProtocol;
+  if (draft.playerB) return `${draft.playerA} vs ${draft.playerB}`;
+  return draft.isPublic ? "Open arena" : "Invite only";
+}
+
+function safetyText(protocol: QuestProtocolView | null) {
+  const risk = protocolText(protocol?.riskPolicy, ["safetyNote", "note", "summary", "policy", "warning"]);
+  if (risk) return risk;
+  return protocol?.redFlags?.find((flag) => flag.trim().length > 0) ?? "";
+}
 
 export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onActionItem }: Props) {
   const [d, setD] = useState<ChallengeDraft>(draft);
   const [openField, setOpenField] = useState<null | "stake" | "evidence" | "deadline" | "type">(null);
+
   useEffect(() => setD(draft), [draft]);
+
+  const protocol = (rich ?? null) as QuestProtocolView | null;
+  const questTitle = firstText(protocol?.title, d.title, "Untitled quest");
+  const summary = firstText(
+    protocol?.userFacingSummary,
+    protocol?.recommendationSummary,
+    protocol?.proposition,
+    d.rules,
+    "Review the quest terms, send the invite, and let the Familiar judge the proof.",
+  );
+  const participants = participantText(protocol, d);
+  const proofRequired = firstText(
+    protocolText(protocol?.evidenceProtocol, ["summary", "required", "requirement", "proof", "type"]),
+    protocol?.evidenceType,
+    d.evidence,
+    "Proof required before the Familiar judges.",
+  );
+  const winCondition = firstText(
+    protocol?.proposition,
+    d.rules,
+    protocolText(protocol?.outcomeType, ["summary", "label", "rule", "type"]),
+    "The quest rules decide the result.",
+  );
+  const deadline = firstText(
+    protocolText(protocol?.timingProtocol, ["summary", "deadline", "window", "timing"]),
+    protocol?.deadline,
+    d.deadline,
+    "Timing to be confirmed.",
+  );
+  const familiarJudge = firstText(
+    protocolText(protocol?.settlementProtocol, ["judge", "arbiter", "reviewRule", "summary", "description", "rule"]),
+    d.aiReview ? "AI Familiar reviews submitted proof." : "Summoner reviews submitted proof.",
+  );
+  const safety = safetyText(protocol);
 
   const applyField = (patch: Partial<ChallengeDraft>) => {
     setD(prev => ({ ...prev, ...patch }));
@@ -56,143 +174,192 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
     setOpenField(null);
   };
 
+  const detailRows = [
+    ["Summoner / opponent", participants],
+    ["Proof required", proofRequired],
+    ["Win condition", winCondition],
+    ["Deadline / timing", deadline],
+    ["AI Familiar judge", familiarJudge],
+  ] as const;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
+      className="relative isolate overflow-visible"
+      initial={{ opacity: 0, y: 8 }}
       transition={{ type: "spring", stiffness: 300, damping: 22 }}
-      className="lp-glass"
-      style={{
-        borderRadius: "28px",
-        boxShadow: "0 8px 30px rgba(15,23,42,0.04)",
-        // NO overflow: hidden here — it was clipping the absolute-positioned
-        // ClickableField dropdowns, making the options INVISIBLE and the user's
-        // click fall through to whichever sibling field was underneath. Reported
-        // as "can't pick the stake amount, clicks do nothing". The top sticker
-        // tab doesn't actually need the clip because its own background is
-        // contained to the header div.
-      }}
     >
-      {/* Top sticker tab */}
       <div
-        className="px-5 py-2.5 flex items-center justify-between"
-        style={{ background: `linear-gradient(90deg, ${PEACH}1A, ${MINT}1A, ${LAVENDER}1A)`, borderBottom: `1px solid ${NAVY_FAINT}` }}
+        className="relative overflow-hidden p-4 sm:p-5"
+        style={{
+          background:
+            "radial-gradient(circle at 92% 0%, rgba(255,216,107,0.34), transparent 28%), radial-gradient(circle at 8% 14%, rgba(143,230,193,0.3), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(223,245,255,0.9))",
+          border: `1px solid ${SUM_BORDER}`,
+          borderRadius: "28px",
+          boxShadow: SUM_SHADOW,
+          color: SUM_INK,
+        }}
       >
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>📝 Your market</span>
-        <span className="text-xs font-bold px-2.5 py-0.5" style={{ background: "#FFFFFF", color: PEACH_DARK, borderRadius: "999px" }}>
-          {d.isPublic ? "🌍 Public" : "🔒 Private"}
-        </span>
-      </div>
-
-      <div className="p-5">
-        {/* Title — editable */}
-        <input
-          type="text"
-          value={d.title}
-          onChange={e => setD(prev => ({ ...prev, title: e.target.value }))}
-          maxLength={64}
-          className="w-full text-xl font-extrabold bg-transparent border-b-2 border-transparent focus:outline-none transition-colors mb-2 pb-1"
-          style={{ color: NAVY, borderBottomColor: "transparent" }}
-          onFocus={e => (e.currentTarget.style.borderBottomColor = PEACH)}
-          onBlur={e => (e.currentTarget.style.borderBottomColor = "transparent")}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-5 top-5 rounded-full"
+          style={{
+            width: "3rem",
+            height: "3rem",
+            background:
+              "radial-gradient(circle at 35% 30%, #fff 0 18%, #ffd86b 19% 38%, #ffb978 39% 100%)",
+            boxShadow: "0 0 0 4px rgba(255,216,107,0.18), 0 0 24px rgba(143,230,193,0.56)",
+          }}
         />
 
-        {/* AI's overall take — one-sentence summary */}
-        {rich?.recommendationSummary && (
-          <p className="text-xs font-medium mb-4 leading-relaxed" style={{ color: NAVY_DIM }}>
-            <span style={{ color: PEACH_DARK }}>✨ </span>{rich.recommendationSummary}
-          </p>
-        )}
-
-        {/* Oracle attachments — AI called real tools and wired them into the bet.
-            Rendered as a dashed card with source + current value + verify link. */}
-        {rich?.oracles && rich.oracles.length > 0 && (
-          <div
-            className="mb-4 px-3 py-2.5"
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: SUM_MUTED }}>
+              Quest Contract
+            </p>
+            <input
+              className="mt-1 w-full bg-transparent text-2xl font-extrabold leading-tight outline-none"
+              maxLength={64}
+              onBlur={(event) => {
+                event.currentTarget.style.borderBottomColor = "transparent";
+              }}
+              onChange={(event) => setD(prev => ({ ...prev, title: event.target.value }))}
+              onFocus={(event) => {
+                event.currentTarget.style.borderBottomColor = SUM_PEACH;
+              }}
+              style={{ color: SUM_INK, borderBottom: "2px solid transparent" }}
+              type="text"
+              value={d.title || questTitle}
+            />
+          </div>
+          <span
+            className="rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em]"
             style={{
-              background: `linear-gradient(135deg, ${MINT}33, ${LAVENDER}22)`,
-              border: `1.5px dashed ${MINT_TEXT}`,
-              borderRadius: "14px",
+              background: d.isPublic ? SUM_MINT : SUM_CARD,
+              border: `1px solid ${SUM_BORDER}`,
+              color: SUM_INK,
+              boxShadow: "0 8px 18px rgba(40,102,133,0.08)",
             }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MINT_TEXT }}>🔗 Oracle attached</p>
-            {rich.oracles.map((o, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 mb-1 last:mb-0">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold truncate" style={{ color: NAVY }}>{o.source} · {o.label}</p>
-                  {o.currentValue && (
-                    <p className="text-[11px] font-semibold" style={{ color: MINT_TEXT }}>Now: {o.currentValue}</p>
+            {d.isPublic ? "Public arena" : "Invite quest"}
+          </span>
+        </div>
+
+        <p className="relative z-10 mt-3 text-sm font-semibold leading-6" style={{ color: SUM_MUTED }}>
+          {summary}
+        </p>
+
+        <div className="relative z-10 mt-4 grid gap-2">
+          {detailRows.map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-[18px] px-3 py-3 sm:px-4"
+              style={{
+                background: "rgba(255,255,255,0.72)",
+                border: `1px solid ${SUM_BORDER}`,
+              }}
+            >
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em]" style={{ color: SUM_MUTED }}>
+                {label}
+              </p>
+              <p className="mt-1 text-sm font-bold leading-5" style={{ color: SUM_INK }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {safety && (
+          <div
+            className="relative z-10 mt-4 rounded-[18px] px-4 py-3"
+            style={{
+              background: SUM_DANGER_BG,
+              border: "1px solid rgba(180,35,74,0.2)",
+              color: SUM_DANGER,
+            }}
+          >
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em]">Safety note</p>
+            <p className="mt-1 text-sm font-semibold leading-5">{safety}</p>
+          </div>
+        )}
+
+        {rich?.oracles && rich.oracles.length > 0 && (
+          <div
+            className="relative z-10 mt-4 rounded-[18px] px-4 py-3"
+            style={{
+              background: "rgba(143,230,193,0.22)",
+              border: `1px solid ${SUM_BORDER}`,
+            }}
+          >
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em]" style={{ color: SUM_MUTED }}>
+              Source attached
+            </p>
+            <div className="mt-2 grid gap-2">
+              {rich.oracles.map((oracle, index) => (
+                <div key={`${oracle.source}-${oracle.label}-${index}`} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold" style={{ color: SUM_INK }}>
+                      {oracle.source} - {oracle.label}
+                    </p>
+                    {oracle.currentValue && (
+                      <p className="text-xs font-semibold" style={{ color: SUM_MUTED }}>
+                        Current: {oracle.currentValue}
+                      </p>
+                    )}
+                  </div>
+                  {oracle.oracleUrl && (
+                    <a
+                      className="shrink-0 rounded-full px-3 py-1 text-xs font-bold"
+                      href={oracle.oracleUrl}
+                      rel="noreferrer"
+                      style={{ background: "#fff", color: SUM_INK, border: `1px solid ${SUM_BORDER}` }}
+                      target="_blank"
+                    >
+                      Verify
+                    </a>
                   )}
                 </div>
-                {o.oracleUrl && (
-                  <a
-                    href={o.oracleUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[10px] font-bold shrink-0 px-2 py-0.5 hover:underline"
-                    style={{ background: "#FFFFFF", color: MINT_TEXT, borderRadius: "999px", border: `1px solid ${MINT_TEXT}` }}
-                  >
-                    verify ↗
-                  </a>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Red flags — AI-raised concerns */}
-        {rich?.redFlags && rich.redFlags.length > 0 && (
-          <div
-            className="mb-4 px-3 py-2"
-            style={{ background: ROSE_BG, border: `1px solid #FDA4AF`, borderRadius: "14px" }}
-          >
-            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: ROSE_TEXT }}>⚠️ Heads up</p>
-            {rich.redFlags.map((f, i) => (
-              <p key={i} className="text-xs font-medium leading-relaxed" style={{ color: ROSE_TEXT }}>• {f}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Proactive action items — AI proposes clickable next-steps (top up, reduce scope, etc.)
-            Parent handles actual click via onActionItem; we just render buttons. */}
         {rich?.actionItems && rich.actionItems.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            {rich.actionItems.map((a, i) => (
+          <div className="relative z-10 mt-4 flex flex-wrap gap-2">
+            {rich.actionItems.map((action, index) => (
               <button
-                key={i}
-                type="button"
-                onClick={() => onActionItem?.(a)}
-                title={a.reasoning}
-                className="px-3 py-1.5 text-[11px] font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                className="rounded-full px-3 py-2 text-xs font-extrabold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                key={`${action.label}-${index}`}
+                onClick={() => onActionItem?.(action)}
                 style={{
-                  background: PEACH,
-                  color: PEACH_TEXT,
-                  borderRadius: "999px",
-                  border: `1.5px solid ${PEACH_DARK}`,
-                  boxShadow: `0 2px 8px ${ORANGE_GLOW}`,
+                  background: SUM_PEACH,
+                  border: "1px solid rgba(255,185,120,0.7)",
+                  boxShadow: "0 8px 18px rgba(255,164,96,0.18)",
+                  color: SUM_INK,
                 }}
+                title={action.reasoning}
+                type="button"
               >
-                ✨ {a.label}
+                {action.label}
               </button>
             ))}
           </div>
         )}
 
-        {/* Key fields — each clickable to reveal AI's alternative options with reasoning */}
-        <div className="grid grid-cols-2 gap-2.5 mb-5">
+        <div className="relative z-20 mt-4 grid grid-cols-2 gap-2.5">
           <ClickableField
-            label="Stake"
-            value={d.stake > 0 ? `${d.stake} cr` : "Free"}
-            tint={d.stake > 0 ? PEACH : MINT}
-            emoji="💰"
             isOpen={openField === "stake"}
+            label="Points"
+            marker="XP"
             onToggle={() => setOpenField(openField === "stake" ? null : "stake")}
-            options={rich?.stakeOptions?.map(o => ({
-              label: o.amount === 0 ? `Free — ${o.label}` : `${o.amount} cr — ${o.label}`,
-              reasoning: o.reasoning,
-              onClick: () => applyField({ stake: o.amount }),
-              active: o.amount === d.stake,
+            options={rich?.stakeOptions?.map(option => ({
+              active: option.amount === d.stake,
+              label: option.amount === 0 ? `Free - ${option.label}` : `${option.amount} cr - ${option.label}`,
+              onClick: () => applyField({ stake: option.amount }),
+              reasoning: option.reasoning,
             }))}
+            tint={SUM_PEACH}
+            value={d.stake > 0 ? `${d.stake} credits` : "Free"}
             customInput={{
               placeholder: "e.g. 7 or 0 for free",
               onApply: (raw) => {
@@ -202,82 +369,72 @@ export default function DraftPanel({ draft, rich, onPublish, onFieldChange, onAc
             }}
           />
           <ClickableField
-            label="Deadline"
-            value={d.deadline}
-            tint={LAVENDER}
-            emoji="⏰"
             isOpen={openField === "deadline"}
+            label="Deadline"
+            marker="T"
             onToggle={() => setOpenField(openField === "deadline" ? null : "deadline")}
-            options={rich?.deadlineOptions?.map(o => ({
-              label: o.duration,
-              reasoning: o.reasoning,
-              onClick: () => applyField({ deadline: o.duration }),
-              active: o.duration === d.deadline,
+            options={rich?.deadlineOptions?.map(option => ({
+              active: option.duration === d.deadline,
+              label: option.duration,
+              onClick: () => applyField({ deadline: option.duration }),
+              reasoning: option.reasoning,
             }))}
+            tint={SUM_SUN}
+            value={d.deadline}
             customInput={{
               placeholder: "e.g. 3 days, 2 hours",
               onApply: (raw) => applyField({ deadline: raw }),
             }}
           />
           <ClickableField
-            label="Evidence"
-            value={d.evidence}
-            tint={MINT}
-            emoji="📸"
             isOpen={openField === "evidence"}
+            label="Proof"
+            marker="P"
             onToggle={() => setOpenField(openField === "evidence" ? null : "evidence")}
-            options={rich?.evidenceOptions?.map(o => ({
-              label: `${o.label}${o.required ? " ★" : ""}`,
-              reasoning: o.reasoning,
-              onClick: () => applyField({ evidence: o.label }),
-              active: o.label === d.evidence,
+            options={rich?.evidenceOptions?.map(option => ({
+              active: option.label === d.evidence,
+              label: `${option.label}${option.required ? " required" : ""}`,
+              onClick: () => applyField({ evidence: option.label }),
+              reasoning: option.reasoning,
             }))}
+            tint={SUM_MINT}
+            value={d.evidence}
             customInput={{
-              placeholder: "e.g. screenshot + timestamp",
+              placeholder: "e.g. screenshot plus timestamp",
               onApply: (raw) => applyField({ evidence: raw }),
             }}
           />
           <ClickableField
-            label="Type"
-            value={d.type}
-            tint={PEACH}
-            emoji="🏷️"
             isOpen={openField === "type"}
+            label="Quest style"
+            marker="Q"
             onToggle={() => setOpenField(openField === "type" ? null : "type")}
+            tint={SUM_SKY}
+            value={d.type}
             customInput={{
-              placeholder: "e.g. Fitness, Combat, Art",
+              placeholder: "e.g. Fitness, Games, Debate",
               onApply: (raw) => applyField({ type: raw }),
             }}
           />
         </div>
 
-        {/* Rules */}
-        {d.rules && (
-          <div
-            className="mb-5 px-4 py-3"
-            style={{ background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "16px" }}
-          >
-            <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: PEACH_DARK }}>📖 Rules</p>
-            <p className="text-sm font-medium leading-relaxed" style={{ color: NAVY }}>{d.rules}</p>
-          </div>
-        )}
-
-        {/* Publish */}
         <motion.button
+          className="relative z-10 mt-5 w-full py-4 text-base font-extrabold"
           onClick={() => onPublish(d)}
-          whileHover={{ scale: 1.03, y: -2 }}
-          whileTap={{ scale: 0.96 }}
-          transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="w-full py-4 text-base font-extrabold"
           style={{
-            background: PEACH,
-            color: PEACH_TEXT,
+            background: `linear-gradient(135deg, ${SUM_PEACH}, ${SUM_SUN})`,
+            border: "1px solid rgba(255,185,120,0.72)",
             borderRadius: "9999px",
-            boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}`,
-            letterSpacing: "0.02em",
+            boxShadow: "0 14px 30px rgba(255,164,96,0.24)",
+            color: SUM_INK,
+            letterSpacing: "0",
           }}
+          transition={{ type: "spring", stiffness: 400, damping: 22 }}
+          type="button"
+          whileHover={{ scale: 1.02, y: -1 }}
+          whileTap={{ scale: 0.97 }}
         >
-          🚀 Publish &amp; Get Link
+          Send Quest
         </motion.button>
       </div>
     </motion.div>
@@ -288,111 +445,118 @@ interface ClickableFieldProps {
   label: string;
   value: string;
   tint: string;
-  emoji: string;
+  marker: string;
   isOpen: boolean;
   onToggle: () => void;
   options?: Array<{ label: string; reasoning: string; onClick: () => void; active: boolean }>;
-  /** Optional custom-value override — if provided, shows a "Custom…" input at the bottom. */
   customInput?: {
     placeholder: string;
     onApply: (raw: string) => void;
   };
 }
 
-function ClickableField({ label, value, tint, emoji, isOpen, onToggle, options, customInput }: ClickableFieldProps) {
+function ClickableField({ label, value, tint, marker, isOpen, onToggle, options, customInput }: ClickableFieldProps) {
   const [customValue, setCustomValue] = useState("");
   const clickable = Boolean((options && options.length > 0) || customInput);
 
   const applyCustom = () => {
-    const v = customValue.trim();
-    if (v.length === 0 || !customInput) return;
-    customInput.onApply(v);
+    const nextValue = customValue.trim();
+    if (nextValue.length === 0 || !customInput) return;
+    customInput.onApply(nextValue);
     setCustomValue("");
   };
 
   return (
-    // When this field is open, raise its whole stacking context so the
-    // dropdown sits visually above sibling fields in the grid (e.g. Stake
-    // dropdown must appear ON TOP of the Evidence/Type cells below it,
-    // otherwise clicks on dropdown options fall through to those cells).
     <div className="relative" style={{ zIndex: isOpen ? 30 : 1 }}>
       <motion.button
-        onClick={onToggle}
-        whileTap={clickable ? { scale: 0.97 } : undefined}
         className="w-full px-3 py-3 text-left transition-all"
+        onClick={onToggle}
         style={{
-          background: `${tint}14`,
-          border: `1px solid ${tint}33`,
+          background: "rgba(255,255,255,0.7)",
+          border: `1px solid ${SUM_BORDER}`,
           borderRadius: "16px",
           cursor: clickable ? "pointer" : "default",
         }}
+        type="button"
+        whileTap={clickable ? { scale: 0.97 } : undefined}
       >
-        <p className="text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1" style={{ color: NAVY_DIM }}>
-          <span>{emoji}</span>
+        <p className="mb-1 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[0.16em]" style={{ color: SUM_MUTED }}>
+          <span
+            className="grid h-5 w-5 place-items-center rounded-full text-[9px]"
+            style={{ background: tint, color: SUM_INK }}
+          >
+            {marker}
+          </span>
           <span>{label}</span>
-          {clickable && <span className="ml-auto text-[9px] font-semibold" style={{ color: NAVY_DIM, opacity: 0.7 }}>tap ↓</span>}
+          {clickable && <span className="ml-auto text-[9px] font-semibold" style={{ color: SUM_MUTED }}>Tap</span>}
         </p>
-        <p className="text-sm font-bold" style={{ color: NAVY }}>{value}</p>
+        <p className="truncate text-sm font-bold" style={{ color: SUM_INK }}>{value}</p>
       </motion.button>
 
       <AnimatePresence>
         {isOpen && clickable && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="absolute left-0 right-0 top-full z-20 mt-1 space-y-1 p-2"
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            onWheel={(event) => event.stopPropagation()}
+            style={{
+              background: "#fff",
+              border: `1px solid ${SUM_BORDER}`,
+              borderRadius: "16px",
+              boxShadow: "0 18px 34px rgba(40,102,133,0.16)",
+            }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 right-0 top-full mt-1 z-20 p-2 space-y-1 lp-glass"
-            style={{ borderRadius: "16px", boxShadow: "0 8px 24px rgba(15,23,42,0.12)" }}
-            onWheel={(e) => e.stopPropagation()}
           >
-            {options?.map((opt, i) => (
+            {options?.map((option, index) => (
               <button
-                key={i}
-                onClick={opt.onClick}
-                className="w-full text-left px-3 py-2 transition-colors rounded-xl"
+                className="w-full rounded-xl px-3 py-2 text-left transition-colors"
+                key={`${option.label}-${index}`}
+                onClick={option.onClick}
                 style={{
-                  background: opt.active ? `${tint}40` : "transparent",
-                  border: opt.active ? `1px solid ${tint}` : "1px solid transparent",
+                  background: option.active ? `${tint}66` : "transparent",
+                  border: option.active ? `1px solid ${tint}` : "1px solid transparent",
                 }}
+                type="button"
               >
-                <p className="text-xs font-bold mb-0.5" style={{ color: NAVY }}>{opt.label}</p>
-                <p className="text-[10px] font-medium leading-snug" style={{ color: NAVY_DIM }}>{opt.reasoning}</p>
+                <p className="mb-0.5 text-xs font-bold" style={{ color: SUM_INK }}>{option.label}</p>
+                <p className="text-[10px] font-medium leading-snug" style={{ color: SUM_MUTED }}>{option.reasoning}</p>
               </button>
             ))}
 
             {customInput && (
               <>
                 {(options?.length ?? 0) > 0 && (
-                  <div className="flex items-center gap-2 my-1 px-2">
-                    <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
-                    <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>or type your own</span>
-                    <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
+                  <div className="my-1 flex items-center gap-2 px-2">
+                    <div className="h-px flex-1" style={{ background: SUM_BORDER }} />
+                    <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: SUM_MUTED }}>Custom</span>
+                    <div className="h-px flex-1" style={{ background: SUM_BORDER }} />
                   </div>
                 )}
                 <div
-                  className="px-3 py-2 rounded-xl flex items-center gap-2"
+                  className="flex items-center gap-2 rounded-xl px-3 py-2"
                   style={{
                     background: "#FFFFFF",
                     border: `2px dashed ${tint}`,
                   }}
                 >
-                  <span className="text-xs font-bold opacity-80" style={{ color: NAVY_DIM }}>✏️</span>
                   <input
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent text-xs font-bold focus:outline-none placeholder:font-medium"
+                    onChange={event => setCustomValue(event.target.value)}
+                    onKeyDown={event => event.key === "Enter" && applyCustom()}
+                    placeholder={customInput.placeholder}
+                    style={{ color: SUM_INK }}
                     type="text"
                     value={customValue}
-                    onChange={e => setCustomValue(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && applyCustom()}
-                    placeholder={customInput.placeholder}
-                    className="flex-1 bg-transparent text-xs font-bold focus:outline-none placeholder:font-medium"
-                    style={{ color: NAVY }}
-                    autoFocus
                   />
                   <button
-                    onClick={applyCustom}
+                    className="rounded-full px-3 py-1 text-[11px] font-bold transition-all active:scale-95 disabled:opacity-40"
                     disabled={customValue.trim().length === 0}
-                    className="px-3 py-1 text-[11px] font-bold rounded-full disabled:opacity-40 transition-all active:scale-95"
-                    style={{ color: NAVY, background: tint, border: `1px solid ${tint}` }}
+                    onClick={applyCustom}
+                    style={{ color: SUM_INK, background: tint, border: `1px solid ${tint}` }}
+                    type="button"
                   >
                     Set
                   </button>

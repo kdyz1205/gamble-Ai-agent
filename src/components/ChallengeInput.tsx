@@ -3,17 +3,17 @@
 import { useState } from "react";
 
 const suggestions = [
-  "I bet I can do 50 pushups in 2 minutes",
+  "I can do 50 pushups in 2 minutes",
   "Who can run 5K faster this weekend?",
   "I challenge my friend to a coding contest",
-  "Bet $20 on who finishes the book first",
+  "Who can finish the book first?",
 ];
 
 const quickActions = [
   { label: "Fitness", icon: "💪", color: "bg-teal-light text-teal" },
   { label: "Video Proof", icon: "🎥", color: "bg-accent-light text-accent" },
   { label: "Nearby", icon: "📍", color: "bg-gold-light text-gold" },
-  { label: "Money Stake", icon: "💰", color: "bg-success-light text-success" },
+  { label: "Credits", icon: "💰", color: "bg-success-light text-success" },
   { label: "Free Mode", icon: "🎯", color: "bg-bg-input text-text-secondary" },
 ];
 
@@ -66,7 +66,7 @@ export default function ChallengeInput() {
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="Describe your challenge... e.g. &quot;I bet I can run 5K under 25 minutes this Saturday&quot;"
+            placeholder="Describe your quest... e.g. &quot;I can run 5K under 25 minutes this Saturday&quot;"
             rows={2}
             className="flex-1 px-3 py-3 text-base text-text-primary placeholder-text-tertiary bg-transparent resize-none outline-none"
           />

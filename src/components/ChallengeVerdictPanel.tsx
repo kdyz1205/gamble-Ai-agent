@@ -13,17 +13,17 @@ const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
 const TIER_DESC: Record<1 | 2 | 3, string> = {
   1: "Fast & efficient",
-  2: "Balanced judgment",
+  2: "Balanced review",
   3: "Maximum intelligence",
 };
 
 function statusLabel(s: string): string {
   const m: Record<string, string> = {
-    open: "Waiting for opponent",
+    open: "Waiting for challenger",
     live: "In progress",
-    judging: "Ready for AI verdict",
-    pending_settlement: "Settling on-chain\u2026",
-    disputed: "AI recommendation ready",
+    judging: "Ready for Familiar review",
+    pending_settlement: "Preparing receipt\u2026",
+    disputed: "Familiar result ready",
     settled: "Settled",
     cancelled: "Cancelled",
     draft: "Draft",
@@ -153,7 +153,7 @@ export default function ChallengeVerdictPanel({
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "AI verdict failed");
+      setVerdictErr(e instanceof Error ? e.message : "Familiar result failed");
     } finally {
       setBusy(false);
     }
@@ -175,7 +175,7 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
-      setAsyncHint("AI is analyzing evidence (video frames + vision)...");
+      setAsyncHint("Familiar is reviewing proof (video frames + vision)...");
 
       // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
       // Replaces the old 2s-forever loop that at 1000 concurrent waiters did
@@ -193,7 +193,7 @@ export default function ChallengeVerdictPanel({
         if (Date.now() - pollStart > MAX_TOTAL_MS) {
           setBusy(false);
           setAsyncHint("");
-          setVerdictErr("Verdict is taking longer than expected — please reload to check status.");
+          setVerdictErr("Familiar review is taking longer than expected — please reload to check status.");
           return;
         }
         const delay = BACKOFF_SEQUENCE[Math.min(attempt, BACKOFF_SEQUENCE.length - 1)];
@@ -207,7 +207,7 @@ export default function ChallengeVerdictPanel({
               cancelled = true;
               setBusy(false);
               setAsyncHint("");
-              if (j.status === "failed") setVerdictErr(j.error || "Background verdict failed");
+              if (j.status === "failed") setVerdictErr(j.error || "Background Familiar review failed");
               await refresh();
               onCreditsMayChange();
               return;
@@ -226,7 +226,7 @@ export default function ChallengeVerdictPanel({
       if (pollRef.current) clearInterval(pollRef.current);
       scheduleNext();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not start background verdict");
+      setVerdictErr(e instanceof Error ? e.message : "Could not start background Familiar review");
       setBusy(false);
     }
   };
@@ -240,7 +240,7 @@ export default function ChallengeVerdictPanel({
       await refresh();
       onCreditsMayChange();
     } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not confirm AI recommendation");
+      setVerdictErr(e instanceof Error ? e.message : "Could not confirm Familiar result");
     } finally {
       setBusy(false);
     }
@@ -271,7 +271,7 @@ export default function ChallengeVerdictPanel({
           animate={{ opacity: [0.5, 1, 0.5], scale: [0.95, 1, 0.95] }}
           transition={{ duration: 1.5, repeat: Infinity }}
         />
-        <p className="text-sm text-text-muted">Loading challenge...</p>
+        <p className="text-sm text-text-muted">Loading quest...</p>
       </div>
     );
   }
@@ -279,9 +279,9 @@ export default function ChallengeVerdictPanel({
   const hasOpponent = challenge.participants.some(p => p.role === "opponent");
   const phaseMatchDone = hasOpponent || challenge.status !== "open";
   const phases = [
-    { key: "match", done: phaseMatchDone, label: "Opponent", icon: "👤" },
-    { key: "ev", done: Boolean(allSubmitted || settled), label: "Evidence", icon: "📸" },
-    { key: "ai", done: Boolean(settled), label: "AI Verdict", icon: "⚡" },
+    { key: "match", done: phaseMatchDone, label: "Challenger", icon: "👤" },
+    { key: "ev", done: Boolean(allSubmitted || settled), label: "Proof", icon: "📸" },
+    { key: "ai", done: Boolean(settled), label: "Familiar Result", icon: "⚡" },
   ];
 
   const verdictRow = challenge.judgments?.[0] ?? null;
@@ -301,10 +301,10 @@ export default function ChallengeVerdictPanel({
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The bet</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: "#FDBA74" }}>The quest</p>
             <h3 className="text-xl font-black leading-tight" style={{ color: "#1E293B" }}>{challenge.title}</h3>
             <p className="text-xs mt-1.5 max-w-xl font-medium" style={{ color: "#64748B" }}>
-              {challenge.rules || "AI reviews evidence against your challenge rules, then settles credits."}
+              {challenge.rules || "Familiar reviews proof against your quest rules, then prepares a result receipt."}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -317,7 +317,7 @@ export default function ChallengeVerdictPanel({
               {statusLabel(challenge.status)}
             </motion.span>
             {challenge.stake > 0 && (
-              <span className="text-xs font-bold text-amber-400">{challenge.stake} credits at stake</span>
+              <span className="text-xs font-bold text-amber-400">{challenge.stake} quest credits</span>
             )}
           </div>
         </div>
@@ -390,7 +390,7 @@ export default function ChallengeVerdictPanel({
                     {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
                   </p>
                   <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    {isCreator ? "Creator" : "Opponent"} · {ev ? "Evidence in" : "Waiting"}
+                    {isCreator ? "Creator" : "Challenger"} · {ev ? "Proof in" : "Waiting"}
                   </p>
                   {ev && (
                     <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
@@ -466,9 +466,9 @@ export default function ChallengeVerdictPanel({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All evidence is in</p>
+                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All proof is in</p>
                 <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
-                  {isCreator ? "AI writes a recommendation. You confirm before credits settle." : "Waiting for the creator to start AI judgment."}
+                  {isCreator ? "Familiar writes a result. You confirm before credits update." : "Waiting for the creator to start Familiar review."}
                 </p>
               </div>
             </div>
@@ -517,7 +517,7 @@ export default function ChallengeVerdictPanel({
                     boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "Analyzing…" : `Generate AI recommendation · ${TIER_COST[tier]} cr`}
+                  {busy ? "Reviewing…" : `Ask Familiar for result · ${TIER_COST[tier]} cr`}
                 </motion.button>
                 <motion.button
                   type="button"
@@ -528,7 +528,7 @@ export default function ChallengeVerdictPanel({
                   className="w-full py-2.5 text-xs font-semibold disabled:opacity-40"
                   style={{ color: "#64748B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
-                  Run in background (recommended for long video)
+                  Background Familiar review
                 </motion.button>
                 {asyncHint && (
                   <motion.p
@@ -553,9 +553,9 @@ export default function ChallengeVerdictPanel({
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
           >
-            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>AI recommendation ready</p>
+            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>Familiar result ready</p>
             <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              Not final yet. Confirm to settle credits, or leave for manual review.
+              Not final yet. Confirm the result, or leave it for manual review.
             </p>
             <motion.button
               type="button"
@@ -569,7 +569,7 @@ export default function ChallengeVerdictPanel({
                 boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
               }}
             >
-              {busy ? "Settling..." : "Confirm AI Recommendation & Settle"}
+              {busy ? "Confirming..." : "Confirm Familiar Result"}
             </motion.button>
           </motion.div>
         )}
@@ -600,7 +600,7 @@ export default function ChallengeVerdictPanel({
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </motion.div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">AI Verdict</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
               </div>
 
               {/* Winner */}
@@ -636,7 +636,7 @@ export default function ChallengeVerdictPanel({
 
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>AI Reasoning</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>Familiar Reasoning</p>
                 <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
@@ -661,7 +661,7 @@ export default function ChallengeVerdictPanel({
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#64748B" }}>
-                  Verdict receipt
+                  Result receipt
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
                   {verdictRow.aiModel}
@@ -713,7 +713,7 @@ export default function ChallengeVerdictPanel({
 
               <motion.button
                 onClick={() => {
-                  const text = `AI Verdict: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nJudged by ${verdictRow.aiModel}`;
+                  const text = `Quest result: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nRefereed by ${verdictRow.aiModel}`;
                   void navigator.clipboard.writeText(text);
                 }}
                 whileTap={{ scale: 0.97 }}

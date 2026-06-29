@@ -87,7 +87,7 @@ export default function MarketsPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5">
         <div className="text-4xl mb-2">👋</div>
-        <p className="text-base font-bold" style={{ color: NAVY }}>Sign in to see your markets.</p>
+        <p className="text-base font-bold" style={{ color: NAVY }}>Sign in to see your quests.</p>
         <Link href="/"
           className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
           style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
@@ -101,12 +101,12 @@ export default function MarketsPage() {
     <div className="relative min-h-screen">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          Summoner.world
         </Link>
         <Link href="/"
           className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
           style={{ color: PEACH_TEXT, background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "9999px" }}>
-          + New bet
+          + New quest
         </Link>
       </header>
 
@@ -122,10 +122,10 @@ export default function MarketsPage() {
           }}
         >
           <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: PEACH_TEXT }}>
-            🎯 Match me with an open challenge
+            🎯 Match me with an open quest
           </p>
           <p className="text-xs font-medium mb-3 leading-relaxed" style={{ color: NAVY_DIM }}>
-            Don&apos;t feel like creating one? Let AI pair you with someone else&apos;s open bet — like shaking WeChat for a drift bottle.
+            Don&apos;t feel like creating one? Let your Familiar pair you with someone else&apos;s open quest.
           </p>
           <button
             onClick={tryMatchMe}
@@ -137,7 +137,7 @@ export default function MarketsPage() {
               border: `1.5px solid ${PEACH_TEXT}22`,
             }}
           >
-            {matching ? "🔍 Looking…" : "🎲 Match me now"}
+            {matching ? "🔍 Looking…" : "🎲 Find a quest"}
           </button>
           {matchError && (
             <p className="text-[11px] font-semibold mt-2" style={{ color: ROSE_TEXT }}>{matchError}</p>
@@ -172,7 +172,7 @@ export default function MarketsPage() {
           </div>
         )}
 
-        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My markets 🎲</h1>
+        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My quests 🎲</h1>
 
         {loading ? (
           <div className="text-center py-16">
@@ -183,11 +183,11 @@ export default function MarketsPage() {
         ) : markets.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-3">🙈</div>
-            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No markets yet.</p>
+            <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No quests yet.</p>
             <Link href="/"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-              Make your first bet ✨
+              Summon your first quest ✨
             </Link>
           </div>
         ) : (

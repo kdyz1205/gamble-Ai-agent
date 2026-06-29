@@ -70,10 +70,10 @@ export default function MePage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>LuckyPlay</Link>
+        <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>Summoner.world</Link>
         <Link href="/" className="text-xs font-bold px-4 py-2"
           style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          + New Market
+          + New Quest
         </Link>
       </header>
 
@@ -95,7 +95,7 @@ export default function MePage() {
           {/* Balance */}
           <div className="flex items-center justify-between py-3 px-4 mb-4"
             style={{ background: CREAM, borderRadius: "20px" }}>
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Balance</span>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NAVY_DIM }}>Credits</span>
             <span className="text-2xl font-extrabold" style={{ color: PEACH_TEXT }}>
               {credits}
               <span className="text-xs font-bold ml-1" style={{ color: NAVY_DIM }}>cr</span>
@@ -106,13 +106,13 @@ export default function MePage() {
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="Active" value={openCount} tint="#5FC9B4" />
             <StatCard label="Settled" value={settledCount} tint="#6BCF8E" />
-            <StatCard label="Staked" value={totalStaked} suffix="cr" tint="#B8A6E0" />
+            <StatCard label="Quest Credits" value={totalStaked} suffix="cr" tint="#B8A6E0" />
           </div>
         </div>
 
         {/* Markets section */}
         <div className="mb-3 flex items-center justify-between px-1">
-          <h2 className="text-base font-bold" style={{ color: NAVY }}>Your Markets</h2>
+          <h2 className="text-base font-bold" style={{ color: NAVY }}>Your Quests</h2>
           <span className="text-xs font-semibold" style={{ color: NAVY_DIM }}>{markets.length} total</span>
         </div>
 
@@ -145,12 +145,12 @@ export default function MePage() {
           <div className="text-center py-12 px-6 shadow-sm"
             style={{ background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "20px" }}>
             <p className="text-sm mb-4" style={{ color: NAVY_DIM }}>
-              {tab === "all" ? "No markets yet — make a friendly call!" : `No ${tab} markets right now.`}
+              {tab === "all" ? "No quests yet — summon a friendly challenge!" : `No ${tab} quests right now.`}
             </p>
             {tab === "all" && (
               <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold"
                 style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-                ✨ Create your first market
+                ✨ Summon your first quest
               </Link>
             )}
           </div>
@@ -170,7 +170,7 @@ export default function MePage() {
                         <span>·</span>
                         <span>{m.stake > 0 ? `${m.stake} cr` : "Free"}</span>
                         <span>·</span>
-                        <span>{m.participants?.length || 0} joined</span>
+                        <span>{m.participants?.length || 0} summoners</span>
                       </div>
                     </div>
                     <span className="flex-shrink-0 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"

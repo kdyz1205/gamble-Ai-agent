@@ -69,10 +69,10 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         const msg = e instanceof Error ? e.message : String(e);
         const pretty =
           /404|not found/i.test(msg)
-            ? "This market was deleted or the link is stale."
+            ? "This quest was deleted or the link is stale."
             : /401|unauthorized/i.test(msg)
-              ? "Please sign in to view this market."
-              : msg || "Could not load this market.";
+              ? "Please sign in to view this quest."
+              : msg || "Could not load this quest.";
         setError(pretty);
         setLoading(false);
       });
@@ -93,7 +93,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       const res = await api.confirmVerdict(id);
       setMarket(res.challenge);
     } catch (err) {
-      setConfirmError(err instanceof Error ? err.message : "Could not confirm the AI recommendation");
+      setConfirmError(err instanceof Error ? err.message : "Could not confirm the Familiar result");
     } finally {
       setConfirming(false);
     }
@@ -110,7 +110,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       await api.deleteChallenge(id);
       router.push("/markets");
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete this market");
+      setDeleteError(err instanceof Error ? err.message : "Could not delete this quest");
       setDeleteStep("confirm");
     }
   }, [id, router]);
@@ -130,21 +130,21 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5 text-center">
         <div className="text-5xl mb-2">😿</div>
         <p className="text-base font-bold max-w-md" style={{ color: ROSE_TEXT }}>
-          {error || "Market not found"}
+          {error || "Quest not found"}
         </p>
         <p className="text-[11px] font-mono opacity-60 max-w-md break-all" style={{ color: NAVY_DIM }}>
-          market id: {id}
+          quest id: {id}
         </p>
         <div className="flex items-center gap-2 mt-2">
           <Link href="/"
             className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
             style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-            Make a new bet ✨
+            Summon a new quest ✨
           </Link>
           <Link href="/markets"
             className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
             style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}>
-            My markets
+            My quests
           </Link>
         </div>
       </div>
@@ -165,12 +165,12 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       {/* Header — consistent with homepage */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          Summoner.world
         </Link>
         <Link href="/markets"
           className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
           style={{ color: NAVY, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
-          My markets
+          My quests
         </Link>
       </header>
 
@@ -185,7 +185,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           {isCreator && (
             <span className="text-xs font-semibold px-2.5 py-1"
               style={{ background: CREAM, color: PEACH_TEXT, borderRadius: "9999px" }}>
-              Your market 💝
+              Your quest 💝
             </span>
           )}
           <span className="ml-auto text-xs font-medium" style={{ color: NAVY_DIM }}>
@@ -200,7 +200,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           className="lp-glass mb-4"
           style={{ borderRadius: "28px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)", padding: "24px 24px 20px" }}
         >
-          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: NAVY_DIM }}>📝 The bet</p>
+          <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: NAVY_DIM }}>📝 The quest</p>
           <h1 className="text-2xl font-extrabold mb-2 leading-tight" style={{ color: NAVY }}>{market.title}</h1>
           {market.proposition && market.proposition !== market.title && (
             <p className="text-sm font-medium mb-2 leading-relaxed" style={{ color: NAVY_DIM }}>
@@ -215,8 +215,8 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
         {/* Key metrics grid */}
         <div className="grid grid-cols-3 gap-2.5 mb-4">
-          <MetricCard label="Stake" emoji="💰" value={stakeLabel} tint={market.stake > 0 ? PEACH : MINT} />
-          <MetricCard label="Evidence" emoji="📸" value={market.evidenceType?.replace(/_/g, " ") || "Self report"} tint={MINT} />
+          <MetricCard label="Credits" emoji="💰" value={stakeLabel} tint={market.stake > 0 ? PEACH : MINT} />
+          <MetricCard label="Proof" emoji="📸" value={market.evidenceType?.replace(/_/g, " ") || "Self report"} tint={MINT} />
           <MetricCard label="Players" emoji="👥" value={`${participantCount} / ${maxParticipants}`} tint={LAVENDER} />
         </div>
 
@@ -248,10 +248,10 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             <div className="flex items-start justify-between gap-3 mb-2">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: LAVENDER_TEXT }}>
-                  AI recommendation
+                  Familiar result
                 </p>
                 <p className="text-sm font-extrabold" style={{ color: NAVY }}>
-                  {latestJudgment.winner?.username ? `${latestJudgment.winner.username} is recommended to win` : "AI recommends a tie / void"}
+                  {latestJudgment.winner?.username ? `${latestJudgment.winner.username} is marked as the result` : "Familiar recommends a tie / void"}
                 </p>
               </div>
               {typeof latestJudgment.confidence === "number" && (
@@ -268,7 +268,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             )}
             {market.status === "disputed" && (
               <p className="mt-3 text-xs font-semibold" style={{ color: ROSE_TEXT }}>
-                This is not final yet. A human confirmation is required before credits settle.
+                This is not final yet. A human confirmation is required before credits update.
               </p>
             )}
             {confirmError && (
@@ -283,7 +283,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 className="mt-3 w-full py-3 text-sm font-extrabold disabled:opacity-50"
                 style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
               >
-                {confirming ? "Settling..." : "Confirm AI recommendation and settle"}
+                {confirming ? "Confirming..." : "Confirm Familiar result"}
               </motion.button>
             )}
           </div>
@@ -315,7 +315,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               })}
             </div>
           ) : (
-            <p className="text-sm font-medium py-2" style={{ color: NAVY_DIM }}>No players yet — share the link 👇</p>
+            <p className="text-sm font-medium py-2" style={{ color: NAVY_DIM }}>No challengers yet — share the link 👇</p>
           )}
         </div>
 
@@ -349,13 +349,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <Link href={`/join/${id}`}
             className="block w-full py-4 text-center text-base font-extrabold active:scale-[0.97] transition-transform"
             style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-            🎲 Accept this market
+            🎲 Accept this quest
           </Link>
         )}
 
         {market.status === "open" && isCreator && (
           <p className="text-center text-sm font-semibold py-3" style={{ color: NAVY_DIM }}>
-            Waiting for an opponent to join…
+            Waiting for a challenger to join…
           </p>
         )}
 
@@ -367,7 +367,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <Link href={`/challenge/${id}/versus`}
             className="block w-full py-4 text-center text-base font-extrabold active:scale-[0.97] transition-transform"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 rgba(110,231,183,0.40)` }}>
-            📸 Submit your evidence
+            📸 Submit your proof
           </Link>
         )}
 
@@ -375,7 +375,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <div className="text-center py-4 px-4"
             style={{ background: "#F3E8FF", border: `1px solid ${LAVENDER}`, borderRadius: "20px" }}>
             <div className="text-3xl mb-2">⚖️</div>
-            <p className="text-sm font-bold" style={{ color: LAVENDER_TEXT }}>AI is reviewing the evidence…</p>
+            <p className="text-sm font-bold" style={{ color: LAVENDER_TEXT }}>The Familiar is reviewing the proof…</p>
           </div>
         )}
 
@@ -384,7 +384,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <div className="mt-4 px-4 py-3 text-center"
             style={{ background: "#F0F9FF", border: `1px solid #BAE6FD`, borderRadius: "20px" }}>
             <p className="text-sm font-semibold" style={{ color: "#0369A1" }}>
-              📦 {market._count.evidence} evidence submission{market._count.evidence > 1 ? "s" : ""}
+              📦 {market._count.evidence} proof submission{market._count.evidence > 1 ? "s" : ""}
             </p>
           </div>
         )}
@@ -400,17 +400,17 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 className="text-xs font-bold px-4 py-2 active:scale-95 transition-colors"
                 style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "9999px" }}
               >
-                🗑 Delete this market
+                🗑 Delete this quest
               </button>
             )}
             {deleteStep !== "idle" && (
               <div className="w-full max-w-sm px-4 py-3 flex flex-col items-center gap-2"
                 style={{ background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "20px" }}>
                 <p className="text-xs font-bold text-center" style={{ color: ROSE_TEXT }}>
-                  Delete this market permanently?
+                  Delete this quest permanently?
                   {market.stake > 0 && (
                     <span className="block mt-1" style={{ color: NAVY_DIM, fontWeight: 600 }}>
-                      {market.stake} cr will be refunded.
+                      {market.stake} cr will return to your balance.
                     </span>
                   )}
                 </p>

@@ -65,7 +65,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
         {challenge.stake > 0 && (
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl"
                style={{ background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.15)" }}>
-            <span className="text-xs text-text-secondary">You will lock</span>
+            <span className="text-xs text-text-secondary">Quest credits</span>
             <span className="text-xl font-black text-[#f5a623]">{challenge.stake} credits</span>
           </div>
         )}
@@ -73,7 +73,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
         {insufficientFunds && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold"
                style={{ background: "rgba(255,59,48,0.1)", border: "1px solid rgba(255,59,48,0.2)", color: "#ff3b30" }}>
-            Insufficient funds. You have {userCredits} credits, need {challenge.stake}.
+            Not enough credits. You have {userCredits}, need {challenge.stake}.
           </div>
         )}
 
@@ -89,7 +89,7 @@ export default function AcceptConfirmPanel({ challenge, userCredits, onConfirmed
                 : "bg-gradient-to-r from-accent to-teal text-white shadow-lg shadow-accent/30"
             }`}
           >
-            {accepting ? "Locking stake..." : insufficientFunds ? "Insufficient Funds" : challenge.stake > 0 ? `Lock ${challenge.stake} Credits & Accept` : "Accept Challenge"}
+            {accepting ? "Accepting quest..." : insufficientFunds ? "Not Enough Credits" : challenge.stake > 0 ? `Accept Quest with ${challenge.stake} Credits` : "Accept Quest"}
           </motion.button>
 
           <motion.button

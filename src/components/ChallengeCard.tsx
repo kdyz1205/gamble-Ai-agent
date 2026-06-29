@@ -55,7 +55,7 @@ function StatusBadge({ status }: { status: Challenge["status"] }) {
       label: "Live",
       className: "bg-danger-light text-danger animate-pulse-soft",
     },
-    judging: { label: "AI Judging", className: "bg-gold-light text-gold" },
+    judging: { label: "Familiar Reviewing", className: "bg-gold-light text-gold" },
     completed: { label: "Settled", className: "bg-success-light text-success" },
   };
   const { label, className } = config[status];
@@ -228,7 +228,7 @@ export default function ChallengeCard({
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           <span className="text-xs font-medium text-text-secondary">
-            {challenge.participants} joined
+            {challenge.participants} summoners
           </span>
         </div>
       </div>
@@ -248,7 +248,7 @@ export default function ChallengeCard({
             </svg>
           </div>
           <span className="text-xs font-medium text-accent">
-            AI Review Enabled
+            Familiar Review Enabled
           </span>
         </div>
       )}
@@ -262,29 +262,29 @@ export default function ChallengeCard({
             disabled={!onAcceptChallenge || acceptChallengePending}
             className="flex-1 py-2.5 text-sm font-semibold text-white bg-accent rounded-xl hover:bg-accent-dark transition-colors shadow-sm hover:shadow-md disabled:opacity-45 disabled:pointer-events-none"
           >
-            {acceptChallengePending ? "Accepting…" : "Accept Challenge"}
+            {acceptChallengePending ? "Accepting…" : "Accept Quest"}
           </button>
         )}
         {challenge.status === "live" && (
           <button className="flex-1 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-danger to-danger/80 rounded-xl hover:opacity-90 transition-opacity shadow-sm">
-            Watch Live
+            Watch Quest
           </button>
         )}
         {(challenge.status === "open" || challenge.status === "live") && (
           <>
             <button className="flex-1 py-2.5 text-sm font-semibold text-accent bg-accent-light rounded-xl hover:bg-accent/20 transition-colors">
-              Bet on {challenge.playerA.name.split(" ")[0]}
+            Join {challenge.playerA.name.split(" ")[0]}
             </button>
             {challenge.playerB && (
               <button className="flex-1 py-2.5 text-sm font-semibold text-teal bg-teal-light rounded-xl hover:bg-teal/20 transition-colors">
-                Bet on {challenge.playerB.name.split(" ")[0]}
+                Join {challenge.playerB.name.split(" ")[0]}
               </button>
             )}
           </>
         )}
         {challenge.status === "completed" && (
           <button className="flex-1 py-2.5 text-sm font-semibold text-text-secondary bg-bg-input rounded-xl hover:bg-bg-hover transition-colors">
-            View Results
+            View Receipt
           </button>
         )}
       </div>

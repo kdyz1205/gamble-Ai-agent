@@ -247,11 +247,11 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       transition={{ duration: 0.25 }}
                     >
                       <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join LuckyPlay" : "Welcome back"}
+                        {mode === "register" ? "Join Summoner.world" : "Welcome back"}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Let's make your first bet ✨"
+                          ? "Let's summon your first quest"
                           : "Good to see you again"}
                       </p>
                     </motion.div>

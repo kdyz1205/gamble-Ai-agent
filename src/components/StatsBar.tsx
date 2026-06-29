@@ -1,8 +1,8 @@
 export default function StatsBar() {
   const stats = [
     { label: "Active Challenges", value: "12,847", trend: "+14%" },
-    { label: "Total Staked", value: "$2.4M", trend: "+8%" },
-    { label: "AI Judgments Today", value: "3,291", trend: "+22%" },
+    { label: "Quest Credits", value: "2.4M", trend: "+8%" },
+    { label: "Familiar Reviews Today", value: "3,291", trend: "+22%" },
     { label: "Players Online", value: "8,432", trend: null },
   ];
 

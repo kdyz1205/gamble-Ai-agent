@@ -31,10 +31,10 @@ const TIER_DESC: Record<1 | 2 | 3, string> = {
 
 function statusConfig(s: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    open:      { label: "Awaiting Opponent",  color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
-    live:      { label: "Battle in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
-    judging:   { label: "AI Analyzing...",    color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
-    settled:   { label: "Battle Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    open:      { label: "Awaiting Challenger", color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
+    live:      { label: "Quest in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
+    judging:   { label: "Familiar Reviewing...", color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
+    settled:   { label: "Quest Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     cancelled: { label: "Cancelled",          color: "#ff4757", bg: "rgba(255,71,87,0.1)",   border: "rgba(255,71,87,0.25)" },
     draft:     { label: "Draft",              color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
   };
@@ -104,14 +104,14 @@ function PlayerSide({
         >
           <span className="text-2xl text-text-muted">?</span>
         </motion.div>
-        <p className="text-sm font-bold text-text-muted">Waiting for opponent...</p>
+        <p className="text-sm font-bold text-text-muted">Waiting for challenger...</p>
         <p className="text-[10px] text-text-muted/60 mt-1">Share the link to invite</p>
       </motion.div>
     );
   }
 
   const username = participant.user.username;
-  const role = participant.role === "creator" ? "Challenger" : "Warrior";
+  const role = participant.role === "creator" ? "Creator" : "Challenger";
   const hasEvidence = Boolean(evidence);
 
   return (
@@ -202,7 +202,7 @@ function PlayerSide({
               </motion.div>
             )}
             <span className={`text-xs font-bold ${hasEvidence ? "text-success" : "text-text-muted"}`}>
-              {hasEvidence ? "Evidence submitted" : "Waiting for evidence"}
+              {hasEvidence ? "Proof submitted" : "Waiting for proof"}
             </span>
           </div>
 
@@ -345,7 +345,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         });
       }
 
-      showNote("Evidence uploaded!", "success");
+      showNote("Proof uploaded!", "success");
       await refresh();
       await updateSession?.();
     } catch (e) {
@@ -366,7 +366,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         description: "Video URL (manual)",
       });
       setPasteUrl("");
-      showNote("Evidence submitted!", "success");
+      showNote("Proof submitted!", "success");
       await refresh();
       await updateSession?.();
     } catch (e) {
@@ -415,7 +415,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
-      showNote("AI is analyzing evidence... you can leave this page.", "info");
+      showNote("Familiar is reviewing proof... you can leave this page.", "info");
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
         try {
@@ -424,7 +424,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             if (pollRef.current) clearInterval(pollRef.current);
             pollRef.current = null;
             setBusy(false);
-            if (j.status === "failed") showNote(j.error || "Verdict failed", "error");
+            if (j.status === "failed") showNote(j.error || "Familiar review failed", "error");
             await refresh();
             await updateSession?.();
           }
@@ -435,7 +435,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         }
       }, 2000);
     } catch (e) {
-      showNote(e instanceof Error ? e.message : "Could not start verdict", "error");
+      showNote(e instanceof Error ? e.message : "Could not start Familiar review", "error");
       setBusy(false);
     }
   };
@@ -445,7 +445,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     setBusy(true);
     try {
       await api.acceptChallenge(challenge.id);
-      showNote("You joined the battle!", "success");
+      showNote("You joined the quest!", "success");
       await refresh();
     } catch (e) {
       showNote(e instanceof Error ? e.message : "Could not join", "error");
@@ -473,7 +473,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         videoPreviewRef.current.srcObject = stream;
       }
     } catch {
-      setCameraError("Camera access required for fair play. Please allow camera access to submit evidence.");
+      setCameraError("Camera access helps verify proof. Please allow camera access to submit proof.");
     }
   };
 
@@ -523,7 +523,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             </svg>
           </div>
           <h2 className="text-xl font-black text-text-primary">Sign in to enter the arena</h2>
-          <p className="text-sm text-text-secondary">You need an account to view and join battles</p>
+          <p className="text-sm text-text-secondary">You need an account to view and join quests</p>
           <Link href="/" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold text-white"
                 style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}>
             Go to Home
@@ -546,7 +546,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           ) : (
             <div className="space-y-3">
               <div className="w-12 h-12 rounded-xl mx-auto animate-breathe-glow" style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }} />
-              <p className="text-sm text-text-muted">Loading battle arena...</p>
+              <p className="text-sm text-text-muted">Loading quest arena...</p>
             </div>
           )}
           <Link href="/" className="text-accent text-sm font-bold hover:underline">Back home</Link>
@@ -597,7 +597,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               </svg>
             </div>
             <span className="text-sm font-extrabold text-text-primary group-hover:text-white transition-colors">
-              ChallengeAI
+              Summoner.world
             </span>
           </Link>
 
@@ -624,7 +624,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             {challenge.stake > 0 && (
               <div className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider"
                    style={{ background: "rgba(245,166,35,0.1)", color: "#f5a623", border: "1px solid rgba(245,166,35,0.2)" }}>
-                {challenge.stake} cr stake
+                {challenge.stake} quest credits
               </div>
             )}
           </div>
@@ -646,7 +646,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             <p className="text-sm text-text-secondary max-w-xl mx-auto">{challenge.rules}</p>
           )}
           <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted">
-            <span>Evidence: {challenge.evidenceType.replace(/_/g, " ")}</span>
+            <span>Proof: {challenge.evidenceType.replace(/_/g, " ")}</span>
             {challenge.deadline && (
               <>
                 <span className="text-text-muted/30">|</span>
@@ -771,7 +771,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm font-extrabold text-text-primary">Submit Your Evidence</p>
+                    <p className="text-sm font-extrabold text-text-primary">Submit Your Proof</p>
                     <p className="text-[10px] text-text-muted">Record live video or paste a public URL</p>
                   </div>
                 </div>
@@ -795,7 +795,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       className="w-full py-4 rounded-xl text-sm font-extrabold text-white disabled:opacity-40"
                       style={{ background: "linear-gradient(135deg, #7c5cfc, #00d4c8)" }}
                     >
-                      Open Camera to Record Evidence
+                      Open Camera to Record Proof
                     </motion.button>
                   )}
 
@@ -924,8 +924,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     </svg>
                   </motion.div>
                   <div>
-                    <h3 className="text-base font-black text-text-primary">AI Judge Ready</h3>
-                    <p className="text-[10px] text-text-muted">All evidence is in. Choose your AI tier and render the verdict.</p>
+                    <h3 className="text-base font-black text-text-primary">Familiar Ready</h3>
+                    <p className="text-[10px] text-text-muted">All proof is in. Choose your Familiar tier and create the result.</p>
                   </div>
                 </div>
 
@@ -977,7 +977,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       boxShadow: "0 8px 32px rgba(245,166,35,0.2)",
                     }}
                   >
-                    {busy ? "AI Analyzing..." : `Run Verdict (${TIER_COST[tier]} cr)`}
+                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${TIER_COST[tier]} cr)`}
                   </motion.button>
                   <motion.button
                     type="button"
@@ -988,7 +988,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     className="py-3.5 rounded-xl text-xs font-extrabold border border-amber-400/30 text-amber-100/80 disabled:opacity-40"
                     style={{ background: "rgba(245,166,35,0.06)" }}
                   >
-                    Background Verdict (for video)
+                    Background Familiar Review
                   </motion.button>
                 </div>
               </div>
@@ -1014,8 +1014,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
             </motion.div>
-            <p className="text-sm font-bold text-amber-200">Waiting for the creator to start the AI verdict</p>
-            <p className="text-[10px] text-text-muted mt-1">All evidence has been submitted</p>
+            <p className="text-sm font-bold text-amber-200">Waiting for the creator to start the Familiar result</p>
+            <p className="text-[10px] text-text-muted mt-1">All proof has been submitted</p>
           </motion.div>
         )}
 
@@ -1047,7 +1047,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                   </motion.div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">AI Verdict</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
                   <h2 className="text-2xl font-black text-text-primary">
                     Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
                   </h2>
@@ -1074,13 +1074,13 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
                 {/* Reasoning with typewriter */}
                 <div className="rounded-xl p-5" style={{ background: "rgba(6,6,15,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">AI Reasoning</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">Familiar Reasoning</p>
                   <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
                     <TypewriterText text={verdictRow.reasoning ?? ""} speed={12} />
                   </p>
                 </div>
 
-                {/* Settlement summary */}
+                {/* Result summary */}
                 {challenge.stake > 0 && (
                   <motion.div
                     className="flex items-center justify-center gap-6 py-3 rounded-xl"
@@ -1090,14 +1090,14 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     transition={{ delay: 0.5 }}
                   >
                     <div className="text-center">
-                      <p className="text-[9px] font-bold uppercase text-text-muted">Stake</p>
+                      <p className="text-[9px] font-bold uppercase text-text-muted">Quest Credits</p>
                       <p className="text-sm font-black text-amber-400">{challenge.stake} cr</p>
                     </div>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(0,232,122,0.5)" strokeWidth="2">
                       <path d="M5 12h14M12 5l7 7-7 7" />
                     </svg>
                     <div className="text-center">
-                      <p className="text-[9px] font-bold uppercase text-text-muted">Winner receives</p>
+                      <p className="text-[9px] font-bold uppercase text-text-muted">Winner reward</p>
                       <p className="text-sm font-black text-success">{challenge.stake * 2} cr</p>
                     </div>
                   </motion.div>
@@ -1125,7 +1125,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            {copied ? "Copied!" : "Share Battle Link"}
+            {copied ? "Copied!" : "Share Quest Link"}
           </motion.button>
 
           <motion.button

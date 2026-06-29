@@ -43,7 +43,7 @@ export default function RoomClient({
     if (!user) { setShowAuth(true); return; }
     try {
       await api.acceptChallenge(challengeId);
-      setJoinMsg("You joined the challenge. Submit your evidence below 👇");
+      setJoinMsg("You joined the quest. Submit your proof below 👇");
       setJoinErr(false);
       await updateSession();
     } catch (err) {
@@ -59,13 +59,13 @@ export default function RoomClient({
         <button onClick={() => router.push("/")}
           className="text-base font-bold tracking-tight active:scale-95 transition-transform"
           style={{ color: NAVY }}>
-          LuckyPlay
+          Summoner.world
         </button>
         <div className="flex items-center gap-2">
           <Link href="/"
             className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
             style={{ color: PEACH_TEXT, background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "9999px" }}>
-            + New bet
+            + New quest
           </Link>
           {user ? (
             <div className="flex items-center gap-2 px-3 py-1.5"
@@ -125,7 +125,7 @@ export default function RoomClient({
             <div className="text-4xl mb-3">🎲</div>
             <h2 className="text-xl font-extrabold mb-2" style={{ color: NAVY }}>{title}</h2>
             <p className="text-sm font-medium mb-5" style={{ color: NAVY_DIM }}>
-              Sign in to view details, submit evidence, or accept this bet.
+              Sign in to view details, submit proof, or accept this quest.
             </p>
             <motion.button onClick={() => setShowAuth(true)}
               whileTap={{ scale: 0.95 }}
@@ -146,7 +146,7 @@ export default function RoomClient({
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
               onClick={handleAccept}
             >
-              🎲 I&apos;m the opponent — Accept
+              🎲 Accept Quest
             </motion.button>
           </div>
         )}

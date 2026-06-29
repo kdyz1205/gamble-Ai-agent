@@ -48,7 +48,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     api.getChallenge(id)
       .then(res => { setChallenge(res.challenge); setLoading(false); })
-      .catch(() => { setError("Can't find this market 😿"); setLoading(false); });
+      .catch(() => { setError("Can't find this quest 😿"); setLoading(false); });
   }, [id]);
 
   const handleAccept = async () => {
@@ -69,7 +69,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
         <motion.div className="w-10 h-10 rounded-full border-[3px] border-t-transparent"
           style={{ borderColor: PEACH, borderTopColor: "transparent" }}
           animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-        <span className="text-sm font-semibold" style={{ color: NAVY_DIM }}>Loading the market…</span>
+        <span className="text-sm font-semibold" style={{ color: NAVY_DIM }}>Loading the quest…</span>
       </div>
     );
   }
@@ -82,7 +82,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
         <Link href="/"
           className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
           style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          Make a new bet ✨
+          Summon a new quest ✨
         </Link>
       </div>
     );
@@ -96,7 +96,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          Summoner.world
         </Link>
       </header>
 
@@ -113,7 +113,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             style={{ background: `linear-gradient(90deg, ${PEACH}1A, ${LAVENDER}1A, ${MINT}1A)`, borderBottom: `1px solid ${NAVY_FAINT}` }}
           >
             <span className="text-xs font-bold uppercase tracking-widest" style={{ color: PEACH_TEXT }}>
-              🎲 You&apos;ve been challenged
+              🎲 You&apos;ve been invited
             </span>
           </div>
 
@@ -126,7 +126,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
               </div>
               <div>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>{c.creator.username}</p>
-                <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>wants to bet with you</p>
+                <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>invited you to a quest</p>
               </div>
               <span className="ml-auto text-[11px] font-bold px-2.5 py-1"
                 style={{ color: PEACH_TEXT, background: CREAM, borderRadius: "9999px" }}>
@@ -140,11 +140,11 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-2.5 mb-5">
               <div className="px-3 py-3" style={{ background: `${c.stake > 0 ? PEACH : MINT}14`, border: `1px solid ${(c.stake > 0 ? PEACH : MINT)}33`, borderRadius: "16px" }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>💰 Stake</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>💰 Credits</p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>{stakeLabel}</p>
               </div>
               <div className="px-3 py-3" style={{ background: `${MINT}14`, border: `1px solid ${MINT}33`, borderRadius: "16px" }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>📸 Evidence</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>📸 Proof</p>
                 <p className="text-sm font-bold" style={{ color: NAVY }}>{c.evidenceType.replace(/_/g, " ")}</p>
               </div>
             </div>
@@ -176,14 +176,14 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 >
                   <div className="text-4xl mb-2">🎉</div>
                   <p className="text-lg font-extrabold mb-1" style={{ color: MINT_TEXT }}>You&apos;re in!</p>
-                  <p className="text-sm font-medium" style={{ color: MINT_TEXT, opacity: 0.85 }}>Submit your evidence before the deadline</p>
+                  <p className="text-sm font-medium" style={{ color: MINT_TEXT, opacity: 0.85 }}>Submit your proof before the deadline</p>
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                     <Link
                       href={`/challenge/${id}`}
                       className="inline-block mt-4 px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
                       style={{ background: "#FFFFFF", color: MINT_TEXT, border: `1px solid ${MINT}`, borderRadius: "9999px" }}
                     >
-                      Go to the challenge →
+                      Go to the quest →
                     </Link>
                   </motion.div>
                 </motion.div>
@@ -194,10 +194,10 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                   style={{ background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "16px" }}
                 >
                   <p className="text-sm font-bold" style={{ color: NAVY_DIM }}>
-                    {c.status === "live" ? "🔴 Market is live — go submit evidence"
+                    {c.status === "live" ? "🔴 Quest is live — go submit proof"
                       : c.status === "judging" ? "⚖️ AI is reviewing"
                       : c.status === "settled" ? "✅ Already settled"
-                      : "This market is no longer open"}
+                      : "This quest is no longer open"}
                   </p>
                 </motion.div>
               ) : (
@@ -216,7 +216,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                     boxShadow: accepting ? "none" : `0 4px 14px 0 ${ORANGE_GLOW}`,
                   }}
                 >
-                  {accepting ? "Joining…" : c.stake > 0 ? `🎲 Accept — risk ${stakeLabel}` : `🎲 Accept the bet`}
+                  {accepting ? "Joining…" : c.stake > 0 ? `🎲 Accept Quest with ${stakeLabel}` : `🎲 Accept the quest`}
                 </motion.button>
               )}
             </AnimatePresence>
@@ -233,7 +233,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                 <button onClick={() => setShowAuth(true)} className="font-extrabold underline decoration-dotted" style={{ color: PEACH_TEXT }}>
                   Sign in
                 </button>
-                {" "}to accept this bet
+                {" "}to accept this quest
               </p>
             )}
           </div>

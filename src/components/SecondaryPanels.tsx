@@ -120,7 +120,7 @@ function LiveContent() {
 
   if (err) return <p className="text-sm text-text-muted">{err}</p>;
   if (events.length === 0) {
-    return <p className="text-sm text-text-muted">No activity yet — publish a public challenge to see it here.</p>;
+    return <p className="text-sm text-text-muted">No quest activity yet — publish a public challenge to see it here.</p>;
   }
 
   return (
@@ -200,7 +200,7 @@ function DiscoverContent({
         );
         setRows(joinable);
       })
-      .catch(() => setMsg("Could not load challenges."))
+      .catch(() => setMsg("Could not load quests."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -214,7 +214,7 @@ function DiscoverContent({
       return;
     }
     if (c.creatorId === uid) {
-      setMsg("This is your challenge — share the link for a friend to join.");
+      setMsg("This is your quest — share the link for a friend to join.");
       return;
     }
     if (c.participants.some((p) => p.user.id === uid)) {
@@ -231,7 +231,7 @@ function DiscoverContent({
     }
   };
 
-  if (loading) return <p className="text-sm text-text-muted">Loading open challenges…</p>;
+  if (loading) return <p className="text-sm text-text-muted">Loading open quests…</p>;
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -252,7 +252,7 @@ function DiscoverContent({
         </motion.div>
         <div className="text-center space-y-1">
           <p className="text-sm font-bold text-text-secondary">No open slots right now</p>
-          <p className="text-xs text-text-muted max-w-[220px]">Ask a friend to publish a public challenge, or create one from the chat.</p>
+          <p className="text-xs text-text-muted max-w-[220px]">Ask a friend to publish a public quest, or summon one from the chat.</p>
         </div>
         <motion.button
           type="button"
@@ -286,7 +286,7 @@ function DiscoverContent({
             <p className="text-sm font-bold text-text-primary leading-snug">{c.title}</p>
             <p className="text-[11px] text-text-muted">
               by @{c.creator.username}
-              {c.stake > 0 ? ` · ${c.stake} credits stake` : ""} · {c.participants.length}/{c.maxParticipants ?? 2} players
+              {c.stake > 0 ? ` · ${c.stake} quest credits` : ""} · {c.participants.length}/{c.maxParticipants ?? 2} summoners
             </p>
             <div className="flex flex-wrap gap-2">
               <motion.button
@@ -297,14 +297,14 @@ function DiscoverContent({
                 className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #D4AF37, #A38829)" }}
               >
-                {mine ? "Yours" : joined ? "Open room" : "Join as opponent"}
+                {mine ? "Yours" : joined ? "Open room" : "Join as challenger"}
               </motion.button>
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 onClick={() => {
                   void navigator.clipboard.writeText(`${window.location.origin}/?challenge=${c.id}`);
-                  setMsg("Link copied — send it to your opponent.");
+                  setMsg("Link copied — send it to your challenger.");
                   setTimeout(() => setMsg(null), 2500);
                 }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold border border-border-subtle text-text-muted"
@@ -348,10 +348,10 @@ function WalletContent() {
         />
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
         <div className="relative z-10">
-          <p className="text-xs font-semibold text-white/70 mb-1">Available Balance</p>
-          <p className="text-3xl font-black text-white">$284.50</p>
+          <p className="text-xs font-semibold text-white/70 mb-1">Credit Balance</p>
+          <p className="text-3xl font-black text-white">284 credits</p>
           <div className="flex gap-2 mt-4">
-            {["Deposit","Withdraw"].map(label => (
+            {["Add credits","History"].map(label => (
               <motion.button
                 key={label}
                 className="flex-1 py-2 rounded-xl text-sm font-bold text-white"
@@ -366,7 +366,7 @@ function WalletContent() {
         </div>
       </motion.div>
 
-      {/* Escrow */}
+      {/* Quest hold */}
       <motion.div
         className="flex justify-between px-4 py-3.5 rounded-xl"
         style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.15)" }}
@@ -375,20 +375,20 @@ function WalletContent() {
         transition={{ delay: 0.1, duration: 0.4 }}
       >
         <div>
-          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">In Escrow</p>
-          <p className="text-xl font-black" style={{ color: "#D4AF37" }}>$85.00</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Quest Hold</p>
+          <p className="text-xl font-black" style={{ color: "#D4AF37" }}>85 credits</p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Bets</p>
+          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Quests</p>
           <p className="text-xl font-black" style={{ color: "#D4AF37" }}>3</p>
         </div>
       </motion.div>
 
-      {/* Win/Loss */}
+      {/* Record */}
       <div className="grid grid-cols-2 gap-2.5">
         {[
-          { label:"Total Won",  val:"$1,240", color:"#639A67", bg:"rgba(99,154,103,0.08)", border:"rgba(99,154,103,0.15)" },
-          { label:"Total Lost", val:"$420",   color:"#A31F34", bg:"rgba(255,71,87,0.08)", border:"rgba(255,71,87,0.15)" },
+          { label:"XP Earned", val:"1,240 XP", color:"#639A67", bg:"rgba(99,154,103,0.08)", border:"rgba(99,154,103,0.15)" },
+          { label:"Quest Record", val:"18 closed", color:"#A31F34", bg:"rgba(255,71,87,0.08)", border:"rgba(255,71,87,0.15)" },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -408,10 +408,10 @@ function WalletContent() {
       <div>
         <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">Recent</p>
         {[
-          { label:"Won: 50 Pushups Challenge", amount:"+$20",  color:"#639A67" },
-          { label:"Staked: 5K Run",            amount:"-$50",  color:"#A31F34" },
-          { label:"Deposit",                   amount:"+$100", color:"#639A67" },
-          { label:"Won: Chess Blitz",          amount:"+$10",  color:"#639A67" },
+          { label:"Quest result: 50 Pushups", amount:"+20 XP", color:"#639A67" },
+          { label:"Quest entry: 5K Run", amount:"50 credits", color:"#A31F34" },
+          { label:"Credits added", amount:"+100 credits", color:"#639A67" },
+          { label:"Quest result: Chess Blitz", amount:"+10 XP", color:"#639A67" },
         ].map((tx, i) => (
           <motion.div
             key={i}
@@ -435,7 +435,7 @@ const ACTIONS = [
   { key: "discover", icon: "◎", label: "Discover", badge: null as string | null, dotColor: "#D4AF37" },
   { key: "live", icon: "⚡", label: "Live", badge: null as string | null, dotColor: "#A31F34" },
   { key: "nearby", icon: "📍", label: "Nearby", badge: null as string | null, dotColor: "#639A67" },
-  { key: "wallet", icon: "◈", label: "Wallet", badge: null as string | null, dotColor: "#D4AF37" },
+  { key: "wallet", icon: "◈", label: "Credits", badge: null as string | null, dotColor: "#D4AF37" },
 ];
 
 export function FloatingActionBar({
@@ -555,7 +555,7 @@ export function FloatingActionBar({
         )}
       </AnimatePresence>
 
-      <Drawer open={active === "discover"} onClose={() => setActive(null)} title="Open challenges">
+      <Drawer open={active === "discover"} onClose={() => setActive(null)} title="Open quests">
         <DiscoverContent
           onRequireAuth={() => onRequireAuth?.()}
           onOpenChallenge={(id) => {
@@ -577,7 +577,7 @@ export function FloatingActionBar({
           onRequireAuth={() => onRequireAuth?.()}
         />
       </Drawer>
-      <Drawer open={active === "wallet"} onClose={() => setActive(null)} title="Wallet & Escrow">
+      <Drawer open={active === "wallet"} onClose={() => setActive(null)} title="Credits & Quests">
         <WalletContent />
       </Drawer>
     </>

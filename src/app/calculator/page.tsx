@@ -184,7 +184,7 @@ export default function CalculatorPage() {
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-          LuckyPlay
+          Summoner.world
         </Link>
         <span className="text-xs font-semibold px-3 py-1.5"
           style={{ color: NAVY_DIM, background: NAVY_HAIR, borderRadius: "9999px" }}>
@@ -196,12 +196,12 @@ export default function CalculatorPage() {
         {/* Intro — plain language explainer */}
         <section>
           <h1 className="text-3xl font-extrabold mb-2 tracking-tight" style={{ color: NAVY }}>
-            Will LuckyPlay make money?
+            Will Summoner.world scale?
           </h1>
           <p className="text-base font-medium leading-relaxed" style={{ color: NAVY_DIM }}>
-            Play with the sliders below to model LuckyPlay&apos;s economics.
+            Play with the sliders below to model Summoner.world&apos;s quest economics.
             The calculator tells you if the business is profitable at those numbers,
-            and breaks down exactly where revenue comes from and where money is spent.
+            and breaks down exactly where revenue comes from and where costs land.
           </p>
         </section>
 
@@ -276,7 +276,7 @@ export default function CalculatorPage() {
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Growth</p>
             <Slider
               label="Monthly active users"
-              explain="How many unique people play LuckyPlay in a month."
+              explain="How many unique people play Summoner.world in a month."
               value={inputs.mau}
               min={100} max={10_000_000} step={100}
               format={fmtInt}
@@ -314,16 +314,16 @@ export default function CalculatorPage() {
               onChange={(v) => set("subPrice", v)}
             />
             <Slider
-              label="Avg stake per challenge"
-              explain="When users bet real money, how much on average. Small-casual: $1–3. Serious: $10+."
+              label="Avg credit value per quest"
+              explain="Average internal credit value attached to a quest. Small-casual: $1-3 equivalent. Serious: $10+ equivalent."
               value={inputs.avgStakeUsd}
               min={0} max={100} step={1}
               format={(v) => `$${v.toFixed(0)}`}
               onChange={(v) => set("avgStakeUsd", v)}
             />
             <Slider
-              label="Platform rake on stakes"
-              explain="What % LuckyPlay keeps from each settled stake. Poker sites: ~5%. DraftKings: ~10%."
+              label="Platform fee on settled quests"
+              explain="What % Summoner.world keeps from settled quest credits. Keep this conservative for an internal-credit-first product."
               value={inputs.rakePct}
               min={0} max={15} step={0.25}
               format={(v) => `${v.toFixed(2)}%`}
@@ -336,7 +336,7 @@ export default function CalculatorPage() {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: NAVY_DIM }}>Costs</p>
             <Slider
-              label="AI cost per judgment"
+              label="Familiar review cost"
               explain="OpenAI GPT-4o vision: ~$0.30. gpt-4o-mini: ~$0.02. Hybrid with frame pre-extraction: ~$0.01."
               value={inputs.aiCostPerJudgment}
               min={0} max={0.5} step={0.005}
@@ -345,7 +345,7 @@ export default function CalculatorPage() {
             />
             <Slider
               label="Storage per user"
-              explain="Video evidence saved on Vercel Blob. Casual users: 0.1 GB. Heavy video users: 1+ GB."
+              explain="Video proof saved on Vercel Blob. Casual users: 0.1 GB. Heavy video users: 1+ GB."
               value={inputs.storagePerUserGb}
               min={0} max={5} step={0.05}
               format={(v) => `${v.toFixed(2)} GB`}
@@ -388,8 +388,8 @@ export default function CalculatorPage() {
               value={fmtMoney(r.breakdown.subs)}
             />
             <BreakdownLine
-              label="Rake on stakes"
-              detail={`${fmtInt(r.volumes.totalChallenges)} challenges × $${inputs.avgStakeUsd} stake × ${inputs.rakePct}%`}
+              label="Platform fee on quest credits"
+              detail={`${fmtInt(r.volumes.totalChallenges)} quests × $${inputs.avgStakeUsd} credit value × ${inputs.rakePct}%`}
               value={fmtMoney(r.breakdown.rake)}
             />
           </div>
@@ -438,16 +438,16 @@ export default function CalculatorPage() {
         >
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: PEACH_TEXT }}>The math in plain english</p>
           <Explain
-            title="How we make money"
-            body={"Two streams. (1) Subscriptions — a slice of your users pay $X/mo for Pro. (2) Rake — we keep a small cut of every stake that settles. Bigger stakes or more active users = more rake."}
+            title="Business model"
+            body={"Two streams. (1) Subscriptions — a slice of your users pay $X/mo for Pro. (2) Platform fees — the product keeps a small fee from settled quest credits. More active quests means more fee volume."}
           />
           <Explain
-            title="How money is spent"
-            body={"Every time AI judges a challenge, we pay OpenAI. That cost scales with how many users and how active they are. Videos also cost storage. Team and infra are fixed — they don't grow with one extra user."}
+            title="Cost model"
+            body={"Every time a Familiar reviews proof, we pay model costs. That cost scales with how many users and how active they are. Videos also cost storage. Team and infra are fixed — they don't grow with one extra user."}
           />
           <Explain
             title="What makes us profitable"
-            body={"Two levers. Either get more users and charge each of them more (revenue ↑), or drive per-judgment AI cost down with smarter frame extraction and cheaper models (cost ↓). Usually both, in that order."}
+            body={"Two levers. Either get more users and charge each of them more (revenue ↑), or drive per-review AI cost down with smarter frame extraction and cheaper models (cost ↓). Usually both, in that order."}
           />
           <Explain
             title="The break-even insight"

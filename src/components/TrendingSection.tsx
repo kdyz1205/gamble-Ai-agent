@@ -1,11 +1,11 @@
 "use client";
 
 const trending = [
-  { tag: "Push-up Marathon", count: "2.4K bets", hot: true },
-  { tag: "Weekend 5K Race", count: "1.8K bets", hot: true },
-  { tag: "Chess Speed Match", count: "956 bets", hot: false },
-  { tag: "Cooking Challenge", count: "743 bets", hot: false },
-  { tag: "Study Hours Bet", count: "621 bets", hot: false },
+  { tag: "Push-up Marathon", count: "2.4K quests", hot: true },
+  { tag: "Weekend 5K Race", count: "1.8K quests", hot: true },
+  { tag: "Chess Speed Match", count: "956 quests", hot: false },
+  { tag: "Cooking Challenge", count: "743 quests", hot: false },
+  { tag: "Study Hours Quest", count: "621 quests", hot: false },
 ];
 
 export default function TrendingSection() {

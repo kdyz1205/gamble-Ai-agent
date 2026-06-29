@@ -5,7 +5,22 @@ const coreWebVitals = require("eslint-config-next/core-web-vitals");
 const typescript = require("eslint-config-next/typescript");
 
 const config = [
-  { ignores: [".next/**", "out/**", "build/**", "node_modules/**", "src/generated/**"] },
+  {
+    ignores: [
+      ".fastembed_cache/**",
+      ".next/**",
+      "build/**",
+      "gambles-recordings/**",
+      "node_modules/**",
+      "out/**",
+      "output/**",
+      "playwright-report/**",
+      "src/generated/**",
+      "test-results/**",
+      "tests/e2e-gambles/.playwright/**",
+      "Workflow_Pictures/**",
+    ],
+  },
   ...coreWebVitals,
   ...typescript,
   {

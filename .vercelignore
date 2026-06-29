@@ -1,0 +1,11 @@
+.fastembed_cache/
+.next/
+node_modules/
+playwright-report/
+tests/e2e-gambles/.playwright/
+gambles-recordings/
+Workflow_Pictures/
+output/
+ios/
+ios-shell/
+*.log

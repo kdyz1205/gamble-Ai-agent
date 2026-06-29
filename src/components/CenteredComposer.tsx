@@ -13,6 +13,14 @@ interface Props {
 
 type VoiceLang = "auto" | "en" | "zh";
 
+const promptChips = ["Friend duel", "Proof challenge", "Group quest", "Debate receipt"] as const;
+const placeholderExamples = [
+  "I can do 20 pushups in 60 seconds…",
+  "Challenge Alex to a Mario Kart score battle…",
+  "Who can hold a plank longer?",
+  "BTC closes above 120k tomorrow…",
+] as const;
+
 export default function CenteredComposer({ onSubmit, isActive, isParsing, initialValue }: Props) {
   const [input, setInput] = useState(initialValue || "");
   const [listening, setListening] = useState(false);
@@ -129,7 +137,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
       setIsTranscribing(false);
       audioChunksRef.current = [];
     }
-  }, [getLanguageHint, onSubmit]);
+  }, [getLanguageHint]);
 
   const startPreviewRecognition = useCallback(() => {
     const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -287,42 +295,82 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
 
   const busy = Boolean(isParsing || isTranscribing);
 
-  // LuckyPlay canonical palette — see project_luckyplay_design_system memory
-  const NAVY = "#1E293B";
-  const NAVY_DIM = "#64748B";
-  const NAVY_FAINT = "#E2E8F0";
-  const PEACH = "#FED7AA";       // orange-200 CTA
-  const PEACH_DARK = "#FDBA74";  // orange-300 hover
-  const PEACH_TEXT = "#7C2D12";  // orange-900 text on peach
-  const ORANGE_GLOW = "rgba(251,146,60,0.39)";
-  const MINT = "#A7F3D0";        // mint-200
-  const ROSE = "#FECACA";        // red-200 (gentle)
+  // Summon World palette — inherited from the original playful challenge system.
+  const NAVY = "#153047";
+  const NAVY_DIM = "#60758A";
+  const NAVY_FAINT = "rgba(41,112,142,0.16)";
+  const PEACH = "#FFB978";
+  const PEACH_DARK = "#E98B3D";
+  const PEACH_TEXT = "#153047";
+  const ORANGE_GLOW = "rgba(255,164,96,0.28)";
+  const MINT = "#8FE6C1";
+  const ROSE = "#FECACA";
   const canSend = Boolean(input.trim() && !busy);
 
   return (
     <div className="w-full">
       <div
+        className="relative overflow-hidden"
         style={{
-          background: "#FFFFFF",
-          border: `2px solid ${busy ? PEACH : NAVY_FAINT}`,
-          borderRadius: "24px",
+          background:
+            "radial-gradient(circle at 88% 0%, rgba(255,216,107,0.32), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(223,245,255,0.88))",
+          border: `1px solid ${busy ? PEACH : NAVY_FAINT}`,
+          borderRadius: "28px",
           boxShadow: busy
-            ? `0 4px 14px 0 ${ORANGE_GLOW}`
-            : `0 8px 30px rgba(15,23,42,0.04)`,
+            ? `0 14px 34px 0 ${ORANGE_GLOW}`
+            : "0 18px 44px rgba(40,102,133,0.14)",
           transition: "all 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
+        <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[18px] text-sm font-extrabold"
+            style={{
+              background: "linear-gradient(135deg, #fff, rgba(255,216,107,0.55))",
+              border: `1px solid ${NAVY_FAINT}`,
+              color: NAVY,
+              boxShadow: "0 10px 22px rgba(40,102,133,0.12)",
+            }}
+          >
+            F
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em]" style={{ color: NAVY_DIM }}>
+              Familiar hint
+            </p>
+            <p className="text-sm font-extrabold leading-tight" style={{ color: NAVY }}>
+              Type a challenge. I will shape it into a quest.
+            </p>
+          </div>
+        </div>
         <textarea
           ref={textareaRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={isActive ? "✏️ tweak it: \"$20 stake\" or \"video proof\"" : "🎲 I bet Benny's wife fails the DMV test — $10..."}
-          rows={isActive ? 1 : 2}
+          placeholder={isActive ? "Add proof, opponent, or deadline…" : placeholderExamples.join("\n")}
+          rows={isActive ? 2 : 4}
           disabled={busy}
-          className="w-full bg-transparent px-5 py-4 text-base font-semibold resize-none focus:outline-none placeholder:font-normal"
+          className="w-full resize-none bg-transparent px-5 py-4 text-base font-semibold leading-6 focus:outline-none placeholder:font-semibold"
           style={{ color: NAVY, caretColor: PEACH }}
         />
+
+        <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-5">
+          {promptChips.map((label) => (
+            <span
+              key={label}
+              className="rounded-full px-3 py-1.5 text-xs font-extrabold"
+              style={{
+                background: "rgba(255,255,255,0.72)",
+                border: `1px solid ${NAVY_FAINT}`,
+                color: NAVY,
+                boxShadow: "0 8px 18px rgba(40,102,133,0.08)",
+              }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
 
         <AnimatePresence>
           {interim && (
@@ -338,7 +386,7 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
           )}
         </AnimatePresence>
 
-        <div className="flex items-center justify-between px-3 py-2.5 border-t" style={{ borderColor: NAVY_FAINT }}>
+        <div className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: NAVY_FAINT }}>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1">
               {(["auto", "en", "zh"] as const).map(lang => (
@@ -407,15 +455,15 @@ export default function CenteredComposer({ onSubmit, isActive, isParsing, initia
             disabled={!canSend}
             whileTap={canSend ? { scale: 0.94 } : undefined}
             transition={{ type: "spring", stiffness: 400, damping: 22 }}
-            className="px-6 py-2 text-sm font-bold transition-all disabled:opacity-40"
+            className="min-h-11 px-6 py-2 text-sm font-extrabold transition-all disabled:opacity-40"
             style={{
               color: canSend ? PEACH_TEXT : NAVY_DIM,
-              background: canSend ? PEACH : NAVY_FAINT,
+              background: canSend ? `linear-gradient(135deg, ${PEACH}, #FFD86B)` : "rgba(226,232,240,0.7)",
               borderRadius: "9999px",
               boxShadow: canSend ? `0 4px 14px 0 ${ORANGE_GLOW}` : "none",
             }}
           >
-            {busy ? "…" : isActive ? "Update ✨" : "Send 🚀"}
+            {isParsing ? "Summoning…" : isTranscribing ? "Listening…" : "Summon"}
           </motion.button>
         </div>
       </div>

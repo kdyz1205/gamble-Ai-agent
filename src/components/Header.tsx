@@ -25,13 +25,13 @@ export default function Header() {
             </svg>
           </div>
           <span className="text-lg font-bold tracking-tight text-text-primary">
-            Challenge<span className="text-accent">AI</span>
+            Summoner<span className="text-accent">.world</span>
           </span>
         </div>
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1">
-          {["Explore", "My Challenges", "Leaderboard"].map((item) => (
+          {["Explore", "My Quests", "Streaks"].map((item) => (
             <button
               key={item}
               className="px-3.5 py-2 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors"
@@ -51,7 +51,7 @@ export default function Header() {
             >
               <div className="w-2 h-2 rounded-full bg-success animate-pulse-soft" />
               <span className="text-sm font-semibold text-text-primary">
-                $1,240.00
+                1,240 credits
               </span>
               <svg
                 width="14"
@@ -70,7 +70,7 @@ export default function Header() {
             {walletOpen && (
               <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-lg border border-border-subtle p-4 animate-float-up">
                 <div className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">
-                  Wallet Overview
+                  Credits Overview
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -78,32 +78,32 @@ export default function Header() {
                       Available
                     </span>
                     <span className="text-sm font-semibold text-success">
-                      $1,240.00
+                      1,240 credits
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-text-secondary">
-                      In Escrow
+                      Quest Hold
                     </span>
                     <span className="text-sm font-semibold text-gold">
-                      $360.00
+                      360 credits
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-text-secondary">
-                      Total Won
+                      XP Earned
                     </span>
                     <span className="text-sm font-semibold text-accent">
-                      $2,890.00
+                      2,890 XP
                     </span>
                   </div>
                   <div className="h-px bg-border-subtle" />
                   <div className="flex gap-2">
                     <button className="flex-1 py-2 text-xs font-semibold text-white bg-accent rounded-lg hover:bg-accent-dark transition-colors">
-                      Deposit
+                      Add credits
                     </button>
                     <button className="flex-1 py-2 text-xs font-semibold text-accent bg-accent-light rounded-lg hover:bg-accent/20 transition-colors">
-                      Withdraw
+                      History
                     </button>
                   </div>
                 </div>
