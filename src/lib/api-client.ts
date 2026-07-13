@@ -141,6 +141,20 @@ export interface ChallengeData {
     createdAt: string;
     winner?: { id: string; username: string } | null;
   }>;
+  verdictResponses?: Array<{
+    userId: string;
+    decision: "accepted" | "review_requested";
+    updatedAt: string;
+  }>;
+  reviewCase?: {
+    id: string;
+    status: "pending" | "processing" | "resolved" | "expired";
+    resolution: "uphold" | "override" | "refund" | null;
+    resolvedWinnerId: string | null;
+    expiresAt: string;
+    createdAt: string;
+    resolvedAt: string | null;
+  } | null;
   _count?: { evidence: number; judgments?: number; participants?: number };
 }
 
@@ -222,8 +236,52 @@ export async function confirmVerdict(id: string): Promise<{
   challenge: ChallengeData;
   judgment: unknown;
   settlement: { success: boolean; error?: string; txHash?: string };
+  settled: boolean;
+  waitingForUserIds: string[];
+  reviewCase: ChallengeData["reviewCase"];
 }> {
   return apiFetch(`/challenges/${id}/confirm-verdict`, { method: "POST" });
+}
+
+export async function respondToVerdict(
+  id: string,
+  decision: "accepted" | "review_requested",
+  reason?: string,
+): Promise<{
+  settled: boolean;
+  status: string;
+  waitingForUserIds: string[];
+  reviewCase: ChallengeData["reviewCase"];
+}> {
+  return apiFetch(`/challenges/${id}/verdict-response`, {
+    method: "POST",
+    body: JSON.stringify({ decision, reason }),
+  });
+}
+
+export interface ReviewQueueItem {
+  id: string;
+  status: "pending" | "processing" | "resolved" | "expired";
+  reason: string;
+  resolution: "uphold" | "override" | "refund" | null;
+  resolvedWinnerId: string | null;
+  expiresAt: string;
+  requestedBy: { id: string; username: string } | null;
+  challenge: ChallengeData;
+}
+
+export async function getReviewQueue(status = "pending"): Promise<{ reviews: ReviewQueueItem[] }> {
+  return apiFetch(`/reviews?status=${encodeURIComponent(status)}`);
+}
+
+export async function resolveReview(
+  reviewId: string,
+  data: { resolution: "uphold" | "override" | "refund"; winnerId?: string | null; notes: string },
+): Promise<{ resolved: boolean; settled: boolean; reviewId: string; finalJudgmentId: string }> {
+  return apiFetch(`/reviews/${reviewId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 /* ── AI Parse & Tweak ── */

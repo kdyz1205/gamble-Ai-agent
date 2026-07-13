@@ -188,7 +188,7 @@ export async function addCredits(
 
 // ── Settlement ──
 
-export async function settleChallenge(
+async function settleChallengeLegacy(
   challengeId: string,
   winnerId: string | null,
   stake: number,
@@ -273,6 +273,156 @@ export async function settleChallenge(
   );
 
   return { success: true };
+}
+
+/**
+ * Idempotent settlement entry point.
+ *
+ * Off-chain credits are the product default and are settled in one database
+ * transaction. A unique ledger marker makes retries safe even if a lambda
+ * crashes after moving credits but before the Challenge status is updated.
+ * The existing on-chain adapter remains the source of truth when enabled.
+ */
+export async function settleChallenge(
+  challengeId: string,
+  winnerId: string | null,
+  stake: number,
+  participants: Array<{ userId: string }>,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (stake <= 0) return { success: true };
+
+  const settlementKey = `settlement:${challengeId}`;
+  const participantIds = [...new Set(participants.map((participant) => participant.userId))].sort();
+  if (participantIds.length === 0) return { success: false, error: "No accepted participants to settle" };
+  if (winnerId && !participantIds.includes(winnerId)) {
+    return { success: false, error: "Winner is not an accepted participant" };
+  }
+
+  const prior = await prisma.creditTx.findUnique({
+    where: { idempotencyKey: settlementKey },
+    select: { x402TxHash: true },
+  });
+  if (prior) return { success: true, txHash: prior.x402TxHash ?? undefined };
+
+  if (isOnChainEnabled()) {
+    const result = await settleChallengeLegacy(
+      challengeId,
+      winnerId,
+      stake,
+      participantIds.map((userId) => ({ userId })),
+    );
+    if (!result.success) return result;
+
+    const marker = await prisma.creditTx.findFirst({
+      where: { challengeId, type: { in: ["win", "refund"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (marker) {
+      await prisma.creditTx.update({
+        where: { id: marker.id },
+        data: { idempotencyKey: settlementKey },
+      });
+    }
+    return result;
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const alreadyDone = await tx.creditTx.findUnique({ where: { idempotencyKey: settlementKey } });
+      if (alreadyDone) return;
+
+      if (!winnerId) {
+        for (const [index, userId] of participantIds.entries()) {
+          const updated = await tx.user.update({
+            where: { id: userId },
+            data: { credits: { increment: stake } },
+            select: { credits: true },
+          });
+          await tx.creditTx.create({
+            data: {
+              userId,
+              type: "refund",
+              amount: stake,
+              balanceAfter: updated.credits,
+              description: "Settlement: inconclusive challenge stake refunded",
+              challengeId,
+              idempotencyKey: index === 0 ? settlementKey : undefined,
+            },
+          });
+        }
+        return;
+      }
+
+      const losers = participantIds.filter((userId) => userId !== winnerId);
+      if (losers.length === 0) {
+        const updated = await tx.user.update({
+          where: { id: winnerId },
+          data: { credits: { increment: stake } },
+          select: { credits: true },
+        });
+        await tx.creditTx.create({
+          data: {
+            userId: winnerId,
+            type: "refund",
+            amount: stake,
+            balanceAfter: updated.credits,
+            description: "Settlement: solo challenge stake refunded",
+            challengeId,
+            idempotencyKey: settlementKey,
+          },
+        });
+        return;
+      }
+
+      for (const loserId of losers) {
+        const loser = await tx.user.update({
+          where: { id: loserId },
+          data: { totalCreditsLost: { increment: stake } },
+          select: { credits: true },
+        });
+        await tx.creditTx.create({
+          data: {
+            userId: loserId,
+            type: "loss",
+            // The stake was already debited when the participant joined.
+            amount: 0,
+            balanceAfter: loser.credits,
+            description: `Settlement: lost ${stake} staked credits (stake already debited)`,
+            challengeId,
+          },
+        });
+      }
+
+      const totalWinnings = stake * participantIds.length;
+      const winner = await tx.user.update({
+        where: { id: winnerId },
+        data: {
+          credits: { increment: totalWinnings },
+          totalCreditsWon: { increment: totalWinnings },
+        },
+        select: { credits: true },
+      });
+      await tx.creditTx.create({
+        data: {
+          userId: winnerId,
+          type: "win",
+          amount: totalWinnings,
+          balanceAfter: winner.credits,
+          description: `Settlement: won +${totalWinnings} credits from ${losers.length} opponent${losers.length > 1 ? "s" : ""}`,
+          challengeId,
+          idempotencyKey: settlementKey,
+        },
+      });
+    });
+    return { success: true };
+  } catch (error) {
+    const committed = await prisma.creditTx.findUnique({
+      where: { idempotencyKey: settlementKey },
+      select: { x402TxHash: true },
+    });
+    if (committed) return { success: true, txHash: committed.x402TxHash ?? undefined };
+    return { success: false, error: error instanceof Error ? error.message : "Settlement failed" };
+  }
 }
 
 export { txLink, MODEL_TIERS, tierById, isOnChainEnabled };

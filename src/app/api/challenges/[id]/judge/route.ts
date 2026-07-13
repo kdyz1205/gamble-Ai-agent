@@ -5,6 +5,7 @@ import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
+import { ensureAutomaticReviewCase } from "@/lib/verdict-review";
 
 /**
  * POST /api/challenges/[id]/judge
@@ -62,6 +63,7 @@ export async function POST(
   const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
   const opponent = challenge.participants.find((p: { role: string }) => p.role === "opponent");
   if (!creator) return Response.json({ error: "Creator not found" }, { status: 400 });
+  if (!opponent) return Response.json({ error: "An accepted opponent is required before judgment" }, { status: 400 });
 
   const evidenceA = challenge.evidence.find((e: { userId: string }) => e.userId === creator.userId);
   const evidenceB = opponent ? challenge.evidence.find((e: { userId: string }) => e.userId === opponent.userId) : null;
@@ -136,6 +138,14 @@ export async function POST(
     include: { winner: { select: { id: true, username: true } } },
   });
 
+  if (result.confidence < 0.85) {
+    await ensureAutomaticReviewCase({
+      challengeId: id,
+      judgmentId: judgment.id,
+      reason: `Automatic review: Familiar confidence was ${Math.round(result.confidence * 100)}%.`,
+    });
+  }
+
   await prisma.challenge.update({
     where: { id },
     data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
@@ -145,7 +155,7 @@ export async function POST(
   await prisma.activityEvent.create({
     data: {
       type: "challenge_verdict_recommended",
-      message: `"${challenge.title}" has an AI recommendation from ${aiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
+      message: `"${challenge.title}" has a Familiar recommendation from ${aiModelLabel}: ${winnerName} wins. Both participants must accept or request review.`,
       userId: result.winnerId,
       challengeId: id,
     },

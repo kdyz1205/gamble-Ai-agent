@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
+import VerdictReviewControls from "@/components/VerdictReviewControls";
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
 const NAVY = "#1E293B";
@@ -52,8 +53,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "deleting">("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -84,19 +83,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [id]);
-
-  const confirmVerdict = useCallback(async () => {
-    setConfirming(true);
-    setConfirmError(null);
-    try {
-      const res = await api.confirmVerdict(id);
-      setMarket(res.challenge);
-    } catch (err) {
-      setConfirmError(err instanceof Error ? err.message : "Could not confirm the Familiar result");
-    } finally {
-      setConfirming(false);
-    }
   }, [id]);
 
   // Creator-only delete. Two-step (confirm first) so one accidental tap doesn't
@@ -158,7 +144,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const participantCount = market.participants?.length || 0;
   const maxParticipants = market.maxParticipants ?? 2;
   const latestJudgment = market.judgments?.[0] ?? null;
-  const canConfirmVerdict = isCreator && market.status === "disputed" && !!latestJudgment;
 
   return (
     <div className="relative min-h-screen">
@@ -271,21 +256,19 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 This is not final yet. A human confirmation is required before credits update.
               </p>
             )}
-            {confirmError && (
-              <p className="mt-3 text-xs font-bold" style={{ color: ROSE_TEXT }}>{confirmError}</p>
-            )}
-            {canConfirmVerdict && (
-              <motion.button
-                type="button"
-                onClick={confirmVerdict}
-                disabled={confirming}
-                whileTap={{ scale: 0.96 }}
-                className="mt-3 w-full py-3 text-sm font-extrabold disabled:opacity-50"
-                style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}
-              >
-                {confirming ? "Confirming..." : "Confirm Familiar result"}
-              </motion.button>
-            )}
+          </div>
+        )}
+
+        {latestJudgment && market.status === "disputed" && user?.id && (
+          <div className="mb-4">
+            <VerdictReviewControls
+              challenge={market}
+              userId={user.id}
+              onUpdated={async () => {
+                const refreshed = await api.getChallenge(id);
+                setMarket(refreshed.challenge);
+              }}
+            />
           </div>
         )}
 

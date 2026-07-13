@@ -1,17 +1,15 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
-import { settleChallenge } from "@/lib/credits";
-import { ChallengeStatus, type ChallengeStatus as ChallengeStatusValue } from "@/lib/enums";
-import { assertChallengeTransition } from "@/lib/challenge-state-machine";
+import { recordVerdictDecision, ReviewFlowError, VerdictDecision } from "@/lib/verdict-review";
 
 export const runtime = "nodejs";
 
 /**
- * POST /api/challenges/[id]/confirm-verdict
+ * Backward-compatible verdict confirmation endpoint.
  *
- * Confirms the latest completed AI recommendation and performs settlement.
- * The AI recommends; the creator makes the final product action explicit.
+ * Confirmation now records this participant's acceptance. Settlement occurs
+ * only after every accepted participant has accepted and no review is open.
  */
 export async function POST(
   _req: NextRequest,
@@ -19,114 +17,56 @@ export async function POST(
 ) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
-
   const { id } = await params;
+
   try {
-  const challenge = await prisma.challenge.findUnique({
-    where: { id },
-    include: {
-      participants: { where: { status: "accepted" } },
-      judgments: {
-        where: { method: "ai", status: "completed" },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: { winner: { select: { id: true, username: true } } },
-      },
-    },
-  });
-
-  if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
-  if (challenge.creatorId !== user.userId) {
-    return Response.json({ error: "Only the creator can confirm the AI recommendation" }, { status: 403 });
-  }
-  if (challenge.status === ChallengeStatus.settled) {
-    return Response.json({ error: "Challenge is already settled" }, { status: 409 });
-  }
-  const status = challenge.status as ChallengeStatusValue;
-  if (status !== ChallengeStatus.disputed && status !== ChallengeStatus.judging) {
-    return Response.json({ error: "No confirmable AI recommendation for this challenge" }, { status: 400 });
-  }
-
-  const judgment = challenge.judgments[0];
-  if (!judgment) {
-    return Response.json({ error: "No completed AI recommendation found" }, { status: 400 });
-  }
-
-  let settlement: { success: boolean; txHash?: string; error?: string } = { success: true };
-  if (challenge.stake > 0) {
-    assertChallengeTransition(status, ChallengeStatus.pending_settlement);
-
-    // Atomic guard: only ONE request gets to move the status from {disputed,judging}
-    // into pending_settlement. If a second tab or a double-click races us, its
-    // updateMany returns count=0 and we bail before double-settling. This
-    // closes the classic "fire the click handler twice → winner gets paid twice"
-    // exploit noted in the production-readiness audit.
-    const claim = await prisma.challenge.updateMany({
-      where: {
-        id,
-        status: { in: [ChallengeStatus.disputed, ChallengeStatus.judging] },
-      },
-      data: { status: ChallengeStatus.pending_settlement },
-    });
-    if (claim.count === 0) {
-      return Response.json(
-        { error: "This challenge is already being settled by another request." },
-        { status: 409 },
-      );
-    }
-
-    settlement = await settleChallenge(
-      id,
-      judgment.winnerId,
-      challenge.stake,
-      challenge.participants.map((p) => ({ userId: p.userId })),
-    );
-
-    if (!settlement.success) {
-      return Response.json(
-        {
-          error: settlement.error || "Settlement failed",
-          settlement,
-          challenge: { id, status: ChallengeStatus.pending_settlement },
-        },
-        { status: 502 },
-      );
-    }
-  }
-
-  const fromStatus = challenge.stake > 0
-    ? ChallengeStatus.pending_settlement
-    : status;
-  assertChallengeTransition(fromStatus, ChallengeStatus.settled);
-
-  const updated = await prisma.challenge.update({
-    where: { id },
-    data: { status: ChallengeStatus.settled },
-    include: {
-      creator: { select: { id: true, username: true, image: true } },
-      participants: { include: { user: { select: { id: true, username: true, image: true } } } },
-      evidence: { include: { user: { select: { id: true, username: true } } }, orderBy: { createdAt: "desc" } },
-      judgments: { include: { winner: { select: { id: true, username: true } } }, orderBy: { createdAt: "desc" } },
-      _count: { select: { evidence: true, participants: true } },
-    },
-  });
-
-  const winnerName = judgment.winner?.username || "No one";
-  await prisma.activityEvent.create({
-    data: {
-      type: "challenge_settled",
-      message: `"${challenge.title}" confirmed by ${user.username}; ${winnerName} wins${challenge.stake > 0 ? ` ${challenge.stake} credits` : ""}.`,
-      userId: judgment.winnerId,
+    const result = await recordVerdictDecision({
       challengeId: id,
-    },
-  });
+      userId: user.userId,
+      decision: VerdictDecision.accepted,
+    });
+    const challenge = await prisma.challenge.findUnique({
+      where: { id },
+      include: {
+        creator: { select: { id: true, username: true, image: true } },
+        participants: { include: { user: { select: { id: true, username: true, image: true } } } },
+        evidence: { include: { user: { select: { id: true, username: true } } }, orderBy: { createdAt: "desc" } },
+        judgments: { include: { winner: { select: { id: true, username: true } } }, orderBy: { createdAt: "desc" } },
+        verdictResponses: {
+          select: { userId: true, decision: true, updatedAt: true },
+          orderBy: { updatedAt: "asc" },
+        },
+        reviewCase: {
+          select: {
+            id: true,
+            status: true,
+            resolution: true,
+            resolvedWinnerId: true,
+            expiresAt: true,
+            createdAt: true,
+            resolvedAt: true,
+          },
+        },
+        _count: { select: { evidence: true, participants: true } },
+      },
+    });
+    if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
 
-  return Response.json({ challenge: updated, judgment, settlement });
-  } catch (err) {
-    console.error(`[confirm-verdict ${id}] uncaught:`, err);
     return Response.json(
-      { error: err instanceof Error ? err.message : "Confirm verdict failed" },
-      { status: 500 },
+      {
+        challenge,
+        judgment: challenge.judgments[0] ?? null,
+        settlement: "settlement" in result
+          ? result.settlement
+          : { success: false, error: "Waiting for all participants" },
+        settled: result.settled,
+        waitingForUserIds: result.waitingForUserIds,
+        reviewCase: result.reviewCase,
+      },
+      { status: result.settled ? 200 : 202 },
     );
+  } catch (error) {
+    const status = error instanceof ReviewFlowError ? error.status : 500;
+    return Response.json({ error: error instanceof Error ? error.message : "Confirm verdict failed" }, { status });
   }
 }

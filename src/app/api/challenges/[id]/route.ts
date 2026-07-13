@@ -29,6 +29,21 @@ export async function GET(
         },
         orderBy: { createdAt: "desc" },
       },
+      verdictResponses: {
+        select: { userId: true, decision: true, updatedAt: true },
+        orderBy: { updatedAt: "asc" },
+      },
+      reviewCase: {
+        select: {
+          id: true,
+          status: true,
+          resolution: true,
+          resolvedWinnerId: true,
+          expiresAt: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
+      },
       _count: { select: { evidence: true, participants: true } },
     },
   });

@@ -11,8 +11,8 @@
  *      winner).
  *   5. AI judgment runs on real OpenAI (gpt-4o-mini) — writes a Judgment row,
  *      status → disputed.
- *   6. A visits /market/{id}, clicks "Confirm AI recommendation and settle".
- *   7. Credits settle and the challenge becomes "settled".
+ *   6. B accepts the result, then A clicks "Accept result" on /market/{id}.
+ *   7. Mutual consent settles credits exactly once.
  *
  * Playwright records each context's video separately. The harness prints the
  * challengeId + winner + final credits so you can trace every run back to a
@@ -30,6 +30,7 @@ import {
   acceptFromJoinPage,
   submitTextEvidenceViaApi,
   triggerJudge,
+  acceptVerdictViaApi,
   confirmVerdictOnMarketPage,
 } from "./helpers";
 
@@ -84,7 +85,9 @@ async function runOneGamble(
     console.log(`[${gambleLabel}] AI verdict: winner=${verdict.winnerUsername} confidence=${verdict.confidence}`);
     expect(verdict.winnerUsername).toBe(PLAYER_A.username);
 
-    // Creator confirms, stakes settle
+    // Both accepted players consent. Player B responds through the real API;
+    // Player A performs the final visible gesture that settles the stake pool.
+    await acceptVerdictViaApi(pageB, challengeId);
     await confirmVerdictOnMarketPage(pageA, challengeId);
 
     // Opponent opens final settled market page for visual closure in the recording

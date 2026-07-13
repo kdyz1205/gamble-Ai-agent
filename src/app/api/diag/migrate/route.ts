@@ -88,6 +88,71 @@ const DDL: Array<{ id: string; sql: string }> = [
   { id: "judgejob_startedAt",            sql: `ALTER TABLE "JudgeJob" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3)` },
   { id: "judgejob_heartbeatAt",          sql: `ALTER TABLE "JudgeJob" ADD COLUMN IF NOT EXISTS "heartbeatAt" TIMESTAMP(3)` },
   { id: "judgejob_idx_status_started",   sql: `CREATE INDEX IF NOT EXISTS "JudgeJob_status_startedAt_idx" ON "JudgeJob" ("status", "startedAt")` },
+
+  // ── Mutual verdict acceptance + human review loop (2026-07-13) ──
+  { id: "user_isReviewer", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isReviewer" BOOLEAN NOT NULL DEFAULT false` },
+  { id: "credittx_idempotencyKey", sql: `ALTER TABLE "CreditTx" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT` },
+  { id: "credittx_idempotencyKey_unique", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "CreditTx_idempotencyKey_key" ON "CreditTx" ("idempotencyKey")` },
+  { id: "verdict_response_table", sql: `
+    CREATE TABLE IF NOT EXISTS "VerdictResponse" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "challengeId" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "decision" TEXT NOT NULL,
+      "reason" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "VerdictResponse_challengeId_fkey" FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "VerdictResponse_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  ` },
+  { id: "verdict_response_unique", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "VerdictResponse_challengeId_userId_key" ON "VerdictResponse" ("challengeId", "userId")` },
+  { id: "verdict_response_idx", sql: `CREATE INDEX IF NOT EXISTS "VerdictResponse_challengeId_decision_idx" ON "VerdictResponse" ("challengeId", "decision")` },
+  { id: "review_case_table", sql: `
+    CREATE TABLE IF NOT EXISTS "ReviewCase" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "challengeId" TEXT NOT NULL,
+      "requestedByUserId" TEXT,
+      "reviewerUserId" TEXT,
+      "originalJudgmentId" TEXT NOT NULL,
+      "finalJudgmentId" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'pending',
+      "reason" TEXT NOT NULL,
+      "resolution" TEXT,
+      "resolvedWinnerId" TEXT,
+      "notes" TEXT,
+      "expiresAt" TIMESTAMP(3) NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      "resolvedAt" TIMESTAMP(3),
+      CONSTRAINT "ReviewCase_challengeId_fkey" FOREIGN KEY ("challengeId") REFERENCES "Challenge"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "ReviewCase_requestedByUserId_fkey" FOREIGN KEY ("requestedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+      CONSTRAINT "ReviewCase_reviewerUserId_fkey" FOREIGN KEY ("reviewerUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+      CONSTRAINT "ReviewCase_resolvedWinnerId_fkey" FOREIGN KEY ("resolvedWinnerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+    )
+  ` },
+  { id: "review_case_unique", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "ReviewCase_challengeId_key" ON "ReviewCase" ("challengeId")` },
+  { id: "review_case_status_idx", sql: `CREATE INDEX IF NOT EXISTS "ReviewCase_status_createdAt_idx" ON "ReviewCase" ("status", "createdAt")` },
+  { id: "review_case_requester_idx", sql: `CREATE INDEX IF NOT EXISTS "ReviewCase_requestedByUserId_idx" ON "ReviewCase" ("requestedByUserId")` },
+  { id: "review_case_low_confidence_backfill", sql: `
+    INSERT INTO "ReviewCase" (
+      "id", "challengeId", "requestedByUserId", "reviewerUserId",
+      "originalJudgmentId", "status", "reason", "expiresAt", "createdAt", "updatedAt"
+    )
+    SELECT
+      'review_' || md5(c."id" || random()::text), c."id", NULL, NULL,
+      j."id", 'pending', 'Automatic review: AI confidence below 0.85',
+      NOW() + INTERVAL '72 hours', NOW(), NOW()
+    FROM "Challenge" c
+    JOIN LATERAL (
+      SELECT "id", "confidence" FROM "Judgment"
+      WHERE "challengeId" = c."id" AND "method" = 'ai' AND "status" = 'completed'
+      ORDER BY "createdAt" DESC LIMIT 1
+    ) j ON true
+    WHERE c."status"::text = 'disputed'
+      AND COALESCE(j."confidence", 0) < 0.85
+    ON CONFLICT ("challengeId") DO NOTHING
+  ` },
 ];
 
 export async function POST(req: NextRequest) {

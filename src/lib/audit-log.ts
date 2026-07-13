@@ -10,6 +10,11 @@ export const AuditActions = {
   EVIDENCE_SUBMITTED: "evidence.submitted",
   JUDGMENT_COMPLETED: "judgment.completed",
   CRON_TRANSITION: "cron.deadline_to_judging",
+  VERDICT_ACCEPTED: "verdict.accepted",
+  REVIEW_REQUESTED: "review.requested",
+  REVIEW_RESOLVED: "review.resolved",
+  SETTLEMENT_FAILED: "settlement.failed",
+  CHALLENGE_SETTLED: "challenge.settled",
 } as const;
 
 /**

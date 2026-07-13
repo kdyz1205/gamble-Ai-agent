@@ -52,39 +52,44 @@ model VerificationToken {
 // ═══════════════════════════════════════
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime?
-  username      String    @unique
-  name          String?
-  image         String?
-  passwordHash  String?
-  bio           String?
-  credits       Int       @default(10) // starting credits — enough for a few rounds
-  totalCreditsWon  Int    @default(0)
-  totalCreditsLost Int    @default(0)
-  totalCreditsBought Int  @default(0)
-  evmAddress    String?   @unique // EVM wallet for on-chain USAGE tokens
-  latitude      Float?
-  longitude     Float?
-  locationUpdatedAt DateTime?
-  isOnline      Boolean   @default(false)
-  lastSeenAt    DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  emailVerified      DateTime?
+  username           String    @unique
+  name               String?
+  image              String?
+  passwordHash       String?
+  bio                String?
+  credits            Int       @default(10) // starting credits — enough for a few rounds
+  totalCreditsWon    Int       @default(0)
+  totalCreditsLost   Int       @default(0)
+  totalCreditsBought Int       @default(0)
+  evmAddress         String?   @unique // EVM wallet for on-chain USAGE tokens
+  latitude           Float?
+  longitude          Float?
+  locationUpdatedAt  DateTime?
+  isOnline           Boolean   @default(false)
+  isReviewer         Boolean   @default(false)
+  lastSeenAt         DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  challengesCreated  Challenge[]    @relation("ChallengeCreator")
-  participations     Participant[]
-  evidenceSubmissions Evidence[]
-  judgmentsGiven     Judgment[]     @relation("JudgeUser")
-  judgmentsWon       Judgment[]     @relation("WinnerUser")
-  transactions       CreditTx[]
-  activityEvents     ActivityEvent[]
-  judgeJobsRequested JudgeJob[]     @relation("JudgeJobRequester")
-  auditLogsActor     AuditLog[]     @relation("AuditLogActor")
-  auditLogsTarget    AuditLog[]     @relation("AuditLogTarget")
+  accounts             Account[]
+  sessions             Session[]
+  challengesCreated    Challenge[]       @relation("ChallengeCreator")
+  participations       Participant[]
+  evidenceSubmissions  Evidence[]
+  judgmentsGiven       Judgment[]        @relation("JudgeUser")
+  judgmentsWon         Judgment[]        @relation("WinnerUser")
+  transactions         CreditTx[]
+  activityEvents       ActivityEvent[]
+  judgeJobsRequested   JudgeJob[]        @relation("JudgeJobRequester")
+  auditLogsActor       AuditLog[]        @relation("AuditLogActor")
+  auditLogsTarget      AuditLog[]        @relation("AuditLogTarget")
+  verdictResponses     VerdictResponse[]
+  reviewCasesRequested ReviewCase[]      @relation("ReviewRequester")
+  reviewCasesResolved  ReviewCase[]      @relation("ReviewResolver")
+  reviewCasesWon       ReviewCase[]      @relation("ReviewWinner")
 }
 
 // ═══════════════════════════════════════
@@ -92,21 +97,22 @@ model User {
 // ═══════════════════════════════════════
 
 model CreditTx {
-  id           String   @id @default(cuid())
-  userId       String
-  type         String   // topup | ai_parse | ai_judge | stake | win | loss | refund | bonus
-  amount       Int      // positive = gained, negative = spent
-  balanceAfter Int
-  description  String?
-  challengeId  String?
-  x402TxHash   String?  // on-chain tx hash for USDC top-ups
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  type           String // topup | ai_parse | ai_judge | stake | win | loss | refund | bonus
+  amount         Int // positive = gained, negative = spent
+  balanceAfter   Int
+  description    String?
+  challengeId    String?
+  x402TxHash     String? // on-chain tx hash for USDC top-ups
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
 
   // Ledger rows must SURVIVE user / challenge deletion so post-hoc audits and
   // counter-party history stay intact. Cascade on user delete would destroy
   // the counter-party record of a win/loss the opposing user already received.
-  user         User       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  challenge    Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([challengeId])
@@ -118,69 +124,71 @@ model CreditTx {
 // ═══════════════════════════════════════
 
 model Challenge {
-  id            String   @id @default(cuid())
-  creatorId     String
-  title         String
-  description   String?
-  type          String   // Fitness | Cooking | Coding | Learning | Games | Prediction | General
-  status        String   @default("draft") // draft | open | funded | live | judging | resolved | void | cancelled | disputed
+  id          String  @id @default(cuid())
+  creatorId   String
+  title       String
+  description String?
+  type        String // Fitness | Cooking | Coding | Learning | Games | Prediction | General
+  status      String  @default("draft") // draft | open | funded | live | judging | resolved | void | cancelled | disputed
 
   // ── Market structure ──
-  marketType    String   @default("challenge") // yes_no | threshold | head_to_head | challenge
-  proposition   String?  // canonical proposition ("Will X happen?", "Can I do Y?")
+  marketType  String  @default("challenge") // yes_no | threshold | head_to_head | challenge
+  proposition String? // canonical proposition ("Will X happen?", "Can I do Y?")
 
   // ── Stakes ──
-  stake         Int      @default(0) // credits wagered per participant
-  stakeToken    String   @default("credits") // credits | usdc | eth
+  stake      Int    @default(0) // credits wagered per participant
+  stakeToken String @default("credits") // credits | usdc | eth
 
   // ── Timing ──
-  deadline      DateTime?
-  eventTime     String?  // human-readable event time ("April 10", "tomorrow 3pm")
-  joinWindow    String?  // how long others can join ("24 hours", "until event")
-  proofWindow   String?  // how long to submit proof ("48 hours after event")
+  deadline    DateTime?
+  eventTime   String? // human-readable event time ("April 10", "tomorrow 3pm")
+  joinWindow  String? // how long others can join ("24 hours", "until event")
+  proofWindow String? // how long to submit proof ("48 hours after event")
 
   // ── Rules & Evidence ──
-  rules         String?
-  evidenceType  String   @default("self_report") // video | photo | gps | self_report
+  rules        String?
+  evidenceType String  @default("self_report") // video | photo | gps | self_report
 
   // ── Settlement ──
   settlementMode String  @default("mutual_confirmation") // oracle | arbiter | mutual_confirmation
-  proofSource   String?  // who submits the result ("creator", "opponent", "both", username)
-  arbiter       String?  // who decides disputes (username or "ai")
-  fallbackRule  String?  // what happens if no proof ("refund_if_no_proof", "forfeit_if_no_proof")
-  disputeWindow String?  // how long to dispute ("12 hours", "24 hours")
+  proofSource    String? // who submits the result ("creator", "opponent", "both", username)
+  arbiter        String? // who decides disputes (username or "ai")
+  fallbackRule   String? // what happens if no proof ("refund_if_no_proof", "forfeit_if_no_proof")
+  disputeWindow  String? // how long to dispute ("12 hours", "24 hours")
 
   // ── Visibility ──
-  isPublic      Boolean  @default(false)
-  visibility    String   @default("private") // private | invite_only | public
-  maxParticipants Int    @default(2)
+  isPublic        Boolean @default(false)
+  visibility      String  @default("private") // private | invite_only | public
+  maxParticipants Int     @default(2)
 
   // ── On-chain anchoring (optional) ──
-  paramsHash    String?  // hash of market params at creation time
-  evidenceHash  String?  // hash of submitted evidence
+  paramsHash     String? // hash of market params at creation time
+  evidenceHash   String? // hash of submitted evidence
   resolutionHash String? // hash of final resolution packet
-  escrowTxHash  String?  // on-chain escrow creation tx
-  settleTxHash  String?  // on-chain settlement tx
+  escrowTxHash   String? // on-chain escrow creation tx
+  settleTxHash   String? // on-chain settlement tx
 
   // ── AI ──
-  aiReview      Boolean  @default(true)
-  aiModel       String?  // which model was used for judging
+  aiReview Boolean @default(true)
+  aiModel  String? // which model was used for judging
 
   // ── Metadata ──
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   discoveryLat        Float?
   discoveryLng        Float?
   discoveryCapturedAt DateTime?
 
-  creator       User          @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  participants  Participant[]
-  evidence      Evidence[]
-  judgments     Judgment[]
-  creditTxs     CreditTx[]
-  activityEvents ActivityEvent[]
-  judgeJobs     JudgeJob[]
-  auditLogs     AuditLog[]    @relation("AuditLogChallenge")
+  creator          User              @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants     Participant[]
+  evidence         Evidence[]
+  judgments        Judgment[]
+  creditTxs        CreditTx[]
+  activityEvents   ActivityEvent[]
+  judgeJobs        JudgeJob[]
+  auditLogs        AuditLog[]        @relation("AuditLogChallenge")
+  verdictResponses VerdictResponse[]
+  reviewCase       ReviewCase?
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
   // by createdAt DESC; the "my markets" tab filters on creatorId; the judge
@@ -192,15 +200,15 @@ model Challenge {
 }
 
 model Participant {
-  id           String   @id @default(cuid())
-  challengeId  String
-  userId       String
-  role         String   @default("opponent") // creator | opponent | spectator
-  status       String   @default("pending")  // pending | accepted | declined | completed
-  joinedAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  role        String   @default("opponent") // creator | opponent | spectator
+  status      String   @default("pending") // pending | accepted | declined | completed
+  joinedAt    DateTime @default(now())
 
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([challengeId, userId])
 }
@@ -210,24 +218,24 @@ model Participant {
 // ═══════════════════════════════════════
 
 model Evidence {
-  id           String   @id @default(cuid())
-  challengeId  String
-  userId       String
-  type         String   // video | photo | gps | text
-  url          String?
-  description  String?
-  metadata     String?  // JSON string
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  type        String // video | photo | gps | text
+  url         String?
+  description String?
+  metadata    String? // JSON string
+  createdAt   DateTime @default(now())
 
   // ── Pre-extracted vision frames (populated async on submit so judgeChallenge can skip ffmpeg) ──
-  preparedFrames      String?   // JSON array of public Blob URLs — already normalized JPEGs, judge just fetches them
+  preparedFrames      String? // JSON array of public Blob URLs — already normalized JPEGs, judge just fetches them
   preparedAt          DateTime? // when frame extraction finished
-  preparedDurationSec Float?    // source video duration (if video) for caption building
-  preparedMode        String?   // "scene_change" | "uniform_fallback" | "photo" | "none"
-  prepareError        String?   // populated if extraction failed — judge falls back to slow path + logs this
+  preparedDurationSec Float? // source video duration (if video) for caption building
+  preparedMode        String? // "scene_change" | "uniform_fallback" | "photo" | "none"
+  prepareError        String? // populated if extraction failed — judge falls back to slow path + logs this
 
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // One evidence row per (challenge, user). Prevents double-submit from
   // flooding the judge with N rows per player where only the first is read.
@@ -237,21 +245,67 @@ model Evidence {
 }
 
 model Judgment {
-  id           String   @id @default(cuid())
-  challengeId  String
-  judgeId      String?
-  winnerId     String?
-  method       String   @default("ai") // ai | manual | community_vote
-  aiModel      String?
-  reasoning    String?
-  confidence   Float?
-  status       String   @default("pending") // pending | completed | disputed
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  challengeId String
+  judgeId     String?
+  winnerId    String?
+  method      String   @default("ai") // ai | manual | community_vote
+  aiModel     String?
+  reasoning   String?
+  confidence  Float?
+  status      String   @default("pending") // pending | completed | disputed
+  createdAt   DateTime @default(now())
 
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  judge        User?     @relation("JudgeUser", fields: [judgeId], references: [id])
-  winner       User?     @relation("WinnerUser", fields: [winnerId], references: [id])
-  judgeJobs    JudgeJob[]
+  challenge Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  judge     User?      @relation("JudgeUser", fields: [judgeId], references: [id])
+  winner    User?      @relation("WinnerUser", fields: [winnerId], references: [id])
+  judgeJobs JudgeJob[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// VERDICT RESPONSES & HUMAN REVIEW
+// ─────────────────────────────────────────────────────────────
+
+model VerdictResponse {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  decision    String // accepted | review_requested
+  reason      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([challengeId, decision])
+}
+
+model ReviewCase {
+  id                 String    @id @default(cuid())
+  challengeId        String    @unique
+  requestedByUserId  String?
+  reviewerUserId     String?
+  originalJudgmentId String
+  finalJudgmentId    String?
+  status             String    @default("pending") // pending | processing | resolved | expired
+  reason             String
+  resolution         String? // uphold | override | refund
+  resolvedWinnerId   String?
+  notes              String?
+  expiresAt          DateTime
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  resolvedAt         DateTime?
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  requestedBy User?     @relation("ReviewRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  reviewer    User?     @relation("ReviewResolver", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  winner      User?     @relation("ReviewWinner", fields: [resolvedWinnerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requestedByUserId])
 }
 
 // ═══════════════════════════════════════
@@ -259,11 +313,11 @@ model Judgment {
 // ═══════════════════════════════════════
 
 model JudgeJob {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   challengeId       String
   requestedByUserId String
-  status            String   @default("pending") // pending | processing | completed | failed
-  tierId            Int      @default(1)
+  status            String    @default("pending") // pending | processing | completed | failed
+  tierId            Int       @default(1)
   providerId        String?
   model             String?
   webhookUrl        String?
@@ -273,14 +327,14 @@ model JudgeJob {
   creditsUsed       Int?
   creditsRemaining  Int?
   txHash            String?
-  startedAt         DateTime?  // when runner actually picked up the job (for heartbeat / stuck detection)
-  heartbeatAt       DateTime?  // updated periodically during long runs so we can find hung jobs
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  startedAt         DateTime? // when runner actually picked up the job (for heartbeat / stuck detection)
+  heartbeatAt       DateTime? // updated periodically during long runs so we can find hung jobs
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  challenge         Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  requestedBy       User      @relation("JudgeJobRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
-  judgment          Judgment? @relation(fields: [judgmentId], references: [id])
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  requestedBy User      @relation("JudgeJobRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  judgment    Judgment? @relation(fields: [judgmentId], references: [id])
 
   @@index([challengeId, status])
   @@index([status, startedAt]) // sweeper can find stuck-in-processing jobs
@@ -296,12 +350,12 @@ model AuditLog {
   actorUserId  String?
   targetUserId String?
   challengeId  String?
-  payload      String?  // JSON string (SQLite doesn't support JSONB)
+  payload      String? // JSON string (SQLite doesn't support JSONB)
   createdAt    DateTime @default(now())
 
-  actor        User?      @relation("AuditLogActor", fields: [actorUserId], references: [id])
-  target       User?      @relation("AuditLogTarget", fields: [targetUserId], references: [id])
-  challenge    Challenge? @relation("AuditLogChallenge", fields: [challengeId], references: [id])
+  actor     User?      @relation("AuditLogActor", fields: [actorUserId], references: [id])
+  target    User?      @relation("AuditLogTarget", fields: [targetUserId], references: [id])
+  challenge Challenge? @relation("AuditLogChallenge", fields: [challengeId], references: [id])
 
   @@index([challengeId])
   @@index([actorUserId])
@@ -313,16 +367,16 @@ model AuditLog {
 // ═══════════════════════════════════════
 
 model ActivityEvent {
-  id           String   @id @default(cuid())
-  type         String
-  message      String
-  userId       String?
-  challengeId  String?
-  metadata     String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  type        String
+  message     String
+  userId      String?
+  challengeId String?
+  metadata    String?
+  createdAt   DateTime @default(now())
 
-  user         User?      @relation(fields: [userId], references: [id])
-  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
+  challenge Challenge? @relation(fields: [challengeId], references: [id])
 
   // Feed reads order by createdAt DESC and often filter by type.
   @@index([createdAt])

@@ -9,6 +9,7 @@ import { judgeChallenge } from "./ai-engine";
 import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, settleChallenge, TIER_MULTIPLIER } from "./credits";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { ensureAutomaticReviewCase } from "./verdict-review";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -50,7 +51,7 @@ export interface ExecuteJudgmentOptions {
 }
 
 /**
- * Runs AI judgment, persists Judgment, settles stakes, marks challenge settled.
+ * Runs AI judgment and persists a recommendation for participant consent or review.
  * Idempotent: skips if a completed judgment already exists for this challenge.
  */
 export async function executeChallengeJudgment(
@@ -228,7 +229,19 @@ export async function executeChallengeJudgment(
     include: { winner: { select: { id: true, username: true } } },
   });
 
-  if (process.env.AI_VERDICT_MODE !== "auto_settle") {
+  if (result.confidence < 0.85) {
+    await ensureAutomaticReviewCase({
+      challengeId,
+      judgmentId: judgment.id,
+      reason: `Automatic review: Familiar confidence was ${Math.round(result.confidence * 100)}%.`,
+    });
+  }
+
+  // A Familiar recommendation is never permission to move credits. This
+  // challenge was validated as `judging` above, so every judgment enters the
+  // participant-consent / review state. Legacy auto-settle code below remains
+  // unreachable until it is removed in a separate cleanup.
+  if (challenge.status === ChallengeStatus.judging) {
     await prisma.challenge.update({
       where: { id: challengeId },
       data: { status: ChallengeStatus.disputed, aiModel: aiModelLabel },
@@ -252,7 +265,7 @@ export async function executeChallengeJudgment(
     await prisma.activityEvent.create({
       data: {
         type: "challenge_verdict_recommended",
-        message: `"${challenge.title}" has an AI recommendation from ${aiModelLabel}: ${winnerName} wins. Creator confirmation required.`,
+        message: `"${challenge.title}" has a Familiar recommendation from ${aiModelLabel}: ${winnerName} wins. Both participants must accept or request review.`,
         userId: result.winnerId,
         challengeId,
       },

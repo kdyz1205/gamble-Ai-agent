@@ -191,32 +191,18 @@ export async function POST(req: NextRequest) {
   const autoConfirm = req.nextUrl.searchParams.get("autoConfirm") === "1";
   if (autoConfirm && judgeResult.ok) {
     await mark("auto_confirm", async () => {
-      // Replicates /api/challenges/[id]/confirm-verdict without auth gate
-      const fresh = await prisma.challenge.findUnique({
-        where: { id: challenge.id },
-        include: {
-          participants: { where: { status: "accepted" } },
-          judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
-        },
+      // Diagnostic automation still exercises the same mutual-consent service
+      // as the user-facing endpoints. It cannot bypass an open review case.
+      const { recordVerdictDecision, VerdictDecision } = await import("@/lib/verdict-review");
+      await recordVerdictDecision({
+        challengeId: challenge.id,
+        userId: creator.id,
+        decision: VerdictDecision.accepted,
       });
-      if (!fresh || fresh.status !== "disputed") return;
-      const j = fresh.judgments[0];
-      if (!j) return;
-      const claim = await prisma.challenge.updateMany({
-        where: { id: challenge.id, status: { in: ["disputed", "judging"] } },
-        data: { status: "pending_settlement" },
-      });
-      if (claim.count === 0) return;
-      const { settleChallenge } = await import("@/lib/credits");
-      await settleChallenge(
-        challenge.id,
-        j.winnerId,
-        fresh.stake,
-        fresh.participants.map((p) => ({ userId: p.userId })),
-      );
-      await prisma.challenge.update({
-        where: { id: challenge.id },
-        data: { status: "settled" },
+      await recordVerdictDecision({
+        challengeId: challenge.id,
+        userId: opponent.id,
+        decision: VerdictDecision.accepted,
       });
     });
   }

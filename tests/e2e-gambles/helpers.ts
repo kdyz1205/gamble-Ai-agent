@@ -1,5 +1,4 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect } from "@playwright/test";
 import { PLAYER_A, PLAYER_B } from "./users";
 export { PLAYER_A, PLAYER_B };
 
@@ -162,22 +161,35 @@ export async function triggerJudge(page: Page, challengeId: string): Promise<{ w
 }
 
 /**
- * Click the "Confirm AI recommendation and settle" button on /market/[id]
- * under the creator's session. After this fires, credits settle and the
- * challenge status flips to "settled".
+ * Record one player's acceptance through the real authenticated API.
+ */
+export async function acceptVerdictViaApi(page: Page, challengeId: string): Promise<void> {
+  const response = await page.request.post(`${BASE_URL}/api/challenges/${challengeId}/verdict-response`, {
+    data: { decision: "accepted" },
+    headers: { "Content-Type": "application/json" },
+  });
+  if (![200, 202].includes(response.status())) {
+    throw new Error(`verdict acceptance failed: ${response.status()} ${await response.text().catch(() => "")}`);
+  }
+}
+
+/**
+ * Click the participant-visible "Accept result" button. Settlement happens
+ * only if the other accepted player already consented and no review is open.
  */
 export async function confirmVerdictOnMarketPage(page: Page, challengeId: string) {
   await page.goto(`${BASE_URL}/market/${challengeId}`, { waitUntil: "domcontentloaded" });
-  const btn = page.getByRole("button", { name: /confirm ai recommendation and settle/i }).first();
+  const btn = page.getByRole("button", { name: /accept result/i }).first();
   await btn.waitFor({ state: "visible", timeout: 15_000 });
-  // Pre-register before click (same race condition as acceptFromJoinPage).
   const confirmRes = page.waitForResponse(
-    (r) => r.url().includes(`/challenges/${challengeId}/confirm-verdict`) && r.request().method() === "POST",
+    (r) => r.url().includes(`/challenges/${challengeId}/verdict-response`) && r.request().method() === "POST",
     { timeout: 30_000 },
   );
   await btn.click();
-  await confirmRes;
-  // Brief pause so the final "Settled" state is on camera
+  const response = await confirmRes;
+  if (![200, 202].includes(response.status())) {
+    throw new Error(`verdict acceptance failed: ${response.status()} ${await response.text().catch(() => "")}`);
+  }
   await page.waitForTimeout(1500);
 }
 

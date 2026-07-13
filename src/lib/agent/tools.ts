@@ -13,9 +13,10 @@
  * credits.ts atomic helpers.
  */
 import prisma from "@/lib/db";
-import { spendCredits, addCredits, settleChallenge } from "@/lib/credits";
+import { spendCredits, addCredits } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { ChallengeStatus } from "@/lib/enums";
+import { recordVerdictDecision, VerdictDecision } from "@/lib/verdict-review";
 import type { AgentToolName, DraftState } from "./types";
 
 export interface ToolContext {
@@ -309,44 +310,25 @@ async function runVisionJudgeTool(ctx: ToolContext, args: Record<string, unknown
 async function confirmVerdictTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
-
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    include: {
-      participants: { where: { status: "accepted" } },
-      judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
-    },
-  });
-  if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (challenge.creatorId !== ctx.userId) return { ok: false, error: "Only the creator can confirm" };
-  if (challenge.status === ChallengeStatus.settled) return { ok: false, error: "Already settled" };
-  const confirmableStatuses: string[] = [ChallengeStatus.disputed, ChallengeStatus.judging];
-  if (!confirmableStatuses.includes(challenge.status)) {
-    return { ok: false, error: `Not confirmable (status=${challenge.status})` };
-  }
-  const j = challenge.judgments[0];
-  if (!j) return { ok: false, error: "No AI recommendation to confirm yet" };
-
-  if (challenge.stake > 0) {
-    const claim = await prisma.challenge.updateMany({
-      where: { id: challengeId, status: { in: [ChallengeStatus.disputed, ChallengeStatus.judging] } },
-      data: { status: ChallengeStatus.pending_settlement },
-    });
-    if (claim.count === 0) return { ok: false, error: "Already being settled by another request" };
-    const settlement = await settleChallenge(
+  try {
+    const result = await recordVerdictDecision({
       challengeId,
-      j.winnerId,
-      challenge.stake,
-      challenge.participants.map((p) => ({ userId: p.userId })),
-    );
-    if (!settlement.success) return { ok: false, error: settlement.error || "Settlement failed" };
+      userId: ctx.userId,
+      decision: VerdictDecision.accepted,
+    });
+    return {
+      ok: true,
+      data: {
+        challengeId,
+        status: result.status,
+        settled: result.settled,
+        waitingForUserIds: result.waitingForUserIds,
+        reviewStatus: result.reviewCase?.status ?? null,
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Verdict confirmation failed" };
   }
-  await prisma.challenge.updateMany({
-    where: { id: challengeId, status: { in: [ChallengeStatus.pending_settlement, ChallengeStatus.disputed, ChallengeStatus.judging] } },
-    data: { status: ChallengeStatus.settled },
-  });
-
-  return { ok: true, data: { challengeId, winnerId: j.winnerId, status: "settled" } };
 }
 
 /* ─────────────────────────────────────────────── */

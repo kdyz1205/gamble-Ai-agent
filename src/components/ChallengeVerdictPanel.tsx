@@ -8,6 +8,8 @@ import * as api from "@/lib/api-client";
 import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
+import ResultReceiptCard from "./ResultReceiptCard";
+import VerdictReviewControls from "./VerdictReviewControls";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -128,7 +130,6 @@ export default function ChallengeVerdictPanel({
   const isCreator = challenge?.creatorId === userId;
   const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
   const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
-  const canConfirmAi = challenge && challenge.status === "disputed" && isCreator && challenge.judgments.length > 0;
   const settled = challenge?.status === "settled";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
@@ -231,21 +232,6 @@ export default function ChallengeVerdictPanel({
     }
   };
 
-  const confirmAiRecommendation = async () => {
-    if (!challenge) return;
-    setBusy(true);
-    setVerdictErr("");
-    try {
-      await api.confirmVerdict(challenge.id);
-      await refresh();
-      onCreditsMayChange();
-    } catch (e) {
-      setVerdictErr(e instanceof Error ? e.message : "Could not confirm Familiar result");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const copyLink = () => {
     const url = `${window.location.origin}/challenge/${challengeId}`;
     void navigator.clipboard.writeText(url);
@@ -286,6 +272,7 @@ export default function ChallengeVerdictPanel({
 
   const verdictRow = challenge.judgments?.[0] ?? null;
   const sc = statusColor(challenge.status);
+  const showLegacyReceipt = false;
 
   return (
     <motion.div
@@ -545,33 +532,15 @@ export default function ChallengeVerdictPanel({
           </motion.div>
         )}
 
-        {canConfirmAi && verdictRow && (
-          <motion.div
-            className="space-y-3 p-5"
-            style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "24px" }}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          >
-            <p className="text-sm font-bold" style={{ color: "#1E293B" }}>Familiar result ready</p>
-            <p className="text-xs font-medium" style={{ color: "#64748B", lineHeight: 1.5 }}>
-              Not final yet. Confirm the result, or leave it for manual review.
-            </p>
-            <motion.button
-              type="button"
-              disabled={busy}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => void confirmAiRecommendation()}
-              className="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40"
-              style={{
-                background: "linear-gradient(135deg, #f5a623, #7c5cfc)",
-                boxShadow: "0 8px 40px rgba(245,166,35,0.2)",
-              }}
-            >
-              {busy ? "Confirming..." : "Confirm Familiar Result"}
-            </motion.button>
-          </motion.div>
+        {verdictRow && challenge.status === "disputed" && (
+          <VerdictReviewControls
+            challenge={challenge}
+            userId={userId}
+            onUpdated={async () => {
+              await refresh();
+              onCreditsMayChange();
+            }}
+          />
         )}
 
         {/* ══ VERDICT REVEAL ══ */}
@@ -645,8 +614,17 @@ export default function ChallengeVerdictPanel({
           )}
         </AnimatePresence>
 
-        {/* Verdict Receipt Card */}
+        {/* Result Receipt Card */}
         {verdictRow && challenge.status === "settled" && (
+          <ResultReceiptCard
+            challenge={challenge}
+            judgment={verdictRow}
+            shareUrl={typeof window !== "undefined" ? `${window.location.origin}/challenge/${challenge.id}` : undefined}
+            className="mt-4"
+          />
+        )}
+
+        {showLegacyReceipt && verdictRow && challenge.status === "settled" && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
