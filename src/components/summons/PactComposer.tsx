@@ -32,13 +32,21 @@ function getProofHint(input: string, proofWindow: string) {
   return proofWindow;
 }
 
+function newRequestId(prefix: string) {
+  const random = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  return `${prefix}_${random}`;
+}
+
 export default function PactComposer() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLElement>(null);
   const castTimersRef = useRef<number[]>([]);
+  const publishRequestIdRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [stake, setStake] = useState("50");
-  const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Open match");
+  const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
   const [proofWindow, setProofWindow] = useState<(typeof proofOptions)[number]>("24 hours");
   const [turns, setTurns] = useState<api.AgentTurn[]>([]);
   const [draftState, setDraftState] = useState(() => api.emptyAgentDraftState());
@@ -137,6 +145,23 @@ export default function PactComposer() {
     setInput(event.currentTarget.value);
   }
 
+  function draftWithSelectedSettings(base = draftState): api.AgentDraftState {
+    const parsedStake = stake.trim() === "" ? null : Math.max(0, Math.floor(Number(stake)));
+    const participants = opponentMode === "Invite only"
+      ? "you + 1 invited friend"
+      : opponentMode === "Public pool"
+        ? "you + 1 opponent from the public pool"
+        : "you + 1 open opponent";
+    return {
+      ...base,
+      participants,
+      stake: Number.isFinite(parsedStake) ? parsedStake : null,
+      stakeType: parsedStake === null || !Number.isFinite(parsedStake) ? null : parsedStake === 0 ? "none" : "credits",
+      timeWindow: proofWindow,
+      readyToPublish: base.readyToPublish && parsedStake !== null && Number.isFinite(parsedStake),
+    };
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = input.trim();
@@ -149,7 +174,12 @@ export default function PactComposer() {
 
     try {
       const challengeSettings = `Challenge settings: stake ${stake || "unset"} credits; opponent ${opponentMode}; proof window ${proofWindow}.`;
-      const response = await api.agentRespond(`${message}\n\n${challengeSettings}`, turns, draftState);
+      const response = await api.agentRespond(
+        `${message}\n\n${challengeSettings}`,
+        turns,
+        draftWithSelectedSettings(),
+        newRequestId("turn"),
+      );
       const nextTurns: api.AgentTurn[] = [
         ...turns,
         { role: "user", content: message },
@@ -158,6 +188,8 @@ export default function PactComposer() {
       setTurns(nextTurns);
       setDraftState(response.draftState);
       setInput("");
+
+      if (response.toolError) setError(response.toolError);
 
       const toolResult = response.toolResult as
         | { marketUrl?: string; shareUrl?: string; challengeId?: string }
@@ -171,6 +203,46 @@ export default function PactComposer() {
       } else {
         setError(message);
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (isSubmitting || marketUrl) return;
+    const selectedDraft = draftWithSelectedSettings();
+    if (!selectedDraft.readyToPublish) {
+      setError("The quest still needs one clear answer before it can be published.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    triggerCastVisual();
+    publishRequestIdRef.current ??= newRequestId("publish");
+    try {
+      const response = await api.publishAgentDraft(selectedDraft, publishRequestIdRef.current);
+      setDraftState(response.draftState);
+      setTurns((current) => [
+        ...current,
+        { role: "user", content: "Publish this quest" },
+        { role: "ai", content: response.userVisibleReply },
+      ]);
+      if (response.toolError) {
+        setError(response.toolError);
+        return;
+      }
+      const toolResult = response.toolResult as
+        | { marketUrl?: string; shareUrl?: string; challengeId?: string }
+        | undefined;
+      const nextUrl = toolResult?.marketUrl || toolResult?.shareUrl || (toolResult?.challengeId ? `/challenge/${toolResult.challengeId}` : null);
+      if (!nextUrl) {
+        setError("The server did not return the published quest link.");
+        return;
+      }
+      setMarketUrl(nextUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not publish quest");
     } finally {
       setIsSubmitting(false);
     }
@@ -251,13 +323,28 @@ export default function PactComposer() {
       </div>
 
       <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2">
+        {draftState.readyToPublish && !marketUrl && (
+          <button
+            className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmitting}
+            onClick={() => { void handlePublish(); }}
+            style={{ background: "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))", color: "var(--sum-ink)" }}
+            type="button"
+          >
+            {isSubmitting
+              ? "Publishing…"
+              : draftState.stake && draftState.stake > 0
+                ? `Publish & escrow ${draftState.stake} credits`
+                : "Publish free quest"}
+          </button>
+        )}
         {marketUrl && (
           <Link
             className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold"
             href={marketUrl}
             style={{ background: "var(--sum-peach)", color: "var(--sum-ink)" }}
           >
-            Send Quest
+            Open Quest
           </Link>
         )}
       </div>
@@ -351,7 +438,17 @@ export default function PactComposer() {
                   className="mt-1 w-full bg-transparent text-lg font-semibold outline-none"
                   inputMode="numeric"
                   min="0"
-                  onChange={(event) => setStake(event.target.value)}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setStake(next);
+                    if (next.trim() === "") {
+                      setDraftState((current) => ({ ...current, stake: null, stakeType: null, readyToPublish: false }));
+                    } else {
+                      const nextStake = Math.max(0, Math.floor(Number(next)));
+                      setDraftState((current) => ({ ...current, stake: nextStake, stakeType: nextStake === 0 ? "none" : "credits" }));
+                    }
+                    publishRequestIdRef.current = null;
+                  }}
                   style={{ color: "var(--sum-ink)" }}
                   type="number"
                   value={stake}
@@ -369,7 +466,18 @@ export default function PactComposer() {
                       <button
                         key={option}
                         className="min-h-6 rounded-md px-2 text-[10px] font-semibold transition"
-                        onClick={() => setOpponentMode(option)}
+                        onClick={() => {
+                          setOpponentMode(option);
+                          setDraftState((current) => ({
+                            ...current,
+                            participants: option === "Invite only"
+                              ? "you + 1 invited friend"
+                              : option === "Public pool"
+                                ? "you + 1 opponent from the public pool"
+                                : "you + 1 open opponent",
+                          }));
+                          publishRequestIdRef.current = null;
+                        }}
                         style={{
                           background: selected ? "var(--sum-peach)" : "rgba(255,255,255,0.68)",
                           border: `1px solid ${selected ? "rgba(255,185,120,0.72)" : "var(--sum-border)"}`,
@@ -395,7 +503,11 @@ export default function PactComposer() {
                       <button
                         key={option}
                         className="min-h-6 rounded-md px-2 text-[10px] font-semibold transition"
-                        onClick={() => setProofWindow(option)}
+                        onClick={() => {
+                          setProofWindow(option);
+                          setDraftState((current) => ({ ...current, timeWindow: option }));
+                          publishRequestIdRef.current = null;
+                        }}
                         style={{
                           background: selected ? "var(--sum-mint)" : "rgba(255,255,255,0.68)",
                           border: `1px solid ${selected ? "rgba(143,230,193,0.78)" : "var(--sum-border)"}`,
@@ -512,7 +624,7 @@ export default function PactComposer() {
                     : castPhase === "settling"
                       ? "Quest preview forming..."
                       : latestReply
-                        ? "Quest ready"
+                        ? draftState.readyToPublish ? "Ready to publish" : "One answer still needed"
                         : `${stakeDisplay} / ${proofWindow}`}
             </p>
           </div>

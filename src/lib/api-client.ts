@@ -414,10 +414,28 @@ export async function agentRespond(
   message: string,
   conversationHistory: AgentTurn[],
   draftState: AgentDraftState,
+  requestId?: string,
 ): Promise<AgentResponse> {
   return apiFetch("/agent/respond", {
     method: "POST",
-    body: JSON.stringify({ message, conversationHistory, draftState }),
+    body: JSON.stringify({ message, conversationHistory, draftState, requestId }),
+  });
+}
+
+/** Publish an already-reviewed draft without another non-deterministic LLM turn. */
+export async function publishAgentDraft(
+  draftState: AgentDraftState,
+  requestId: string,
+): Promise<AgentResponse> {
+  return apiFetch("/agent/respond", {
+    method: "POST",
+    body: JSON.stringify({
+      message: "Publish this quest",
+      conversationHistory: [],
+      draftState,
+      requestId,
+      intent: "publish",
+    }),
   });
 }
 

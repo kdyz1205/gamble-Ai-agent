@@ -15,14 +15,16 @@
 import prisma from "@/lib/db";
 import { spendCredits, addCredits } from "@/lib/credits";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
-import { ChallengeStatus } from "@/lib/enums";
 import { recordVerdictDecision, VerdictDecision } from "@/lib/verdict-review";
+import { createHash } from "node:crypto";
+import { getDraftIssues, normalizeDraftState } from "./draft-policy";
 import type { AgentToolName, DraftState } from "./types";
 
 export interface ToolContext {
   userId: string;
   baseUrl: string; // used to construct share links
   draftState: DraftState;
+  requestId?: string; // client-generated idempotency key for createChallenge
 }
 
 export interface ToolResult {
@@ -34,19 +36,39 @@ export interface ToolResult {
 /* ─────────────────────────────────────────────── */
 
 async function createChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
-  // Source of truth is the current merged draftState; args can override.
+  // Source of truth is the current server-normalized draftState. Tool args are
+  // only a compatibility fallback for older/direct callers and must not
+  // override explicit UI choices such as invite privacy or credits.
   const draft = ctx.draftState;
-  const title = String(args.title ?? draft.title ?? "").trim();
-  const proposition = String(args.proposition ?? draft.proposition ?? title);
-  const stake = Math.max(0, Math.floor(Number(args.stake ?? draft.stake ?? 0)));
-  const evidenceType = String(args.evidenceType ?? draft.evidenceType ?? "self_report");
-  const judgeRule = String(args.judgeRule ?? draft.judgeRule ?? "");
-  const timeWindow = String(args.timeWindow ?? draft.timeWindow ?? "24 hours");
+  const title = String(draft.title ?? args.title ?? "").trim();
+  const proposition = String(draft.proposition ?? args.proposition ?? title);
+  const rawStake = Number(draft.stake ?? args.stake);
+  const stake = Number.isFinite(rawStake) ? Math.max(0, Math.floor(rawStake)) : Number.NaN;
+  const evidenceType = String(draft.evidenceType ?? args.evidenceType ?? "");
+  const judgeRule = String(draft.judgeRule ?? args.judgeRule ?? "");
+  const timeWindow = String(draft.timeWindow ?? args.timeWindow ?? "");
+  const participants = String(draft.participants ?? args.participants ?? "").trim();
   // Default challenges to PUBLIC so /markets actually has something to show
   // and strangers can find + accept. Agent can override with isPublic=false
   // if the user explicitly says "just me and my friend" / "private".
   const rawIsPublic = args.isPublic;
-  const isPublic = rawIsPublic === undefined ? true : Boolean(rawIsPublic);
+  const isInviteOnly = /invite|friend|private|好友|朋友|仅邀请|私密/i.test(participants);
+  const isPublic = isInviteOnly ? false : rawIsPublic === undefined ? true : Boolean(rawIsPublic);
+
+  const candidate = normalizeDraftState({
+    ...draft,
+    title,
+    proposition,
+    participants,
+    stake,
+    evidenceType: evidenceType === "video" || evidenceType === "photo" || evidenceType === "text" ? evidenceType : null,
+    judgeRule,
+    timeWindow,
+  });
+  const issues = getDraftIssues(candidate);
+  if (issues.length > 0) {
+    return { ok: false, error: `Challenge draft is incomplete or ambiguous: ${issues.join(", ")}` };
+  }
 
   if (!title) return { ok: false, error: "title required" };
 
@@ -74,81 +96,128 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
 
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
   const deadline = parseTimeWindowToDate(timeWindow);
-
-  // Atomic escrow then create; refund on throw — same pattern POST /api/challenges uses.
-  if (stake > 0) {
-    const spend = await spendCredits(ctx.userId, stake, "stake", `Staked ${stake} credits on "${title.slice(0, 40)}"`);
-    if (!spend.success) return { ok: false, error: spend.error || "Insufficient credits" };
+  const safeRequestId = typeof ctx.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(ctx.requestId)
+    ? ctx.requestId
+    : null;
+  const challengeId = safeRequestId
+    ? `quest_${createHash("sha256").update(`${ctx.userId}:${safeRequestId}`).digest("hex").slice(0, 24)}`
+    : null;
+  if (!challengeId) {
+    return { ok: false, error: "requestId required for idempotent challenge creation" };
   }
 
-  let challenge;
+  // A retry after a lost HTTP response returns the original row and never
+  // stakes credits twice. The deterministic primary key also closes the
+  // concurrent double-click race at the database boundary.
+  const existing = await prisma.challenge.findUnique({ where: { id: challengeId } });
+  if (existing) return { ok: true, data: challengeResult(existing, ctx.baseUrl, true) };
+
+  // Escrow, ledger, challenge, participant, and audit event are one database
+  // transaction. Any failed write rolls the entire operation back; no
+  // compensating refund window and no charged-without-a-quest state remain.
   try {
-    challenge = await prisma.challenge.create({
-      data: {
-        creatorId: ctx.userId,
-        title,
-        description: proposition,
-        marketType: "challenge",
-        proposition,
-        type: inferTypeFromTitle(title),
-        stake,
-        stakeToken: "credits",
-        deadline,
-        rules: judgeRule || proposition || title,
-        evidenceType,
-        settlementMode: "mutual_confirmation",
-        isPublic,
-        visibility: isPublic ? "public" : "private",
-        maxParticipants: 2,
-        aiReview: true,
-        status: "open",
-        participants: {
-          create: { userId: ctx.userId, role: "creator", status: "accepted" },
+    const challenge = await prisma.$transaction(async (tx) => {
+      if (stake > 0) {
+        const debited = await tx.user.updateMany({
+          where: { id: ctx.userId, credits: { gte: stake } },
+          data: { credits: { decrement: stake } },
+        });
+        if (debited.count === 0) throw new Error("INSUFFICIENT_CREDITS");
+      }
+
+      const created = await tx.challenge.create({
+        data: {
+          id: challengeId,
+          creatorId: ctx.userId,
+          title: candidate.title!,
+          description: candidate.proposition,
+          marketType: "challenge",
+          proposition: candidate.proposition,
+          type: inferTypeFromTitle(candidate.title!),
+          stake: candidate.stake!,
+          stakeToken: "credits",
+          deadline,
+          rules: candidate.judgeRule,
+          evidenceType: candidate.evidenceType!,
+          settlementMode: "mutual_confirmation",
+          isPublic,
+          visibility: isPublic ? "public" : isInviteOnly ? "invite_only" : "private",
+          maxParticipants: 2,
+          aiReview: true,
+          status: "open",
+          participants: {
+            create: { userId: ctx.userId, role: "creator", status: "accepted" },
+          },
+          activityEvents: {
+            create: {
+              type: "challenge_created",
+              message: `Challenge "${candidate.title}" created via agent`,
+              userId: ctx.userId,
+            },
+          },
         },
-      },
+      });
+
+      if (stake > 0) {
+        const user = await tx.user.findUnique({ where: { id: ctx.userId }, select: { credits: true } });
+        if (!user) throw new Error("CREATOR_NOT_FOUND");
+        await tx.creditTx.create({
+          data: {
+            userId: ctx.userId,
+            type: "stake",
+            amount: -stake,
+            balanceAfter: user.credits,
+            description: `Staked ${stake} credits on "${candidate.title!.slice(0, 40)}"`,
+            challengeId,
+            idempotencyKey: `stake:create:${challengeId}`,
+          },
+        });
+      }
+      return created;
     });
+    return { ok: true, data: challengeResult(challenge, ctx.baseUrl, false) };
   } catch (err) {
-    if (stake > 0) {
-      await addCredits(ctx.userId, stake, "refund", `Refund — challenge creation failed`);
+    if ((err as { code?: string }).code === "P2002") {
+      const existing = await prisma.challenge.findUnique({ where: { id: challengeId } });
+      if (existing) return { ok: true, data: challengeResult(existing, ctx.baseUrl, true) };
+    }
+    if (err instanceof Error && err.message === "INSUFFICIENT_CREDITS") {
+      return { ok: false, error: "Insufficient credits" };
     }
     return { ok: false, error: err instanceof Error ? err.message : "Challenge create failed" };
   }
+}
 
-  await prisma.activityEvent.create({
-    data: {
-      type: "challenge_created",
-      message: `Challenge "${title}" created via agent`,
-      userId: ctx.userId,
-      challengeId: challenge.id,
-    },
-  });
-
+function challengeResult(
+  challenge: { id: string; title: string; status: string; stake: number; evidenceType: string },
+  baseUrl: string,
+  deduplicated: boolean,
+) {
   return {
-    ok: true,
-    data: {
-      challengeId: challenge.id,
-      title: challenge.title,
-      status: challenge.status,
-      stake: challenge.stake,
-      evidenceType: challenge.evidenceType,
-      shareUrl: `${ctx.baseUrl}/join/${challenge.id}`,
-      marketUrl: `${ctx.baseUrl}/market/${challenge.id}`,
-    },
+    challengeId: challenge.id,
+    title: challenge.title,
+    status: challenge.status,
+    stake: challenge.stake,
+    evidenceType: challenge.evidenceType,
+    deduplicated,
+    shareUrl: `${baseUrl}/join/${challenge.id}`,
+    marketUrl: `${baseUrl}/market/${challenge.id}`,
   };
 }
 
 function parseTimeWindowToDate(tw: string): Date {
   const s = tw.toLowerCase();
   const now = Date.now();
-  const hr = /(\d+)\s*hour/i.exec(s);
-  const min = /(\d+)\s*(min|minute)/i.exec(s);
-  const day = /(\d+)\s*day/i.exec(s);
-  const week = /(\d+)\s*week/i.exec(s);
+  const hr = /(\d+)\s*(?:hours?|hrs?|小时|小時)/i.exec(s);
+  const min = /(\d+)\s*(?:mins?|minutes?|分钟|分鐘)/i.exec(s);
+  const day = /(\d+)\s*(?:days?|天)/i.exec(s);
+  const week = /(\d+)\s*(?:weeks?|周|週)/i.exec(s);
   let addMs = 24 * 60 * 60 * 1000;
-  if (hr) addMs = Number(hr[1]) * 60 * 60 * 1000;
-  else if (min) addMs = Number(min[1]) * 60 * 1000;
-  else if (day) addMs = Number(day[1]) * 24 * 60 * 60 * 1000;
-  else if (week) addMs = Number(week[1]) * 7 * 24 * 60 * 60 * 1000;
+  if (hr) addMs = Math.max(1, Number(hr[1])) * 60 * 60 * 1000;
+  else if (min) addMs = Math.max(1, Number(min[1])) * 60 * 1000;
+  else if (day) addMs = Math.max(1, Number(day[1])) * 24 * 60 * 60 * 1000;
+  else if (week) addMs = Math.max(1, Number(week[1])) * 7 * 24 * 60 * 60 * 1000;
+  else if (/tomorrow|明天/.test(s)) addMs = 24 * 60 * 60 * 1000;
   return new Date(now + addMs);
 }
 

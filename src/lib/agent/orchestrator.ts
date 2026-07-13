@@ -21,6 +21,12 @@ import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
 import { executeAgentTool } from "./tools";
 import {
+  buildDeterministicAgentResponse,
+  draftIssueQuestion,
+  getDraftIssues,
+  normalizeDraftState,
+} from "./draft-policy";
+import {
   emptyDraftState,
   type AgentAction,
   type AgentMessage,
@@ -45,6 +51,7 @@ export interface AgentTurnInput {
   message: string;
   history: AgentMessage[];
   draftState?: DraftState;
+  requestId?: string;
   maxToolRounds?: number; // safety cap; default 1
 }
 
@@ -53,7 +60,7 @@ export interface AgentTurnInput {
  * merged draft state, plus (if the LLM requested a tool) the tool's result.
  */
 export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse> {
-  const draftState: DraftState = input.draftState ?? emptyDraftState();
+  const draftState = normalizeDraftState(input.draftState ?? emptyDraftState());
 
   // Resolve provider/model
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -82,37 +89,59 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     `Respond with the JSON object only. No markdown, no preamble, no explanation.`,
   ].join("\n");
 
-  const rawText = await completeOraclePrompt({
-    providerId,
-    model,
-    system: AGENT_SYSTEM_PROMPT,
-    user: userPayload,
-    maxTokens: 900,
-    temperature: 0.4,
-  });
-
-  const parsed = safeParseAgentJson(rawText);
-  if (!parsed) {
-    // Graceful fallback: ask the user to restate. Never return raw JSON to UI.
-    return {
-      userVisibleReply:
-        "抱歉, 我这边没解出你刚才那句话 — 再说一次好吗? 或者换一种说法。",
-      agentAction: "ask_followup",
-      draftPatch: {},
-      toolName: null,
-      toolArgs: null,
-      draftState,
-    };
+  let parsed: RawAgentResponse | null = null;
+  try {
+    const rawText = await completeOraclePrompt({
+      providerId,
+      model,
+      system: AGENT_SYSTEM_PROMPT,
+      user: userPayload,
+      maxTokens: 900,
+      temperature: 0.4,
+    });
+    parsed = safeParseAgentJson(rawText);
+  } catch (err) {
+    console.error("[agent] LLM turn failed; using deterministic challenge compiler:", err instanceof Error ? err.message : err);
   }
 
+  // A provider outage, exhausted account, missing key, or malformed JSON must
+  // not turn the product's main entry point into a 500. The local compiler
+  // covers the common friend-challenge path and remains conservative when the
+  // win condition is genuinely ambiguous.
+  if (!parsed) parsed = buildDeterministicAgentResponse(input.message, draftState);
+
   const validated = validateAgentResponse(parsed);
-  const newDraftState: DraftState = {
+  const newDraftState = normalizeDraftState({
     ...draftState,
     ...validated.draftPatch,
     // Special merge rule for safetyNotes — append rather than replace so we
     // don't lose earlier redirects when AI forgets to include them again.
     safetyNotes: mergeSafetyNotes(draftState.safetyNotes, validated.draftPatch.safetyNotes),
-  };
+  });
+
+  // readyToPublish is a server-derived invariant, never an LLM assertion.
+  // Do not let an incomplete draft appear ready or reach createChallenge.
+  if (validated.toolName === "createChallenge" && !newDraftState.readyToPublish) {
+    const chinese = /[\u3400-\u9fff]/.test(input.message);
+    return {
+      userVisibleReply: draftIssueQuestion(newDraftState, chinese),
+      agentAction: "ask_followup",
+      draftPatch: { readyToPublish: false },
+      toolName: null,
+      toolArgs: null,
+      draftState: newDraftState,
+    };
+  }
+  if (!validated.toolName && validated.agentAction === "show_draft" && !newDraftState.readyToPublish) {
+    const chinese = /[\u3400-\u9fff]/.test(input.message);
+    validated.agentAction = "ask_followup";
+    validated.userVisibleReply = draftIssueQuestion(newDraftState, chinese);
+  } else if (!validated.toolName && validated.agentAction === "ask_followup" && newDraftState.readyToPublish) {
+    validated.agentAction = "show_draft";
+    validated.userVisibleReply = /[\u3400-\u9fff]/.test(input.message)
+      ? "挑战规则已经完整。请检查草稿，确认后发布。"
+      : "The quest rules are complete. Review the draft, then publish it.";
+  }
 
   // Execute tool if the LLM named one.
   //
@@ -135,13 +164,22 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   if (validated.toolName) {
     const result = await executeAgentTool(
       validated.toolName,
-      { userId: input.userId, baseUrl: input.baseUrl, draftState: newDraftState },
+      { userId: input.userId, baseUrl: input.baseUrl, draftState: newDraftState, requestId: input.requestId },
       validated.toolArgs ?? {},
     );
     if (result.ok) {
       toolResult = result.data;
     } else {
       toolError = result.error;
+    }
+
+    // The first model reply was written before the tool result existed. Never
+    // leave a false "publishing now" message visible when creation failed.
+    if (validated.toolName === "createChallenge") {
+      const chinese = /[\u3400-\u9fff]/.test(input.message);
+      finalReply = result.ok
+        ? (chinese ? "Quest 已发布。现在可以把邀请链接发给朋友。" : "Quest published. You can now send the invite link to your friend.")
+        : (chinese ? `发布失败：${result.error ?? "未知错误"}` : `Could not publish the quest: ${result.error ?? "unknown error"}`);
     }
 
     // Always normalize to call_tool — we did actually call a tool.
@@ -152,7 +190,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     // tool), do a grounded 2nd turn so the reply reflects real data. For
     // clean `call_tool` responses we trust the first reply (usually a short
     // "doing it now…" placeholder before the client renders toolResult).
-    const firstReplyWasUngrounded = validated.agentAction !== "call_tool";
+    const firstReplyWasUngrounded = validated.agentAction !== "call_tool" && validated.toolName !== "createChallenge";
     if (firstReplyWasUngrounded) {
       const grounded = await groundedReplyTurn({
         providerId,
@@ -168,11 +206,11 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
       if (grounded) {
         finalReply = grounded.userVisibleReply || finalReply;
         finalPatch = { ...finalPatch, ...grounded.draftPatch };
-        finalDraftState = {
+        finalDraftState = normalizeDraftState({
           ...newDraftState,
           ...grounded.draftPatch,
           safetyNotes: mergeSafetyNotes(newDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
-        };
+        });
       }
     }
   }
@@ -186,6 +224,41 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     draftState: finalDraftState,
     toolResult,
     toolError,
+  };
+}
+
+/** Publish a reviewed draft without spending another LLM turn. */
+export async function publishAgentDraft(input: Pick<AgentTurnInput, "userId" | "baseUrl" | "draftState" | "requestId">): Promise<AgentResponse> {
+  const draftState = normalizeDraftState(input.draftState ?? emptyDraftState());
+  const issues = getDraftIssues(draftState);
+  const chinese = /[\u3400-\u9fff]/.test([draftState.title, draftState.proposition].filter(Boolean).join(" "));
+  if (issues.length > 0) {
+    return {
+      userVisibleReply: draftIssueQuestion(draftState, chinese),
+      agentAction: "ask_followup",
+      draftPatch: { readyToPublish: false },
+      toolName: null,
+      toolArgs: null,
+      draftState,
+    };
+  }
+
+  const result = await executeAgentTool(
+    "createChallenge",
+    { userId: input.userId, baseUrl: input.baseUrl, draftState, requestId: input.requestId },
+    {},
+  );
+  return {
+    userVisibleReply: result.ok
+      ? (chinese ? "Quest 已发布。现在可以把邀请链接发给朋友。" : "Quest published. You can now send the invite link to your friend.")
+      : (chinese ? `发布失败：${result.error ?? "未知错误"}` : `Could not publish the quest: ${result.error ?? "unknown error"}`),
+    agentAction: "call_tool",
+    draftPatch: {},
+    toolName: "createChallenge",
+    toolArgs: {},
+    draftState,
+    toolResult: result.data,
+    toolError: result.error,
   };
 }
 

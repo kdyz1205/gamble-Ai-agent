@@ -19,7 +19,8 @@
  */
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
-import { runAgentTurn } from "@/lib/agent/orchestrator";
+import { publishAgentDraft, runAgentTurn } from "@/lib/agent/orchestrator";
+import { normalizeDraftState } from "@/lib/agent/draft-policy";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
 
 export const runtime = "nodejs";
@@ -59,7 +60,7 @@ function sanitizeDraftState(raw: unknown): DraftState {
   const base = emptyDraftState();
   if (!raw || typeof raw !== "object") return base;
   const r = raw as Record<string, unknown>;
-  return {
+  return normalizeDraftState({
     title:         typeof r.title === "string" ? r.title : null,
     proposition:   typeof r.proposition === "string" ? r.proposition : null,
     participants:  typeof r.participants === "string" ? r.participants : null,
@@ -70,7 +71,7 @@ function sanitizeDraftState(raw: unknown): DraftState {
     timeWindow:    typeof r.timeWindow === "string" ? r.timeWindow : null,
     safetyNotes:   Array.isArray(r.safetyNotes) ? r.safetyNotes.filter((x): x is string => typeof x === "string") : [],
     readyToPublish: !!r.readyToPublish,
-  };
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -97,6 +98,9 @@ export async function POST(req: NextRequest) {
 
   const history = sanitizeHistory(body.conversationHistory);
   const draftState = sanitizeDraftState(body.draftState);
+  const requestId = typeof body.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(body.requestId)
+    ? body.requestId
+    : undefined;
 
   // Base URL for share links is taken from the incoming request so dev/staging
   // point at the right host.
@@ -105,12 +109,23 @@ export async function POST(req: NextRequest) {
   const baseUrl = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL || "https://gamble-ai-agent.vercel.app");
 
   try {
+    if (body.intent === "publish") {
+      if (!requestId) return Response.json({ error: "requestId required for idempotent publish" }, { status: 400 });
+      const result = await publishAgentDraft({
+        userId: user.userId,
+        baseUrl,
+        draftState,
+        requestId,
+      });
+      return Response.json(result);
+    }
     const result = await runAgentTurn({
       userId: user.userId,
       baseUrl,
       message,
       history,
       draftState,
+      requestId,
     });
     return Response.json(result);
   } catch (err) {
