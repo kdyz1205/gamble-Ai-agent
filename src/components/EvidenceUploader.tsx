@@ -371,7 +371,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       <textarea
         value={description}
         onChange={e => setDescription(e.target.value)}
-        placeholder="Describe what you did. For a match video, identify each player by shirt color or starting court side and confirm it is one continuous recording with the score shown or called after every rally."
+        placeholder="Describe what you did. For a match video, identify each player by shirt color or starting court side, use one continuous recording, and briefly show the score in frame after every rally."
         rows={3}
         className="w-full px-4 py-3 text-sm font-medium bg-white focus:outline-none resize-y"
         style={{ color: NAVY, border: `1.5px solid ${NAVY_FAINT}`, borderRadius: "16px", minHeight: 80 }}
