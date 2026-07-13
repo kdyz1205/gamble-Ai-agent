@@ -3,7 +3,7 @@ import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { judgeChallenge } from "@/lib/ai-engine";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
-import { getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
+import { addCredits, getCredits, spendForInference, TIER_MULTIPLIER } from "@/lib/credits";
 import { ChallengeStatus } from "@/lib/enums";
 import { ensureAutomaticReviewCase } from "@/lib/verdict-review";
 
@@ -52,12 +52,14 @@ export async function POST(
   // Free Mode: when the challenge has no stake, AI judgment is free.
   // Paid challenges still charge the user's credits for the judgment inference.
   const isFreeChallenge = (challenge.stake ?? 0) === 0;
+  let inferenceCharged = false;
 
   if (!isFreeChallenge) {
     const balance = await getCredits(user.userId);
     if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
     const spend = await spendForInference(user.userId, tierId, "judge", `Judge: "${challenge.title.slice(0, 40)}"`, id);
     if (!spend.success) return noCredits(cost, spend.balance, getAiModel(tierId).displayName);
+    inferenceCharged = true;
   }
 
   const creator = challenge.participants.find((p: { role: string }) => p.role === "creator");
@@ -94,36 +96,57 @@ export async function POST(
       : (pdef?.defaultModel ?? aiModel.model));
   const aiModelLabel = `${pdef?.shortLabel ?? aiModel.displayName} · ${judgeModel}`;
 
-  const result = await judgeChallenge({
-    title: challenge.title,
-    type: challenge.type,
-    rules: challenge.rules,
-    evidencePolicy: challenge.evidenceType,
-    evidenceA: evidenceA
-      ? {
-          description: evidenceA.description,
-          type: evidenceA.type,
-          url: evidenceA.url,
-          preparedFrames: parseFrames(evidenceA.preparedFrames),
-          preparedDurationSec: evidenceA.preparedDurationSec,
-          preparedMode: evidenceA.preparedMode,
-        }
-      : null,
-    evidenceB: evidenceB
-      ? {
-          description: evidenceB.description,
-          type: evidenceB.type,
-          url: evidenceB.url,
-          preparedFrames: parseFrames(evidenceB.preparedFrames),
-          preparedDurationSec: evidenceB.preparedDurationSec,
-          preparedMode: evidenceB.preparedMode,
-        }
-      : null,
-    participantAId: creator.userId,
-    participantBId: opponent?.userId ?? null,
-    model: judgeModel,
-    providerId,
-  });
+  let result;
+  try {
+    result = await judgeChallenge({
+      title: challenge.title,
+      type: challenge.type,
+      rules: challenge.rules,
+      evidencePolicy: challenge.evidenceType,
+      evidenceA: evidenceA
+        ? {
+            description: evidenceA.description,
+            type: evidenceA.type,
+            url: evidenceA.url,
+            preparedFrames: parseFrames(evidenceA.preparedFrames),
+            preparedDurationSec: evidenceA.preparedDurationSec,
+            preparedMode: evidenceA.preparedMode,
+          }
+        : null,
+      evidenceB: evidenceB
+        ? {
+            description: evidenceB.description,
+            type: evidenceB.type,
+            url: evidenceB.url,
+            preparedFrames: parseFrames(evidenceB.preparedFrames),
+            preparedDurationSec: evidenceB.preparedDurationSec,
+            preparedMode: evidenceB.preparedMode,
+          }
+        : null,
+      participantAId: creator.userId,
+      participantBId: opponent?.userId ?? null,
+      model: judgeModel,
+      providerId,
+    });
+  } catch (error) {
+    if (inferenceCharged) {
+      try {
+        await addCredits(
+          user.userId,
+          cost,
+          "refund",
+          `Refund — judge provider failed: ${error instanceof Error ? error.message.slice(0, 80) : "unknown"}`,
+          id,
+        );
+      } catch (refundError) {
+        console.error("CRITICAL: direct judge refund failed", { challengeId: id, userId: user.userId, refundError });
+      }
+    }
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Judge provider failed", refunded: inferenceCharged },
+      { status: 502 },
+    );
+  }
 
   const judgment = await prisma.judgment.create({
     data: {

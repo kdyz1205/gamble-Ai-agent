@@ -7,6 +7,8 @@ import {
   capJudgeVisuals,
   type JudgeVisionImage,
 } from "./media/prepare-evidence-visuals";
+import { detectScoredMatchContract } from "./scored-match";
+import { judgeShortScoredMatch } from "./scored-match-judge";
 
 /**
  * Resolve the effective LLM provider + model for non-vision text calls (parse,
@@ -123,6 +125,13 @@ Examples of contextual thinking:
 - Cooking a specific dish → photo + recipe detail, short deadline
 - Coding / LeetCode speed → screenshot + timestamp, short deadline
 - Eating challenge → video, restaurant receipt bonus, short deadline
+
+SHORT SCORED SPORTS (badminton, table tennis, tennis, pickleball, volleyball):
+- A phrase like "5个球" / "5 points" is materially ambiguous. It can mean "first to 5 points" or "play exactly 5 rallies"; those can produce different winners. Ask this ONE clarification and do not silently choose.
+- Once clarified, write the exact stopping rule into rules: either "first player to N points" or "exactly N rallies; higher score wins".
+- Require one continuous full-match video with both players and the ball/shuttle visible, no cuts, stable full-court framing, and an explicit Participant A/B visual identity (shirt color or starting court side).
+- Require the score to be shown on camera or called clearly after every rally. Recommend a neutral scorekeeper/witness when visibility is weak or stakes are meaningful.
+- For these matches, evidenceType must be video. The AI judge will build a timestamped rally ledger and refuse an unclear point instead of guessing a winner.
 
 PHILOSOPHY: DECIDE FOR THE USER BY DEFAULT.
 The user wants the platform to do the thinking for them. Don't force questions when you can make a reasonable call.
@@ -472,6 +481,32 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   // Solo / no opponent — accept the single submission.
   if (!participantBId && evidenceA) {
     return { winnerId: participantAId, reasoning: "No opponent — solo submission accepted.", confidence: 0.85 };
+  }
+
+  // Short point-scored sports must never use the generic "sample a few frames
+  // and pick whichever looks clearer" rubric. Compile an explicit scoring
+  // contract, build a chronological rally ledger, and reduce it in code.
+  const scoredMatch = detectScoredMatchContract(title, type, rules);
+  if (scoredMatch.kind === "ambiguous" || scoredMatch.kind === "unsupported") {
+    return {
+      winnerId: null,
+      reasoning: `Automatic sports scoring stopped: ${scoredMatch.reason} The rules must explicitly say either "first to N points" or "exactly N rallies"; this result requires human review.`,
+      confidence: 0.25,
+    };
+  }
+  if (scoredMatch.kind === "ready") {
+    // Provider/network failures intentionally propagate. Both judgment entry
+    // points refund the inference charge on a thrown infrastructure failure.
+    return judgeShortScoredMatch({
+      title,
+      rules,
+      evidenceA: evidenceA!,
+      evidenceB: evidenceB!,
+      participantAId,
+      participantBId: participantBId!,
+      providerId: params.providerId,
+      model: params.model,
+    }, scoredMatch.contract);
   }
 
   // ── System: strict, rubric-based, honest about uncertainty ──

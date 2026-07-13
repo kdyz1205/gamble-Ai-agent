@@ -50,6 +50,107 @@ async function collectJpgs(outDir: string): Promise<string[]> {
     .map((n) => join(outDir, n));
 }
 
+async function collectJpgsWithPrefix(outDir: string, prefix: string): Promise<string[]> {
+  const names = await readdir(outDir);
+  return names
+    .filter((name) => name.startsWith(prefix) && name.endsWith(".jpg"))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((name) => join(outDir, name));
+}
+
+export interface TimestampedFrame {
+  path: string;
+  timestampSec: number;
+  rallyIndex?: number;
+}
+
+/**
+ * Uniform temporal sampling with calculable timestamps. Unlike scene-change
+ * extraction, this preserves order and cannot silently skip a quiet rally end.
+ */
+export async function extractTimelineFrames(
+  url: string,
+  framesPerSecond: number,
+  maxFrames: number,
+  outDir: string,
+  timeoutMs = 180_000,
+): Promise<TimestampedFrame[]> {
+  if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
+  if (!Number.isFinite(framesPerSecond) || framesPerSecond <= 0 || maxFrames <= 0) return [];
+
+  const fps = Math.min(8, Math.max(0.1, framesPerSecond));
+  const prefix = "timeline-";
+  const outPattern = join(outDir, `${prefix}%05d.jpg`);
+  const args = [
+    "-y",
+    "-i", url,
+    "-vf", `fps=${fps.toFixed(6)},scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:black`,
+    "-frames:v", String(maxFrames),
+    "-q:v", "4",
+    "-start_number", "0",
+    outPattern,
+  ];
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeline extraction timeout")), timeoutMs);
+    execFile(ffmpegPath!, args, { timeout: timeoutMs }, (error) => {
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+
+  const paths = await collectJpgsWithPrefix(outDir, prefix);
+  return paths.map((path, index) => ({ path, timestampSec: index / fps }));
+}
+
+/** Dense frames around one candidate rally end for the second-pass point call. */
+export async function extractTimestampedRallyWindow(
+  url: string,
+  rallyIndex: number,
+  endSec: number,
+  outDir: string,
+  options?: { beforeSec?: number; afterSec?: number; fps?: number; timeoutMs?: number },
+): Promise<TimestampedFrame[]> {
+  if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
+  const beforeSec = options?.beforeSec ?? 1.5;
+  const afterSec = options?.afterSec ?? 1.5;
+  const fps = options?.fps ?? 8;
+  const timeoutMs = options?.timeoutMs ?? 90_000;
+  const startSec = Math.max(0, endSec - beforeSec);
+  const durationSec = beforeSec + afterSec;
+  const maxFrames = Math.ceil(durationSec * fps);
+  const prefix = `rally-${String(rallyIndex).padStart(2, "0")}-`;
+  const outPattern = join(outDir, `${prefix}%05d.jpg`);
+  const args = [
+    "-y",
+    "-ss", startSec.toFixed(3),
+    "-i", url,
+    "-t", durationSec.toFixed(3),
+    "-vf", `fps=${fps.toFixed(6)},scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:black`,
+    "-frames:v", String(maxFrames),
+    "-q:v", "3",
+    "-start_number", "0",
+    outPattern,
+  ];
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`rally ${rallyIndex} extraction timeout`)), timeoutMs);
+    execFile(ffmpegPath!, args, { timeout: timeoutMs }, (error) => {
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+
+  const paths = await collectJpgsWithPrefix(outDir, prefix);
+  return paths.map((path, index) => ({
+    path,
+    timestampSec: startSec + index / fps,
+    rallyIndex,
+  }));
+}
+
 /** Evenly spaced JPEG screenshots saved to folder; returns absolute file paths sorted. */
 export function extractScreenshotsFromUrl(
   url: string,
