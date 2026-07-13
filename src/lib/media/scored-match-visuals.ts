@@ -13,8 +13,10 @@ import type { JudgeVisionImage } from "./prepare-evidence-visuals";
 
 const SHEET_COLUMNS = 3;
 const SHEET_ROWS = 3;
-const TILE_WIDTH = 480;
-const TILE_HEIGHT = 270;
+const TIMELINE_TILE_WIDTH = 480;
+const TIMELINE_TILE_HEIGHT = 270;
+const DETAIL_TILE_WIDTH = 640;
+const DETAIL_TILE_HEIGHT = 360;
 const FRAMES_PER_SHEET = SHEET_COLUMNS * SHEET_ROWS;
 const MAX_SHEETS = 24;
 const MAX_TIMELINE_FRAMES = FRAMES_PER_SHEET * MAX_SHEETS;
@@ -29,6 +31,12 @@ export interface ScoredTimelineVisuals {
 export interface RallyWindowCandidate {
   index: number;
   endSec: number;
+}
+
+export interface ScoredRallyDetailVisuals {
+  framesPerSecond: number;
+  frameCount: number;
+  visuals: JudgeVisionImage[];
 }
 
 function timestampLabel(seconds: number): string {
@@ -46,17 +54,22 @@ function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-async function labeledTile(frame: TimestampedFrame, sourceLabel: string): Promise<Buffer> {
+async function labeledTile(
+  frame: TimestampedFrame,
+  sourceLabel: string,
+  tileWidth: number,
+  tileHeight: number,
+): Promise<Buffer> {
   const rally = frame.rallyIndex != null ? `R${frame.rallyIndex} ` : "";
   const label = `${sourceLabel} ${rally}${timestampLabel(frame.timestampSec)}`;
   const overlay = Buffer.from(`
-    <svg width="${TILE_WIDTH}" height="${TILE_HEIGHT}">
-      <rect x="0" y="224" width="${TILE_WIDTH}" height="46" fill="rgba(0,0,0,0.82)" />
-      <text x="12" y="255" fill="#ffffff" font-family="Arial, sans-serif" font-size="25" font-weight="700">${escapeXml(label)}</text>
+    <svg width="${tileWidth}" height="${tileHeight}">
+      <rect x="0" y="${tileHeight - 46}" width="${tileWidth}" height="46" fill="rgba(0,0,0,0.82)" />
+      <text x="12" y="${tileHeight - 15}" fill="#ffffff" font-family="Arial, sans-serif" font-size="25" font-weight="700">${escapeXml(label)}</text>
     </svg>
   `);
   return sharp(frame.path)
-    .resize(TILE_WIDTH, TILE_HEIGHT, { fit: "fill" })
+    .resize(tileWidth, tileHeight, { fit: "fill" })
     .composite([{ input: overlay, left: 0, top: 0 }])
     .jpeg({ quality: 80, mozjpeg: true })
     .toBuffer();
@@ -65,24 +78,26 @@ async function labeledTile(frame: TimestampedFrame, sourceLabel: string): Promis
 async function framesToContactSheets(
   frames: TimestampedFrame[],
   sourceLabel: string,
+  tileWidth = TIMELINE_TILE_WIDTH,
+  tileHeight = TIMELINE_TILE_HEIGHT,
 ): Promise<JudgeVisionImage[]> {
   const visuals: JudgeVisionImage[] = [];
   const limited = frames.slice(0, MAX_TIMELINE_FRAMES);
   for (let offset = 0; offset < limited.length; offset += FRAMES_PER_SHEET) {
     const batch = limited.slice(offset, offset + FRAMES_PER_SHEET);
-    const tiles = await Promise.all(batch.map((frame) => labeledTile(frame, sourceLabel)));
+    const tiles = await Promise.all(batch.map((frame) => labeledTile(frame, sourceLabel, tileWidth, tileHeight)));
     const sheet = await sharp({
       create: {
-        width: SHEET_COLUMNS * TILE_WIDTH,
-        height: SHEET_ROWS * TILE_HEIGHT,
+        width: SHEET_COLUMNS * tileWidth,
+        height: SHEET_ROWS * tileHeight,
         channels: 3,
         background: { r: 8, g: 12, b: 20 },
       },
     })
       .composite(tiles.map((input, index) => ({
         input,
-        left: (index % SHEET_COLUMNS) * TILE_WIDTH,
-        top: Math.floor(index / SHEET_COLUMNS) * TILE_HEIGHT,
+        left: (index % SHEET_COLUMNS) * tileWidth,
+        top: Math.floor(index / SHEET_COLUMNS) * tileHeight,
       })))
       .jpeg({ quality: 78, mozjpeg: true })
       .toBuffer();
@@ -104,6 +119,12 @@ export function planScoredTimeline(durationSec: number): { framesPerSecond: numb
     framesPerSecond,
     frameCount: Math.min(MAX_TIMELINE_FRAMES, Math.ceil(durationSec * framesPerSecond)),
   };
+}
+
+export function planRallyDetailFps(candidateCount: number): number {
+  if (candidateCount <= 0) return 0;
+  const threeSecondWindows = candidateCount * 3;
+  return Math.min(12, MAX_TIMELINE_FRAMES / threeSecondWindows);
 }
 
 /**
@@ -144,7 +165,7 @@ export async function prepareRallyDetailVisuals(
   sourceLabel: string,
   url: string,
   candidates: RallyWindowCandidate[],
-): Promise<JudgeVisionImage[]> {
+): Promise<ScoredRallyDetailVisuals> {
   if (!isEvidenceUrlAllowed(url)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
   const temp = await mkdtemp(join(tmpdir(), "scored-detail-"));
   try {
@@ -154,7 +175,9 @@ export async function prepareRallyDetailVisuals(
     const { buffer } = await fetchBinaryCapped(url, 160 * 1024 * 1024, 180_000);
     await writeFile(localVideo, buffer);
     const frameGroups: TimestampedFrame[][] = [];
-    for (const candidate of candidates.slice(0, 11)) {
+    const limitedCandidates = candidates.slice(0, 11);
+    const framesPerSecond = planRallyDetailFps(limitedCandidates.length);
+    for (const candidate of limitedCandidates) {
       // Keep every image sequence isolated. ffmpeg's image2 muxer may clean
       // stale sequence members when another sequence is written nearby.
       const rallyDirectory = join(temp, `window-${String(candidate.index).padStart(2, "0")}`);
@@ -164,13 +187,28 @@ export async function prepareRallyDetailVisuals(
         candidate.index,
         candidate.endSec,
         rallyDirectory,
-        { beforeSec: 1.5, afterSec: 1.5, fps: 8 },
+        {
+          beforeSec: 1.5,
+          afterSec: 1.5,
+          fps: framesPerSecond,
+          width: DETAIL_TILE_WIDTH,
+          height: DETAIL_TILE_HEIGHT,
+        },
       ));
     }
     const frames = frameGroups.flat().slice(0, MAX_TIMELINE_FRAMES);
     if (frames.length === 0) throw new Error("No dense rally-ending frames were extracted.");
     // Await before `finally` removes the frame files backing the sharp jobs.
-    return await framesToContactSheets(frames, sourceLabel);
+    return {
+      framesPerSecond,
+      frameCount: frames.length,
+      visuals: await framesToContactSheets(
+        frames,
+        sourceLabel,
+        DETAIL_TILE_WIDTH,
+        DETAIL_TILE_HEIGHT,
+      ),
+    };
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

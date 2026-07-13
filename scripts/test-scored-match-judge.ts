@@ -16,6 +16,7 @@ import { judgeShortScoredMatch } from "../src/lib/scored-match-judge";
 import { getProviderById } from "../src/lib/llm-providers";
 import { prepareRallyDetailVisuals, prepareScoredMatchTimeline } from "../src/lib/media/scored-match-visuals";
 import {
+  deriveRallyLedger,
   detectScoredMatchContract,
   validateRallyLedger,
   type RallyObservation,
@@ -44,7 +45,7 @@ function rally(
     winner,
     scoreAfter: { A: scoreA, B: scoreB },
     confidence,
-    evidence: `Synthetic visible scoreboard after rally ${index}`,
+    evidence: `Synthetic visible rally endpoint ${index}`,
   };
 }
 
@@ -83,6 +84,18 @@ function testContractCompiler() {
 }
 
 function testDeterministicLedger() {
+  const derivedWithoutScoreboard = deriveRallyLedger([
+    { index: 1, startSec: 0, endSec: 1.9, winner: "A", confidence: 0.93 },
+    { index: 2, startSec: 2, endSec: 3.9, winner: "B", confidence: 0.93 },
+    { index: 3, startSec: 4, endSec: 5.9, winner: "A", confidence: 0.93 },
+    { index: 4, startSec: 6, endSec: 7.9, winner: "B", confidence: 0.93 },
+    { index: 5, startSec: 8, endSec: 9.9, winner: "A", confidence: 0.93 },
+  ]);
+  assert.deepEqual(
+    derivedWithoutScoreboard.map((entry) => entry.scoreAfter),
+    [{ A: 1, B: 0 }, { A: 1, B: 1 }, { A: 2, B: 1 }, { A: 2, B: 2 }, { A: 3, B: 2 }],
+  );
+
   const valid = validateRallyLedger(exactFive, {
     identityConfirmed: true,
     continuousCoverage: true,
@@ -183,21 +196,11 @@ async function testProductionJudgeInterception() {
 
 function frameSvg(rallyIndex: number, frameWithinRally: number, fps: number): Buffer {
   const winners: Array<"A" | "B"> = ["A", "B", "A", "B", "A"];
-  const scores = [
-    { A: 1, B: 0 },
-    { A: 1, B: 1 },
-    { A: 2, B: 1 },
-    { A: 2, B: 2 },
-    { A: 3, B: 2 },
-  ];
   const secondsWithinRally = frameWithinRally / fps;
   const completed = secondsWithinRally >= 1;
   const winner = winners[rallyIndex - 1];
-  const score = scores[rallyIndex - 1];
-  const previous = rallyIndex === 1 ? { A: 0, B: 0 } : scores[rallyIndex - 2];
   const shuttleX = completed ? (winner === "A" ? 720 : 240) : 240 + Math.round(secondsWithinRally * 480);
   const headline = completed ? `RALLY ${rallyIndex} COMPLETE - POINT ${winner}` : `RALLY ${rallyIndex} IN PLAY`;
-  const shownScore = completed ? score : previous;
   return Buffer.from(`
     <svg width="960" height="540" xmlns="http://www.w3.org/2000/svg">
       <rect width="960" height="540" fill="#0b6b4f"/>
@@ -211,7 +214,7 @@ function frameSvg(rallyIndex: number, frameWithinRally: number, fps: number): Bu
       <text x="480" y="72" text-anchor="middle" fill="#fff" font-family="Arial" font-size="24">Participant A = RED | Participant B = BLUE | continuous video</text>
       <rect x="170" y="390" width="620" height="112" rx="12" fill="rgba(0,0,0,0.82)"/>
       <text x="480" y="430" text-anchor="middle" fill="${completed ? "#fde047" : "#fff"}" font-family="Arial" font-size="32" font-weight="700">${headline}</text>
-      <text x="480" y="480" text-anchor="middle" fill="#fff" font-family="Arial" font-size="37" font-weight="700">SCORE: A ${shownScore.A} - ${shownScore.B} B</text>
+      <text x="480" y="480" text-anchor="middle" fill="#fff" font-family="Arial" font-size="29" font-weight="700">NO SCOREBOARD - FAMILIAR DERIVES SCORE</text>
     </svg>
   `);
 }
@@ -264,17 +267,18 @@ async function runLiveVideoPath(mediaOnly = false) {
     assert.deepEqual({ width: firstSheet.width, height: firstSheet.height }, { width: 1440, height: 810 });
     console.log(`REAL_MEDIA_PREPROCESS PASS duration=${prepared.durationSec.toFixed(2)}s frames=${prepared.frameCount} sheets=${prepared.visuals.length} size=1440x810`);
 
-    const detailVisuals = await prepareRallyDetailVisuals("SOURCE-A", uploadedUrl, [
+    const preparedDetails = await prepareRallyDetailVisuals("SOURCE-A", uploadedUrl, [
       { index: 1, endSec: 1.9 },
       { index: 2, endSec: 3.9 },
       { index: 3, endSec: 5.9 },
       { index: 4, endSec: 7.9 },
       { index: 5, endSec: 9.9 },
     ]);
-    assert.ok(detailVisuals.length >= 10, `Expected dense detail sheets, got ${detailVisuals.length}`);
-    const firstDetail = await sharp(Buffer.from(detailVisuals[0].base64, "base64")).metadata();
-    assert.deepEqual({ width: firstDetail.width, height: firstDetail.height }, { width: 1440, height: 810 });
-    console.log(`REAL_RALLY_WINDOWS PASS candidates=5 fps=8 sheets=${detailVisuals.length} size=1440x810`);
+    assert.equal(preparedDetails.framesPerSecond, 12);
+    assert.ok(preparedDetails.visuals.length >= 10, `Expected dense detail sheets, got ${preparedDetails.visuals.length}`);
+    const firstDetail = await sharp(Buffer.from(preparedDetails.visuals[0].base64, "base64")).metadata();
+    assert.deepEqual({ width: firstDetail.width, height: firstDetail.height }, { width: 1920, height: 1080 });
+    console.log(`REAL_RALLY_WINDOWS PASS candidates=5 fps=${preparedDetails.framesPerSecond} frames=${preparedDetails.frameCount} sheets=${preparedDetails.visuals.length} size=1920x1080`);
     if (mediaOnly) return;
 
     const providerId = process.env.ORACLE_DEFAULT_PROVIDER || "openai";
@@ -282,9 +286,9 @@ async function runLiveVideoPath(mediaOnly = false) {
     assert.ok(model, `Unknown live-test provider: ${providerId}`);
     const result = await judgeShortScoredMatch({
       title: "Exactly five badminton rallies",
-      rules: "Exactly 5 rallies; higher score wins. Participant A wears red and Participant B wears blue. One continuous full-court video with score shown after every rally.",
-      evidenceA: { type: "video", url: uploadedUrl, description: "Participant A is red; Participant B is blue; shared continuous match video." },
-      evidenceB: { type: "video", url: uploadedUrl, description: "Same shared continuous match video; A is red and B is blue." },
+      rules: "Exactly 5 rallies; higher score wins. Participant A wears red and Participant B wears blue. One continuous full-court video; no scoreboard is required.",
+      evidenceA: { type: "video", url: uploadedUrl, description: "Participant A is red; Participant B is blue; shared continuous match video with no scoreboard." },
+      evidenceB: { type: "video", url: uploadedUrl, description: "Same shared continuous match video; A is red and B is blue; remembered result A won 3-2." },
       participantAId: "participant-a",
       participantBId: "participant-b",
       providerId,
@@ -305,7 +309,7 @@ async function main() {
   testContractCompiler();
   testDeterministicLedger();
   await testProductionJudgeInterception();
-  console.log("PURE_RULES PASS 6 contract cases + 4 ledger cases");
+  console.log("PURE_RULES PASS 6 contract cases + 5 ledger cases (including no-score derivation)");
   if (process.argv.includes("--media-only")) await runLiveVideoPath(true);
   else if (process.argv.includes("--live")) await runLiveVideoPath();
   else console.log("LIVE_VIDEO_PATH SKIPPED (run with --live)");

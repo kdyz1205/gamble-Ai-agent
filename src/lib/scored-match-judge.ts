@@ -9,9 +9,9 @@ import {
   type RallyWindowCandidate,
 } from "./media/scored-match-visuals";
 import {
+  deriveRallyLedger,
   validateRallyLedger,
-  type RallyLedgerInput,
-  type RallyObservation,
+  type RallyPointObservation,
   type ScoredMatchContract,
 } from "./scored-match";
 
@@ -44,8 +44,12 @@ interface DiscoveryResult {
   analysis: string;
 }
 
-interface DetailResult extends RallyLedgerInput {
-  rallies: RallyObservation[];
+interface DetailResult {
+  identityConfirmed: boolean;
+  continuousCoverage: boolean;
+  integrityFlags: string[];
+  rallies: RallyPointObservation[];
+  confidence: number;
   analysis: string;
 }
 
@@ -68,7 +72,7 @@ function videoUrl(evidence: ScoredMatchEvidence): string | null {
 function fail(reason: string, confidence = 0.25) {
   return {
     winnerId: null,
-    reasoning: `Automatic rally scoring stopped: ${reason} The quest requires participant confirmation or human review; no winner was inferred from sparse frames.`,
+    reasoning: `Automatic rally scoring stopped: ${reason} The quest requires participant confirmation or human review; no winner was guessed from incomplete evidence.`,
     confidence,
   };
 }
@@ -212,12 +216,15 @@ Find all rally windows in chronological order. Do not infer identity or continui
   if (!primary || !primaryTimeline) return fail("the selected primary video was not available after extraction.");
 
   let detailImages: JudgeVisionImage[];
+  let detailFramesPerSecond: number;
   try {
-    detailImages = await prepareRallyDetailVisuals(
+    const preparedDetails = await prepareRallyDetailVisuals(
       `SOURCE-${primary.id}`,
       primary.url,
       discovery.candidateRallies,
     );
+    detailImages = preparedDetails.visuals;
+    detailFramesPerSecond = preparedDetails.framesPerSecond;
   } catch (error) {
     return fail(error instanceof Error ? error.message : "dense rally extraction failed");
   }
@@ -227,11 +234,11 @@ Find all rally windows in chronological order. Do not infer identity or continui
     model: params.model,
     maxTokens: 2200,
     images: detailImages,
-    system: `You are phase 2 of a high-stakes short sports-match referee. The attached 3x3 contact sheets contain dense 8fps windows around each candidate rally ending. Each tile is burned with source, rally number, and exact timestamp.
+    system: `You are phase 2 of a high-stakes short sports-match referee. The attached 3x3 contact sheets contain dense ${detailFramesPerSecond.toFixed(2)}fps windows around each candidate rally ending. Each tile is burned with source, rally number, and exact timestamp.
 
-Produce observations, not a final winner. Award a rally only when its ending is visible enough to identify who won the point under the sport's rules. Do not use pose, celebration, or court side alone as proof. Use a visible shuttle/ball landing, net/out fault, failed return, explicit visible scoreboard transition, or another concrete endpoint. If unclear, winner must be null and confidence below 0.75.
+Produce observations, not a final winner or score. Award a rally only when its ending is visible enough to identify who won the point under the sport's rules. Do not use pose, celebration, or court side alone as proof. Use a visible shuttle/ball landing, net/out fault, failed return, or another concrete endpoint. A visible scoreboard is optional corroboration, never a requirement. If unclear, winner must be null and confidence below 0.75.
 
-The score starts 0-0. scoreAfter must add exactly one point to the observed rally winner. Preserve the phase-1 identity and integrity result unless these denser frames reveal a contradiction.
+The application starts at 0-0 and deterministically derives scoreAfter from your ordered point winners. Do not calculate or return a score. Preserve the phase-1 identity and integrity result unless these denser frames reveal a contradiction.
 
 Return JSON only:
 {
@@ -243,7 +250,6 @@ Return JSON only:
     "startSec":0.0,
     "endSec":4.5,
     "winner":"A"|"B"|null,
-    "scoreAfter":{"A":1,"B":0},
     "confidence":0.0,
     "evidence":"what is visible and at which timestamp"
   }],
@@ -261,8 +267,9 @@ Resolve every rally from concrete visual evidence. Return null for any point tha
   });
 
   if (!detailShapeIsUsable(detail)) return fail("the dense pass did not return a valid rally ledger.");
+  const derivedRallies = deriveRallyLedger(detail.rallies);
   const validation = validateRallyLedger(contract, {
-    ...detail,
+    rallies: derivedRallies,
     identityConfirmed: discovery.identityConfirmed && detail.identityConfirmed,
     continuousCoverage: discovery.continuousCoverage && detail.continuousCoverage,
     integrityFlags: [...discovery.integrityFlags, ...detail.integrityFlags],
@@ -270,7 +277,7 @@ Resolve every rally from concrete visual evidence. Return null for any point tha
     durationSec: primaryTimeline.durationSec,
   });
 
-  const ledgerText = detail.rallies.map((rally) =>
+  const ledgerText = derivedRallies.map((rally) =>
     `R${rally.index} ${rally.startSec.toFixed(2)}-${rally.endSec.toFixed(2)}s: ${rally.winner ?? "unclear"} -> ${rally.scoreAfter?.A ?? "?"}-${rally.scoreAfter?.B ?? "?"} (${Math.round((rally.confidence || 0) * 100)}%)${rally.evidence ? `, ${rally.evidence}` : ""}`,
   ).join("\n");
 

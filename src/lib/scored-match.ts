@@ -23,6 +23,8 @@ export interface RallyObservation {
   evidence?: string;
 }
 
+export type RallyPointObservation = Omit<RallyObservation, "scoreAfter">;
+
 export interface RallyLedgerInput {
   identityConfirmed: boolean;
   continuousCoverage: boolean;
@@ -151,6 +153,20 @@ export function detectScoredMatchContract(
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+/** Build the auditable score line from point winners; no scoreboard is needed. */
+export function deriveRallyLedger(points: RallyPointObservation[]): RallyObservation[] {
+  let scoreA = 0;
+  let scoreB = 0;
+  return points.map((point) => {
+    if (point.winner === "A") scoreA += 1;
+    else if (point.winner === "B") scoreB += 1;
+    return {
+      ...point,
+      scoreAfter: { A: scoreA, B: scoreB },
+    };
+  });
 }
 
 /**

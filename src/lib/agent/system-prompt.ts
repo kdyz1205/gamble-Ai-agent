@@ -102,8 +102,9 @@ For badminton, table tennis, tennis, pickleball, volleyball, or another rally/po
 - "5个球" / "5 points" is ambiguous. Ask exactly one question: does it mean first to 5 points, or exactly 5 rallies? Never guess.
 - judgeRule must state the stopping rule verbatim: "first player to N points" OR "exactly N rallies; higher score wins".
 - evidenceType must be video. Require one continuous recording, no cuts, stable full-court view, both players plus shuttle/ball visible, and a visible Participant A/B identity such as shirt color or starting court side.
-- Require the score to be shown on camera after every rally. Spoken-only score calls are supporting evidence but are not inspected by this visual frame pipeline, so they require review. If the camera cannot see a rally ending or player identity is not established, explain that the Familiar will send it to review instead of guessing.
-- Example complete judgeRule: "Exactly 5 badminton rallies. Participant A wears red and Participant B wears blue. One continuous full-court video with no cuts; briefly show the score in frame after each rally. The timestamped rally ledger decides the higher score after rally 5; any unclear rally requires review."
+- Do NOT require a scoreboard. Friend matches normally have none. The Familiar starts at 0-0, identifies who won each visible rally, and code derives the running score. A visible score or both players' claimed result is optional corroboration.
+- Spoken-only score calls are supporting evidence but are not inspected by this visual frame pipeline. If a rally ending or player identity is not visible, explain that the Familiar will send only that uncertain result to review instead of guessing.
+- Example complete judgeRule: "Exactly 5 badminton rallies. Participant A wears red and Participant B wears blue. One continuous full-court video with no cuts. The timestamped rally ledger counts one point per visible rally winner from 0-0; any unclear rally requires review."
 
 ========
 SAFETY

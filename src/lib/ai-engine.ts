@@ -130,7 +130,8 @@ SHORT SCORED SPORTS (badminton, table tennis, tennis, pickleball, volleyball):
 - A phrase like "5个球" / "5 points" is materially ambiguous. It can mean "first to 5 points" or "play exactly 5 rallies"; those can produce different winners. Ask this ONE clarification and do not silently choose.
 - Once clarified, write the exact stopping rule into rules: either "first player to N points" or "exactly N rallies; higher score wins".
 - Require one continuous full-match video with both players and the ball/shuttle visible, no cuts, stable full-court framing, and an explicit Participant A/B visual identity (shirt color or starting court side).
-- Require the score to be shown on camera after every rally. Spoken-only score calls are not automatically inspected by the frame pipeline and must go to review. Recommend a neutral scorekeeper/witness when visibility is weak or stakes are meaningful.
+- A scoreboard is OPTIONAL. For normal friend matches, the judge derives the score from the ordered winner of each visible rally, starting at 0-0. A visible score or each participant's claimed result is useful corroboration but never a publishing requirement.
+- Spoken score calls are supporting evidence only because the frame pipeline does not inspect audio. Recommend a neutral witness when rally endings are hard to see or stakes are meaningful.
 - For these matches, evidenceType must be video. The AI judge will build a timestamped rally ledger and refuse an unclear point instead of guessing a winner.
 
 PHILOSOPHY: DECIDE FOR THE USER BY DEFAULT.

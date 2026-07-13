@@ -110,12 +110,14 @@ export async function extractTimestampedRallyWindow(
   rallyIndex: number,
   endSec: number,
   outDir: string,
-  options?: { beforeSec?: number; afterSec?: number; fps?: number; timeoutMs?: number },
+  options?: { beforeSec?: number; afterSec?: number; fps?: number; width?: number; height?: number; timeoutMs?: number },
 ): Promise<TimestampedFrame[]> {
   if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
   const beforeSec = options?.beforeSec ?? 1.5;
   const afterSec = options?.afterSec ?? 1.5;
   const fps = options?.fps ?? 8;
+  const width = options?.width ?? 480;
+  const height = options?.height ?? 270;
   const timeoutMs = options?.timeoutMs ?? 90_000;
   const startSec = Math.max(0, endSec - beforeSec);
   const durationSec = beforeSec + afterSec;
@@ -127,7 +129,7 @@ export async function extractTimestampedRallyWindow(
     "-ss", startSec.toFixed(3),
     "-i", url,
     "-t", durationSec.toFixed(3),
-    "-vf", `fps=${fps.toFixed(6)},scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:black`,
+    "-vf", `fps=${fps.toFixed(6)},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
     "-frames:v", String(maxFrames),
     "-q:v", "3",
     "-start_number", "0",
