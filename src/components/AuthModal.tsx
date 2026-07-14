@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
+import { createPortal } from "react-dom";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
 interface Props {
   open: boolean;
@@ -141,7 +143,9 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
     caretColor: PEACH_HOVER,
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -166,7 +170,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-sm relative overflow-hidden lp-glass"
+              className="auth-portal relative w-full max-w-sm overflow-hidden"
               style={{
                 borderRadius: "28px",
                 boxShadow: "0 20px 60px rgba(15,23,42,0.12), 0 4px 14px 0 rgba(251,146,60,0.18)",
@@ -212,10 +216,10 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", damping: 14, stiffness: 260 }}
                       >
-                        <span className="text-4xl">🎉</span>
+                        <PicoFamiliar className="h-20 w-20" mood="celebrate" />
                       </motion.div>
                       <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
-                        You&apos;re in! Let&apos;s play
+                        You&apos;re in! Your quest world is ready.
                       </p>
                     </motion.div>
                   )}
@@ -235,7 +239,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                       y: { duration: 3, repeat: Infinity, ease: "easeInOut" },
                     }}
                   >
-                    <span className="text-3xl">🎲</span>
+                    <PicoFamiliar className="h-16 w-16" mood="guide" />
                   </motion.div>
 
                   <AnimatePresence mode="wait">
@@ -430,9 +434,9 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
                         {mode === "register" ? "Creating…" : "Signing in…"}
                       </span>
                     ) : mode === "register" ? (
-                      "Start Playing 🎲"
+                      "Enter the Quest World"
                     ) : (
-                      "Sign In ✨"
+                      "Sign In"
                     )}
                   </motion.button>
                 </form>
@@ -459,6 +463,7 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

@@ -146,7 +146,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const latestJudgment = market.judgments?.[0] ?? null;
 
   return (
-    <div className="relative min-h-screen">
+    <div className="quest-market-world sum-map-world sum-world-shell relative min-h-screen">
       {/* Header — consistent with homepage */}
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>

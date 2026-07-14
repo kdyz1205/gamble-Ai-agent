@@ -96,77 +96,51 @@ export default function GatewayDoorHold() {
   const buttonLabel = isOpening ? "Entering World..." : "Enter World";
 
   return (
-    <section
-      className="sum-quest-card relative w-full max-w-xl overflow-hidden p-4 sm:p-5"
-      data-phase={phase}
-      data-testid="gateway-door-hold"
-    >
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full"
-        style={{
-          background:
-            "radial-gradient(circle at 35% 35%, var(--sum-cloud), var(--sum-sun) 34%, var(--sum-peach) 70%)",
-          boxShadow: "0 0 44px var(--sum-orb-glow)",
+    <section className="gateway-door" data-phase={phase} data-testid="gateway-door-hold">
+      <button
+        aria-label="Enter World"
+        aria-disabled={isOpening}
+        className="gateway-door__button outline-none focus-visible:ring-4 focus-visible:ring-white/70"
+        data-testid="gateway-handle"
+        disabled={isOpening}
+        onClick={openGateway}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") openGateway();
         }}
-        animate={{ y: isOpening ? [-4, -18, -8] : [-3, 4, -3], rotate: isOpening ? [0, 18, 36] : [0, 8, 0] }}
-        transition={{ duration: isOpening ? 1.3 : 4.2, repeat: isOpening ? 0 : Infinity, ease: "easeInOut" }}
-      />
-
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <motion.div
+        onPointerCancel={cancelHold}
+        onPointerDown={startHold}
+        onPointerLeave={cancelHold}
+        onPointerUp={cancelHold}
+        style={{ touchAction: "none" }}
+        type="button"
+      >
+        <motion.span
+          aria-hidden
+          className="gateway-door__progress"
+          animate={{ width: isOpening ? ["100%", "92%", "100%"] : progressPercent }}
+          transition={{ duration: isOpening ? 0.9 : 0.14, ease: "easeOut" }}
+        />
+        <span className="gateway-door__label relative z-10">
+          <motion.span
             aria-hidden
-            className="grid h-14 w-14 shrink-0 place-items-center rounded-[20px] border border-white/80 bg-white text-xl font-extrabold shadow-[0_12px_24px_rgba(40,102,133,0.12)]"
+            className="gateway-door__pico"
             animate={{
               scale: isCharging ? 1 + holdProgress * 0.04 : isOpening ? [1, 1.08, 1] : 1,
               rotate: isOpening ? [0, -4, 4, 0] : 0,
             }}
-            transition={{ duration: isOpening ? 0.8 : 0.2 }}
           >
             <PicoFamiliar className="h-14 w-14" />
-          </motion.div>
-          <div className="min-w-0">
-            <p className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>
-              Pico · AI Familiar
-            </p>
-            <p className="text-base font-extrabold leading-tight sm:text-lg">Ready to referee your next quest</p>
-          </div>
-        </div>
-
-        <button
-          aria-label="Enter World"
-          aria-disabled={isOpening}
-          className="group relative min-h-14 w-full overflow-hidden rounded-full border border-[rgba(255,185,120,0.58)] px-6 py-4 text-base font-extrabold shadow-[0_14px_30px_rgba(255,164,96,0.28)] outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-4 focus-visible:ring-[rgba(255,185,120,0.42)] sm:w-auto sm:min-w-44"
-          data-testid="gateway-handle"
-          disabled={isOpening}
-          onClick={openGateway}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") openGateway();
-          }}
-          onPointerCancel={cancelHold}
-          onPointerDown={startHold}
-          onPointerLeave={cancelHold}
-          onPointerUp={cancelHold}
-          style={{
-            background: "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))",
-            color: "var(--sum-ink)",
-            touchAction: "none",
-          }}
-          type="button"
-        >
-          <motion.span
-            aria-hidden
-            className="absolute inset-y-0 left-0 rounded-full bg-white/24"
-            animate={{ width: isOpening ? ["100%", "92%", "100%"] : progressPercent }}
-            transition={{ duration: isOpening ? 0.9 : 0.14, ease: "easeOut" }}
-          />
-          <span className="relative inline-flex items-center justify-center gap-2">
-            <span className="sum-quest-orb" aria-hidden />
-            {buttonLabel}
+          </motion.span>
+          <span>
+            <small className="block text-[10px] uppercase tracking-[0.16em] opacity-70">Pico is waiting</small>
+            <span className="block">{buttonLabel}</span>
           </span>
-        </button>
-      </div>
+        </span>
+        <span className="gateway-door__arrow relative z-10" aria-hidden>→</span>
+      </button>
+      <p className="px-3 pb-1 pt-3 text-center text-[11px] font-extrabold text-[color:var(--sum-muted)]">
+        Tap once, or hold to open the portal
+      </p>
     </section>
   );
 }

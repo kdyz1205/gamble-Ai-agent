@@ -158,6 +158,14 @@ test.describe("iOS entry shell", () => {
 
     await expect(page.getByText("Sign in to continue")).toBeVisible();
     await expect(page.getByText("Join Summoner.world")).toBeVisible();
+
+    const authPortal = page.locator(".auth-portal");
+    await expect(authPortal).toBeVisible();
+    const authBounds = await authPortal.boundingBox();
+    expect(authBounds).not.toBeNull();
+    expect(authBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(authBounds!.x + authBounds!.width).toBeLessThanOrEqual(390);
+    expect(await authPortal.evaluate((element) => element.parentElement?.parentElement === document.body)).toBe(true);
   });
 
   test("opens App Review support from the iPhone entry shell and submits a report", async ({ page }) => {

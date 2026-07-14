@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import AuthModal from "@/components/AuthModal";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import QuestGlyph from "@/components/world/QuestGlyph";
+import QuestWorldScene from "@/components/world/QuestWorldScene";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 
@@ -166,7 +169,7 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
   const fallbackRules = c.rules || c.proposition || summary;
 
   return (
-    <div className="sum-map-world min-h-screen relative overflow-hidden">
+    <div className="quest-invite-world sum-map-world min-h-screen relative overflow-hidden">
       <div
         className="sum-quest-orb absolute left-6 top-24 h-16 w-16 opacity-80"
         style={{ background: PEACH }}
@@ -183,29 +186,39 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
         aria-hidden="true"
       />
 
-      <header className="relative z-20 flex items-center justify-between px-5 py-4">
-        <Link href="/" className="text-base font-black tracking-tight" style={{ color: INK }}>
-          Summoner.world
+      <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <Link href="/" className="summoner-wordmark text-base" style={{ color: INK }}>
+          <span className="summoner-wordmark__crest h-9 w-9"><QuestGlyph className="h-4 w-4" kind="spark" /></span>
+          Summoner<span className="ml-[-0.55rem] text-[#e85f4e]">.world</span>
         </Link>
-        <span className="sum-sticker-badge text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: INK }}>
-          Invite
+        <span className="sum-sticker-badge px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: INK }}>
+          Quest invite
         </span>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100vh-72px)] max-w-xl items-center px-4 py-6">
+      <main className="relative z-10 mx-auto grid min-h-[calc(100vh-72px)] max-w-6xl items-center gap-7 px-4 py-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)]">
+        <aside className="hidden lg:block">
+          <QuestWorldScene compact />
+          <p className="mx-auto -mt-4 w-[84%] rounded-[1.25rem] border-2 border-white/80 bg-[rgba(255,253,244,0.9)] px-4 py-3 text-center text-xs font-black text-[color:var(--sum-ink)] shadow-[0_7px_0_rgba(23,53,75,0.08)]">
+            A shared quest starts only after both friends agree.
+          </p>
+        </aside>
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 24 }}
-          className="sum-quest-card w-full overflow-hidden"
+          className="quest-invitation w-full overflow-hidden"
           style={{ boxShadow: SHADOW }}
         >
           <div
-            className="px-5 py-4"
+            className="relative px-5 py-5 pr-24"
             style={{ borderBottom: `1px solid ${BORDER}`, background: "rgba(255, 255, 255, 0.64)" }}
           >
+            <span className="absolute right-5 top-4 grid h-16 w-16 place-items-center rounded-full border-2 border-dashed border-[#e85f4e] bg-[#fff7d5]">
+              <PicoFamiliar className="h-14 w-14" mood="guide" />
+            </span>
             <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: GRASS }}>
-              Quest Invite
+              Sealed by Pico
             </p>
             <h1 className="mt-2 text-2xl font-black leading-tight sm:text-3xl" style={{ color: INK }}>
               {summoner} summoned a quest for you
@@ -362,11 +375,11 @@ export default function JoinPage({ params }: { params: Promise<{ id: string }> }
                     whileHover={{ scale: 1.01, y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                    className="w-full rounded-full px-5 py-4 text-base font-black disabled:opacity-60"
+                    className="quest-primary-button w-full px-5 py-4 text-base font-black disabled:opacity-60"
                     style={{
-                      background: accepting ? BORDER : PEACH,
+                      background: accepting ? BORDER : undefined,
                       color: INK,
-                      boxShadow: accepting ? "none" : "0 14px 28px rgba(251, 146, 60, 0.24)",
+                      boxShadow: accepting ? "none" : undefined,
                     }}
                   >
                     {accepting ? "Accepting Quest..." : "Accept Quest"}

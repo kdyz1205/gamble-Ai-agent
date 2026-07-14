@@ -5,6 +5,7 @@ import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
+import QuestGlyph from "@/components/world/QuestGlyph";
 import * as api from "@/lib/api-client";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
@@ -451,19 +452,12 @@ export default function PactComposer() {
   return (
     <>
       <div
-        className="sum-map-world sum-quest-card relative isolate h-full overflow-hidden p-4 shadow-none sm:p-5 xl:min-h-[640px]"
+        className="quest-composer h-full xl:min-h-[640px]"
         data-cast-phase={castPhase}
         data-casting={castingActive ? "true" : "false"}
         data-live={hasInput ? "true" : "false"}
         data-result={latestReply ? "true" : "false"}
         data-testid="pact-composer"
-        style={{
-          background:
-            "radial-gradient(circle at 84% 8%, rgba(255,216,107,0.42), transparent 28%), radial-gradient(circle at 8% 20%, rgba(143,230,193,0.34), transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.95), rgba(223,245,255,0.9))",
-          border: "1px solid var(--sum-border)",
-          boxShadow: "var(--sum-shadow-soft)",
-          color: "var(--sum-ink)",
-        }}
       >
         <span
           aria-hidden
@@ -485,19 +479,19 @@ export default function PactComposer() {
         />
         <form
           onSubmit={(event) => { void handleSubmit(event); }}
-          className="relative z-10 grid gap-2.5 min-[1660px]:grid-cols-[minmax(0,1fr)_220px]"
+          className="relative z-10 grid gap-3"
         >
           <div className="min-w-0">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-                  Summon Composer
+                  Your quest spell
                 </p>
                 <h1 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
-                  One sentence. Full quest.
+                  Say it like you would to a friend.
                 </h1>
                 <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
-                  Your familiar turns a challenge into rules, proof, invite, and receipt.
+                  Pico turns your words into clear, shared terms before anyone commits.
                 </p>
               </div>
               <span
@@ -511,23 +505,24 @@ export default function PactComposer() {
               </span>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="quest-idea-strip mt-4">
               {promptChips.map((label) => (
                 <span
                   key={label}
-                  className="sum-sticker-badge px-3 py-2 text-xs font-extrabold"
-                  style={{
-                    background: "rgba(255,255,255,0.78)",
-                    boxShadow: "0 8px 18px rgba(40,102,133,0.08)",
-                  }}
+                  className=""
                 >
                   {label}
                 </span>
               ))}
             </div>
 
-            <div className="mt-2 grid gap-2 lg:grid-cols-[112px_1fr_1fr]">
-              <label className="qx-control-card rounded-[18px] px-3 py-2" style={{ border: "1px solid var(--sum-border)", background: "rgba(255,255,255,0.72)" }}>
+            <details className="quest-terms">
+              <summary>
+                <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> Quest terms</span>
+                <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{stakeDisplay} · {opponentMode} · {proofWindow}</span>
+              </summary>
+              <div className="quest-terms__grid">
+              <label className="quest-control">
                 <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
                   Credits
                 </span>
@@ -552,17 +547,17 @@ export default function PactComposer() {
                 />
               </label>
 
-              <div className="qx-control-card rounded-[18px] px-3 py-2" style={{ border: "1px solid var(--sum-border)", background: "rgba(255,255,255,0.72)" }}>
+              <div className="quest-control">
                 <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
                   Opponent
                 </span>
-                <div className="mt-2 grid grid-cols-3 gap-1">
+                <div className="quest-choice-grid">
                   {opponentOptions.map((option) => {
                     const selected = option === opponentMode;
                     return (
                       <button
                         key={option}
-                        className="min-h-10 rounded-xl px-2 text-[10px] font-semibold transition"
+                        data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setOpponentMode(option);
                           setDraftState((current) => ({
@@ -575,11 +570,7 @@ export default function PactComposer() {
                           }));
                           publishRequestIdRef.current = null;
                         }}
-                        style={{
-                          background: selected ? "var(--sum-peach)" : "rgba(255,255,255,0.68)",
-                          border: `1px solid ${selected ? "rgba(255,185,120,0.72)" : "var(--sum-border)"}`,
-                          color: selected ? "var(--sum-ink)" : "var(--sum-muted)",
-                        }}
+                        style={{ "--choice-color": "var(--sum-peach)" } as CSSProperties}
                         type="button"
                       >
                         {option}
@@ -589,27 +580,23 @@ export default function PactComposer() {
                 </div>
               </div>
 
-              <div className="qx-control-card rounded-[18px] px-3 py-2" style={{ border: "1px solid var(--sum-border)", background: "rgba(255,255,255,0.72)" }}>
+              <div className="quest-control">
                 <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
                   Proof window
                 </span>
-                <div className="mt-2 grid grid-cols-3 gap-1">
+                <div className="quest-choice-grid">
                   {proofOptions.map((option) => {
                     const selected = option === proofWindow;
                     return (
                       <button
                         key={option}
-                        className="min-h-10 rounded-xl px-2 text-[10px] font-semibold transition"
+                        data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setProofWindow(option);
                           setDraftState((current) => ({ ...current, timeWindow: option }));
                           publishRequestIdRef.current = null;
                         }}
-                        style={{
-                          background: selected ? "var(--sum-mint)" : "rgba(255,255,255,0.68)",
-                          border: `1px solid ${selected ? "rgba(143,230,193,0.78)" : "var(--sum-border)"}`,
-                          color: selected ? "var(--sum-ink)" : "var(--sum-muted)",
-                        }}
+                        style={{ "--choice-color": "var(--sum-mint)" } as CSSProperties}
                         type="button"
                       >
                         {option}
@@ -618,35 +605,27 @@ export default function PactComposer() {
                   })}
                 </div>
               </div>
-            </div>
+              </div>
+            </details>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_56px_150px]">
+            <div className="quest-composer__prompt mt-3">
               <textarea
-                className="qx-challenge-input min-h-[9rem] w-full resize-none rounded-[22px] bg-white/85 p-4 text-base font-semibold leading-6 outline-none placeholder:font-semibold sm:min-h-[10rem]"
+                className="qx-challenge-input"
                 data-live={hasInput ? "true" : "false"}
                 disabled={isSubmitting}
                 onChange={handleInput}
                 onInput={handleInput}
                 placeholder={placeholderExamples.join("\n")}
                 ref={inputRef}
-                style={{
-                  border: "1px solid var(--sum-border)",
-                  color: "var(--sum-ink)",
-                  boxShadow: "inset 0 0 28px rgba(40,102,133,0.05)",
-                }}
                 value={input}
               />
+              <div className="quest-composer__actions">
               <button
                 aria-label={isRecording ? "Stop voice recording" : "Describe quest by voice"}
-                className="grid min-h-14 place-items-center rounded-full border text-[11px] font-extrabold transition hover:-translate-y-0.5 sm:min-h-16"
+                className="quest-tool-button"
                 disabled={isSubmitting || isTranscribing}
                 onClick={() => { void toggleVoiceInput(); }}
-                style={{
-                  background: isRecording ? "#fecaca" : "rgba(255,255,255,0.88)",
-                  borderColor: isRecording ? "#fca5a5" : "var(--sum-border)",
-                  color: isRecording ? "#991b1b" : "var(--sum-ink)",
-                  boxShadow: isRecording ? "0 0 0 5px rgba(252,165,165,0.2)" : "0 10px 22px rgba(40,102,133,0.08)",
-                }}
+                style={{ background: isRecording ? "#fecaca" : undefined, color: isRecording ? "#991b1b" : undefined }}
                 title={isRecording ? "Stop recording" : "Speak your challenge"}
                 type="button"
               >
@@ -654,46 +633,32 @@ export default function PactComposer() {
                   {isRecording ? (
                     <span className="h-3 w-3 rounded-[3px] bg-current" />
                   ) : (
-                    <svg fill="none" height="20" viewBox="0 0 24 24" width="20">
-                      <rect height="11" rx="4" stroke="currentColor" strokeWidth="2" width="7" x="8.5" y="2.5" />
-                      <path d="M5 10.5C5 14.37 8.13 17.5 12 17.5C15.87 17.5 19 14.37 19 10.5M12 17.5V21M9 21H15" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-                    </svg>
+                    <QuestGlyph className="h-5 w-5" kind="voice" />
                   )}
                 </span>
                 <span>{isTranscribing ? "..." : isRecording ? "Stop" : "Voice"}</span>
               </button>
               <RitualButton
                 aria-label="Summon"
-                className="qx-generate-button min-h-14 rounded-full px-5 text-sm normal-case tracking-normal sm:min-h-16"
+                className="quest-primary-button quest-submit-button qx-generate-button"
                 data-cast-phase={castPhase}
                 data-casting={castingActive ? "true" : "false"}
                 disabled={!canSubmit}
-                style={{
-                  background: "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))",
-                  border: "1px solid rgba(255,185,120,0.68)",
-                  boxShadow: canSubmit ? "0 14px 30px rgba(255,164,96,0.24)" : "none",
-                  color: "var(--sum-ink)",
-                }}
                 type="submit"
               >
-                {isSubmitting ? "Summoning..." : "Summon"}
+                <QuestGlyph className="h-4 w-4" kind="spark" />
+                {isSubmitting ? "Summoning..." : "Summon quest"}
               </RitualButton>
+              </div>
             </div>
 
             {contractResult ?? (
               <div
-                className="qx-blueprint-preview mt-2 overflow-hidden rounded-lg p-2"
+                className="quest-blueprint qx-blueprint-preview"
                 data-cast-phase={castPhase}
                 data-casting={castingActive ? "true" : "false"}
                 data-active={hasInput ? "true" : "false"}
                 data-testid="challenge-blueprint-preview"
-                style={{
-                  border: "1px solid var(--sum-border)",
-                  background: hasInput
-                    ? "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(143,230,193,0.18), rgba(255,216,107,0.12))"
-                    : "rgba(255,255,255,0.62)",
-                  boxShadow: hasInput ? "inset 0 0 34px rgba(40,102,133,0.045), 0 12px 26px rgba(40,102,133,0.08)" : "none",
-                }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -716,16 +681,11 @@ export default function PactComposer() {
                   </span>
                 </div>
 
-                <div className="mt-2 grid grid-cols-5 gap-1 text-[9px] sm:text-[10px]">
+                <div className="quest-blueprint__track">
                   {blueprintItems.map(([label, value]) => (
                     <span
                       key={label}
-                      className="qx-blueprint-cell min-w-0 rounded-md px-1.5 py-1.5 sm:px-2"
-                      style={{
-                        border: "1px solid var(--sum-border)",
-                        background: "rgba(255,255,255,0.72)",
-                        color: "var(--sum-muted)",
-                      }}
+                      className="qx-blueprint-cell"
                     >
                       <span className="block uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>{label}</span>
                       <span className="mt-0.5 block truncate font-semibold normal-case tracking-normal" style={{ color: "var(--sum-ink)" }}>
@@ -752,7 +712,7 @@ export default function PactComposer() {
             </p>
           </div>
 
-          <aside className="hidden rounded-[20px] p-3 min-[1660px]:block" style={{ border: "1px solid var(--sum-border)", background: "rgba(255,255,255,0.72)" }}>
+          <aside className="hidden">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
               Quest card
             </p>

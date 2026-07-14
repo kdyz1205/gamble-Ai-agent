@@ -14,22 +14,14 @@ export default function SceneBackground({ tone = "gateway", particleCount = 72 }
       aria-hidden
       className="absolute inset-0 overflow-hidden"
       style={{
-        background: `radial-gradient(circle at 76% 12%, ${warmth}, transparent 24%), radial-gradient(circle at 16% 28%, rgba(143,230,193,0.34), transparent 28%), linear-gradient(180deg, #dff5ff 0%, #eefaff 52%, #e9fbdc 100%)`,
+        background: `radial-gradient(circle at 76% 12%, ${warmth}, transparent 24%), radial-gradient(circle at 16% 28%, rgba(112,214,165,0.3), transparent 28%), linear-gradient(180deg, #c8efff 0%, #effcff 52%, #effbdc 100%)`,
       }}
     >
-      <div
-        className="absolute inset-0 opacity-60"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(78,148,171,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(78,148,171,0.09) 1px, transparent 1px)",
-          backgroundSize: "42px 42px",
-          maskImage: "linear-gradient(180deg, transparent, black 24%, black 82%, transparent)",
-        }}
-      />
-      <div className="absolute -left-16 bottom-[-7rem] h-64 w-[46%] rounded-[50%] bg-[color:var(--sum-grass)] opacity-80 blur-[1px]" />
-      <div className="absolute -right-20 bottom-[-8rem] h-72 w-[54%] rounded-[50%] bg-[color:var(--sum-mint)] opacity-48 blur-[1px]" />
-      <div className="absolute left-[8%] top-[12%] h-6 w-24 rounded-full bg-white/70 blur-sm" />
-      <div className="absolute right-[13%] top-[21%] h-8 w-32 rounded-full bg-white/72 blur-sm" />
+      <div className="absolute -left-16 bottom-[-8rem] h-72 w-[52%] rounded-[50%] bg-[color:var(--sum-grass)] opacity-90" />
+      <div className="absolute -right-20 bottom-[-10rem] h-80 w-[58%] rounded-[50%] bg-[color:var(--sum-mint)] opacity-58" />
+      <div className="absolute left-[7%] top-[13%] h-6 w-28 rounded-full bg-white/72 shadow-[42px_7px_0_5px_rgba(255,255,255,0.54)]" />
+      <div className="absolute right-[12%] top-[23%] h-8 w-36 rounded-full bg-white/74 shadow-[-28px_5px_0_3px_rgba(255,255,255,0.46)]" />
+      <div className="absolute right-[7%] top-[9%] h-20 w-20 rounded-full bg-[color:var(--sum-sun)] opacity-70 shadow-[0_0_0_18px_rgba(255,216,95,0.13)]" />
       <ParticleField count={Math.min(particleCount, 38)} />
     </div>
   );

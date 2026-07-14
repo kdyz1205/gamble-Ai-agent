@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ResultReceiptCard from "@/components/ResultReceiptCard";
+import QuestGlyph from "@/components/world/QuestGlyph";
 import type { ChallengeData } from "@/lib/api-client";
 
 const demoReceiptChallenge = {
@@ -87,29 +88,23 @@ export default function JudgmentDemoPage() {
             This is the final Summoner.world result surface: proof is checked, the AI Familiar explains the result, and the receipt is ready to share.
           </p>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {journey.map(([step, title, body]) => (
+          <div className="receipt-journey mt-6">
+            {journey.map(([step, title, body], index) => (
               <div
                 key={step}
-                className="rounded-[22px] p-4"
-                style={{
-                  background: "rgba(255, 255, 255, 0.74)",
-                  border: "1px solid var(--sum-border)",
-                  boxShadow: "var(--sum-shadow-soft)",
-                }}
+                className="receipt-journey__step"
               >
                 <span
-                  className="grid h-8 w-8 place-items-center rounded-full text-xs font-black"
-                  style={{ background: "var(--sum-mint)", color: "var(--sum-ink)" }}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[1rem] text-xs font-black"
                 >
-                  {step}
+                  <QuestGlyph className="h-4 w-4" kind={index === 0 ? "proof" : index === 1 ? "spark" : "receipt"} />
                 </span>
-                <p className="mt-3 text-sm font-black" style={{ color: "var(--sum-ink)" }}>
+                <div className="min-w-0"><p className="text-xs font-black" style={{ color: "var(--sum-ink)" }}>
                   {title}
                 </p>
-                <p className="mt-1 text-xs font-semibold leading-5" style={{ color: "var(--sum-muted)" }}>
+                <p className="mt-0.5 truncate text-[9px] font-bold" style={{ color: "var(--sum-muted)" }}>
                   {body}
-                </p>
+                </p></div>
               </div>
             ))}
           </div>

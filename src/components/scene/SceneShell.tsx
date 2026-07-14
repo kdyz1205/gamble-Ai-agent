@@ -27,9 +27,9 @@ export default function SceneShell({
       <SceneBackground tone={tone} particleCount={particleCount} />
       <SceneTopBar rightSlot={topBarRight} />
       {showSidebar && <SceneMobileNav active={activePath} />}
-      <div className="relative z-10 flex min-h-[calc(100vh-72px)]">
+      <div className="relative z-10 flex min-h-[calc(100vh-76px)]">
         {showSidebar && <SceneSidebar active={activePath} />}
-        <section className="min-w-0 flex-1 pb-6 lg:pb-0">
+        <section className="min-w-0 flex-1 pb-24 lg:pb-0">
           <SceneTransition transitionKey={activePath}>{children}</SceneTransition>
         </section>
       </div>

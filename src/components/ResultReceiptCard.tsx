@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { ChallengeData } from "@/lib/api-client";
+import QuestGlyph from "@/components/world/QuestGlyph";
 
 type Judgment = NonNullable<ChallengeData["judgments"]>[number];
 type Participant = ChallengeData["participants"][number];
@@ -25,7 +26,6 @@ const PEACH = "var(--sum-peach)";
 const MINT = "var(--sum-mint)";
 const GRASS = "var(--sum-grass)";
 const SUN = "var(--sum-sun)";
-const SHADOW = "var(--sum-shadow-soft)";
 
 function formatLabel(value?: string | null) {
   if (!value) return "Proof";
@@ -160,11 +160,8 @@ export default function ResultReceiptCard({
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 24 }}
-      className={`relative overflow-hidden rounded-[28px] p-5 sm:p-6 ${className}`}
+      className={`result-receipt relative overflow-hidden p-5 sm:p-6 ${className}`}
       style={{
-        background: `linear-gradient(155deg, ${CARD} 0%, rgba(255, 246, 230, 0.94) 48%, rgba(206, 255, 218, 0.88) 100%)`,
-        border: `1px solid ${BORDER}`,
-        boxShadow: SHADOW,
         color: INK,
       }}
       data-testid="result-receipt-card"
@@ -253,13 +250,10 @@ export default function ResultReceiptCard({
         <button
           type="button"
           onClick={() => void handleShare()}
-          className="mt-5 w-full rounded-full px-5 py-3.5 text-sm font-black active:scale-95 transition-transform"
-          style={{
-            background: PEACH,
-            color: INK,
-            boxShadow: "0 14px 28px rgba(251, 146, 60, 0.24)",
-          }}
+          className="quest-primary-button mt-5 inline-flex w-full items-center justify-center gap-2 px-5 py-3.5 text-sm font-black"
+          style={{ color: INK }}
         >
+          <QuestGlyph className="h-4 w-4" kind="receipt" />
           {shareState === "shared" ? "Receipt Copied" : shareState === "failed" ? "Copy Failed" : "Share Receipt"}
         </button>
       </div>

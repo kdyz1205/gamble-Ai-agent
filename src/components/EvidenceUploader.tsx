@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import QuestGlyph from "@/components/world/QuestGlyph";
 
 // Summoner.world proof palette.
 const NAVY = "#1E293B";
@@ -13,7 +14,6 @@ const NAVY_FAINT = "#E2E8F0";
 const PEACH = "#FED7AA";
 const PEACH_DARK = "#FDBA74";
 const PEACH_TEXT = "#7C2D12";
-const ORANGE_GLOW = "rgba(251,146,60,0.39)";
 const MINT = "#A7F3D0";
 const MINT_TEXT = "#065F46";
 const LAVENDER = "#E9D5FF";
@@ -256,29 +256,28 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="sum-world-panel"
-      style={{ borderRadius: "24px", padding: "20px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}
+      className="proof-camp"
     >
-      <div className="flex items-center gap-3 mb-4">
-        <PicoFamiliar className="h-12 w-12 shrink-0" mood="referee" />
+      <div className="proof-camp__header mb-4 flex items-center gap-3">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] border-2 border-white bg-[#eafaff] shadow-[0_5px_0_rgba(23,53,75,0.08)]"><PicoFamiliar className="h-14 w-14" mood="referee" /></span>
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: PEACH_DARK }}>Proof portal</p>
-          <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>Record live, upload, or paste so the Familiar can referee.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: PEACH_DARK }}>Proof camp</p>
+          <p className="mt-1 text-xs font-bold" style={{ color: NAVY_DIM }}>Each friend adds their own clear, traceable proof.</p>
         </div>
       </div>
 
       {/* Mode chooser — only when no content chosen yet */}
       {!mode && !hasContent && (
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <ActionTile emoji="📹" label="Record video" hint="Webcam + mic" tint={PEACH} onClick={() => startCamera(true)} />
-          <ActionTile emoji="📸" label="Take photo" hint="Snap from camera" tint={MINT} onClick={takePhoto} />
-          <ActionTile emoji="🎥" label="Upload video" hint="MP4 / WebM from device" tint={LAVENDER} onClick={() => pickFile("video")} />
-          <ActionTile emoji="🖼️" label="Upload photo" hint="JPG / PNG from device" tint={PINK} onClick={() => pickFile("photo")} />
+          <ActionTile kind="proof" label="Record video" hint="One continuous clip" tint={PEACH} onClick={() => startCamera(true)} />
+          <ActionTile kind="spark" label="Take photo" hint="Snap from camera" tint={MINT} onClick={takePhoto} />
+          <ActionTile kind="proof" label="Upload video" hint="MP4 / WebM" tint={LAVENDER} onClick={() => pickFile("video")} />
+          <ActionTile kind="receipt" label="Upload photo" hint="JPG / PNG" tint={PINK} onClick={() => pickFile("photo")} />
           <div className="col-span-2">
             <button onClick={() => setMode("url")}
               className="w-full px-3 py-2 text-xs font-bold active:scale-95 transition-transform"
               style={{ color: NAVY_DIM, background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "16px" }}>
-              🔗 …or paste an HTTPS URL instead
+              Or paste a public HTTPS link
             </button>
           </div>
         </div>
@@ -411,12 +410,12 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
         whileTap={{ scale: 0.96 }}
         whileHover={!submitting && hasContent ? { scale: 1.02, y: -1 } : undefined}
         transition={{ type: "spring", stiffness: 400, damping: 22 }}
-        className="w-full mt-4 py-3.5 text-base font-extrabold disabled:opacity-40"
+        className="quest-primary-button mt-4 w-full py-3.5 text-base font-black disabled:opacity-40"
         style={{
           color: PEACH_TEXT,
-          background: PEACH,
+          background: submitting || !hasContent ? PEACH : undefined,
           borderRadius: "9999px",
-          boxShadow: submitting || !hasContent ? "none" : `0 4px 14px 0 ${ORANGE_GLOW}`,
+          boxShadow: submitting || !hasContent ? "none" : undefined,
         }}
       >
         {submitting ? (uploading ? "Uploading..." : "Submitting...") : "Submit proof"}
@@ -425,8 +424,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   );
 }
 
-function ActionTile({ emoji, label, hint, tint, onClick }: {
-  emoji: string; label: string; hint: string; tint: string; onClick: () => void;
+function ActionTile({ kind, label, hint, tint, onClick }: {
+  kind: "proof" | "spark" | "receipt"; label: string; hint: string; tint: string; onClick: () => void;
 }) {
   return (
     <motion.button
@@ -434,14 +433,14 @@ function ActionTile({ emoji, label, hint, tint, onClick }: {
       whileHover={{ scale: 1.03, y: -2 }}
       whileTap={{ scale: 0.96 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className="p-3 text-left"
+      className="proof-choice p-3 text-left"
       style={{
         background: `${tint}22`,
-        border: `1px solid ${tint}66`,
+        border: `2px solid ${tint}66`,
         borderRadius: "18px",
       }}
     >
-      <div className="text-2xl mb-1">{emoji}</div>
+      <span className="mb-2 grid h-9 w-9 place-items-center rounded-[1rem] border-2 border-white bg-white/70 text-[color:var(--sum-ink)] shadow-[0_4px_0_rgba(23,53,75,0.08)]"><QuestGlyph className="h-4 w-4" kind={kind} /></span>
       <p className="text-sm font-bold" style={{ color: NAVY }}>{label}</p>
       <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>{hint}</p>
     </motion.button>
