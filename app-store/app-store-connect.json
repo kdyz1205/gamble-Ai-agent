@@ -1,0 +1,33 @@
+{
+  "appName": "Summon World",
+  "bundleId": "com.summonworld.app",
+  "sku": "summon-world-ios",
+  "primaryCategory": "Lifestyle",
+  "secondaryCategory": "Social Networking",
+  "privacyPolicyUrl": "https://summoner.world/privacy",
+  "supportUrl": "https://summoner.world/support",
+  "marketingUrl": "https://summoner.world/enter",
+  "reviewNotes": "Summon World is a social challenge platform for creating Quests with friends, submitting proof, and receiving an AI-assisted result. No real-money gambling is offered; credits are in-app points only and have no cash redemption value. App Review can create a normal email/password account or use the demo account supplied in App Store Connect. UGC moderation is available through Report content, Block a user, and support@summoner.world.",
+  "demoAccount": {
+    "email": "appreview@summoner.world",
+    "passwordSecret": "APP_REVIEW_DEMO_PASSWORD",
+    "status": "set in App Store Connect before binary submission"
+  },
+  "moderation": {
+    "reportContent": true,
+    "blockUser": true,
+    "supportContact": "support@summoner.world"
+  },
+  "privacyNutrition": {
+    "tracking": false,
+    "dataLinkedToUser": [
+      "Email Address",
+      "User ID",
+      "User Generated Content"
+    ],
+    "purposes": [
+      "App Functionality",
+      "Developer Communications"
+    ]
+  }
+}
