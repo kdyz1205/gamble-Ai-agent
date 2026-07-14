@@ -23,15 +23,15 @@ export default function RitualButton({
 
   return (
     <motion.button
-      className={`relative isolate overflow-hidden rounded-md font-semibold uppercase tracking-[0.14em] outline-none transition disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-[#ff8fdc] ${className}`}
+      className={`relative isolate overflow-hidden rounded-full font-extrabold outline-none transition disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-4 focus-visible:ring-[rgba(255,185,120,0.36)] ${className}`}
       disabled={disabled}
       style={{
         background: primary
-          ? `linear-gradient(90deg, ${sceneTokens.color.gold}, ${sceneTokens.color.violet})`
-          : "rgba(244,239,255,0.035)",
-        border: `1px solid ${primary ? "rgba(255,206,239,0.58)" : sceneTokens.color.line}`,
+          ? "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))"
+          : "rgba(255,255,255,0.74)",
+        border: `1px solid ${primary ? "rgba(255,185,120,0.62)" : sceneTokens.color.line}`,
         boxShadow: primary && !disabled ? sceneTokens.shadow.gold : "none",
-        color: primary ? "#fff7fd" : sceneTokens.color.text,
+        color: sceneTokens.color.text,
         ...style,
       }}
       {...(!disabled ? sceneMotion.hoverLift : {})}
@@ -44,7 +44,7 @@ export default function RitualButton({
         style={{
           background: primary
             ? "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.24) 42%, transparent 58%)"
-            : "radial-gradient(circle at 50% 50%, rgba(255,79,189,0.12), transparent 64%)",
+            : "radial-gradient(circle at 50% 50%, rgba(143,230,193,0.2), transparent 64%)",
           opacity: primary ? 0.42 : 0.2,
           x: "-120%",
         }}

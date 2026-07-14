@@ -1,123 +1,65 @@
-import RitualForgeEffects from "@/components/rituals/RitualForgeEffects";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import RitualButton from "@/components/scene/RitualButton";
 import SceneShell from "@/components/scene/SceneShell";
-import QuixMark from "@/components/scene/QuixMark";
-import { sceneTokens } from "@/lib/scene/scene-tokens";
 
-const upgrades = [
-  {
-    name: "Edge Amplifier",
-    effect: "+6 XP streak",
-    status: "Ready",
-    detail: "Sharpens Familiar prep before the next live quest.",
-  },
-  {
-    name: "Oracle Lens",
-    effect: "+12 proof clarity",
-    status: "Charging",
-    detail: "Filters noisy proof into review-ready signal.",
-  },
-  {
-    name: "Seal Resonance",
-    effect: "+3 rule checks",
-    status: "Ready",
-    detail: "Stabilizes quest language before commitment.",
-  },
+const familiarSkills = [
+  { name: "Proof Scout", effect: "Finds missing player and timing details", status: "Ready" as const, tone: "var(--sum-mint)" },
+  { name: "Fair Rule Lens", effect: "Flags ambiguous win conditions before publish", status: "Learning" as const, tone: "var(--sum-sun)" },
+  { name: "Receipt Spark", effect: "Turns a settled result into a shareable story", status: "Ready" as const, tone: "var(--sum-peach)" },
 ] as const;
 
-const forgeQueue = [
-  ["Primary Core", "OracleX resonance", "92%"],
-  ["Trait Feed", "Edge Amplifier I", "68%"],
-  ["Seal Memory", "Quest rules", "84%"],
-] as const;
-
-const telemetry = [
-  ["Familiar Bias", "Proof clarity"],
-  ["Stability", "System green"],
-  ["Safety Gate", "No result move"],
+const trainingPath = [
+  ["Listen", "Understands a natural challenge"],
+  ["Clarify", "Asks only for missing terms"],
+  ["Review", "Checks proof without guessing"],
+  ["Explain", "Creates a readable result receipt"],
 ] as const;
 
 export default function RitualsPage() {
   return (
-    <SceneShell activePath="/rituals" particleCount={44} tone="contract">
-      <section className="mx-auto flex min-h-[calc(100svh-72px)] w-full max-w-[1500px] flex-col gap-3 px-3 py-3 sm:px-5 lg:px-6">
-        <header className="relative z-10 flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
+    <SceneShell activePath="/rituals" particleCount={24} tone="contract">
+      <section className="mx-auto w-full max-w-[1240px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
+        <header className="flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.34em]" style={{ color: sceneTokens.color.gold }}>
-              Familiars / Prep
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold leading-[1.08] tracking-[0.02em] sm:text-4xl" style={{ color: sceneTokens.color.text }}>
-              Prepare your Familiar.
-            </h1>
+            <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em]">Familiar grove</span>
+            <h1 className="mt-3 text-3xl font-extrabold leading-none text-[color:var(--sum-ink)] sm:text-4xl">Grow a clearer, fairer Familiar.</h1>
           </div>
-          <p className="max-w-xl text-sm leading-6 lg:text-right" style={{ color: sceneTokens.color.textMuted }}>
-            Upgrade traits before the next quest. Every prep step strengthens proof quality, Familiar clarity, or quest integrity.
+          <p className="max-w-xl text-sm font-semibold leading-6 text-[color:var(--sum-muted)] lg:text-right">
+            Familiar skills improve how a quest is explained and reviewed. They never bypass consent, move credits, or invent a winner.
           </p>
         </header>
 
-        <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(230px,0.78fr)_minmax(420px,1.28fr)_minmax(230px,0.78fr)]">
-          <RitualQueuePanel />
-          <ForgeChamber />
-          <TelemetryPanel />
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(260px,0.8fr)_minmax(420px,1.25fr)_minmax(260px,0.8fr)]">
+          <TrainingPath />
+          <FamiliarHome />
+          <SafetyPanel />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          {upgrades.map((upgrade) => (
-            <UpgradeCard key={upgrade.name} {...upgrade} />
-          ))}
-        </div>
+        <section className="mt-4" aria-labelledby="skills-title">
+          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+            <h2 className="text-xl font-extrabold text-[color:var(--sum-ink)]" id="skills-title">Pico&apos;s skills</h2>
+            <span className="text-xs font-semibold text-[color:var(--sum-muted)]">Presentation and judgment support only</span>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {familiarSkills.map((skill) => <SkillCard key={skill.name} {...skill} />)}
+          </div>
+        </section>
       </section>
     </SceneShell>
   );
 }
 
-function RitualQueuePanel() {
+function TrainingPath() {
   return (
-    <aside
-      className="qx-award-surface relative isolate order-2 overflow-hidden rounded-lg p-3.5 lg:order-none"
-      data-testid="ritual-queue-panel"
-      style={{
-        background: "linear-gradient(180deg, rgba(18,4,28,0.78), rgba(5,0,10,0.78))",
-        border: `1px solid ${sceneTokens.color.lineStrong}`,
-        boxShadow: sceneTokens.shadow.panel,
-      }}
-    >
-      <span aria-hidden className="qx-corner-frame" />
-      <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: sceneTokens.color.gold }}>
-        Familiar Queue
-      </p>
-      <div className="mt-3 space-y-2.5">
-        {forgeQueue.map(([label, value, progress]) => (
-          <div
-            className="rounded-lg p-3"
-            key={label}
-            style={{
-              background: "rgba(244,239,255,0.035)",
-              border: `1px solid ${sceneTokens.color.line}`,
-            }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold" style={{ color: sceneTokens.color.text }}>
-                  {label}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: sceneTokens.color.textMuted }}>
-                  {value}
-                </p>
-              </div>
-              <p className="text-sm font-semibold tabular-nums" style={{ color: sceneTokens.color.gold }}>
-                {progress}
-              </p>
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(244,239,255,0.08)" }}>
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: progress,
-                  background: `linear-gradient(90deg, ${sceneTokens.color.gold}, ${sceneTokens.color.violet}, ${sceneTokens.color.cyan})`,
-                  boxShadow: sceneTokens.shadow.gold,
-                }}
-              />
+    <aside className="sum-world-panel p-4" data-testid="ritual-queue-panel">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Training path</p>
+      <div className="mt-3 space-y-2">
+        {trainingPath.map(([label, detail], index) => (
+          <div className="flex gap-3 rounded-[18px] border border-[color:var(--sum-border)] bg-white/72 p-3" key={label}>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--sum-mint)] text-xs font-extrabold text-[color:var(--sum-ink)]">{index + 1}</span>
+            <div>
+              <h2 className="text-sm font-extrabold text-[color:var(--sum-ink)]">{label}</h2>
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-[color:var(--sum-muted)]">{detail}</p>
             </div>
           </div>
         ))}
@@ -126,170 +68,60 @@ function RitualQueuePanel() {
   );
 }
 
-function ForgeChamber() {
+function FamiliarHome() {
   return (
-    <section
-      className="qx-award-surface relative isolate order-1 min-h-[360px] overflow-hidden rounded-lg lg:order-none lg:min-h-[430px]"
-      data-testid="ritual-forge-chamber"
-      style={{
-        background:
-          "linear-gradient(180deg, rgba(3,0,8,0.04), rgba(3,0,8,0.46) 58%, rgba(3,0,8,0.9)), url('/scene/quixnova/rituals/proof-crystal.png')",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundSize: "cover",
-        border: `1px solid ${sceneTokens.color.lineStrong}`,
-        boxShadow: sceneTokens.shadow.seal,
-      }}
-    >
-      <span aria-hidden className="qx-corner-frame" />
-      <RitualForgeEffects className="z-[2] hidden opacity-90 sm:block" />
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-[45%] z-[1] h-[62%] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80"
-        style={{
-          background: "radial-gradient(ellipse at 50% 50%, rgba(255,79,189,0.28), rgba(139,61,255,0.18) 36%, transparent 70%)",
-          filter: "blur(18px)",
-          mixBlendMode: "screen",
-        }}
-      />
-      <div className="absolute inset-0 z-10 grid place-items-center">
-        <div
-          className="grid h-28 w-28 place-items-center rounded-full sm:h-36 sm:w-36"
-          style={{
-            background: "radial-gradient(circle, rgba(255,79,189,0.18), rgba(5,0,10,0.24) 64%)",
-            border: `1px solid ${sceneTokens.color.lineStrong}`,
-            boxShadow: "0 0 66px rgba(255,79,189,0.28), inset 0 0 42px rgba(139,61,255,0.16)",
-            color: sceneTokens.color.gold,
-          }}
-        >
-          <QuixMark className="h-14 w-14 sm:h-20 sm:w-20" />
+    <section className="sum-world-panel relative isolate min-h-[430px] overflow-hidden p-5 text-center sm:p-6" data-testid="ritual-forge-chamber">
+      <div className="absolute -right-14 -top-14 h-44 w-44 rounded-full bg-[color:var(--sum-sun)] opacity-30 blur-3xl" aria-hidden />
+      <div className="absolute -bottom-14 -left-10 h-40 w-40 rounded-full bg-[color:var(--sum-mint)] opacity-35 blur-3xl" aria-hidden />
+      <div className="relative">
+        <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]">Pico · Level 1</span>
+        <PicoFamiliar className="mx-auto mt-3 h-44 w-44" mood="celebrate" />
+        <h2 className="mt-1 text-2xl font-extrabold text-[color:var(--sum-ink)]">Proof-ready companion</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">Pico learns how to make rules clearer, surface uncertainty, and explain a result in language friends can trust.</p>
+        <div className="mx-auto mt-4 max-w-sm rounded-full bg-[rgba(96,117,138,0.12)] p-1">
+          <div className="h-2 w-[72%] rounded-full bg-[color:var(--sum-mint)]" />
         </div>
-      </div>
-      <div
-        className="absolute inset-x-5 bottom-4 z-20 rounded-lg px-4 py-3 text-center sm:inset-x-[18%]"
-        style={{
-          background: "linear-gradient(180deg, rgba(255,79,189,0.12), rgba(5,0,10,0.78))",
-          border: `1px solid ${sceneTokens.color.lineStrong}`,
-          boxShadow: "0 0 48px rgba(255,79,189,0.2), inset 0 0 44px rgba(255,79,189,0.06)",
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: sceneTokens.color.gold }}>
-          Familiar Prep
-        </p>
-        <RitualButton className="mt-2 min-h-11 w-full px-8 text-xs sm:w-auto" data-testid="begin-fusion-button" type="button">
-          Begin Prep
-        </RitualButton>
+        <p className="mt-2 text-[11px] font-extrabold text-[#2a9f84]">72% to next skill</p>
+        <RitualButton className="mt-4 min-h-12 px-8 text-sm" data-testid="begin-fusion-button" type="button">Practice a sample quest</RitualButton>
       </div>
     </section>
   );
 }
 
-function TelemetryPanel() {
+function SafetyPanel() {
   return (
-    <aside
-      className="qx-award-surface relative isolate order-3 overflow-hidden rounded-lg p-3.5 lg:order-none"
-      data-testid="ritual-telemetry-panel"
-      style={{
-        background: "linear-gradient(180deg, rgba(18,4,28,0.78), rgba(5,0,10,0.78))",
-        border: `1px solid ${sceneTokens.color.lineStrong}`,
-        boxShadow: sceneTokens.shadow.panel,
-      }}
-    >
-      <span aria-hidden className="qx-corner-frame" />
-      <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: sceneTokens.color.gold }}>
-        Resonance
-      </p>
-      <div className="mt-3 grid gap-2.5">
-        {telemetry.map(([label, value]) => (
-          <div
-            className="rounded-lg p-3"
-            key={label}
-            style={{
-              background: "rgba(244,239,255,0.035)",
-              border: `1px solid ${sceneTokens.color.line}`,
-            }}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: sceneTokens.color.textFaint }}>
-              {label}
-            </p>
-            <p className="mt-2 text-sm font-semibold" style={{ color: sceneTokens.color.text }}>
-              {value}
-            </p>
+    <aside className="sum-world-panel p-4" data-testid="ritual-telemetry-panel">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Familiar promises</p>
+      <div className="mt-3 space-y-2">
+        {[
+          ["No guessing", "Unclear proof becomes review"],
+          ["No hidden moves", "Credits update only through settlement"],
+          ["No secret rules", "Both people see the same quest card"],
+        ].map(([label, value]) => (
+          <div className="rounded-[18px] border border-[color:var(--sum-border)] bg-white/72 p-3" key={label}>
+            <h2 className="text-sm font-extrabold text-[color:var(--sum-ink)]">{label}</h2>
+            <p className="mt-1 text-[11px] font-semibold leading-5 text-[color:var(--sum-muted)]">{value}</p>
           </div>
         ))}
       </div>
-      <div
-        className="mt-3 rounded-lg p-3"
-        style={{
-          background: "linear-gradient(135deg, rgba(0,240,181,0.08), rgba(255,79,189,0.07))",
-          border: "1px solid rgba(0,240,181,0.22)",
-        }}
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: sceneTokens.color.cyan }}>
-          Output
-        </p>
-        <p className="mt-2 text-sm leading-5" style={{ color: sceneTokens.color.textMuted }}>
-          Safer Familiar upgrades without moving credits, proof, or result state.
-        </p>
-      </div>
+      <p className="mt-3 rounded-[18px] border border-[rgba(143,230,193,0.54)] bg-[rgba(143,230,193,0.18)] p-3 text-xs font-semibold leading-5 text-[color:var(--sum-ink)]">
+        Familiar growth changes presentation and review quality—not challenge state, participant consent, or settlement authority.
+      </p>
     </aside>
   );
 }
 
-function UpgradeCard({
-  detail,
-  effect,
-  name,
-  status,
-}: {
-  detail: string;
-  effect: string;
-  name: string;
-  status: "Ready" | "Charging";
-}) {
+function SkillCard({ effect, name, status, tone }: { effect: string; name: string; status: "Ready" | "Learning"; tone: string }) {
   const ready = status === "Ready";
-
   return (
-    <article
-      className="qx-award-card relative isolate overflow-hidden rounded-lg p-4"
-      data-testid={`ritual-upgrade-${name.toLowerCase().replaceAll(" ", "-")}`}
-      style={{
-        background: "linear-gradient(180deg, rgba(18,4,28,0.84), rgba(5,0,10,0.74))",
-        border: `1px solid ${ready ? sceneTokens.color.lineStrong : sceneTokens.color.line}`,
-        boxShadow: ready ? "0 0 42px rgba(255,79,189,0.1)" : "none",
-      }}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.24em]" style={{ color: ready ? sceneTokens.color.gold : sceneTokens.color.textFaint }}>
-        {status}
-      </p>
-      <div className="mt-3 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold" style={{ color: sceneTokens.color.text }}>
-            {name}
-          </h2>
-          <p className="mt-1 text-sm" style={{ color: sceneTokens.color.textMuted }}>
-            {effect}
-          </p>
-        </div>
-        <span
-          aria-hidden
-          className="h-9 w-9 rotate-45 rounded-md"
-          style={{
-            background: ready
-              ? `linear-gradient(135deg, ${sceneTokens.color.gold}, ${sceneTokens.color.violet})`
-              : "rgba(244,239,255,0.055)",
-            border: `1px solid ${ready ? sceneTokens.color.lineStrong : sceneTokens.color.line}`,
-            boxShadow: ready ? sceneTokens.shadow.gold : "none",
-          }}
-        />
+    <article className="sum-world-panel p-4" data-testid={`ritual-upgrade-${name.toLowerCase().replaceAll(" ", "-")}`}>
+      <div className="flex items-start justify-between gap-3">
+        <span className="rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--sum-ink)]" style={{ background: tone }}>{status}</span>
+        <span className="sum-quest-orb" />
       </div>
-      <p className="mt-3 min-h-10 text-sm leading-5" style={{ color: sceneTokens.color.textMuted }}>
-        {detail}
-      </p>
-      <RitualButton className="mt-4 min-h-11 w-full text-xs" disabled={!ready} type="button" variant={ready ? "primary" : "ghost"}>
-        {ready ? "Begin Prep" : "Charging"}
-      </RitualButton>
+      <h2 className="mt-4 text-xl font-extrabold text-[color:var(--sum-ink)]">{name}</h2>
+      <p className="mt-2 min-h-10 text-sm font-semibold leading-5 text-[color:var(--sum-muted)]">{effect}</p>
+      <RitualButton className="mt-4 min-h-11 w-full text-xs" disabled={!ready} type="button" variant={ready ? "primary" : "ghost"}>{ready ? "Practice" : "Learning"}</RitualButton>
     </article>
   );
 }
