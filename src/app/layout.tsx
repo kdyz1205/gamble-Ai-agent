@@ -3,6 +3,7 @@ import Providers from "@/components/Providers";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
 import "./globals.css";
+import "./summoner-world.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
@@ -31,7 +32,7 @@ export const viewport: Viewport = {
   userScalable: false,
   viewportFit: "cover",
   themeColor: "#E0F2FE",
-  colorScheme: "dark",
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -70,8 +71,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className="min-h-screen antialiased"
         style={{
-          background: "#03020a",
-          color: "#f4efff",
+          background: "var(--sum-sky)",
+          color: "var(--sum-ink)",
         }}
       >
         <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>

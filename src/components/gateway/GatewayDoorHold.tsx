@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
 const HOLD_MS = 1650;
 const ROUTE_DELAY_MS = 2180;
@@ -123,11 +124,11 @@ export default function GatewayDoorHold() {
             }}
             transition={{ duration: isOpening ? 0.8 : 0.2 }}
           >
-            F
+            <PicoFamiliar className="h-14 w-14" />
           </motion.div>
           <div className="min-w-0">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>
-              AI familiar
+              Pico · AI Familiar
             </p>
             <p className="text-base font-extrabold leading-tight sm:text-lg">Ready to referee your next quest</p>
           </div>

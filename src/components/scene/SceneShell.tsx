@@ -23,7 +23,7 @@ export default function SceneShell({
   topBarRight,
 }: SceneShellProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden" style={{ color: sceneTokens.color.text }}>
+    <main className="sum-world-shell relative min-h-screen overflow-hidden" style={{ color: sceneTokens.color.text }}>
       <SceneBackground tone={tone} particleCount={particleCount} />
       <SceneTopBar rightSlot={topBarRight} />
       {showSidebar && <SceneMobileNav active={activePath} />}

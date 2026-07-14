@@ -1,7 +1,5 @@
 import ParticleField from "@/components/scene/ParticleField";
-import SceneAtmosphereEffects from "@/components/scene/SceneAtmosphereEffects";
-import SceneFog from "@/components/scene/SceneFog";
-import { sceneTokens, type SceneTone } from "@/lib/scene/scene-tokens";
+import type { SceneTone } from "@/lib/scene/scene-tokens";
 
 interface SceneBackgroundProps {
   tone?: SceneTone;
@@ -9,44 +7,30 @@ interface SceneBackgroundProps {
 }
 
 export default function SceneBackground({ tone = "gateway", particleCount = 72 }: SceneBackgroundProps) {
-  const background =
-    tone === "world"
-      ? "radial-gradient(circle at 48% 18%, rgba(255,79,189,0.18), transparent 25%), radial-gradient(circle at 72% 46%, rgba(139,61,255,0.16), transparent 30%), radial-gradient(circle at 28% 62%, rgba(255,47,143,0.12), transparent 28%), linear-gradient(180deg, #030006 0%, #080012 44%, #030006 100%)"
-      : tone === "contract"
-        ? `radial-gradient(circle at 50% 48%, rgba(255,79,189,0.18), transparent 28%), linear-gradient(180deg, ${sceneTokens.color.void} 0%, ${sceneTokens.color.deep} 48%, ${sceneTokens.color.veil} 100%)`
-        : `radial-gradient(circle at 50% 42%, rgba(255,79,189,0.16), transparent 32%), linear-gradient(180deg, ${sceneTokens.color.void} 0%, ${sceneTokens.color.deep} 48%, ${sceneTokens.color.veil} 100%)`;
+  const warmth = tone === "contract" ? "rgba(255,185,120,0.26)" : "rgba(255,216,107,0.24)";
 
   return (
     <div
+      aria-hidden
       className="absolute inset-0 overflow-hidden"
       style={{
-        background,
-        backgroundPosition: "center center",
-        backgroundRepeat: "no-repeat",
+        background: `radial-gradient(circle at 76% 12%, ${warmth}, transparent 24%), radial-gradient(circle at 16% 28%, rgba(143,230,193,0.34), transparent 28%), linear-gradient(180deg, #dff5ff 0%, #eefaff 52%, #e9fbdc 100%)`,
       }}
-      aria-hidden
     >
       <div
-        className="absolute inset-0 opacity-[0.06]"
+        className="absolute inset-0 opacity-60"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(255,79,189,0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(139,61,255,0.13) 1px, transparent 1px)",
-          backgroundSize: "112px 112px",
-          maskImage: "radial-gradient(circle at 50% 42%, black 0%, transparent 72%)",
+            "linear-gradient(rgba(78,148,171,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(78,148,171,0.09) 1px, transparent 1px)",
+          backgroundSize: "42px 42px",
+          maskImage: "linear-gradient(180deg, transparent, black 24%, black 82%, transparent)",
         }}
       />
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 52% 18%, rgba(255,79,189,0.2), transparent 24%), radial-gradient(circle at 76% 64%, rgba(139,61,255,0.14), transparent 28%), radial-gradient(circle at 28% 62%, rgba(255,47,143,0.12), transparent 28%)",
-          mixBlendMode: "screen",
-          opacity: 0.9,
-        }}
-      />
-      <SceneAtmosphereEffects className="hidden opacity-80 sm:block" />
-      <SceneFog />
-      <ParticleField count={particleCount} />
+      <div className="absolute -left-16 bottom-[-7rem] h-64 w-[46%] rounded-[50%] bg-[color:var(--sum-grass)] opacity-80 blur-[1px]" />
+      <div className="absolute -right-20 bottom-[-8rem] h-72 w-[54%] rounded-[50%] bg-[color:var(--sum-mint)] opacity-48 blur-[1px]" />
+      <div className="absolute left-[8%] top-[12%] h-6 w-24 rounded-full bg-white/70 blur-sm" />
+      <div className="absolute right-[13%] top-[21%] h-8 w-32 rounded-full bg-white/72 blur-sm" />
+      <ParticleField count={Math.min(particleCount, 38)} />
     </div>
   );
 }

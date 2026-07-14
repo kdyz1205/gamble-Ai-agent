@@ -9,12 +9,12 @@ import * as api from "@/lib/api-client";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
 const proofOptions = ["24 hours", "72 hours", "7 days"] as const;
-const promptChips = ["Friend duel", "Proof challenge", "Group quest", "Debate receipt"] as const;
+const promptChips = ["Friend match", "Fitness quest", "Habit streak", "Skill challenge"] as const;
 const placeholderExamples = [
-  "I can do 20 pushups in 60 seconds…",
-  "Challenge Alex to a Mario Kart score battle…",
+  "First to win 3 badminton rallies...",
+  "I can do 20 pushups in 60 seconds...",
   "Who can hold a plank longer?",
-  "BTC closes above 120k tomorrow…",
+  "Challenge Alex to a Mario Kart score battle...",
 ] as const;
 type CastPhase = "idle" | "charging" | "binding" | "sealing" | "settling";
 
@@ -44,6 +44,9 @@ export default function PactComposer() {
   const resultRef = useRef<HTMLElement>(null);
   const castTimersRef = useRef<number[]>([]);
   const publishRequestIdRef = useRef<string | null>(null);
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceChunksRef = useRef<Blob[]>([]);
   const [input, setInput] = useState("");
   const [stake, setStake] = useState("50");
   const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
@@ -55,6 +58,8 @@ export default function PactComposer() {
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [marketUrl, setMarketUrl] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const canSubmit = Boolean(input.trim()) && !isSubmitting;
   const latestReply = useMemo(() => turns.filter((turn) => turn.role === "ai").at(-1), [turns]);
@@ -104,6 +109,11 @@ export default function PactComposer() {
     return () => {
       window.clearInterval(timer);
       clearCastTimers();
+      if (voiceRecorderRef.current?.state === "recording") {
+        voiceRecorderRef.current.onstop = null;
+        voiceRecorderRef.current.stop();
+      }
+      voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -143,6 +153,93 @@ export default function PactComposer() {
 
   function handleInput(event: FormEvent<HTMLTextAreaElement>) {
     setInput(event.currentTarget.value);
+  }
+
+  function stopVoiceTracks() {
+    voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
+    voiceStreamRef.current = null;
+  }
+
+  async function transcribeVoice(recorder: MediaRecorder) {
+    const blob = new Blob(voiceChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+    voiceChunksRef.current = [];
+    if (!blob.size) return;
+
+    setIsTranscribing(true);
+    setError(null);
+    try {
+      const response = await api.transcribeAudio(blob);
+      const transcript = response.transcript.trim();
+      if (!transcript) {
+        setError("Pico could not hear a clear sentence. Try again closer to the microphone.");
+        return;
+      }
+      setInput((current) => current.trim() ? `${current.trimEnd()} ${transcript}` : transcript);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not transcribe voice";
+      if (/401|unauthorized/i.test(message)) {
+        setError("Sign in before using voice transcription.");
+        setAuthOpen(true);
+      } else {
+        setError(message);
+      }
+    } finally {
+      setIsTranscribing(false);
+    }
+  }
+
+  async function toggleVoiceInput() {
+    if (isRecording) {
+      voiceRecorderRef.current?.stop();
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setError("This browser does not support microphone recording.");
+      return;
+    }
+
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceStreamRef.current = stream;
+      voiceChunksRef.current = [];
+      const mimeCandidates = [
+        "audio/webm;codecs=opus",
+        "audio/ogg;codecs=opus",
+        "audio/mp4;codecs=mp4a.40.2",
+        "audio/mp4",
+        "audio/webm",
+        "audio/aac",
+      ];
+      const mimeType = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+      let recorder: MediaRecorder;
+      try {
+        recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
+      voiceRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) voiceChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setIsRecording(false);
+        stopVoiceTracks();
+        setError("Microphone recording stopped unexpectedly.");
+      };
+      recorder.onstop = () => {
+        setIsRecording(false);
+        stopVoiceTracks();
+        void transcribeVoice(recorder);
+      };
+      recorder.start(250);
+      setIsRecording(true);
+    } catch (err) {
+      stopVoiceTracks();
+      setError(err instanceof Error ? err.message : "Microphone access was not granted.");
+    }
   }
 
   function draftWithSelectedSettings(base = draftState): api.AgentDraftState {
@@ -267,7 +364,7 @@ export default function PactComposer() {
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-            Quest Contract
+            Quest card
           </p>
           <h2 className="mt-1.5 max-w-[44rem] text-lg font-semibold leading-[1.12] sm:text-2xl">
             {resultTitle}
@@ -465,7 +562,7 @@ export default function PactComposer() {
                     return (
                       <button
                         key={option}
-                        className="min-h-6 rounded-md px-2 text-[10px] font-semibold transition"
+                        className="min-h-10 rounded-xl px-2 text-[10px] font-semibold transition"
                         onClick={() => {
                           setOpponentMode(option);
                           setDraftState((current) => ({
@@ -502,7 +599,7 @@ export default function PactComposer() {
                     return (
                       <button
                         key={option}
-                        className="min-h-6 rounded-md px-2 text-[10px] font-semibold transition"
+                        className="min-h-10 rounded-xl px-2 text-[10px] font-semibold transition"
                         onClick={() => {
                           setProofWindow(option);
                           setDraftState((current) => ({ ...current, timeWindow: option }));
@@ -523,7 +620,7 @@ export default function PactComposer() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_150px]">
+            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_56px_150px]">
               <textarea
                 className="qx-challenge-input min-h-[9rem] w-full resize-none rounded-[22px] bg-white/85 p-4 text-base font-semibold leading-6 outline-none placeholder:font-semibold sm:min-h-[10rem]"
                 data-live={hasInput ? "true" : "false"}
@@ -539,6 +636,32 @@ export default function PactComposer() {
                 }}
                 value={input}
               />
+              <button
+                aria-label={isRecording ? "Stop voice recording" : "Describe quest by voice"}
+                className="grid min-h-14 place-items-center rounded-full border text-[11px] font-extrabold transition hover:-translate-y-0.5 sm:min-h-16"
+                disabled={isSubmitting || isTranscribing}
+                onClick={() => { void toggleVoiceInput(); }}
+                style={{
+                  background: isRecording ? "#fecaca" : "rgba(255,255,255,0.88)",
+                  borderColor: isRecording ? "#fca5a5" : "var(--sum-border)",
+                  color: isRecording ? "#991b1b" : "var(--sum-ink)",
+                  boxShadow: isRecording ? "0 0 0 5px rgba(252,165,165,0.2)" : "0 10px 22px rgba(40,102,133,0.08)",
+                }}
+                title={isRecording ? "Stop recording" : "Speak your challenge"}
+                type="button"
+              >
+                <span aria-hidden className="grid h-5 w-5 place-items-center">
+                  {isRecording ? (
+                    <span className="h-3 w-3 rounded-[3px] bg-current" />
+                  ) : (
+                    <svg fill="none" height="20" viewBox="0 0 24 24" width="20">
+                      <rect height="11" rx="4" stroke="currentColor" strokeWidth="2" width="7" x="8.5" y="2.5" />
+                      <path d="M5 10.5C5 14.37 8.13 17.5 12 17.5C15.87 17.5 19 14.37 19 10.5M12 17.5V21M9 21H15" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+                    </svg>
+                  )}
+                </span>
+                <span>{isTranscribing ? "..." : isRecording ? "Stop" : "Voice"}</span>
+              </button>
               <RitualButton
                 aria-label="Summon"
                 className="qx-generate-button min-h-14 rounded-full px-5 text-sm normal-case tracking-normal sm:min-h-16"
@@ -553,7 +676,7 @@ export default function PactComposer() {
                 }}
                 type="submit"
               >
-                {isSubmitting ? "Summoning…" : "Summon"}
+                {isSubmitting ? "Summoning..." : "Summon"}
               </RitualButton>
             </div>
 
@@ -631,7 +754,7 @@ export default function PactComposer() {
 
           <aside className="hidden rounded-[20px] p-3 min-[1660px]:block" style={{ border: "1px solid var(--sum-border)", background: "rgba(255,255,255,0.72)" }}>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-              Quest Contract
+              Quest card
             </p>
             <h3 className="mt-3 text-base font-extrabold leading-tight" style={{ color: "var(--sum-ink)" }}>
               {displayChallengeTitle}

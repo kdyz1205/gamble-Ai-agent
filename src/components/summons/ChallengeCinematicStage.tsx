@@ -1,127 +1,67 @@
-import type { CSSProperties } from "react";
-import QuixMark from "@/components/scene/QuixMark";
-import { sceneTokens } from "@/lib/scene/scene-tokens";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
-const telemetry = [
-  ["Input", "Natural language"],
-  ["Credits", "Internal only"],
-  ["Proof", "Proof timed"],
-] as const;
-
-const contractRows = [
-  ["Quest", "measurable challenge"],
-  ["Credits", "internal credits + invite mode"],
-  ["Proof", "proof source + deadline"],
-  ["Familiar", "AI reasoning + receipt"],
-] as const;
-
-const engineHud = [
-  ["Parse", "intent becomes terms"],
-  ["Compile", "credits attach to rules"],
-  ["Referee", "proof becomes result"],
-  ["Receipt", "share trail remains"],
-] as const;
-
-const engineParticles = Array.from({ length: 10 }, (_, index) => index);
+const rallyTrail = ["1–0", "1–1", "2–1", "2–2", "3–2"] as const;
 
 export default function ChallengeCinematicStage() {
   return (
-    <aside
-      className="qx-award-surface qx-cinematic-stage relative isolate hidden h-full min-h-[640px] overflow-hidden rounded-lg p-5 xl:block"
-      data-testid="challenge-cinematic-stage"
-      style={{
-        background:
-          "linear-gradient(135deg, rgba(10,0,18,0.86), rgba(3,0,8,0.76)), radial-gradient(circle at 52% 18%, rgba(255,79,189,0.22), transparent 34%)",
-        border: `1px solid ${sceneTokens.color.lineStrong}`,
-        boxShadow: "0 34px 140px rgba(0,0,0,0.58), inset 0 0 96px rgba(255,79,189,0.045)",
-        backdropFilter: "blur(24px)",
-      }}
-    >
-      <span aria-hidden className="qx-stage-reference" />
-      <span aria-hidden className="qx-stage-depth" />
-      <span aria-hidden className="qx-stage-bloom" />
-      <span aria-hidden className="qx-stage-ring qx-stage-ring-a" />
-      <span aria-hidden className="qx-stage-ring qx-stage-ring-b" />
-      <span aria-hidden className="qx-stage-scan" />
-      <span aria-hidden className="qx-corner-frame" />
+    <aside className="sum-world-panel relative isolate h-full min-h-[420px] overflow-hidden p-5 sm:p-6 xl:min-h-[640px]" data-testid="challenge-cinematic-stage">
+      <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[color:var(--sum-sun)] opacity-30 blur-3xl" aria-hidden />
+      <div className="absolute -bottom-14 -left-12 h-44 w-44 rounded-full bg-[color:var(--sum-mint)] opacity-35 blur-3xl" aria-hidden />
 
-      <div className="qx-engine-header relative z-10 flex items-start justify-between gap-5">
+      <div className="relative flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: sceneTokens.color.gold }}>
-            Quest Engine
-          </p>
-          <h2 className="mt-3 text-4xl font-semibold leading-[0.96] min-[1440px]:text-5xl" style={{ color: sceneTokens.color.text }}>
-            Summon
-            <span className="block" style={{ color: sceneTokens.color.gold }}>
-              the quest.
-            </span>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-[color:var(--sum-muted)]">Meet your proof scout</p>
+          <h2 className="mt-2 text-3xl font-extrabold leading-[1.02] text-[color:var(--sum-ink)] sm:text-4xl">
+            Pico makes friend challenges clear.
           </h2>
-          <p className="mt-3 max-w-[360px] text-sm leading-6" style={{ color: sceneTokens.color.textMuted }}>
-            A single sentence becomes rules, credits, proof, invite, and receipt path.
+          <p className="mt-3 max-w-[32rem] text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">
+            No scoreboard is required. Upload continuous proof, identify the players, and Pico checks each decisive moment before your app derives the score.
           </p>
         </div>
-        <div className="grid shrink-0 gap-1.5 text-right">
-          {telemetry.map(([label, value]) => (
-            <div key={label} className="qx-engine-telemetry rounded-md px-3 py-2">
-              <p>{label}</p>
-              <strong>{value}</strong>
+        <PicoFamiliar className="h-24 w-24 shrink-0 sm:h-28 sm:w-28" mood="referee" />
+      </div>
+
+      <section className="mt-5 rounded-[24px] border border-[color:var(--sum-border)] bg-[rgba(223,245,255,0.7)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Example quest</p>
+            <h3 className="mt-1 text-lg font-extrabold text-[color:var(--sum-ink)]">First to 3 badminton rallies</h3>
+          </div>
+          <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-extrabold">No scoreboard</span>
+        </div>
+
+        <div className="sum-path-line relative mt-5 grid grid-cols-5 gap-1">
+          {rallyTrail.map((score, index) => (
+            <div className="relative z-10 text-center" key={score}>
+              <span
+                className="mx-auto grid h-11 w-11 place-items-center rounded-full border-2 border-white text-xs font-extrabold text-[color:var(--sum-ink)] shadow-[0_8px_18px_rgba(40,102,133,0.12)]"
+                style={{ background: index % 2 === 0 ? "var(--sum-peach)" : "var(--sum-mint)" }}
+              >
+                {index + 1}
+              </span>
+              <p className="mt-2 text-[11px] font-extrabold text-[color:var(--sum-ink)]">{score}</p>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="qx-engine-theater relative z-10 mt-4 min-[1440px]:mt-5">
-        <span aria-hidden className="qx-engine-grid" />
-        <span aria-hidden className="qx-engine-horizon" />
-        <span aria-hidden className="qx-engine-halo qx-engine-halo-main" />
-        <span aria-hidden className="qx-engine-halo qx-engine-halo-secondary" />
-        <span aria-hidden className="qx-engine-beam qx-engine-beam-a" />
-        <span aria-hidden className="qx-engine-beam qx-engine-beam-b" />
-        {engineParticles.map((index) => (
-          <span
-            key={index}
-            aria-hidden
-            className="qx-engine-particle"
-            style={{
-              "--particle-index": index,
-              "--particle-left": `${12 + ((index * 17) % 76)}%`,
-              "--particle-top": `${18 + ((index * 23) % 62)}%`,
-              "--particle-delay": `${index * 180}ms`,
-            } as CSSProperties}
-          />
-        ))}
-
-        <div className="qx-engine-core">
-          <span aria-hidden className="qx-engine-core-glow" />
-          <QuixMark className="h-10 w-10" />
-        </div>
-
-        <div className="qx-engine-contract-slab">
-          <p>AI Quest Core</p>
-          <h3>Sentence to proof to receipt</h3>
-          <dl>
-            {contractRows.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
-
-      <div className="qx-engine-hud relative z-10 mt-3 grid grid-cols-4 gap-2">
-        {engineHud.map(([label, value], index) => (
-          <div
-            key={label}
-            className="qx-engine-hud-item rounded-lg p-2.5"
-            style={{ "--hud-delay": `${index * 90}ms` } as CSSProperties}
-          >
-            <p>{label}</p>
-            <span>{value}</span>
-          </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {[
+          ["01", "Describe", "Who, what, and the win condition."],
+          ["02", "Prove", "One continuous clip or clear photos."],
+          ["03", "Receive", "Reasoned result and shareable receipt."],
+        ].map(([number, title, body]) => (
+          <article className="rounded-[20px] border border-[color:var(--sum-border)] bg-white/76 p-3" key={number}>
+            <span className="text-[10px] font-extrabold text-[#e98648]">{number}</span>
+            <h3 className="mt-1 text-sm font-extrabold text-[color:var(--sum-ink)]">{title}</h3>
+            <p className="mt-1 text-[11px] font-semibold leading-5 text-[color:var(--sum-muted)]">{body}</p>
+          </article>
         ))}
       </div>
+
+      <p className="mt-4 rounded-[18px] border border-[rgba(143,230,193,0.52)] bg-[rgba(143,230,193,0.2)] px-4 py-3 text-xs font-semibold leading-5 text-[color:var(--sum-ink)]">
+        If a rally is unclear, Pico leaves the winner blank and sends it for review instead of guessing.
+      </p>
     </aside>
   );
 }

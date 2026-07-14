@@ -1,4 +1,5 @@
 import GatewayDoorHold from "@/components/gateway/GatewayDoorHold";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
 const gatewaySteps = [
   {
@@ -66,16 +67,14 @@ export default function EnterPage() {
           <div className="sum-quest-card relative overflow-hidden p-4 sm:p-5">
             <div className="absolute right-4 top-4 h-16 w-16 rounded-full bg-[color:var(--sum-sun)] opacity-30 blur-2xl" aria-hidden />
             <div className="relative flex items-center gap-3">
-              <div className="grid h-14 w-14 place-items-center rounded-3xl border border-white/80 bg-white shadow-[0_10px_24px_rgba(40,102,133,0.12)]">
-                <span className="text-2xl" aria-hidden>
-                  *
-                </span>
+              <div className="grid h-16 w-16 place-items-center rounded-3xl border border-white/80 bg-white shadow-[0_10px_24px_rgba(40,102,133,0.12)]">
+                <PicoFamiliar className="h-16 w-16" />
               </div>
               <div>
                 <p className="text-sm font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>
-                  Familiar badge
+                  Meet Pico
                 </p>
-                <p className="text-xl font-extrabold">Proof-ready referee</p>
+                <p className="text-xl font-extrabold">Your proof-ready Familiar</p>
               </div>
             </div>
 

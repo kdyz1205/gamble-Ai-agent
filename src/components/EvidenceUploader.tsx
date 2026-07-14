@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
-// LuckyPlay palette — only the tokens this component actually uses.
+// Summoner.world proof palette.
 const NAVY = "#1E293B";
 const NAVY_DIM = "#64748B";
 const NAVY_FAINT = "#E2E8F0";
@@ -255,16 +256,13 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="lp-glass"
+      className="sum-world-panel"
       style={{ borderRadius: "24px", padding: "20px", boxShadow: "0 8px 30px rgba(15,23,42,0.04)" }}
     >
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-          style={{ background: `linear-gradient(135deg, ${PEACH}, ${PINK})`, boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          📸
-        </div>
+      <div className="flex items-center gap-3 mb-4">
+        <PicoFamiliar className="h-12 w-12 shrink-0" mood="referee" />
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: PEACH_DARK }}>Your proof</p>
+          <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: PEACH_DARK }}>Proof portal</p>
           <p className="text-xs font-medium" style={{ color: NAVY_DIM }}>Record live, upload, or paste so the Familiar can referee.</p>
         </div>
       </div>
