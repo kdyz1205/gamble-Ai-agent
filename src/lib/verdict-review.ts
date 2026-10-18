@@ -2,6 +2,7 @@ import prisma from "@/lib/db";
 import { ChallengeStatus } from "@/lib/enums";
 import { settleChallenge } from "@/lib/credits";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
+import type { Prisma } from "@/generated/prisma/client";
 
 export const VerdictDecision = {
   accepted: "accepted",
@@ -59,9 +60,9 @@ export async function ensureAutomaticReviewCase(input: {
   challengeId: string;
   judgmentId: string;
   reason: string;
-}): Promise<void> {
+}, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<void> {
   const now = new Date();
-  await prisma.reviewCase.upsert({
+  await db.reviewCase.upsert({
     where: { challengeId: input.challengeId },
     create: {
       challengeId: input.challengeId,
@@ -73,11 +74,11 @@ export async function ensureAutomaticReviewCase(input: {
     },
     update: {},
   });
-  await appendAuditLog({
+  await db.auditLog.create({ data: {
     action: AuditActions.REVIEW_REQUESTED,
     challengeId: input.challengeId,
-    payload: { source: "automatic_low_confidence", judgmentId: input.judgmentId, reason: input.reason.slice(0, 500) },
-  });
+    payload: JSON.stringify({ source: "automatic_low_confidence", judgmentId: input.judgmentId, reason: input.reason.slice(0, 500) }),
+  } });
 }
 
 async function finalizeOutcome(input: {
@@ -166,7 +167,7 @@ export async function recordVerdictDecision(input: {
     where: { id: input.challengeId },
     include: {
       participants: { where: { status: "accepted" }, select: { userId: true } },
-      judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
+      judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
       verdictResponses: true,
       reviewCase: true,
     },
@@ -182,7 +183,7 @@ export async function recordVerdictDecision(input: {
     throw new ReviewFlowError(`Verdict response is not allowed in status ${challenge.status}`, 409);
   }
   const judgment = challenge.judgments[0];
-  if (!judgment) throw new ReviewFlowError("No completed AI recommendation found", 400);
+  if (!judgment) throw new ReviewFlowError("No completed recommendation found", 400);
 
   if (input.decision === VerdictDecision.reviewRequested) {
     const reason = input.reason?.trim() ?? "";
@@ -279,7 +280,7 @@ async function resolveReviewCaseCore(input: {
       challenge: {
         include: {
           participants: { where: { status: "accepted" }, select: { userId: true } },
-          judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
+          judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
         },
       },
     },
@@ -338,7 +339,7 @@ async function resolveReviewCaseCore(input: {
         challenge: {
           include: {
             participants: { where: { status: "accepted" }, select: { userId: true } },
-            judgments: { where: { method: "ai", status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
+            judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
           },
         },
       },

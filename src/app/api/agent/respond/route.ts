@@ -22,6 +22,7 @@ import { getAuthUser, unauthorized } from "@/lib/auth";
 import { publishAgentDraft, runAgentTurn } from "@/lib/agent/orchestrator";
 import { normalizeDraftState } from "@/lib/agent/draft-policy";
 import { emptyDraftState, type AgentMessage, type DraftState } from "@/lib/agent/types";
+import { AiBudgetError, withAiContext } from "@/lib/ai-governance";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
 
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) return Response.json({ error: "message required" }, { status: 400 });
+  if (message.length > 8000) return Response.json({ error: "Message too long (maximum 8000 characters)." }, { status: 413 });
 
   const history = sanitizeHistory(body.conversationHistory);
   const draftState = sanitizeDraftState(body.draftState);
@@ -119,20 +121,20 @@ export async function POST(req: NextRequest) {
       });
       return Response.json(result);
     }
-    const result = await runAgentTurn({
+    const result = await withAiContext({ userId: user.userId, requestId, purpose: "agent.turn" }, () => runAgentTurn({
       userId: user.userId,
       baseUrl,
       message,
       history,
       draftState,
       requestId,
-    });
+    }));
     return Response.json(result);
   } catch (err) {
     console.error("[agent/respond] error:", err);
     return Response.json(
       { error: err instanceof Error ? err.message : "Agent turn failed" },
-      { status: 500 },
+      { status: err instanceof AiBudgetError ? 429 : 500 },
     );
   }
 }

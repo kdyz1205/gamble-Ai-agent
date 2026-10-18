@@ -107,29 +107,31 @@ export async function spendForInference(
   //   UPDATE "User" SET credits = credits - cost WHERE id = ? AND credits >= cost
   // so two concurrent calls cannot both pass the balance check at different moments.
   const cost = TIER_MULTIPLIER[tierId];
-  const result = await prisma.user.updateMany({
-    where: { id: userId, credits: { gte: cost } },
-    data: { credits: { decrement: cost } },
-  });
-  if (result.count === 0) {
-    const current = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-    return { success: false, balance: current?.credits ?? 0, model: tier.model, error: "Insufficient credits" };
-  }
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.user.updateMany({
+      where: { id: userId, credits: { gte: cost } },
+      data: { credits: { decrement: cost } },
+    });
+    if (result.count === 0) {
+      const current = await tx.user.findUnique({ where: { id: userId }, select: { credits: true } });
+      return { success: false, balance: current?.credits ?? 0, model: tier.model, error: "Insufficient credits" };
+    }
 
-  // Refetch balance for the tx row (not in the same transaction — acceptable for ledger display).
-  const after = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-  await prisma.creditTx.create({
-    data: {
-      userId,
-      type: `ai_${action}`,
-      amount: -cost,
-      balanceAfter: after?.credits ?? 0,
-      description: `${description} [${tier.name}]`,
-      challengeId,
-    },
-  });
+    // Balance and ledger commit together; a failed ledger write rolls back the debit.
+    const after = await tx.user.findUnique({ where: { id: userId }, select: { credits: true } });
+    await tx.creditTx.create({
+      data: {
+        userId,
+        type: `ai_${action}`,
+        amount: -cost,
+        balanceAfter: after?.credits ?? 0,
+        description: `${description} [${tier.name}]`,
+        challengeId,
+      },
+    });
 
-  return { success: true, balance: after?.credits ?? 0, model: tier.model };
+    return { success: true, balance: after?.credits ?? 0, model: tier.model };
+  });
 }
 
 // ── Stake / Add Credits ──
@@ -149,19 +151,21 @@ export async function spendCredits(
   if (amount <= 0) {
     return { success: false, balance: 0, error: "Invalid spend amount" };
   }
-  const result = await prisma.user.updateMany({
-    where: { id: userId, credits: { gte: amount } },
-    data: { credits: { decrement: amount } },
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.user.updateMany({
+      where: { id: userId, credits: { gte: amount } },
+      data: { credits: { decrement: amount } },
+    });
+    if (result.count === 0) {
+      const current = await tx.user.findUnique({ where: { id: userId }, select: { credits: true } });
+      return { success: false, balance: current?.credits ?? 0, error: "Insufficient credits" };
+    }
+    const after = await tx.user.findUnique({ where: { id: userId }, select: { credits: true } });
+    await tx.creditTx.create({
+      data: { userId, type, amount: -amount, balanceAfter: after?.credits ?? 0, description, challengeId },
+    });
+    return { success: true, balance: after?.credits ?? 0 };
   });
-  if (result.count === 0) {
-    const current = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-    return { success: false, balance: current?.credits ?? 0, error: "Insufficient credits" };
-  }
-  const after = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } });
-  await prisma.creditTx.create({
-    data: { userId, type, amount: -amount, balanceAfter: after?.credits ?? 0, description, challengeId },
-  });
-  return { success: true, balance: after?.credits ?? 0 };
 }
 
 export async function addCredits(
@@ -172,18 +176,20 @@ export async function addCredits(
   challengeId?: string,
   x402TxHash?: string,
 ): Promise<{ balance: number }> {
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      credits: { increment: amount },
-      ...(type === "topup" ? { totalCreditsBought: { increment: amount } } : {}),
-      ...(type === "win" ? { totalCreditsWon: { increment: amount } } : {}),
-    },
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: {
+        credits: { increment: amount },
+        ...(type === "topup" ? { totalCreditsBought: { increment: amount } } : {}),
+        ...(type === "win" ? { totalCreditsWon: { increment: amount } } : {}),
+      },
+    });
+    await tx.creditTx.create({
+      data: { userId, type, amount, balanceAfter: updated.credits, description, challengeId, x402TxHash },
+    });
+    return { balance: updated.credits };
   });
-  await prisma.creditTx.create({
-    data: { userId, type, amount, balanceAfter: updated.credits, description, challengeId, x402TxHash },
-  });
-  return { balance: updated.credits };
 }
 
 // ── Settlement ──

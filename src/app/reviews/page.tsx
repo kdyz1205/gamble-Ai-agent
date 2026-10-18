@@ -85,7 +85,7 @@ export default function ReviewQueuePage() {
 
         {reviews.map((item) => {
           const original = item.challenge.judgments?.find((judgment) => judgment.id === (item as ReviewQueueItem & { originalJudgmentId?: string }).originalJudgmentId)
-            ?? item.challenge.judgments?.find((judgment) => judgment.method === "ai")
+            ?? item.challenge.judgments?.find((judgment) => ["ai", "rules"].includes(judgment.method))
             ?? item.challenge.judgments?.[0];
           const participants = item.challenge.participants.filter((participant) => participant.status === "accepted");
           return (
