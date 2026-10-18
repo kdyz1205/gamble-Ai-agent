@@ -59,7 +59,11 @@ async function acceptQuest(quest: Awaited<ReturnType<typeof createQuest>>) {
   assert.equal((await prisma.challenge.findUniqueOrThrow({ where: { id: quest.challengeId } })).status, "live");
   assert.equal(await prisma.participant.count({ where: { challengeId: quest.challengeId, status: "accepted" } }), 2);
   const prior = await balances(quest.ids);
-  assert.equal((await executeAgentTool("acceptChallenge", context(quest.opponent.id), { challengeId: quest.challengeId })).ok, false);
+  const repeated = await executeAgentTool("acceptChallenge", context(quest.opponent.id), { challengeId: quest.challengeId });
+  assert.equal(repeated.ok, true, repeated.error);
+  assert.equal((repeated.data as { reused: boolean }).reused, true);
+  assert.equal(await prisma.creditTx.count({ where: { challengeId: quest.challengeId, userId: quest.opponent.id, type: "stake" } }),
+    (await prisma.challenge.findUniqueOrThrow({ where: { id: quest.challengeId } })).stake > 0 ? 1 : 0);
   assert.deepEqual(await balances(quest.ids), prior);
   pass("acceptance records opponent and retry cannot debit twice");
 }
