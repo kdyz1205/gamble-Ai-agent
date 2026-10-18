@@ -3,6 +3,8 @@ import { executeChallengeJudgment, type JudgmentExecutionFailure } from "./chall
 import type { TierId } from "./auth";
 import { isEvidenceUrlAllowed } from "./media/evidence-url";
 
+export const JUDGE_JOB_TIMEOUT_MS = 6 * 60 * 1000;
+
 async function deliverWebhook(
   job: { id: string; challengeId: string; webhookUrl: string | null },
   payload: Record<string, unknown>,
@@ -48,10 +50,21 @@ export async function runJudgeJob(jobId: string): Promise<void> {
   if (!job) return;
 
   const tierId = job.tierId as TierId;
-  const result = await executeChallengeJudgment(job.challengeId, tierId, {
-    providerId: job.providerId ?? undefined,
-    model: job.model ?? undefined,
-  });
+  let result;
+  try {
+    result = await executeChallengeJudgment(job.challengeId, tierId, {
+      providerId: job.providerId ?? undefined,
+      model: job.model ?? undefined,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 500) : "Background judgment failed";
+    const failed = await prisma.judgeJob.updateMany({
+      where: { id: jobId, status: "processing" },
+      data: { status: "failed", error: message },
+    });
+    if (failed.count > 0) await deliverWebhook(job, { status: "failed", error: message });
+    return;
+  }
 
   if (!result.ok) {
     if ("skipped" in result && result.skipped) {
@@ -71,6 +84,12 @@ export async function runJudgeJob(jobId: string): Promise<void> {
     return;
   }
 
+  // A completed AI recommendation still needs participant consent. Never report
+  // settlement from job completion: the challenge row owns lifecycle truth.
+  const challenge = await prisma.challenge.findUniqueOrThrow({
+    where: { id: job.challengeId },
+    select: { status: true },
+  });
   const snapshot = {
     judgment: {
       id: result.judgment.id,
@@ -80,7 +99,7 @@ export async function runJudgeJob(jobId: string): Promise<void> {
       aiModel: result.judgment.aiModel,
     },
     settlement: result.settlementResult,
-    challenge: { id: job.challengeId, status: "settled" as const },
+    challenge: { id: job.challengeId, status: challenge.status },
     model: result.model,
     tierId: result.tierId,
     creditsUsed: result.creditsUsed,
@@ -110,32 +129,37 @@ export async function runJudgeJob(jobId: string): Promise<void> {
  * on its regular schedule. Without this, a lambda cold-recycle mid-ffmpeg
  * would leave the job permanently pending and the client polling forever.
  */
-export async function sweepStuckJudgeJobs(): Promise<{ swept: number }> {
-  const threshold = new Date(Date.now() - 6 * 60 * 1000); // 6 minutes ago
+export async function sweepStuckJudgeJobs(jobId?: string): Promise<{ swept: number }> {
+  const threshold = new Date(Date.now() - JUDGE_JOB_TIMEOUT_MS);
+  // Include pending work: after() may never start if its hosting process dies.
+  const staleWhere = {
+    ...(jobId ? { id: jobId } : {}),
+    OR: [
+      { status: "pending", createdAt: { lt: threshold } },
+      { status: "processing", startedAt: { lt: threshold } },
+      { status: "processing", startedAt: null, updatedAt: { lt: threshold } },
+    ],
+  };
   const stale = await prisma.judgeJob.findMany({
-    where: {
-      status: "processing",
-      OR: [
-        { startedAt: { lt: threshold } },
-        // Legacy jobs from before startedAt existed
-        { startedAt: null, updatedAt: { lt: threshold } },
-      ],
-    },
+    where: staleWhere,
     select: { id: true, challengeId: true, webhookUrl: true },
+    take: 100,
+    orderBy: { createdAt: "asc" },
   });
+  let swept = 0;
   for (const job of stale) {
-    await prisma.judgeJob.update({
-      where: { id: job.id },
+    // Recheck eligibility atomically. A completion or a fresh runner claim
+    // between the query and this write must not be overwritten as failed.
+    const result = await prisma.judgeJob.updateMany({
+      where: { ...staleWhere, id: job.id },
       data: {
         status: "failed",
-        error: "Sweeper: job exceeded max duration with no result — probably a crashed lambda.",
+        error: "Background review exceeded its time limit. Reload the quest before retrying; credits are not automatically charged again.",
       },
     });
-    // Best-effort webhook so clients polling externally can stop.
-    await deliverWebhook(
-      { id: job.id, challengeId: job.challengeId, webhookUrl: job.webhookUrl ?? null },
-      { status: "failed", error: "stuck_timeout" },
-    );
+    if (result.count === 0) continue;
+    swept += result.count;
+    await deliverWebhook(job, { status: "failed", error: "stuck_timeout" });
   }
-  return { swept: stale.length };
+  return { swept };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useAmbientMotionAllowed } from "@/lib/use-motion-policy";
 
 /* ═══════════════════════════════════════════════════
    QUANTUM ENERGY FIELD — Multi-layer Particle System
@@ -42,6 +43,7 @@ interface ReactiveParticle {
 }
 
 export default function ParticleBackground() {
+  const motionAllowed = useAmbientMotionAllowed();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouse = useRef({ x: -2000, y: -2000, vx: 0, vy: 0, prevX: -2000, prevY: -2000, active: false });
   const scrollY = useRef(0);
@@ -51,7 +53,7 @@ export default function ParticleBackground() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !motionAllowed) return;
 
     const ctx = canvas.getContext("2d", { alpha: true })!;
     if (!ctx) return;
@@ -364,7 +366,7 @@ export default function ParticleBackground() {
       window.removeEventListener("resize", resize);
       window.removeEventListener("click", onClick);
     };
-  }, []);
+  }, [motionAllowed]);
 
   return (
     <canvas
