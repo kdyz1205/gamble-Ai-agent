@@ -898,6 +898,13 @@ body {
   .quest-blueprint__track span:first-child { grid-column: 1 / -1; }
 }
 
+/* Keep the world visible while its ambient loops rest in hidden/low-power tabs. */
+html[data-ambient-motion="paused"] .sum-familiar,
+html[data-ambient-motion="paused"] .sum-quest-orb,
+html[data-ambient-motion="paused"] .quest-world-scene__node {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sum-familiar,
   .sum-quest-orb,
