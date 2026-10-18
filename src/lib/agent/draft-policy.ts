@@ -60,7 +60,7 @@ export function normalizeDraftState(input: Partial<DraftState> | null | undefine
     judgeRule: cleanText(input?.judgeRule, 2_000),
     timeWindow: cleanText(input?.timeWindow, 120),
     safetyNotes: Array.isArray(input?.safetyNotes)
-      ? [...new Set(input.safetyNotes.filter((note): note is string => typeof note === "string").map((note) => note.trim()).filter(Boolean))].slice(0, 8)
+      ? [...new Set(input.safetyNotes.filter((note): note is string => typeof note === "string").map((note) => note.trim().slice(0, 240)).filter(Boolean))].slice(0, 8)
       : [],
     readyToPublish: false,
   };

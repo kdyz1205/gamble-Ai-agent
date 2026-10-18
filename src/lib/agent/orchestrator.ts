@@ -2,7 +2,7 @@
  * GambleAI Agent Orchestrator.
  *
  * One turn = one user message + current conversation history + current hidden
- * draft state → one LLM call → structured JSON → merge draftPatch → optionally
+ * draft state → exact local edit or one LLM call → merge draftPatch → optionally
  * execute a single tool → return an AgentResponse.
  *
  * The LLM's contract is enforced by:
@@ -17,15 +17,16 @@
  * delegates here.
  */
 import { completeOraclePrompt } from "@/lib/llm-router";
+import { AiBudgetError } from "@/lib/ai-governance";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
 import { executeAgentTool } from "./tools";
 import {
-  buildDeterministicAgentResponse,
   draftIssueQuestion,
   getDraftIssues,
   normalizeDraftState,
 } from "./draft-policy";
+import { boundedAgentHistory, MAX_AGENT_MESSAGE_CHARS, tryLocalAgentResponse } from "./local-routing";
 import {
   emptyDraftState,
   type AgentAction,
@@ -61,6 +62,14 @@ export interface AgentTurnInput {
  */
 export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse> {
   const draftState = normalizeDraftState(input.draftState ?? emptyDraftState());
+  if (input.message.length > MAX_AGENT_MESSAGE_CHARS) {
+    return {
+      userVisibleReply: /[\u3400-\u9fff]/.test(input.message)
+        ? `消息过长，请将本次要求缩短到 ${MAX_AGENT_MESSAGE_CHARS} 个字符以内；现有草稿已保留。`
+        : `Please shorten this message to ${MAX_AGENT_MESSAGE_CHARS} characters. Your existing draft is preserved.`,
+      agentAction: "ask_followup", draftPatch: {}, toolName: null, toolArgs: null, draftState,
+    };
+  }
 
   // Resolve provider/model
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -72,25 +81,22 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   //   (a) the hidden draft state as JSON,
   //   (b) recent conversation history as plain text,
   //   (c) the user's new message.
-  const historyText = input.history
-    .slice(-16) // keep last 16 turns to stay under context budget
-    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
-    .join("\n\n");
+  const historyText = boundedAgentHistory(input.history);
 
   const userPayload = [
     `Hidden draft state (merge your draftPatch into this):`,
     "```json",
-    JSON.stringify(draftState, null, 2),
+    JSON.stringify(draftState),
     "```",
     "",
-    historyText ? `Conversation so far:\n${historyText}\n` : "Conversation so far: (this is the first turn)\n",
+    historyText ? `Recent conversation excerpts (may be incomplete; the structured draft is the current state):\n${historyText}\n` : "No earlier conversation supplied.\n",
     `User's new message:\n${input.message}`,
     "",
     `Respond with the JSON object only. No markdown, no preamble, no explanation.`,
   ].join("\n");
 
-  let parsed: RawAgentResponse | null = null;
-  try {
+  let parsed: RawAgentResponse | null = tryLocalAgentResponse(input.message, draftState);
+  if (!parsed) try {
     const rawText = await completeOraclePrompt({
       providerId,
       model,
@@ -101,14 +107,19 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     });
     parsed = safeParseAgentJson(rawText);
   } catch (err) {
-    console.error("[agent] LLM turn failed; using deterministic challenge compiler:", err instanceof Error ? err.message : err);
+    if (err instanceof AiBudgetError) throw err;
+    console.error("[agent] LLM turn failed; preserving draft:", err instanceof Error ? err.message : err);
   }
 
-  // A provider outage, exhausted account, missing key, or malformed JSON must
-  // not turn the product's main entry point into a 500. The local compiler
-  // covers the common friend-challenge path and remains conservative when the
-  // win condition is genuinely ambiguous.
-  if (!parsed) parsed = buildDeterministicAgentResponse(input.message, draftState);
+  // Never turn unsupported requests into plausible generic rules on outage,
+  // and never publish from a local natural-language guess.
+  if (!parsed) return {
+    userVisibleReply: /[\u3400-\u9fff]/.test(input.message)
+      ? "AI 暂时无法处理这次要求，现有草稿已保留。请稍后重试；若草稿已确认，可使用发布按钮。"
+      : "The AI could not process this request. Your draft is preserved. Try again shortly; a reviewed draft can still be published with the publish button.",
+    agentAction: "ask_followup", draftPatch: {}, toolName: null, toolArgs: null,
+    draftState,
+  };
 
   const validated = validateAgentResponse(parsed);
   const newDraftState = normalizeDraftState({
@@ -286,20 +297,20 @@ async function groundedReplyTurn(args: {
   const userPayload = [
     `You just called the backend tool \`${args.toolName}\` with these args:`,
     "```json",
-    JSON.stringify(args.toolArgs, null, 2),
+    boundedToolJson(args.toolArgs, 2_000),
     "```",
     "",
     `The tool returned:`,
     "```json",
-    JSON.stringify(toolPayload, null, 2),
+    boundedToolJson(toolPayload, 6_000),
     "```",
     "",
     `Current hidden draft state:`,
     "```json",
-    JSON.stringify(args.draftStateBeforeTool, null, 2),
+    JSON.stringify(args.draftStateBeforeTool),
     "```",
     "",
-    args.historyText ? `Conversation so far:\n${args.historyText}\n` : "",
+    args.historyText ? `Recent conversation excerpts (may be incomplete):\n${args.historyText}\n` : "",
     `Original user message:\n${args.userMessage}`,
     "",
     `Now write ONE short natural reply (userVisibleReply) grounded in the actual tool result — no invented details. If the tool failed or returned nothing useful, say so naturally and offer a next step.`,
@@ -325,6 +336,11 @@ async function groundedReplyTurn(args: {
   } catch {
     return null;
   }
+}
+
+function boundedToolJson(value: unknown, limit: number): string {
+  const json = JSON.stringify(value) ?? "null";
+  return json.length <= limit ? json : JSON.stringify({ truncated: true, excerpt: json.slice(0, limit), instruction: "This is partial tool data; do not infer omitted results." });
 }
 
 /** Merge safety notes by union — never lose a redirect. */

@@ -44,12 +44,18 @@ async function main() {
       history: [],
       draftState: emptyDraftState(),
     });
-    assert.equal(generic.agentAction, "show_draft");
-    assert.equal(generic.draftState.readyToPublish, true);
-    assert.equal(generic.draftState.participants, "you + 1 invited friend");
+    assert.equal(generic.agentAction, "ask_followup");
+    assert.equal(generic.draftState.readyToPublish, false);
+    assert.deepEqual(generic.draftState, emptyDraftState());
+    const publish = await runAgentTurn({
+      userId: "fallback-test-user", baseUrl: "https://summoner.world",
+      message: "publish it", history: [], draftState: second.draftState,
+    });
+    assert.equal(publish.toolName, null);
+    assert.deepEqual(publish.draftState, second.draftState);
 
     console.log("PASS real orchestrator degrades without provider credit/key instead of returning 500");
-    console.log("PASS fallback keeps one-question continuity and produces a publishable friend quest");
+    console.log("PASS exact templates keep continuity; unsupported inference failures preserve drafts and never publish");
   } finally {
     if (savedProvider === undefined) delete process.env.ORACLE_DEFAULT_PROVIDER;
     else process.env.ORACLE_DEFAULT_PROVIDER = savedProvider;
