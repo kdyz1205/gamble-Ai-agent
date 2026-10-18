@@ -23,6 +23,8 @@ test("world decorations pause on visibility changes and resume; the portal remai
   });
   await expect(root).toHaveAttribute("data-ambient-motion", "paused");
   await expect.poll(() => page.locator(DECORATIONS).evaluateAll((nodes) => nodes.every((node) => getComputedStyle(node).animationPlayState === "paused"))).toBe(true);
+  // CSS pauses finish on the next rendering update; measure after that commit.
+  await expect.poll(() => page.locator(DECORATIONS).evaluateAll((nodes) => nodes.flatMap((node) => node.getAnimations()).every((animation) => animation.playState === "paused" && !animation.pending))).toBe(true);
   const before = await page.locator(".quest-world-scene__node").first().evaluate((node) => Number(node.getAnimations()[0]?.currentTime));
   await page.waitForTimeout(350);
   const after = await page.locator(".quest-world-scene__node").first().evaluate((node) => Number(node.getAnimations()[0]?.currentTime));
