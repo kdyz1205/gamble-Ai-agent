@@ -11,6 +11,7 @@ import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ParticleBackground from "@/components/ParticleBackground";
+import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
 /* ── Helpers ── */
 function evidenceBlobPathname(challengeId: string, filename: string): string {
@@ -251,7 +252,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<(() => void) | null>(null);
+  const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
   // Camera recording state
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -273,6 +275,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     try {
       const { challenge: c } = await api.getChallenge(challengeId);
       setChallenge(c);
+      return c;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }
@@ -281,14 +284,26 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    if (!challenge || challenge.status === "settled") return;
-    const t = setInterval(() => void refresh(), 5000);
-    return () => clearInterval(t);
-  }, [challenge, refresh]);
+    if (!challenge?.status || isTerminalChallenge(challenge.status)) return;
+    return startVisiblePolling({ delays: 5000, task: async () => {
+      const current = await refresh();
+      return !isTerminalChallenge(current?.status);
+    } });
+  }, [challenge?.status, refresh]);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    pollingChallengeRef.current = { id: challengeId, terminal: false };
+    return () => { pollingChallengeRef.current = null; pollRef.current?.(); pollRef.current = null; };
+  }, [challengeId]);
+
+  useEffect(() => {
+    if (pollingChallengeRef.current) pollingChallengeRef.current.terminal = isTerminalChallenge(challenge?.status);
+    if (isTerminalChallenge(challenge?.status)) {
+      pollRef.current?.();
+      pollRef.current = null;
+      setBusy(false);
+    }
+  }, [challenge?.status]);
 
   // Reveal verdict with delay for drama
   useEffect(() => {
@@ -415,25 +430,27 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (pollingChallengeRef.current?.id !== challenge.id || pollingChallengeRef.current.terminal) return;
       showNote("Familiar is reviewing proof... you can leave this page.", "info");
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
+      pollRef.current?.();
+      pollRef.current = startVisiblePolling({
+        delays: JUDGE_POLL_DELAYS,
+        timeoutMs: JUDGE_POLL_TIMEOUT_MS,
+        onTimeout: () => { setBusy(false); showNote("Familiar review is taking longer than expected — reload to check its status.", "error"); },
+        onError: () => showNote("Could not check Familiar review. Retrying when this page is visible.", "error"),
+        task: async (signal) => {
           const j = await api.getJudgeJob(res.jobId);
+          if (signal.aborted) return false;
+          if (document.visibilityState === "hidden") return;
           if (j.status === "completed" || j.status === "failed") {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
             setBusy(false);
             if (j.status === "failed") showNote(j.error || "Familiar review failed", "error");
             await refresh();
-            await updateSession?.();
+            if (pollingChallengeRef.current?.id === challenge.id) await updateSession?.();
+            return false;
           }
-        } catch {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          setBusy(false);
-        }
-      }, 2000);
+        },
+      });
     } catch (e) {
       showNote(e instanceof Error ? e.message : "Could not start Familiar review", "error");
       setBusy(false);

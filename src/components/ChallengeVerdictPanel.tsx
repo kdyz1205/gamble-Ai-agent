@@ -10,6 +10,7 @@ import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
 import ResultReceiptCard from "./ResultReceiptCard";
 import VerdictReviewControls from "./VerdictReviewControls";
+import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -94,7 +95,8 @@ export default function ChallengeVerdictPanel({
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<(() => void) | null>(null);
+  const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!challengeId) return;
@@ -110,8 +112,18 @@ export default function ChallengeVerdictPanel({
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    pollingChallengeRef.current = { id: challengeId, terminal: false };
+    return () => { pollingChallengeRef.current = null; pollRef.current?.(); pollRef.current = null; };
+  }, [challengeId]);
+
+  useEffect(() => {
+    if (pollingChallengeRef.current) pollingChallengeRef.current.terminal = isTerminalChallenge(challenge?.status);
+    if (isTerminalChallenge(challenge?.status)) {
+      pollRef.current?.();
+      pollRef.current = null;
+      setBusy(false);
+    }
+  }, [challenge?.status]);
 
   // Dramatic verdict reveal delay
   useEffect(() => {
@@ -176,56 +188,33 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (pollingChallengeRef.current?.id !== challenge.id || pollingChallengeRef.current.terminal) return;
       setAsyncHint("Familiar is reviewing proof (video frames + vision)...");
 
-      // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
-      // Replaces the old 2s-forever loop that at 1000 concurrent waiters did
-      // 500 req/s against /api/judge-jobs/[id] for as long as anyone was
-      // watching. Stops automatically after 15min (maxDuration + grace) so
-      // even a stuck job doesn't loop forever.
-      const BACKOFF_SEQUENCE = [2000, 3000, 5000, 8000, 12000, 20000, 30000];
-      const MAX_TOTAL_MS = 15 * 60 * 1000; // hard stop at 15 minutes
-      const pollStart = Date.now();
-      let attempt = 0;
-      let cancelled = false;
-
-      const scheduleNext = () => {
-        if (cancelled) return;
-        if (Date.now() - pollStart > MAX_TOTAL_MS) {
+      pollRef.current?.();
+      pollRef.current = startVisiblePolling({
+        delays: JUDGE_POLL_DELAYS,
+        timeoutMs: JUDGE_POLL_TIMEOUT_MS,
+        onTimeout: () => {
           setBusy(false);
           setAsyncHint("");
           setVerdictErr("Familiar review is taking longer than expected — please reload to check status.");
-          return;
-        }
-        const delay = BACKOFF_SEQUENCE[Math.min(attempt, BACKOFF_SEQUENCE.length - 1)];
-        attempt++;
-        // Use nested setTimeout instead of setInterval so each tick is independently schedulable.
-        const timerId = setTimeout(async () => {
-          if (cancelled) return;
-          try {
-            const j = await api.getJudgeJob(res.jobId);
-            if (j.status === "completed" || j.status === "failed") {
-              cancelled = true;
-              setBusy(false);
-              setAsyncHint("");
-              if (j.status === "failed") setVerdictErr(j.error || "Background Familiar review failed");
-              await refresh();
-              onCreditsMayChange();
-              return;
-            }
-            scheduleNext();
-          } catch {
-            cancelled = true;
+        },
+        onError: () => setAsyncHint("Could not check the review. Retrying when this page is visible..."),
+        task: async (signal) => {
+          const j = await api.getJudgeJob(res.jobId);
+          if (signal.aborted) return false;
+          if (document.visibilityState === "hidden") return;
+          if (j.status === "completed" || j.status === "failed") {
             setBusy(false);
             setAsyncHint("");
+            if (j.status === "failed") setVerdictErr(j.error || "Background Familiar review failed");
+            await refresh();
+            if (pollingChallengeRef.current?.id === challenge.id) onCreditsMayChange();
+            return false;
           }
-        }, delay);
-        // Store the timer so we can cancel on unmount — reuse pollRef to minimize code diff.
-        pollRef.current = timerId as unknown as ReturnType<typeof setInterval>;
-      };
-
-      if (pollRef.current) clearInterval(pollRef.current);
-      scheduleNext();
+        },
+      });
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "Could not start background Familiar review");
       setBusy(false);
