@@ -378,7 +378,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const runJudge = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -402,7 +402,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const runJudgeAsync = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -957,7 +957,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                         </p>
                         <p className="text-[10px] text-text-muted mt-0.5">{TIER_DESC[t]}</p>
                         <p className="text-xs font-bold mt-1" style={{ color: tier === t ? "#f5a623" : "rgba(240,240,255,0.35)" }}>
-                          {TIER_COST[t]} credits
+                          {challenge.stake > 0 ? TIER_COST[t] : 0} credits
                         </p>
                       </div>
                     </motion.button>
@@ -977,7 +977,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       boxShadow: "0 8px 32px rgba(245,166,35,0.2)",
                     }}
                   >
-                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${TIER_COST[tier]} cr)`}
+                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${challenge.stake > 0 ? TIER_COST[tier] : 0} cr)`}
                   </motion.button>
                   <motion.button
                     type="button"

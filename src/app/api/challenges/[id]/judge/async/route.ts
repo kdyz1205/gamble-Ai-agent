@@ -3,7 +3,7 @@ import { after } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@/lib/auth";
 import { getCredits, TIER_MULTIPLIER } from "@/lib/credits";
-import { runJudgeJob } from "@/lib/judge-async";
+import { getOrCreateJudgeJob, runJudgeJob } from "@/lib/judge-async";
 import { isEvidenceUrlAllowed } from "@/lib/media/evidence-url";
 
 export const runtime = "nodejs";
@@ -42,13 +42,9 @@ export async function POST(
     return Response.json({ error: "webhookUrl must be a safe public https URL" }, { status: 400 });
   }
 
-  const cost = TIER_MULTIPLIER[tierId];
-  const balance = await getCredits(user.userId);
-  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
-
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    select: { creatorId: true, status: true, title: true },
+    select: { creatorId: true, status: true, title: true, stake: true },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -65,31 +61,19 @@ export async function POST(
     );
   }
 
-  const inflight = await prisma.judgeJob.findFirst({
-    where: { challengeId: id, status: { in: ["pending", "processing"] } },
-    select: { id: true },
-  });
-  if (inflight) {
-    return Response.json(
-      {
-        error: "A verdict job is already running for this challenge",
-        jobId: inflight.id,
-        pollUrl: `/api/judge-jobs/${inflight.id}`,
-      },
-      { status: 409 },
-    );
-  }
+  const cost = challenge.stake > 0 ? TIER_MULTIPLIER[tierId] : 0;
+  const balance = await getCredits(user.userId);
+  if (balance < cost) return noCredits(cost, balance, getAiModel(tierId).displayName);
 
-  const job = await prisma.judgeJob.create({
-    data: {
-      challengeId: id,
-      requestedByUserId: user.userId,
-      tierId,
-      providerId: providerId ?? null,
-      model: model ?? null,
-      webhookUrl: webhookUrl ?? null,
-      status: "pending",
-    },
+  // Serialize intake across instances; retries share the active job rather than
+  // creating competing runners or failing a recoverable client request.
+  const { job, reused } = await getOrCreateJudgeJob({
+    challengeId: id,
+    requestedByUserId: user.userId,
+    tierId,
+    providerId: providerId ?? null,
+    model: model ?? null,
+    webhookUrl: webhookUrl ?? null,
   });
 
   after(() => runJudgeJob(job.id));
@@ -103,10 +87,11 @@ export async function POST(
     {
       status: "processing",
       jobId: job.id,
+      reused,
       pollUrl: `/api/judge-jobs/${job.id}`,
       pollUrlAbsolute: origin ? pollUrl : undefined,
       message:
-        "AI recommendation runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; creator confirmation settles credits.",
+        "AI recommendation runs in the background (video frames + vision). Poll pollUrl or use webhookUrl; both participants must accept the result before credits settle.",
     },
     { status: 202 },
   );

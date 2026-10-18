@@ -5,6 +5,28 @@ import { isEvidenceUrlAllowed } from "./media/evidence-url";
 
 export const JUDGE_JOB_TIMEOUT_MS = 6 * 60 * 1000;
 
+/** One active async job per challenge, including concurrent HTTP retries. */
+export async function getOrCreateJudgeJob(input: {
+  challengeId: string;
+  requestedByUserId: string;
+  tierId: number;
+  providerId: string | null;
+  model: string | null;
+  webhookUrl: string | null;
+}) {
+  return prisma.$transaction(async (tx) => {
+    // A separate key from the judgment execution lease: intake never holds the
+    // inference lock while waiting for the background worker.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.challengeId}, 7118))`;
+    const active = await tx.judgeJob.findFirst({
+      where: { challengeId: input.challengeId, status: { in: ["pending", "processing"] } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (active) return { job: active, reused: true };
+    return { job: await tx.judgeJob.create({ data: { ...input, status: "pending" } }), reused: false };
+  });
+}
+
 async function deliverWebhook(
   job: { id: string; challengeId: string; webhookUrl: string | null },
   payload: Record<string, unknown>,

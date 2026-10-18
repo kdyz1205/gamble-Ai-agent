@@ -2,7 +2,7 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import prisma from "../src/lib/db";
-import { runJudgeJob, sweepStuckJudgeJobs } from "../src/lib/judge-async";
+import { getOrCreateJudgeJob, runJudgeJob, sweepStuckJudgeJobs } from "../src/lib/judge-async";
 
 // Real DB integration. Creates only isolated zero-stake fixtures and never invokes
 // a model or the credits ledger. DATABASE_URL may target a disposable DB or Neon.
@@ -17,6 +17,23 @@ async function main() {
       creatorId: user.id, title: "Recovery integration fixture", description: "No AI or credits used",
       type: "General", status: "cancelled", stake: 0,
     } });
+    const concurrent = await Promise.all(Array.from({ length: 5 }, () => getOrCreateJudgeJob({
+      challengeId: challenge.id, requestedByUserId: user.id, tierId: 1,
+      providerId: null, model: null, webhookUrl: null,
+    })));
+    assert.equal(new Set(concurrent.map(({ job }) => job.id)).size, 1);
+    assert.equal(concurrent.filter(({ reused }) => !reused).length, 1);
+    assert.equal(await prisma.judgeJob.count({ where: { challengeId: challenge.id } }), 1);
+    await prisma.judgeJob.update({ where: { id: concurrent[0].job.id }, data: { status: "failed" } });
+    const retried = await getOrCreateJudgeJob({
+      challengeId: challenge.id, requestedByUserId: user.id, tierId: 1,
+      providerId: null, model: null, webhookUrl: null,
+    });
+    assert.notEqual(retried.job.id, concurrent[0].job.id);
+    assert.equal(retried.reused, false);
+    await prisma.judgeJob.update({ where: { id: retried.job.id }, data: { status: "failed" } });
+    console.log("PASS five simultaneous intake requests reuse one job; failed work can create a new job");
+
     const old = new Date(Date.now() - 7 * 60 * 1000);
     const makeJob = (data: { status: string; startedAt?: Date | null; createdAt?: Date }) =>
       prisma.judgeJob.create({ data: {

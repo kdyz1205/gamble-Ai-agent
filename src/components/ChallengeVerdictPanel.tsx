@@ -138,7 +138,7 @@ export default function ChallengeVerdictPanel({
 
   const runVerdict = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -162,7 +162,7 @@ export default function ChallengeVerdictPanel({
 
   const runVerdictAsync = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -484,7 +484,7 @@ export default function ChallengeVerdictPanel({
                         </p>
                         <p className="text-[10px] font-medium mt-0.5" style={{ color: selected ? "#9A3412" : "#64748B" }}>{TIER_DESC[t]}</p>
                         <p className="text-[11px] font-bold mt-1" style={{ color: selected ? "#7C2D12" : "#94A3B8" }}>
-                          {TIER_COST[t]} cr
+                          {(challenge.stake > 0 ? TIER_COST[t] : 0)} cr
                         </p>
                       </motion.button>
                     );
@@ -504,7 +504,7 @@ export default function ChallengeVerdictPanel({
                     boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "Reviewing…" : `Ask Familiar for result · ${TIER_COST[tier]} cr`}
+                  {busy ? "Reviewing…" : `Ask Familiar for result · ${(challenge.stake > 0 ? TIER_COST[tier] : 0)} cr`}
                 </motion.button>
                 <motion.button
                   type="button"

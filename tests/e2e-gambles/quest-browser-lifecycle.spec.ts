@@ -1,0 +1,133 @@
+import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { hash } from "bcryptjs";
+import { expect, test, type BrowserContext } from "@playwright/test";
+import { Pool } from "pg";
+
+const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3017";
+test.use({ channel: "chrome" });
+test("zero-credit friends publish and accept through UI; expired no-proof quest yields void and mutual-consent receipt", async ({ browser }) => {
+  test.skip(!/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL ?? ""), "Requires explicit isolated local PostgreSQL fixture database");
+  test.setTimeout(300_000);
+  const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
+  const password = randomUUID();
+  const passwordHash = await hash(password, 8);
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  async function createPlayer(label: string) {
+    const id = `browser${label}${suffix}`;
+    const email = `browser-${label}-${suffix}@example.invalid`;
+    const username = `browser_${label}_${suffix}`;
+    await db.query('INSERT INTO "User" (id,email,username,"passwordHash",credits,"updatedAt") VALUES ($1,$2,$3,$4,0,NOW())', [id, email, username, passwordHash]);
+    return { id, email, username };
+  }
+  const creator = await createPlayer("a");
+  const opponent = await createPlayer("b");
+  const a = await browser.newContext({ reducedMotion: "reduce" });
+  const b = await browser.newContext({ reducedMotion: "reduce" });
+  async function signIn(context: BrowserContext, email: string) {
+    const { csrfToken } = await (await context.request.get(`${BASE}/api/auth/csrf`)).json();
+    const response = await context.request.post(`${BASE}/api/auth/callback/credentials`, { form: { email, password, csrfToken, callbackUrl: `${BASE}/summons`, json: "true" } });
+    expect(response.ok()).toBe(true);
+    const session = await (await context.request.get(`${BASE}/api/auth/session`)).json();
+    expect(session.user.email).toBe(email);
+    await context.addInitScript(() => { localStorage.setItem("oracle_llm_provider", "openai"); localStorage.setItem("oracle_llm_model", "gpt-4o-mini"); });
+  }
+  try {
+    await signIn(a, creator.email); await signIn(b, opponent.email);
+    const pageA = await a.newPage(); const pageB = await b.newPage();
+    await pageA.goto(`${BASE}/summons`);
+    await pageA.locator("summary").filter({ hasText: "Quest terms" }).click();
+    await pageA.locator('input[type="number"]').fill("0");
+    await pageA.locator("textarea").first().fill("badminton first to 3 points");
+    const draftResponse = pageA.waitForResponse((res) => res.url().includes("/api/agent/respond") && res.request().method() === "POST");
+    await pageA.getByRole("button", { name: "Summon", exact: true }).click();
+    expect((await draftResponse).status()).toBe(200);
+    const publishedResponse = pageA.waitForResponse((res) => res.url().includes("/api/agent/respond") && res.request().method() === "POST");
+    await pageA.getByRole("button", { name: "Publish free quest", exact: true }).click();
+    const published = await (await publishedResponse).json();
+    const challengeId = published.toolResult.challengeId as string;
+    expect(challengeId).toBeTruthy();
+    const stored = (await db.query('SELECT * FROM "Challenge" WHERE id=$1', [challengeId])).rows[0];
+    expect(stored.stake).toBe(0);
+    expect(stored.evidenceType).toBe("video");
+    const anonymous = await browser.newContext();
+    try { expect((await anonymous.request.get(`${BASE}/api/ai/usage`)).status()).toBe(401); }
+    finally { await anonymous.close(); }
+    const overlong = await a.request.post(`${BASE}/api/agent/respond`, { data: { message: "x".repeat(8001), conversationHistory: [], draftState: {} } });
+    expect(overlong.status()).toBe(413);
+    for (const context of [a, b]) {
+      const usageResponse = await context.request.get(`${BASE}/api/ai/usage`);
+      expect(usageResponse.status()).toBe(200);
+      expect(usageResponse.headers()["cache-control"]).toContain("no-store");
+      const usage = await usageResponse.json();
+      expect(usage.reservedCalls).toBe(0); expect(usage.completedCalls).toBe(0); expect(usage.receipts).toHaveLength(0);
+    }
+    // A synthetic usage receipt belongs only to its actor. It records a test
+    // error event, never a successful model call or a financial transaction.
+    const receiptId = `privacy${suffix}`;
+    await db.query('INSERT INTO "AuditLog" (id,action,"actorUserId",payload) VALUES ($1,$2,$3,$4)', [receiptId, "ai.call.completed", creator.id, JSON.stringify({ requestId: receiptId, outcome: "failed", usage: null, purpose: "privacy.test" })]);
+    const ownUsage = await (await a.request.get(`${BASE}/api/ai/usage`)).json();
+    const otherUsage = await (await b.request.get(`${BASE}/api/ai/usage`)).json();
+    expect(ownUsage.receipts.map((row: { id: string }) => row.id)).toContain(receiptId);
+    expect(otherUsage.receipts.map((row: { id: string }) => row.id)).not.toContain(receiptId);
+    await db.query('DELETE FROM "AuditLog" WHERE id=$1', [receiptId]);
+
+    await pageB.goto(`${BASE}/join/${challengeId}`);
+    const acceptResponse = pageB.waitForResponse((res) => res.url().includes(`/challenges/${challengeId}/accept`) && res.request().method() === "POST");
+    await pageB.getByRole("button", { name: "Accept Quest", exact: true }).click();
+    expect((await acceptResponse).ok()).toBe(true);
+    // Real providers currently reject requests for insufficient balance. Exercise
+    // the deterministic expired/no-proof rule, without fabricating an AI verdict.
+    // SQL supplies only the expired judging precondition normally set by cron.
+    await db.query(`UPDATE "Challenge" SET deadline=NOW()-INTERVAL '1 minute', status='judging' WHERE id=$1`, [challengeId]);
+    await pageA.goto(`${BASE}/challenge/${challengeId}`);
+    const judgmentResponse = pageA.waitForResponse((res) => res.url().includes(`/challenges/${challengeId}/judge`) && res.request().method() === "POST", { timeout: 120_000 });
+    await pageA.getByRole("button", { name: "Ask Familiar for result · 0 cr", exact: true }).click();
+    const judgment = await judgmentResponse;
+    expect(judgment.ok(), await judgment.text()).toBe(true);
+    expect((await judgment.json()).judgment.winnerId).toBeNull();
+    for (const page of [pageA, pageB]) {
+      await page.goto(`${BASE}/challenge/${challengeId}`);
+      const consentResponse = page.waitForResponse((res) => res.url().includes(`/challenges/${challengeId}/verdict-response`) && res.request().method() === "POST");
+      await page.getByRole("button", { name: "Accept result", exact: true }).click();
+      expect((await consentResponse).ok()).toBe(true);
+    }
+    await pageA.reload();
+    await expect(pageA.getByText("Quest Settled", { exact: true })).toBeVisible();
+    await expect(pageA.getByRole("button", { name: "Share Receipt", exact: true })).toBeVisible();
+    const final = (await db.query('SELECT * FROM "Challenge" WHERE id=$1', [challengeId])).rows[0];
+    final.verdictResponses = (await db.query('SELECT * FROM "VerdictResponse" WHERE "challengeId"=$1', [challengeId])).rows;
+    final.judgments = (await db.query('SELECT * FROM "Judgment" WHERE "challengeId"=$1', [challengeId])).rows;
+    final.creditTxs = (await db.query('SELECT * FROM "CreditTx" WHERE "challengeId"=$1', [challengeId])).rows;
+    expect(final.status).toBe("settled"); expect(final.verdictResponses).toHaveLength(2); expect(final.judgments).toHaveLength(1); expect(final.creditTxs).toHaveLength(0);
+    expect((await db.query('SELECT credits FROM "User" WHERE id=$1', [creator.id])).rows[0].credits).toBe(0);
+    expect((await db.query('SELECT credits FROM "User" WHERE id=$1', [opponent.id])).rows[0].credits).toBe(0);
+    await pageA.screenshot({ path: `test-results/quest-browser-receipt-${suffix}.png`, fullPage: true });
+    console.log(JSON.stringify({ challengeId, result: final.status, consentCount: final.verdictResponses.length, creditTransactions: final.creditTxs.length }));
+
+    // Exercise the async HTTP admission contract at zero balance as well.
+    const asyncChallengeId = `async${suffix}`;
+    await db.query(`INSERT INTO "Challenge" (id,"creatorId",title,description,type,status,stake,deadline,"updatedAt") VALUES ($1,$2,$3,$4,$5,$6,0,NOW()-INTERVAL '1 minute',NOW())`, [asyncChallengeId, creator.id, "Expired async zero-credit fixture", "No proof, deterministic void", "General", "judging"]);
+    await db.query('INSERT INTO "Participant" (id,"challengeId","userId",role,status) VALUES ($1,$2,$3,$4,$5),($6,$2,$7,$8,$5)', [`asynca${suffix}`, asyncChallengeId, creator.id, "creator", "accepted", `asyncb${suffix}`, opponent.id, "opponent"]);
+    const asyncResponse = await a.request.post(`${BASE}/api/challenges/${asyncChallengeId}/judge/async`, { data: { tier: 1 } });
+    expect(asyncResponse.status(), await asyncResponse.text()).toBe(202);
+    const { jobId } = await asyncResponse.json();
+    let asyncResult: { status?: string; result?: { challenge: { status: string }; creditsUsed: number } } = {};
+    await expect.poll(async () => {
+      const response = await a.request.get(`${BASE}/api/judge-jobs/${jobId}`);
+      expect(response.status()).toBe(200);
+      asyncResult = await response.json();
+      return asyncResult.status;
+    }, { timeout: 60_000 }).toBe("completed");
+    expect(asyncResult.result?.challenge.status).toBe("disputed");
+    expect(asyncResult.result?.creditsUsed).toBe(0);
+    console.log(JSON.stringify({ asyncChallengeId, jobId, asyncStatus: asyncResult.status, challengeStatus: asyncResult.result?.challenge.status, creditsUsed: asyncResult.result?.creditsUsed }));
+  } finally {
+    await a.close(); await b.close();
+    const ids = (await db.query('SELECT id FROM "Challenge" WHERE "creatorId"=$1', [creator.id])).rows.map((row: {id: string}) => row.id);
+    await db.query('DELETE FROM "AuditLog" WHERE "challengeId"=ANY($1::text[]) OR "actorUserId"=ANY($2::text[])', [ids, [creator.id, opponent.id]]);
+    await db.query('DELETE FROM "ActivityEvent" WHERE "challengeId"=ANY($1::text[]) OR "userId"=ANY($2::text[])', [ids, [creator.id, opponent.id]]);
+    await db.query('DELETE FROM "User" WHERE id=ANY($1::text[])', [[creator.id, opponent.id]]);
+    await db.end();
+  }
+});

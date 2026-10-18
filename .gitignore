@@ -20,6 +20,7 @@
 
 # next.js
 /.next/
+/.next-runtime-verification/
 /out/
 
 # production
