@@ -13,6 +13,7 @@
  * credits.ts atomic helpers.
  */
 import prisma from "@/lib/db";
+import { submitChallengeEvidence, EvidenceSubmissionError } from "@/lib/evidence-submission";
 import { acceptChallenge } from "@/lib/challenge-acceptance";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "@/lib/verdict-review";
@@ -267,52 +268,14 @@ async function generateShareLinkTool(ctx: ToolContext, args: Record<string, unkn
 
 async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
-  const type = String(args.type ?? "text");
-  const description = args.description ? String(args.description) : null;
-  const url = args.url ? String(args.url) : null;
   if (!challengeId) return { ok: false, error: "challengeId required" };
-
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    include: { participants: true },
-  });
-  if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (!["live", "matched"].includes(challenge.status)) {
-    return { ok: false, error: `Challenge is not active (status=${challenge.status})` };
+  try {
+    const user = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { username: true } });
+    const { evidence } = await submitChallengeEvidence({ userId: ctx.userId, username: user?.username ?? "Player" }, challengeId, args);
+    return { ok: true, data: { evidenceId: evidence.id, challengeId, type: evidence.type, hasUrl: Boolean(evidence.url) } };
+  } catch (error) {
+    return { ok: false, error: error instanceof EvidenceSubmissionError ? error.message : "Proof could not be saved. Please retry." };
   }
-  if (!challenge.participants.some((p) => p.userId === ctx.userId)) {
-    return { ok: false, error: "You are not a participant" };
-  }
-
-  const evidence = await prisma.evidence.upsert({
-    where: { challengeId_userId: { challengeId, userId: ctx.userId } },
-    create: { challengeId, userId: ctx.userId, type, url, description },
-    update: {
-      type,
-      url,
-      description,
-      preparedFrames: null,
-      preparedAt: null,
-      preparedDurationSec: null,
-      preparedMode: null,
-      prepareError: null,
-    },
-  });
-
-  const activeParticipants = challenge.participants.filter((p) => p.status === "accepted");
-  const evCount = await prisma.evidence.findMany({
-    where: { challengeId },
-    select: { userId: true },
-    distinct: ["userId"],
-  });
-  if (evCount.length >= activeParticipants.length) {
-    await prisma.challenge.updateMany({
-      where: { id: challengeId, status: { in: ["live", "matched"] } },
-      data: { status: "judging" },
-    });
-  }
-
-  return { ok: true, data: { evidenceId: evidence.id, challengeId, type, hasUrl: !!url } };
 }
 
 /* ─────────────────────────────────────────────── */
