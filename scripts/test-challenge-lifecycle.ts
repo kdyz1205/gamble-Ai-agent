@@ -1,4 +1,4 @@
-/** Real local PostgreSQL product flow. --live additionally invokes the real OpenAI provider. */
+/** Real local PostgreSQL product flow. --live additionally invokes a real provider (default OpenAI). */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
@@ -9,6 +9,7 @@ import { executeChallengeJudgment } from "../src/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "../src/lib/verdict-review";
 import { isOnChainEnabled, settleChallenge } from "../src/lib/credits";
 import { AI_RECEIPT_ACTION, AI_RESERVATION_ACTION } from "../src/lib/ai-governance";
+import { getProviderById } from "../src/lib/llm-providers";
 
 config({ path: ".env.local", quiet: true });
 const runId = `lifecycle_${randomUUID().replaceAll("-", "")}`;
@@ -112,7 +113,10 @@ async function main() {
     "This integration suite writes only to the explicitly isolated local summoner_verification database");
   assert.equal(isOnChainEnabled(), false, "on-chain mutations must be disabled during local verification");
   const live = process.argv.includes("--live");
-  if (live) assert(process.env.OPENAI_API_KEY, "--live requires an actual OPENAI_API_KEY");
+  const liveProvider = getProviderById(process.env.TEST_LIFECYCLE_PROVIDER || "openai");
+  assert(liveProvider, "unknown TEST_LIFECYCLE_PROVIDER");
+  if (live) assert(process.env[liveProvider.envVar], `--live requires an actual ${liveProvider.envVar}`);
+  const liveModel = process.env.TEST_LIFECYCLE_MODEL || liveProvider.defaultModel;
 
   for (const stake of [0, 5]) {
     const voidQuest = await createQuest(`void_${stake}`, stake);
@@ -179,8 +183,8 @@ async function main() {
       assert.equal(uploaded.ok, true, uploaded.error);
     }
     const concurrent = await Promise.all([
-      executeChallengeJudgment(liveQuest.challengeId, 1, { providerId: "openai", model: "gpt-4o-mini" }),
-      executeChallengeJudgment(liveQuest.challengeId, 1, { providerId: "openai", model: "gpt-4o-mini" }),
+      executeChallengeJudgment(liveQuest.challengeId, 1, { providerId: liveProvider.id, model: liveModel }),
+      executeChallengeJudgment(liveQuest.challengeId, 1, { providerId: liveProvider.id, model: liveModel }),
     ]);
     if (process.argv.includes("--expect-provider-failure")) {
       assert.equal(concurrent.filter((result) => result.ok).length, 0, "an unavailable provider cannot produce a completed recommendation");
@@ -217,7 +221,7 @@ async function main() {
     assert.equal(await prisma.auditLog.count({ where: { challengeId: liveQuest.challengeId, action: AI_RESERVATION_ACTION } }), 1);
     pass("post-settlement judge retry does not invoke or charge AI");
   } else {
-    console.log("SKIP paid provider judgment: pass --live to exercise real OpenAI");
+    console.log("SKIP paid provider judgment: pass --live to exercise a real provider");
   }
   console.log(JSON.stringify({ runId, passed, live, fixtures, retained: true }));
 }
