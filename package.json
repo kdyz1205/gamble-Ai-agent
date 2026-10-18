@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:ai:unit": "tsx scripts/test-agent-draft-policy.ts && tsx scripts/test-agent-orchestrator-fallback.ts && tsx scripts/test-scored-match-judge.ts && tsx scripts/test-judgment-policy.ts",
-    "test:ai:integration": "tsx scripts/test-agent-routing.ts && tsx scripts/test-agent-tool-receipts.ts && tsx scripts/test-llm-router.ts && tsx scripts/test-ai-governance.ts && tsx scripts/test-challenge-lifecycle.ts && tsx scripts/test-judgment-provider-contract.ts && tsx scripts/test-judge-job-recovery.ts && tsx scripts/test-judgment-crash-recovery.ts",
+    "test:ai:integration": "tsx scripts/test-agent-routing.ts && tsx scripts/test-agent-tool-receipts.ts && tsx scripts/test-llm-router.ts && tsx scripts/test-ai-governance.ts && tsx scripts/test-challenge-acceptance.ts && tsx scripts/test-challenge-lifecycle.ts && tsx scripts/test-judgment-provider-contract.ts && tsx scripts/test-judge-job-recovery.ts && tsx scripts/test-judgment-crash-recovery.ts",
     "test:ai:live": "tsx scripts/test-challenge-lifecycle.ts --live",
     "test:browser:lifecycle": "playwright test tests/e2e-gambles/quest-browser-lifecycle.spec.ts --workers=1",
     "test:scored-match": "tsx scripts/test-scored-match-judge.ts",

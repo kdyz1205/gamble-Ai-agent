@@ -13,7 +13,7 @@
  * credits.ts atomic helpers.
  */
 import prisma from "@/lib/db";
-import { spendCredits, addCredits } from "@/lib/credits";
+import { acceptChallenge } from "@/lib/challenge-acceptance";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "@/lib/verdict-review";
 import { createHash } from "node:crypto";
@@ -237,46 +237,13 @@ function inferTypeFromTitle(title: string): string {
 async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
-  // Delegate to the existing atomic accept logic via direct prisma transaction.
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    include: { participants: true },
-  });
-  if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (challenge.status !== "open") return { ok: false, error: `Challenge not open (status=${challenge.status})` };
-  if (challenge.creatorId === ctx.userId) return { ok: false, error: "You cannot accept your own challenge" };
-  if (challenge.participants.some((p) => p.userId === ctx.userId)) {
-    return { ok: false, error: "You are already in this challenge" };
-  }
-
-  if (challenge.stake > 0) {
-    const spend = await spendCredits(ctx.userId, challenge.stake, "stake", `Staked ${challenge.stake} credits on "${challenge.title.slice(0, 40)}"`, challengeId);
-    if (!spend.success) return { ok: false, error: spend.error || "Insufficient credits" };
-  }
   try {
-    await prisma.$transaction(async (tx) => {
-      const count = await tx.participant.count({
-        where: { challengeId, status: { in: ["pending", "accepted"] } },
-      });
-      if (count >= challenge.maxParticipants) throw new Error("FULL");
-      await tx.participant.create({
-        data: { challengeId, userId: ctx.userId, role: "opponent", status: "accepted" },
-      });
-    });
-  } catch (e) {
-    if (challenge.stake > 0) {
-      await addCredits(ctx.userId, challenge.stake, "refund", `Refund — could not join "${challenge.title.slice(0, 40)}"`, challengeId);
-    }
-    return { ok: false, error: e instanceof Error ? e.message === "FULL" ? "Challenge full — stake refunded" : e.message : "Accept failed" };
+    const result = await acceptChallenge(challengeId, ctx.userId);
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, data: { challengeId, status: result.challenge.status, reused: result.reused } };
+  } catch {
+    return { ok: false, error: "Could not accept quest. No credits or seat changes were committed." };
   }
-
-  const fresh = await prisma.participant.count({
-    where: { challengeId, status: { in: ["pending", "accepted"] } },
-  });
-  const newStatus = fresh >= challenge.maxParticipants ? "live" : "open";
-  await prisma.challenge.update({ where: { id: challengeId }, data: { status: newStatus } });
-
-  return { ok: true, data: { challengeId, status: newStatus } };
 }
 
 /* ─────────────────────────────────────────────── */
