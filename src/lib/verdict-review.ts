@@ -1,6 +1,7 @@
 import prisma from "@/lib/db";
 import { ChallengeStatus } from "@/lib/enums";
-import { settleChallenge } from "@/lib/credits";
+import { isOnChainEnabled, settleChallenge } from "@/lib/credits";
+import { withJudgmentExecutionLock } from "./judgment-execution-lock";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -15,6 +16,17 @@ export type ReviewResolution = "uphold" | "override" | "refund";
 const ACTIVE_REVIEW_STATUSES = ["pending", "processing"] as const;
 const DEFAULT_DISPUTE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_REVIEW_SLA_HOURS = 72;
+export const REVIEW_PROCESSING_TIMEOUT_MS = 6 * 60 * 1000;
+const REVIEW_RESOLUTION_STARTED = "review.resolution.started";
+type ResolutionSource = "manual_review" | "review_expiry" | "review_recovery";
+interface ReviewResolutionInput {
+  reviewId: string;
+  reviewerUserId: string | null;
+  resolution: ReviewResolution;
+  winnerId?: string | null;
+  notes: string;
+  source: ResolutionSource;
+}
 
 export class ReviewFlowError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -86,7 +98,7 @@ async function finalizeOutcome(input: {
   winnerId: string | null;
   judgmentId: string;
   actorUserId?: string | null;
-  source: "mutual_acceptance" | "manual_review" | "review_expiry";
+  source: "mutual_acceptance" | ResolutionSource;
 }) {
   const challenge = await prisma.challenge.findUnique({
     where: { id: input.challengeId },
@@ -266,14 +278,17 @@ export async function recordVerdictDecision(input: {
   return { ...finalized, waitingForUserIds: [], reviewCase: current.reviewCase };
 }
 
-async function resolveReviewCaseCore(input: {
-  reviewId: string;
-  reviewerUserId: string | null;
-  resolution: ReviewResolution;
-  winnerId?: string | null;
-  notes: string;
-  source: "manual_review" | "review_expiry";
-}) {
+async function resolveReviewCaseCore(input: ReviewResolutionInput) {
+  const row = await prisma.reviewCase.findUnique({ where: { id: input.reviewId }, select: { challengeId: true } });
+  if (!row) throw new ReviewFlowError("Review case not found", 404);
+  // Reuse the existing six-minute execution lease. It serializes all outcome
+  // writers outside the inference/settlement call and survives a crashed worker.
+  const result = await withJudgmentExecutionLock(row.challengeId, () => resolveClaimedReviewCase(input));
+  if (!result) throw new ReviewFlowError("Review resolution is already processing", 409);
+  return result;
+}
+
+async function resolveClaimedReviewCase(input: ReviewResolutionInput) {
   let review = await prisma.reviewCase.findUnique({
     where: { id: input.reviewId },
     include: {
@@ -286,23 +301,50 @@ async function resolveReviewCaseCore(input: {
     },
   });
   if (!review) throw new ReviewFlowError("Review case not found", 404);
-  if (review.status === "resolved") {
+  if (["resolved", "expired"].includes(review.status)) {
     return { resolved: true, settled: review.challenge.status === ChallengeStatus.settled, review };
   }
   if (!ACTIVE_REVIEW_STATUSES.includes(review.status as (typeof ACTIVE_REVIEW_STATUSES)[number])) {
     throw new ReviewFlowError(`Review cannot be resolved from status ${review.status}`, 409);
   }
 
-  const aiJudgment = review.challenge.judgments[0];
-  if (!aiJudgment) throw new ReviewFlowError("Original AI judgment not found", 409);
+  const resuming = review.status === "processing";
   const participantIds = review.challenge.participants.map((participant) => participant.userId);
-  const winnerId = input.resolution === "uphold"
-    ? aiJudgment.winnerId
-    : input.resolution === "override"
-      ? input.winnerId ?? null
-      : null;
-  if (input.resolution === "override" && (!winnerId || !participantIds.includes(winnerId))) {
-    throw new ReviewFlowError("Override winner must be an accepted participant", 400);
+  let winnerId: string | null;
+  let resolutionSource = input.source;
+  if (resuming) {
+    if (review.resolution !== input.resolution || !review.finalJudgmentId
+      || (input.resolution === "override" && (input.winnerId ?? null) !== review.resolvedWinnerId)) {
+      throw new ReviewFlowError("A different or incomplete review resolution is already processing", 409);
+    }
+    winnerId = review.resolvedWinnerId;
+    const recorded = await prisma.judgment.findFirst({ where: {
+      id: review.finalJudgmentId, challengeId: review.challengeId, method: "manual", status: { in: ["pending", "completed"] },
+    } });
+    if (!recorded || recorded.winnerId !== winnerId || recorded.judgeId !== review.reviewerUserId
+      || (input.resolution === "refund" && winnerId !== null)) {
+      throw new ReviewFlowError("Recorded review decision is incomplete or inconsistent; reconciliation is required", 409);
+    }
+    // Source/actor come from the first persisted decision, not a later caller.
+    resolutionSource = review.reviewerUserId ? "manual_review" : "review_recovery";
+    const started = await prisma.auditLog.findFirst({ where: {
+      challengeId: review.challengeId, action: REVIEW_RESOLUTION_STARTED,
+    }, orderBy: { createdAt: "desc" } });
+    if (started?.payload) {
+      try {
+        const intent = JSON.parse(started.payload);
+        if (intent.reviewId === review.id && ["manual_review", "review_expiry"].includes(intent.source)) resolutionSource = intent.source;
+      } catch { /* Legacy records still retain the explicit resolution and manual judgment. */ }
+    }
+  } else {
+    const original = await prisma.judgment.findFirst({ where: {
+      id: review.originalJudgmentId, challengeId: review.challengeId, method: { in: ["ai", "rules"] }, status: "completed",
+    } });
+    if (!original) throw new ReviewFlowError("Original recommendation not found", 409);
+    winnerId = input.resolution === "uphold" ? original.winnerId : input.resolution === "override" ? input.winnerId ?? null : null;
+  }
+  if ((winnerId && !participantIds.includes(winnerId)) || (input.resolution === "override" && !winnerId)) {
+    throw new ReviewFlowError("Review winner must be an accepted participant", 400);
   }
 
   if (review.status === "pending") {
@@ -330,6 +372,10 @@ async function resolveReviewCaseCore(input: {
         },
       });
       await tx.reviewCase.update({ where: { id: review!.id }, data: { finalJudgmentId: judgment.id } });
+      await tx.auditLog.create({ data: {
+        action: REVIEW_RESOLUTION_STARTED, actorUserId: input.reviewerUserId, challengeId: review!.challengeId,
+        payload: JSON.stringify({ reviewId: review!.id, source: input.source, resolution: input.resolution, winnerId, finalJudgmentId: judgment.id }),
+      } });
       return judgment;
     });
     if (!claimed) throw new ReviewFlowError("Review is already being resolved", 409);
@@ -345,36 +391,40 @@ async function resolveReviewCaseCore(input: {
       },
     });
     if (!review) throw new ReviewFlowError("Review case not found after claim", 500);
-  } else if (
-    review.resolution !== input.resolution
-    || review.resolvedWinnerId !== winnerId
-    || !review.finalJudgmentId
-  ) {
-    throw new ReviewFlowError("A different review resolution is already processing", 409);
+  }
+
+  const settlementMarker = await prisma.creditTx.findUnique({ where: { idempotencyKey: `settlement:${review.challengeId}` } });
+  if (settlementMarker && (winnerId === null ? settlementMarker.type !== "refund"
+    : !(settlementMarker.userId === winnerId && (settlementMarker.type === "win" || (participantIds.length === 1 && settlementMarker.type === "refund"))))) {
+    throw new ReviewFlowError("Committed settlement does not match the recorded review decision; reconciliation is required", 409);
+  }
+  if (resuming && review.challenge.stake > 0 && isOnChainEnabled()
+    && !settlementMarker) {
+    throw new ReviewFlowError("On-chain settlement status is unknown; reconcile the transaction before retrying", 409);
   }
 
   const finalized = await finalizeOutcome({
     challengeId: review.challengeId,
     winnerId,
     judgmentId: review.finalJudgmentId!,
-    actorUserId: input.reviewerUserId,
-    source: input.source,
+    actorUserId: review.reviewerUserId,
+    source: resolutionSource,
   });
   if (!finalized.settled) return { resolved: false, ...finalized, review };
 
   const now = new Date();
-  await prisma.$transaction([
-    prisma.judgment.update({ where: { id: review.finalJudgmentId! }, data: { status: "completed" } }),
-    prisma.reviewCase.update({
-      where: { id: review.id },
-      data: { status: input.source === "review_expiry" ? "expired" : "resolved", resolvedAt: now },
-    }),
-  ]);
-  await appendAuditLog({
-    action: AuditActions.REVIEW_RESOLVED,
-    actorUserId: input.reviewerUserId,
-    challengeId: review.challengeId,
-    payload: { reviewId: review.id, resolution: input.resolution, winnerId, finalJudgmentId: review.finalJudgmentId },
+  await prisma.$transaction(async (tx) => {
+    await tx.judgment.update({ where: { id: review!.finalJudgmentId! }, data: { status: "completed" } });
+    await tx.reviewCase.update({
+      where: { id: review!.id },
+      data: { status: resolutionSource === "review_expiry" ? "expired" : "resolved", resolvedAt: now },
+    });
+    await tx.auditLog.create({ data: {
+      action: AuditActions.REVIEW_RESOLVED,
+      actorUserId: review!.reviewerUserId,
+      challengeId: review!.challengeId,
+      payload: JSON.stringify({ reviewId: review!.id, source: resolutionSource, resolution: review!.resolution, winnerId, finalJudgmentId: review!.finalJudgmentId }),
+    } });
   });
   return { resolved: true, ...finalized, reviewId: review.id, finalJudgmentId: review.finalJudgmentId };
 }
@@ -394,24 +444,34 @@ export async function resolveReviewCase(input: {
 }
 
 export async function expireOverdueReviewCases(limit = 20) {
+  const now = new Date();
   const overdue = await prisma.reviewCase.findMany({
-    where: { status: "pending", expiresAt: { lte: new Date() } },
-    orderBy: { expiresAt: "asc" },
+    where: { OR: [
+      { status: "pending", expiresAt: { lte: now } },
+      { status: "processing", updatedAt: { lte: new Date(now.getTime() - REVIEW_PROCESSING_TIMEOUT_MS) } },
+    ] },
+    orderBy: { updatedAt: "asc" },
     take: Math.min(Math.max(limit, 1), 100),
-    select: { id: true },
+    select: { id: true, status: true, resolution: true, resolvedWinnerId: true, reviewerUserId: true, notes: true },
   });
   const outcomes: Array<{ reviewId: string; ok: boolean; error?: string }> = [];
   for (const item of overdue) {
     try {
-      await resolveReviewCaseCore({
+      const resuming = item.status === "processing";
+      if (resuming && !["uphold", "override", "refund"].includes(item.resolution ?? "")) {
+        throw new ReviewFlowError("Recorded review decision is missing; reconciliation is required", 409);
+      }
+      const result = await resolveReviewCaseCore({
         reviewId: item.id,
-        reviewerUserId: null,
-        resolution: "refund",
-        winnerId: null,
-        notes: "Review SLA expired without a moderator decision; all stakes refunded.",
-        source: "review_expiry",
+        reviewerUserId: resuming ? item.reviewerUserId : null,
+        resolution: resuming ? item.resolution as ReviewResolution : "refund",
+        winnerId: resuming ? item.resolvedWinnerId : null,
+        notes: resuming ? item.notes ?? "" : "Review SLA expired without a moderator decision; all stakes refunded.",
+        source: resuming ? "review_recovery" : "review_expiry",
       });
-      outcomes.push({ reviewId: item.id, ok: true });
+      outcomes.push({ reviewId: item.id, ok: result.resolved,
+        ...(!result.resolved ? { error: "settlement" in result ? result.settlement.error ?? "Settlement not completed" : "Settlement not completed" } : {}),
+      });
     } catch (error) {
       outcomes.push({ reviewId: item.id, ok: false, error: error instanceof Error ? error.message : "unknown" });
     }
@@ -421,7 +481,7 @@ export async function expireOverdueReviewCases(limit = 20) {
 
 export async function listReviewQueue(status = "pending") {
   return prisma.reviewCase.findMany({
-    where: status === "all" ? undefined : { status },
+    where: status === "all" ? undefined : status === "pending" ? { status: { in: [...ACTIVE_REVIEW_STATUSES] } } : { status },
     orderBy: { createdAt: "asc" },
     take: 100,
     include: {
