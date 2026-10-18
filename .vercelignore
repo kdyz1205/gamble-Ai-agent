@@ -1,5 +1,6 @@
 .fastembed_cache/
 .next/
+.next-*/
 node_modules/
 playwright-report/
 tests/e2e-gambles/.playwright/

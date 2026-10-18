@@ -99,14 +99,14 @@ export async function POST(req: NextRequest) {
         return meteredAiCall({
           providerId: "openai", model: modelName, kind: "transcription", maxOutputTokens: 0,
         }, async () => {
-        const response = await fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-          body: upstream,
-          signal: AbortSignal.timeout(remainingAiTimeMs(40_000)),
-        });
-        if (response.ok) recordAiResponse(await response.clone().json(), "openai");
-        return response;
+          const response = await fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+            body: upstream,
+            signal: AbortSignal.timeout(remainingAiTimeMs(40_000)),
+          });
+          if (response.ok) recordAiResponse(await response.clone().json(), "openai");
+          return response;
         });
       };
 
