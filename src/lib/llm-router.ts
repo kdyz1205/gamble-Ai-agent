@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getProviderById, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
 import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
+import { meteredAiCall, recordAiResponse, remainingAiTimeMs } from "./ai-governance";
 
 export interface LlmCompleteParams {
   providerId: string;
@@ -12,36 +13,60 @@ export interface LlmCompleteParams {
   temperature?: number;
 }
 
-const ANTHROPIC_TIMEOUT_MS = 45_000;
+function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? Math.min(maximum, Math.max(1, Math.floor(value)))
+    : fallback;
+}
 
-/** Wrap a promise with a hard timeout so a hung upstream never holds a serverless slot forever. */
-async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
-  ]);
+function requestTimeout(kind: "text" | "vision" | "tool"): number {
+  const vision = kind === "vision";
+  const configured = boundedInteger(
+    Number(process.env[vision ? "AI_VISION_TIMEOUT_MS" : "AI_TEXT_TIMEOUT_MS"]),
+    vision ? 80_000 : 40_000,
+    120_000,
+  );
+  return Math.min(configured, remainingAiTimeMs(configured));
+}
+
+/** Meter the physical request, including body parsing, and abort the actual transport. */
+async function providerJson(
+  providerId: string, model: string, kind: "text" | "vision" | "tool",
+  maxOutputTokens: number, url: string, init: RequestInit,
+): Promise<unknown> {
+  return meteredAiCall({ providerId, model, kind, maxOutputTokens }, async () => {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(requestTimeout(kind)) });
+    if (!response.ok) {
+      // Do not include upstream bodies: they can echo private prompts or credentials.
+      throw new Error(`LLM ${providerId} HTTP ${response.status}`);
+    }
+    const data: unknown = await response.json();
+    recordAiResponse(data, providerId === "google" ? "google" : "openai");
+    return data;
+  });
 }
 
 async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number, temperature?: number) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
-  const client = new Anthropic({ apiKey: key, maxRetries: 1 });
-  const response = await withTimeout(
-    client.messages.create({
+  const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: requestTimeout("text") });
+  const response = await meteredAiCall({ providerId: def.id, model, kind: "text", maxOutputTokens: maxTokens }, async () => {
+    const data = await client.messages.create({
       model,
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: user }],
       ...(temperature !== undefined ? { temperature } : {}),
-    }),
-    ANTHROPIC_TIMEOUT_MS,
-    "anthropic.messages.create",
-  );
+    }, { signal: AbortSignal.timeout(requestTimeout("text")) });
+    recordAiResponse(data, "anthropic");
+    return data;
+  });
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
 }
 
 async function openAiCompatibleComplete(
+  providerId: string,
   baseUrl: string,
   apiKey: string,
   model: string,
@@ -52,7 +77,7 @@ async function openAiCompatibleComplete(
   temperature?: number,
 ) {
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions${querySuffix}`;
-  const res = await fetch(url, {
+  const data = await providerJson(providerId, model, "text", maxTokens, url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -67,12 +92,7 @@ async function openAiCompatibleComplete(
       ],
       ...(temperature !== undefined ? { temperature } : {}),
     }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`LLM HTTP ${res.status}: ${err.slice(0, 400)}`);
-  }
-  const data = (await res.json()) as {
+  }) as {
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   return data.choices?.[0]?.message?.content ?? "";
@@ -80,7 +100,7 @@ async function openAiCompatibleComplete(
 
 async function googleComplete(model: string, system: string, user: string, maxTokens: number, apiKey: string, temperature?: number) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
+  const data = await providerJson("google", model, "text", maxTokens, url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -88,12 +108,7 @@ async function googleComplete(model: string, system: string, user: string, maxTo
       contents: [{ role: "user", parts: [{ text: user }] }],
       generationConfig: { maxOutputTokens: maxTokens, ...(temperature !== undefined ? { temperature } : {}) },
     }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 400)}`);
-  }
-  const data = (await res.json()) as {
+  }) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const parts = data.candidates?.[0]?.content?.parts;
@@ -114,7 +129,7 @@ async function googleCompleteVision(
   for (const img of images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
-  const res = await fetch(url, {
+  const data = await providerJson("google", model, "vision", maxTokens, url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -122,12 +137,7 @@ async function googleCompleteVision(
       contents: [{ role: "user", parts }],
       generationConfig: { maxOutputTokens: maxTokens, ...(temperature !== undefined ? { temperature } : {}) },
     }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini vision HTTP ${res.status}: ${err.slice(0, 400)}`);
-  }
-  const data = (await res.json()) as {
+  }) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   const out = data.candidates?.[0]?.content?.parts;
@@ -145,7 +155,7 @@ async function anthropicCompleteVision(
 ) {
   const key = process.env[def.envVar];
   if (!key) throw new Error(`${def.envVar} is not set`);
-  const client = new Anthropic({ apiKey: key, maxRetries: 1 });
+  const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: requestTimeout("vision") });
   const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [
     { type: "text", text: userText },
     ...images.map(
@@ -159,23 +169,23 @@ async function anthropicCompleteVision(
       }),
     ),
   ];
-  // Vision calls are heavier — give them a bit more headroom.
-  const response = await withTimeout(
-    client.messages.create({
+  const response = await meteredAiCall({ providerId: def.id, model, kind: "vision", maxOutputTokens: maxTokens }, async () => {
+    const data = await client.messages.create({
       model,
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content }],
       ...(temperature !== undefined ? { temperature } : {}),
-    }),
-    ANTHROPIC_TIMEOUT_MS * 2,
-    "anthropic.messages.create (vision)",
-  );
+    }, { signal: AbortSignal.timeout(requestTimeout("vision")) });
+    recordAiResponse(data, "anthropic");
+    return data;
+  });
   const block = response.content[0];
   return block?.type === "text" ? block.text : "";
 }
 
 async function openAiCompatibleVisionComplete(
+  providerId: string,
   baseUrl: string,
   apiKey: string,
   model: string,
@@ -196,7 +206,7 @@ async function openAiCompatibleVisionComplete(
       image_url: { url: `data:${img.mimeType};base64,${img.base64}`, detail: "auto" },
     });
   }
-  const res = await fetch(url, {
+  const data = await providerJson(providerId, model, "vision", maxTokens, url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -211,12 +221,7 @@ async function openAiCompatibleVisionComplete(
       ],
       ...(temperature !== undefined ? { temperature } : {}),
     }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`LLM vision HTTP ${res.status}: ${err.slice(0, 400)}`);
-  }
-  const data = (await res.json()) as {
+  }) as {
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   return data.choices?.[0]?.message?.content ?? "";
@@ -229,7 +234,7 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
-  const maxTokens = params.maxTokens ?? 1024;
+  const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
   const key = process.env[def.envVar];
 
@@ -248,6 +253,7 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
       }
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
       return openAiCompatibleComplete(
+        def.id,
         baseUrl,
         key,
         params.model,
@@ -299,6 +305,7 @@ type OpenAiChatMessage =
     };
 
 async function openAiCompatibleWithTools(
+  providerId: string,
   baseUrl: string,
   apiKey: string,
   model: string,
@@ -319,7 +326,7 @@ async function openAiCompatibleWithTools(
 
   for (let iter = 0; iter < maxIterations; iter++) {
     const useTools = iter < maxIterations - 1; // on the last pass force a final text answer
-    const res = await fetch(url, {
+    const data = await providerJson(providerId, model, "tool", maxTokens, url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -329,12 +336,7 @@ async function openAiCompatibleWithTools(
         ...(useTools ? { tools, tool_choice: "auto" } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
       }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`LLM tool HTTP ${res.status}: ${err.slice(0, 400)}`);
-    }
-    const data = (await res.json()) as {
+    }) as {
       choices?: Array<{
         message?: {
           role: "assistant";
@@ -389,7 +391,7 @@ export async function completeOraclePromptWithTools(params: {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
-  const maxTokens = params.maxTokens ?? 1024;
+  const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
   const key = process.env[def.envVar];
 
@@ -418,6 +420,7 @@ export async function completeOraclePromptWithTools(params: {
   if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
 
   return openAiCompatibleWithTools(
+    def.id,
     baseUrl,
     key,
     params.model,
@@ -427,7 +430,9 @@ export async function completeOraclePromptWithTools(params: {
     maxTokens,
     querySuffix,
     temperature,
-    params.maxIterations,
+    Number.isFinite(params.maxIterations)
+      ? Math.min(3, Math.max(1, Math.floor(params.maxIterations!)))
+      : 3,
   );
 }
 
@@ -446,7 +451,7 @@ export async function completeOracleJudgeVision(params: {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
-  const maxTokens = params.maxTokens ?? 1024;
+  const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
   const key = process.env[def.envVar];
 
@@ -476,6 +481,7 @@ export async function completeOracleJudgeVision(params: {
       }
       if (!baseUrl) throw new Error(`Provider ${def.id} has no baseUrl`);
       return openAiCompatibleVisionComplete(
+        def.id,
         baseUrl,
         key,
         params.model,
