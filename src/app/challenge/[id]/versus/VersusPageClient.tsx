@@ -202,7 +202,7 @@ function PlayerSide({
               </motion.div>
             )}
             <span className={`text-xs font-bold ${hasEvidence ? "text-success" : "text-text-muted"}`}>
-              {hasEvidence ? "Proof submitted" : "Waiting for proof"}
+              {hasEvidence ? "Proof submitted" : ["settled", "cancelled", "disputed"].includes(challengeStatus) ? "No proof submitted" : "Waiting for proof"}
             </span>
           </div>
 
@@ -1047,7 +1047,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                   </motion.div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{verdictRow.method === "rules" ? "Rule result" : "Familiar Result"}</p>
                   <h2 className="text-2xl font-black text-text-primary">
                     Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
                   </h2>
@@ -1057,10 +1057,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 <div className="flex flex-wrap justify-center gap-2">
                   {verdictRow.aiModel && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                      Model: {verdictRow.aiModel}
+                      {verdictRow.method === "rules" ? "Decision" : "Model"}: {verdictRow.aiModel}
                     </span>
                   )}
-                  {typeof verdictRow.confidence === "number" && (
+                  {verdictRow.method !== "rules" && typeof verdictRow.confidence === "number" && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold"
                           style={{
                             background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",

@@ -88,6 +88,7 @@ async function main() {
     const snapshot = JSON.parse(finished.resultJson ?? "null");
     assert.equal(finished.status, "completed");
     assert.equal(snapshot.challenge.status, "disputed");
+    assert.equal(snapshot.judgment.method, "rules");
     assert.equal(snapshot.settlement.success, false);
     assert.equal(snapshot.creditsUsed, 0);
     const persisted = await prisma.challenge.findUniqueOrThrow({ where: { id: ready.id }, include: { judgments: true } });

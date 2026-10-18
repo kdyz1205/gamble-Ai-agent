@@ -266,11 +266,12 @@ export default function ChallengeVerdictPanel({
   const phaseMatchDone = hasOpponent || challenge.status !== "open";
   const phases = [
     { key: "match", done: phaseMatchDone, label: "Challenger", icon: "👤" },
-    { key: "ev", done: Boolean(allSubmitted || settled), label: "Proof", icon: "📸" },
-    { key: "ai", done: Boolean(settled), label: "Familiar Result", icon: "⚡" },
+    { key: "ev", done: Boolean(allSubmitted || settled), label: settled && !allSubmitted ? "Proof window closed" : "Proof", icon: "📸" },
+    { key: "ai", done: Boolean(settled), label: challenge.judgments?.[0]?.method === "rules" ? "Rule result" : "Familiar Result", icon: "⚡" },
   ];
 
   const verdictRow = challenge.judgments?.[0] ?? null;
+  const rulesDecision = verdictRow?.method === "rules";
   const sc = statusColor(challenge.status);
   const showLegacyReceipt = false;
 
@@ -301,7 +302,7 @@ export default function ChallengeVerdictPanel({
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
             >
-              {statusLabel(challenge.status)}
+              {rulesDecision && challenge.status === "disputed" ? "Rule result ready" : statusLabel(challenge.status)}
             </motion.span>
             {challenge.stake > 0 && (
               <span className="text-xs font-bold text-amber-400">{challenge.stake} quest credits</span>
@@ -343,6 +344,19 @@ export default function ChallengeVerdictPanel({
           ))}
         </div>
 
+        {challenge.status === "open" && (!me || me.status === "pending") && !isCreator && (
+          <button type="button" className="sum-world-button px-6 py-3 text-sm font-extrabold" disabled={busy}
+            onClick={() => {
+              setBusy(true); setVerdictErr("");
+              void api.acceptChallenge(challenge.id).then(async () => {
+                await refresh(); onCreditsMayChange();
+              }).catch((error) => setVerdictErr(error instanceof Error ? error.message : "Could not join quest"))
+                .finally(() => setBusy(false));
+            }}>
+            {busy ? "Accepting…" : "Accept quest"}
+          </button>
+        )}
+
         {/* Participants + evidence checklist */}
         <div className="grid gap-2 sm:grid-cols-2">
           {accepted.map((p, i) => {
@@ -377,7 +391,7 @@ export default function ChallengeVerdictPanel({
                     {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
                   </p>
                   <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    {isCreator ? "Creator" : "Challenger"} · {ev ? "Proof in" : "Waiting"}
+                    {isCreator ? "Creator" : "Challenger"} · {ev ? "Proof in" : ["settled", "cancelled", "disputed"].includes(challenge.status) ? "No proof submitted" : "Waiting"}
                   </p>
                   {ev && (
                     <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
@@ -569,7 +583,7 @@ export default function ChallengeVerdictPanel({
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </motion.div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{rulesDecision ? "Rule result" : "Familiar Result"}</p>
               </div>
 
               {/* Winner */}
@@ -591,7 +605,7 @@ export default function ChallengeVerdictPanel({
                     {verdictRow.aiModel}
                   </span>
                 )}
-                {typeof verdictRow.confidence === "number" && (
+                {!rulesDecision && typeof verdictRow.confidence === "number" && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
                         style={{
                           background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",
@@ -605,7 +619,7 @@ export default function ChallengeVerdictPanel({
 
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>Familiar Reasoning</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>{rulesDecision ? "Rule explanation" : "Familiar Reasoning"}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
@@ -668,7 +682,7 @@ export default function ChallengeVerdictPanel({
                 </p>
               )}
 
-              {verdictRow.confidence != null && (
+              {!rulesDecision && verdictRow.confidence != null && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-semibold" style={{ color: "#64748B" }}>
                     <span>Confidence</span>
@@ -691,7 +705,10 @@ export default function ChallengeVerdictPanel({
 
               <motion.button
                 onClick={() => {
-                  const text = `Quest result: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nRefereed by ${verdictRow.aiModel}`;
+                  const outcome = verdictRow.winner?.username ? `${verdictRow.winner.username} wins` : "No winner";
+                  const confidence = rulesDecision ? "" : ` (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)`;
+                  const source = `${rulesDecision ? "Decision" : "Refereed by"}: ${verdictRow.aiModel}`;
+                  const text = `Quest result: "${challenge.title}" — ${outcome}${confidence}\n\n"${verdictRow.reasoning}"\n\n${source}`;
                   void navigator.clipboard.writeText(text);
                 }}
                 whileTap={{ scale: 0.97 }}

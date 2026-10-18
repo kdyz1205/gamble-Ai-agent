@@ -115,6 +115,7 @@ export async function runJudgeJob(jobId: string): Promise<void> {
   const snapshot = {
     judgment: {
       id: result.judgment.id,
+      method: result.judgment.method,
       winnerId: result.judgment.winnerId,
       reasoning: result.judgment.reasoning,
       confidence: result.judgment.confidence,
