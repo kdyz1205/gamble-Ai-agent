@@ -59,9 +59,21 @@ async function main() {
     assert.match(accepted.userVisibleReply, /joined.*Status: live/);
     assert.equal(await prisma.participant.count({ where: { challengeId, status: "accepted" } }), 2);
     const evidence = await turn("uploadEvidence", { challengeId, type: "text", description: "This explicit fixture deliberately has no real video." });
-    assert.equal(evidence.userVisibleReply, "Proof saved.");
-    assert.equal(await prisma.evidence.count({ where: { challengeId, userId: creator } }), 1);
-    await turn("uploadEvidence", { challengeId, type: "text", description: "No video proof: the rules guard must send this to review." }, opponent);
+    assert.equal(typeof evidence.toolError, "string");
+    assert.match(evidence.userVisibleReply, /Could not complete the action/);
+    assert.equal(await prisma.evidence.count({ where: { challengeId } }), 0);
+    const invalidOpponent = await turn("uploadEvidence", { challengeId, type: "text", description: "No video proof: the upload must be rejected." }, opponent);
+    assert.equal(typeof invalidOpponent.toolError, "string");
+    assert.equal(await prisma.evidence.count({ where: { challengeId } }), 0);
+    // Historical invalid rows can predate upload validation. The judge must
+    // still route those rows to review rather than infer a sports winner.
+    await prisma.$transaction([
+      prisma.evidence.createMany({ data: [
+        { challengeId, userId: creator, type: "text", description: "Legacy fixture: no video proof." },
+        { challengeId, userId: opponent, type: "text", description: "Legacy fixture: no video proof." },
+      ] }),
+      prisma.challenge.update({ where: { id: challengeId }, data: { status: "judging" } }),
+    ]);
     const judged = await turn("runVisionJudge", { challengeId });
     assert.equal(judged.toolError, undefined);
     assert.match(judged.userVisibleReply, /Rule recommendation recorded; participant confirmation or review is still required/);

@@ -24,6 +24,9 @@ export async function GET(
         orderBy: { createdAt: "desc" },
       },
       judgments: {
+        // A review may have claimed a pending manual decision without settling.
+        // Only committed recommendations/results belong in the player view.
+        where: { status: "completed" },
         include: {
           winner: { select: { id: true, username: true } },
         },
@@ -52,7 +55,11 @@ export async function GET(
     return Response.json({ error: "Challenge not found" }, { status: 404 });
   }
 
-  return Response.json({ challenge });
+  // Settlement can commit before a crashed review finishes its final record.
+  // Publishing the older recommendation then would show a different winner
+  // from the credit ledger. Keep the result unavailable until recovery ends.
+  const awaitingReviewCompletion = challenge.status === "settled" && challenge.reviewCase?.status === "processing";
+  return Response.json({ challenge: awaitingReviewCompletion ? { ...challenge, judgments: [] } : challenge });
 }
 
 /**
