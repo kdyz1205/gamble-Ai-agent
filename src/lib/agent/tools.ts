@@ -366,6 +366,7 @@ async function runVisionJudgeTool(ctx: ToolContext, args: Record<string, unknown
     ok: true,
     data: {
       judgmentId: result.judgment.id,
+      method: result.judgment.method,
       winnerId: result.judgment.winnerId,
       confidence: result.judgment.confidence,
       aiModel: result.judgment.aiModel,
