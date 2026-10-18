@@ -95,6 +95,7 @@ export default function ChallengeVerdictPanel({
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const pollRef = useRef<(() => void) | null>(null);
   const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
@@ -104,12 +105,22 @@ export default function ChallengeVerdictPanel({
     try {
       const { challenge: c } = await api.getChallenge(challengeId);
       setChallenge(c);
+      return c;
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : "Failed to load challenge");
     }
   }, [challengeId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
+    return startVisiblePolling({ delays: 5_000, task: async () => {
+      const current = await refresh();
+      if (current?.status === "settled" && pollingChallengeRef.current?.id === challengeId) onCreditsMayChange();
+      return !isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing");
+    } });
+  }, [challenge?.status, challenge?.reviewCase?.status, challengeId, refresh, onCreditsMayChange]);
 
   useEffect(() => {
     pollingChallengeRef.current = { id: challengeId, terminal: false };
@@ -138,10 +149,33 @@ export default function ChallengeVerdictPanel({
   const evidenceByUser = new Map((challenge?.evidence ?? []).map(e => [e.userId, e] as const));
   const myEvidence = challenge?.evidence.find(e => e.userId === userId);
   const allSubmitted = challenge && accepted.length > 0 && accepted.every(p => evidenceByUser.has(p.user.id));
+  const deadlineMs = challenge?.deadline ? new Date(challenge.deadline).getTime() : NaN;
+  const deadlineExpired = Number.isFinite(deadlineMs) && now >= deadlineMs;
+  const players = accepted.filter(p => p.role === "creator" || p.role === "opponent");
+  const hasAcceptedOpponent = players.some(p => p.role === "opponent") && players.some(p => p.role === "creator");
+  const bothHaveProofRows = hasAcceptedOpponent && players.every(p => evidenceByUser.has(p.user.id));
+  const bothHaveValidProof = bothHaveProofRows && players.every(p => {
+    const proof = evidenceByUser.get(p.user.id);
+    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
+    return !!proof.description?.trim();
+  });
+  const readyForReview = hasAcceptedOpponent && (bothHaveValidProof || deadlineExpired)
+    && ["live", "judging"].includes(challenge?.status);
+  const reviewCost = challenge?.stake > 0 && bothHaveProofRows ? TIER_COST[tier] : 0;
+
+  useEffect(() => {
+    if (!Number.isFinite(deadlineMs) || isTerminalChallenge(challenge?.status)) return;
+    return startVisiblePolling({ immediate: true, delays: 1_000, task: async () => {
+      const current = Date.now();
+      if (current >= deadlineMs) setNow(current);
+      return current < deadlineMs;
+    } });
+  }, [deadlineMs, challenge?.status]);
 
   const isCreator = challenge?.creatorId === userId;
-  const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
-  const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
+  const canSubmitEvidence = challenge && ["live", "matched"].includes(challenge.status) && !!me
+    && me.status === "accepted" && ["creator", "opponent"].includes(me.role) && !myEvidence && !deadlineExpired;
+  const canRunAi = readyForReview && isCreator && challenge.judgments.length === 0;
   const settled = challenge?.status === "settled";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
@@ -150,7 +184,7 @@ export default function ChallengeVerdictPanel({
 
   const runVerdict = async () => {
     if (!challenge) return;
-    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
+    const cost = reviewCost;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -174,7 +208,7 @@ export default function ChallengeVerdictPanel({
 
   const runVerdictAsync = async () => {
     if (!challenge) return;
-    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
+    const cost = reviewCost;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -256,11 +290,12 @@ export default function ChallengeVerdictPanel({
   const phases = [
     { key: "match", done: phaseMatchDone, label: "Challenger", icon: "👤" },
     { key: "ev", done: Boolean(allSubmitted || settled), label: settled && !allSubmitted ? "Proof window closed" : "Proof", icon: "📸" },
-    { key: "ai", done: Boolean(settled), label: challenge.judgments?.[0]?.method === "rules" ? "Rule result" : "Familiar Result", icon: "⚡" },
+    { key: "ai", done: Boolean(settled), label: challenge.judgments?.[0]?.method === "manual" ? "Human review" : challenge.judgments?.[0]?.method === "rules" ? "Rule result" : "Familiar Result", icon: "⚡" },
   ];
 
   const verdictRow = challenge.judgments?.[0] ?? null;
   const rulesDecision = verdictRow?.method === "rules";
+  const manualDecision = verdictRow?.method === "manual";
   const sc = statusColor(challenge.status);
   const showLegacyReceipt = false;
 
@@ -291,7 +326,7 @@ export default function ChallengeVerdictPanel({
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
             >
-              {rulesDecision && challenge.status === "disputed" ? "Rule result ready" : statusLabel(challenge.status)}
+              {manualDecision && challenge.status === "disputed" ? "Human review ready" : rulesDecision && challenge.status === "disputed" ? "Rule result ready" : statusLabel(challenge.status)}
             </motion.span>
             {challenge.stake > 0 && (
               <span className="text-xs font-bold text-amber-400">{challenge.stake} quest credits</span>
@@ -434,7 +469,7 @@ export default function ChallengeVerdictPanel({
         </AnimatePresence>
 
         {/* AI Judge section */}
-        {challenge.status === "judging" && (
+        {readyForReview && (
           <motion.div
             className="space-y-4 p-5"
             style={{
@@ -456,7 +491,7 @@ export default function ChallengeVerdictPanel({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All proof is in</p>
+                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{deadlineExpired && !bothHaveValidProof ? "Proof window closed" : "All proof is in"}</p>
                 <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
                   {isCreator ? "Familiar writes a result. You confirm before credits update." : "Waiting for the creator to start Familiar review."}
                 </p>
@@ -487,7 +522,7 @@ export default function ChallengeVerdictPanel({
                         </p>
                         <p className="text-[10px] font-medium mt-0.5" style={{ color: selected ? "#9A3412" : "#64748B" }}>{TIER_DESC[t]}</p>
                         <p className="text-[11px] font-bold mt-1" style={{ color: selected ? "#7C2D12" : "#94A3B8" }}>
-                          {(challenge.stake > 0 ? TIER_COST[t] : 0)} cr
+                          {(challenge.stake > 0 && bothHaveProofRows ? TIER_COST[t] : 0)} cr
                         </p>
                       </motion.button>
                     );
@@ -507,7 +542,7 @@ export default function ChallengeVerdictPanel({
                     boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "Reviewing…" : `Ask Familiar for result · ${(challenge.stake > 0 ? TIER_COST[tier] : 0)} cr`}
+                  {busy ? "Reviewing…" : `Ask Familiar for result · ${reviewCost} cr`}
                 </motion.button>
                 <motion.button
                   type="button"
@@ -572,7 +607,7 @@ export default function ChallengeVerdictPanel({
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </motion.div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{rulesDecision ? "Rule result" : "Familiar Result"}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{manualDecision ? "Human review" : rulesDecision ? "Rule result" : "Familiar Result"}</p>
               </div>
 
               {/* Winner */}
@@ -591,10 +626,10 @@ export default function ChallengeVerdictPanel({
               <div className="flex flex-wrap justify-center gap-2">
                 {verdictRow.aiModel && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                    {verdictRow.aiModel}
+                    {manualDecision ? "Human review" : verdictRow.aiModel}
                   </span>
                 )}
-                {!rulesDecision && typeof verdictRow.confidence === "number" && (
+                {!rulesDecision && !manualDecision && typeof verdictRow.confidence === "number" && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
                         style={{
                           background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",
@@ -608,7 +643,7 @@ export default function ChallengeVerdictPanel({
 
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>{rulesDecision ? "Rule explanation" : "Familiar Reasoning"}</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>{manualDecision ? "Review explanation" : rulesDecision ? "Rule explanation" : "Familiar Reasoning"}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
@@ -645,7 +680,7 @@ export default function ChallengeVerdictPanel({
                   Result receipt
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
-                  {verdictRow.aiModel}
+                  {manualDecision ? "Human review" : verdictRow.aiModel}
                 </span>
               </div>
 
@@ -671,7 +706,7 @@ export default function ChallengeVerdictPanel({
                 </p>
               )}
 
-              {!rulesDecision && verdictRow.confidence != null && (
+              {!rulesDecision && !manualDecision && verdictRow.confidence != null && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-semibold" style={{ color: "#64748B" }}>
                     <span>Confidence</span>
@@ -695,8 +730,8 @@ export default function ChallengeVerdictPanel({
               <motion.button
                 onClick={() => {
                   const outcome = verdictRow.winner?.username ? `${verdictRow.winner.username} wins` : "No winner";
-                  const confidence = rulesDecision ? "" : ` (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)`;
-                  const source = `${rulesDecision ? "Decision" : "Refereed by"}: ${verdictRow.aiModel}`;
+                  const confidence = rulesDecision || manualDecision ? "" : ` (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)`;
+                  const source = manualDecision ? "Decision: Human review" : `${rulesDecision ? "Decision" : "Refereed by"}: ${verdictRow.aiModel}`;
                   const text = `Quest result: "${challenge.title}" — ${outcome}${confidence}\n\n"${verdictRow.reasoning}"\n\n${source}`;
                   void navigator.clipboard.writeText(text);
                 }}

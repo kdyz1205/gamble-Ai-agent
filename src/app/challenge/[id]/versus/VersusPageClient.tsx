@@ -252,6 +252,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const pollRef = useRef<(() => void) | null>(null);
   const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
@@ -284,12 +285,12 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    if (!challenge?.status || isTerminalChallenge(challenge.status)) return;
+    if (!challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
     return startVisiblePolling({ delays: 5000, task: async () => {
       const current = await refresh();
-      return !isTerminalChallenge(current?.status);
+      return !isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing");
     } });
-  }, [challenge?.status, refresh]);
+  }, [challenge?.status, challenge?.reviewCase?.status, refresh]);
 
   useEffect(() => {
     pollingChallengeRef.current = { id: challengeId, terminal: false };
@@ -316,8 +317,30 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const creator = challenge?.participants.find((p) => p.role === "creator");
   const opponent = challenge?.participants.find((p) => p.role === "opponent");
   const myEvidence = challenge?.evidence.find((e) => e.userId === uid);
+  const acceptedPlayers = challenge?.participants.filter(p => p.status === "accepted" && (p.role === "creator" || p.role === "opponent")) ?? [];
+  const hasOpponent = acceptedPlayers.some(p => p.role === "creator") && acceptedPlayers.some(p => p.role === "opponent");
+  const bothHaveProofRows = hasOpponent && acceptedPlayers.every(p => challenge.evidence.some(e => e.userId === p.user.id));
+  const bothHaveValidProof = bothHaveProofRows && acceptedPlayers.every(p => {
+    const proof = challenge.evidence.find(e => e.userId === p.user.id);
+    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
+    return !!proof.description?.trim();
+  });
+  const deadlineMs = challenge?.deadline ? new Date(challenge.deadline).getTime() : NaN;
+  const deadlineExpired = Number.isFinite(deadlineMs) && now >= deadlineMs;
+  const readyForReview = hasOpponent && (bothHaveValidProof || deadlineExpired) && ["live", "judging"].includes(challenge?.status);
+  const reviewCost = challenge?.stake > 0 && bothHaveProofRows ? TIER_COST[tier] : 0;
+
+  useEffect(() => {
+    if (!Number.isFinite(deadlineMs) || isTerminalChallenge(challenge?.status)) return;
+    return startVisiblePolling({ immediate: true, delays: 1_000, task: async () => {
+      const current = Date.now();
+      if (current >= deadlineMs) setNow(current);
+      return current < deadlineMs;
+    } });
+  }, [deadlineMs, challenge?.status]);
   const isCreator = uid && challenge?.creatorId === uid;
-  const canCapture = challenge && ["open", "live"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
+  const canCapture = challenge && ["live", "matched"].includes(challenge.status) && !myEvidence && !deadlineExpired
+    && challenge.participants.some(p => p.user.id === uid && p.status === "accepted" && ["creator", "opponent"].includes(p.role));
   const canJoin = challenge && challenge.status === "open" && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
 
   const uploadFile = async (file: File) => {
@@ -393,7 +416,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const runJudge = async () => {
     if (!challenge) return;
-    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
+    const cost = reviewCost;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -417,7 +440,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const runJudgeAsync = async () => {
     if (!challenge) return;
-    const cost = challenge.stake > 0 ? TIER_COST[tier] : 0;
+    const cost = reviewCost;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -574,6 +597,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const status = statusConfig(challenge.status);
   const verdictRow = challenge.judgments?.[0] ?? null;
+  const manualDecision = verdictRow?.method === "manual";
   const creatorEvidence = challenge.evidence.find(e => e.userId === creator?.user.id);
   const opponentEvidence = challenge.evidence.find(e => e.userId === opponent?.user.id);
 
@@ -915,7 +939,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
         {/* ── AI Judge Section ── */}
         <AnimatePresence>
-          {challenge.status === "judging" && isCreator && challenge.judgments.length === 0 && (
+          {readyForReview && isCreator && challenge.judgments.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -942,7 +966,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </motion.div>
                   <div>
                     <h3 className="text-base font-black text-text-primary">Familiar Ready</h3>
-                    <p className="text-[10px] text-text-muted">All proof is in. Choose your Familiar tier and create the result.</p>
+                    <p className="text-[10px] text-text-muted">{deadlineExpired && !bothHaveValidProof ? "The proof window closed. Request the deadline-rule result." : "All proof is in. Choose your Familiar tier and create the result."}</p>
                   </div>
                 </div>
 
@@ -974,7 +998,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                         </p>
                         <p className="text-[10px] text-text-muted mt-0.5">{TIER_DESC[t]}</p>
                         <p className="text-xs font-bold mt-1" style={{ color: tier === t ? "#f5a623" : "rgba(240,240,255,0.35)" }}>
-                          {challenge.stake > 0 ? TIER_COST[t] : 0} credits
+                          {challenge.stake > 0 && bothHaveProofRows ? TIER_COST[t] : 0} credits
                         </p>
                       </div>
                     </motion.button>
@@ -994,7 +1018,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       boxShadow: "0 8px 32px rgba(245,166,35,0.2)",
                     }}
                   >
-                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${challenge.stake > 0 ? TIER_COST[tier] : 0} cr)`}
+                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${reviewCost} cr)`}
                   </motion.button>
                   <motion.button
                     type="button"
@@ -1014,7 +1038,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         </AnimatePresence>
 
         {/* ── Non-creator waiting for judge ── */}
-        {challenge.status === "judging" && !isCreator && (
+        {readyForReview && !isCreator && (
           <motion.div
             className="rounded-2xl p-5 text-center"
             style={{ background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.15)" }}
@@ -1064,7 +1088,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                   </motion.div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{verdictRow.method === "rules" ? "Rule result" : "Familiar Result"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{manualDecision ? "Human review" : verdictRow.method === "rules" ? "Rule result" : "Familiar Result"}</p>
                   <h2 className="text-2xl font-black text-text-primary">
                     Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
                   </h2>
@@ -1074,10 +1098,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 <div className="flex flex-wrap justify-center gap-2">
                   {verdictRow.aiModel && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                      {verdictRow.method === "rules" ? "Decision" : "Model"}: {verdictRow.aiModel}
+                      {manualDecision || verdictRow.method === "rules" ? "Decision" : "Model"}: {manualDecision ? "Human review" : verdictRow.aiModel}
                     </span>
                   )}
-                  {verdictRow.method !== "rules" && typeof verdictRow.confidence === "number" && (
+                  {!manualDecision && verdictRow.method !== "rules" && typeof verdictRow.confidence === "number" && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold"
                           style={{
                             background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",
@@ -1091,7 +1115,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
                 {/* Reasoning with typewriter */}
                 <div className="rounded-xl p-5" style={{ background: "rgba(6,6,15,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">Familiar Reasoning</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">{manualDecision ? "Review explanation" : verdictRow.method === "rules" ? "Rule explanation" : "Familiar Reasoning"}</p>
                   <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
                     <TypewriterText text={verdictRow.reasoning ?? ""} speed={12} />
                   </p>
