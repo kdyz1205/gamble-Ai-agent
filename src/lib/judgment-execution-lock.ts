@@ -11,13 +11,23 @@ export async function withJudgmentExecutionLock<T>(challengeId: string, fn: (att
   const token = randomUUID();
   const acquired = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${challengeId}, 7119))`;
-    const prior = await tx.auditLog.findFirst({
-      where: { challengeId, action: CLAIM }, orderBy: { createdAt: "desc" },
-    });
-    if (prior && Date.now() - prior.createdAt.getTime() < LEASE_MS) {
-      const released = await tx.auditLog.findFirst({ where: { action: RELEASE, payload: prior.id } });
-      if (!released) return false;
-    }
+    // payload is TEXT in the canonical schema and JSONB in legacy databases.
+    // Compare its text representation only for historical release records;
+    // new releases have a deterministic ID, independent of payload storage.
+    // Check every recent claim so equal-millisecond timestamps cannot hide an
+    // active worker behind an earlier, already released claim.
+    const active = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT claim."id" FROM "AuditLog" claim
+      WHERE claim."challengeId" = ${challengeId} AND claim."action" = ${CLAIM}
+        AND claim."createdAt" > ${new Date(Date.now() - LEASE_MS)}
+        AND NOT EXISTS (
+          SELECT 1 FROM "AuditLog" release
+          WHERE release."challengeId" = claim."challengeId" AND release."action" = ${RELEASE}
+            AND (release."id" = 'judgment-release:' || claim."id"
+              OR release."payload"::text = claim."id"
+              OR release."payload"::text = to_json(claim."id")::text)
+        ) LIMIT 1`;
+    if (active.length) return false;
     await tx.auditLog.create({ data: { id: token, action: CLAIM, challengeId } });
     return true;
   });
@@ -25,7 +35,10 @@ export async function withJudgmentExecutionLock<T>(challengeId: string, fn: (att
   try {
     return await fn(token);
   } finally {
-    // Preserve the claim on failure. It expires safely; never erase execution evidence.
-    await prisma.auditLog.create({ data: { action: RELEASE, challengeId, payload: token } });
+    // Append a release even when fn throws; a killed worker's unreleased claim
+    // instead expires after six minutes. Never erase execution evidence.
+    await prisma.auditLog.create({ data: {
+      id: `judgment-release:${token}`, action: RELEASE, challengeId, payload: JSON.stringify({ claimId: token }),
+    } });
   }
 }
