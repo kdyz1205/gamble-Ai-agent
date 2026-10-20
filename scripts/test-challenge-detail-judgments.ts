@@ -17,7 +17,9 @@ async function main() {
   let challengeId: string | undefined;
   try {
     const challenge = await prisma.challenge.create({ data: {
-      title: `Explicit review display fixture ${run}`, creatorId: players[0].id, type: "General", status: "disputed", isPublic: false,
+      // This direct anonymous route contract exercises public result display.
+      // Private authorization is verified through real NextAuth HTTP sessions.
+      title: `Explicit review display fixture ${run}`, creatorId: players[0].id, type: "General", status: "disputed", isPublic: true, visibility: "public",
       participants: { create: players.map((user, index) => ({ userId: user.id, role: index === 0 ? "creator" : "opponent", status: "accepted" })) },
     } });
     challengeId = challenge.id;
