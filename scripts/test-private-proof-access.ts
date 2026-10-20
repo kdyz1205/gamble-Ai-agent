@@ -53,7 +53,27 @@ async function main() {
       const discovery = await (await anon.get("/api/challenges?limit=50")).json();
       assert.equal(discovery.challenges.some((quest: { id: string }) => quest.id === id), visibility === "public");
     }
+    let legacyIncompleteProof: string = "not_run_cloud_data_is_preserved";
+    if (["localhost", "127.0.0.1"].includes(new URL(base).hostname) && process.env.DATABASE_URL) {
+      const dbUrl = new URL(process.env.DATABASE_URL);
+      assert(["localhost", "127.0.0.1"].includes(dbUrl.hostname) && dbUrl.pathname === "/summoner_verification");
+      const { Client } = await import("pg");
+      const db = new Client({ connectionString: dbUrl.href }); await db.connect();
+      const questId = quests.at(-1)!;
+      const proof = (await db.query('SELECT id, description FROM "Evidence" WHERE "challengeId"=$1 LIMIT 1', [questId])).rows[0];
+      try {
+        // Only this run's local synthetic fixture: represent an invalid legacy
+        // proof row after readiness was already advanced by older code.
+        await db.query('UPDATE "Evidence" SET description=\' \' WHERE id=$1', [proof.id]);
+        assert.equal((await creator.post(`/api/challenges/${questId}/judge/async`)).status(), 409);
+        assert.equal((await db.query('SELECT count(*)::int AS count FROM "JudgeJob" WHERE "challengeId"=$1', [questId])).rows[0].count, 0);
+        legacyIncompleteProof = "409_no_job_created";
+      } finally {
+        await db.query('UPDATE "Evidence" SET description=$2 WHERE id=$1', [proof.id, proof.description]); await db.end();
+      }
+    }
     const receipt = { base, quests, passed: 3, checks: ["private_and_invite_only_proof_requires_authorized_viewer", "public_proof_and_invitation_preview_preserved", "private_activity_and_discovery_excluded"], providerCalls: 0, at: new Date().toISOString() };
+    Object.assign(receipt, { legacyIncompleteProof });
     await mkdir("output", { recursive: true });
     await writeFile(process.env.PRIVATE_PROOF_RECEIPT ?? "output/private-proof-access.json", JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));

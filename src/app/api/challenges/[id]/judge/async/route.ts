@@ -44,7 +44,9 @@ export async function POST(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    select: { creatorId: true, status: true, title: true, stake: true },
+    select: { creatorId: true, status: true, title: true, stake: true, evidenceType: true,
+      participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
+      evidence: { select: { userId: true, type: true, url: true, description: true } } },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -60,6 +62,15 @@ export async function POST(
       { status: 400 },
     );
   }
+  const players = challenge.participants;
+  const complete = players.length === 2 && players.some((p) => p.role === "creator" && p.userId === challenge.creatorId)
+    && players.some((p) => p.role === "opponent") && players.every((p) => {
+      const proof = challenge.evidence.find((e) => e.userId === p.userId);
+      if (!proof) return false;
+      if (["photo", "video"].includes(challenge.evidenceType)) return proof.type === challenge.evidenceType && !!proof.url?.trim();
+      return !!proof.description?.trim();
+    });
+  if (!complete) return Response.json({ error: "Background review needs valid proof from both players. Use the deadline-rule review when proof is missing." }, { status: 409 });
 
   const cost = challenge.stake > 0 ? TIER_MULTIPLIER[tierId] : 0;
   const balance = await getCredits(user.userId);

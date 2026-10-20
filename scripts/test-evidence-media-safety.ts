@@ -91,7 +91,7 @@ async function main() {
     }
     const receipt = { passed: checks.length, checks, realModelInference: false, at: new Date().toISOString() };
     await mkdir("output", { recursive: true });
-    await writeFile("output/evidence-media-safety.json", JSON.stringify(receipt, null, 2));
+    await writeFile(process.argv.includes("--live") ? "output/evidence-media-safety-live.json" : "output/evidence-media-safety-unit.json", JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } finally {
     // Only the exact synthetic objects created by this run are eligible for cleanup.
