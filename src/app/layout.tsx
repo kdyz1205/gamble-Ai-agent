@@ -4,6 +4,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
 import "./globals.css";
 import "./summoner-world.css";
+import "./summoner-refinement.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
@@ -28,8 +29,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
   themeColor: "#C8EFFF",
   colorScheme: "light",

@@ -26,7 +26,7 @@ export default function SceneTopBar({ title = sceneBrand.world, rightSlot }: Sce
           <>
             <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 shadow-[0_5px_0_rgba(23,53,75,0.06)] sm:inline-flex">
               <span className="grid h-6 w-6 place-items-center rounded-lg bg-[rgba(112,214,165,0.2)] text-[#157b58]"><QuestGlyph className="h-3.5 w-3.5" kind="spark" /></span>
-              Pico ready
+              Pico can help
             </span>
             <Link className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href="/summons">
               <QuestGlyph className="h-4 w-4" kind="spark" />
