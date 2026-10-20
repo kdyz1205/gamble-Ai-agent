@@ -12,7 +12,7 @@ import { Pool } from "pg";
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3017";
 
-test.use({ channel: "chrome" });
+test.use({ ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}) });
 
 test("zero-credit friends publish and accept through UI; expired no-proof quest yields void and mutual-consent receipt", async ({ browser }) => {
 

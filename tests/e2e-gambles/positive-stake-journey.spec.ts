@@ -6,7 +6,7 @@ import { Pool } from "pg";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3017";
-test.use({ channel: "chrome", video: "on" });
+test.use({ ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}), video: "on" });
 
 test("registered friends stake five credits, submit real text proof, wait deadline and consent to exactly one settlement", async ({ browser }, testInfo) => {
   test.setTimeout(240_000);

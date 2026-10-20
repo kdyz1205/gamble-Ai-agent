@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3017";
-test.use({ channel: "chrome", video: "off", trace: "off", launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] } });
+test.use({ ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}), video: "off", trace: "off", launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] } });
 
 test("private invitation keeps join controls while proof access stops outsider polling", async ({ browser }, testInfo) => {
   test.setTimeout(120_000);
