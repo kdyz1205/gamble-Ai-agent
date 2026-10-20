@@ -13,7 +13,7 @@ export default function SceneRouteGlyph({ className, href }: SceneRouteGlyphProp
     return <QuixMark className={className ?? "h-4 w-4"} />;
   }
 
-  if (href === "/contracts/bind") {
+  if (href === "/quests") {
     return (
       <span aria-hidden className={baseClass}>
         <span className="absolute inset-x-[22%] inset-y-[10%] rounded-[3px] border border-current" />
@@ -24,7 +24,7 @@ export default function SceneRouteGlyph({ className, href }: SceneRouteGlyphProp
     );
   }
 
-  if (href === "/duel/demo") {
+  if (href === "/quests?view=proof") {
     return (
       <span aria-hidden className={baseClass}>
         <span className="absolute left-1/2 top-1/2 h-[58%] w-[58%] -translate-x-1/2 -translate-y-1/2 rotate-45 border border-current" />
@@ -34,7 +34,7 @@ export default function SceneRouteGlyph({ className, href }: SceneRouteGlyphProp
     );
   }
 
-  if (href === "/rituals") {
+  if (href === "/me") {
     return (
       <span aria-hidden className={baseClass}>
         <span className="absolute left-[23%] top-[28%] h-1.5 w-1.5 rounded-full bg-current" />
@@ -47,7 +47,7 @@ export default function SceneRouteGlyph({ className, href }: SceneRouteGlyphProp
     );
   }
 
-  if (href === "/enter") {
+  if (href === "/quests?view=results") {
     return (
       <span aria-hidden className={baseClass}>
         <span className="absolute inset-x-[22%] bottom-[12%] top-[12%] rounded-t-full border border-current" />
