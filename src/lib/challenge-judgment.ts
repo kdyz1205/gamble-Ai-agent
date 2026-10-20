@@ -101,6 +101,12 @@ async function executeClaimedJudgment(
   if (challenge.status !== "judging" && !(options?.allowLive && challenge.status === "live")) {
     return { ok: false, error: "Challenge is not in judging state", status: 400 };
   }
+  const players = challenge.participants.filter((p) => p.role === "creator" || p.role === "opponent");
+  if (players.filter((p) => p.role === "creator").length !== 1
+    || players.find((p) => p.role === "creator")?.userId !== challenge.creatorId
+    || players.filter((p) => p.role === "opponent").length > 1) {
+    return { ok: false, error: "Quest players are inconsistent; reconcile the participant record before judgment", status: 409 };
+  }
 
   const offChain = !isOnChainEnabled();
   if (offChain) await reconcileJudgmentFees(challengeId);

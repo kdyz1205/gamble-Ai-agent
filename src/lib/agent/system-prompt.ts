@@ -59,7 +59,7 @@ The server keeps this object between turns. Your draftPatch merges shallow:
   "stakeType":    "credits" | "none" | null,
   "evidenceType": "video" | "photo" | "text" | null,
   "judgeRule":    string | null,   // plain-language rule the AI judge will apply
-  "timeWindow":   string | null,   // "now", "within 1 hour", "by tomorrow", etc.
+  "timeWindow":   string | null,   // explicit duration such as "within 1 hour" or a future ISO timestamp with timezone; ask if ambiguous
   "safetyNotes":  string[],        // list any redirects you made ("swapped alcohol → water")
   "readyToPublish": boolean        // ONLY set true when title + proposition + stake + evidenceType + judgeRule are all populated
 }

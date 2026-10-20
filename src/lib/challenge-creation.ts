@@ -1,3 +1,4 @@
+import { parseProofDeadline } from "./proof-deadline";
 import prisma from "./db";
 import { AuditActions } from "./audit-log";
 
@@ -36,20 +37,12 @@ function creationInput(raw: unknown) {
   }
   let deadlineDate: Date | null = null;
   if (text.deadline) {
-    const deadline = text.deadline;
-    const hours = deadline.match(/(\d+)\s*hour/i);
-    const days = deadline.match(/(\d+)\s*day/i);
-    const weeks = deadline.match(/(\d+)\s*week/i);
-    const minutes = deadline.match(/(\d+)\s*min/i);
-    deadlineDate = new Date();
-    if (hours) deadlineDate.setHours(deadlineDate.getHours() + Number(hours[1]));
-    else if (days) deadlineDate.setDate(deadlineDate.getDate() + Number(days[1]));
-    else if (weeks) deadlineDate.setDate(deadlineDate.getDate() + Number(weeks[1]) * 7);
-    else if (minutes) deadlineDate.setMinutes(deadlineDate.getMinutes() + Number(minutes[1]));
-    else deadlineDate.setHours(deadlineDate.getHours() + 48);
-    if (!Number.isFinite(deadlineDate.getTime())) throw new ChallengeCreationInputError("deadline is outside the supported date range");
+    deadlineDate = parseProofDeadline(text.deadline);
+    if (!deadlineDate) throw new ChallengeCreationInputError("Use an explicit proof duration (for example 2 hours) or a future ISO timestamp with timezone");
   }
-  const isPublic = body.isPublic === undefined ? true : body.isPublic as boolean;
+  if (text.visibility && !["public", "private", "invite_only"].includes(text.visibility)) throw new ChallengeCreationInputError("visibility must be public, private or invite_only");
+  const isPublic = (body.isPublic === undefined ? true : body.isPublic as boolean)
+    && (!text.visibility || text.visibility === "public");
   return { title: body.title.trim(), stake, ...required, ...text, deadline: deadlineDate,
     aiReview: body.aiReview === undefined ? true : body.aiReview as boolean, isPublic,
     visibility: text.visibility || (isPublic ? "public" : "private") };

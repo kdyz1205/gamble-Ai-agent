@@ -1,5 +1,6 @@
 import prisma from "./db";
 import { AuditActions } from "./audit-log";
+import { isEvidenceUrlAllowed, isYouTubeUrl } from "./media/evidence-url";
 
 export class EvidenceSubmissionError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -12,6 +13,10 @@ function evidenceInput(raw: unknown) {
   if (typeof type !== "string" || !type.trim()) throw new EvidenceSubmissionError("Evidence type must be a non-empty string", 400);
   for (const field of ["url", "description"] as const) {
     if (body[field] !== undefined && body[field] !== null && typeof body[field] !== "string") throw new EvidenceSubmissionError(`${field} must be a string or null`, 400);
+  }
+  if (typeof body.url === "string" && body.url.trim()
+    && (!isEvidenceUrlAllowed(body.url.trim()) || isYouTubeUrl(body.url.trim()))) {
+    throw new EvidenceSubmissionError("Proof must link a direct public HTTPS media file or use an upload", 400);
   }
   return { type, url: body.url as string | null | undefined ?? null,
     description: body.description as string | null | undefined ?? null,

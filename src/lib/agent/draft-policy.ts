@@ -1,3 +1,4 @@
+import { parseProofDeadline } from "../proof-deadline";
 import type { DraftState, RawAgentResponse } from "./types";
 
 const SHORT_SCORED_SPORT = /\b(badminton|table tennis|ping[- ]?pong|tennis|pickleball|volleyball)\b|羽毛球|乒乓球|网球|匹克球|排球/i;
@@ -33,7 +34,7 @@ export function getDraftIssues(draft: DraftState): string[] {
   if (draft.stake === 0 && draft.stakeType !== "none") issues.push("credit type");
   if (!draft.evidenceType) issues.push("proof type");
   if (!draft.judgeRule || draft.judgeRule.length < 25) issues.push("AI referee rule");
-  if (!draft.timeWindow) issues.push("proof window");
+  if (!draft.timeWindow || !parseProofDeadline(draft.timeWindow)) issues.push("proof window");
 
   const sportText = scoredSportText(draft);
   if (SHORT_SCORED_SPORT.test(sportText)) {

@@ -143,7 +143,8 @@ async function main() {
     for (const policy of ["video", "photo"]) {
       const media = await makeQuest(policy, policy);
       fixtures.push(media.id);
-      for (const invalid of [{ type: "text", description: "Text cannot replace required media" }, { type: policy }, { type: policy, url: "   " }]) {
+      for (const invalid of [{ type: "text", description: "Text cannot replace required media" }, { type: policy }, { type: policy, url: "   " },
+        ...["https://127.0.0.1/private", "http://example.com/proof", "https://youtube.com/watch?v=qa", "https://user:password@example.com/proof"].map((url) => ({ type: policy, url }))]) {
         await assert.rejects(submit(creator, media.id, invalid));
       }
       assert.equal(await prisma.evidence.count({ where: { challengeId: media.id } }), 0);

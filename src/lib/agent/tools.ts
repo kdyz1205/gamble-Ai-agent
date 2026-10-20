@@ -1,3 +1,4 @@
+import { parseProofDeadline } from "../proof-deadline";
 /**
  * Agent Orchestrator — tool implementations.
  *
@@ -96,7 +97,8 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
   }
 
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
-  const deadline = parseTimeWindowToDate(timeWindow);
+  const deadline = parseProofDeadline(timeWindow);
+  if (!deadline) return { ok: false, error: "Proof window must be an explicit duration or future ISO timestamp with timezone" };
   const safeRequestId = typeof ctx.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(ctx.requestId)
     ? ctx.requestId
     : null;
@@ -206,21 +208,6 @@ function challengeResult(
   };
 }
 
-function parseTimeWindowToDate(tw: string): Date {
-  const s = tw.toLowerCase();
-  const now = Date.now();
-  const hr = /(\d+)\s*(?:hours?|hrs?|小时|小時)/i.exec(s);
-  const min = /(\d+)\s*(?:mins?|minutes?|分钟|分鐘)/i.exec(s);
-  const day = /(\d+)\s*(?:days?|天)/i.exec(s);
-  const week = /(\d+)\s*(?:weeks?|周|週)/i.exec(s);
-  let addMs = 24 * 60 * 60 * 1000;
-  if (hr) addMs = Math.max(1, Number(hr[1])) * 60 * 60 * 1000;
-  else if (min) addMs = Math.max(1, Number(min[1])) * 60 * 1000;
-  else if (day) addMs = Math.max(1, Number(day[1])) * 24 * 60 * 60 * 1000;
-  else if (week) addMs = Math.max(1, Number(week[1])) * 7 * 24 * 60 * 60 * 1000;
-  else if (/tomorrow|明天/.test(s)) addMs = 24 * 60 * 60 * 1000;
-  return new Date(now + addMs);
-}
 
 function inferTypeFromTitle(title: string): string {
   const t = title.toLowerCase();

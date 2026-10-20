@@ -77,7 +77,9 @@ async function main() {
     for (const body of [null, [], { title: 23 }, { title: " " }, { title: "Valid", stake: -1 }, { title: "Valid", stake: 0.5 },
       { title: "Valid", stake: "5" }, { title: "Valid", stake: Number.NaN }, { title: "Valid", stake: Number.POSITIVE_INFINITY },
       { title: "Valid", stake: 2_147_483_648 }, { title: "Valid", description: {} }, { title: "Valid", isPublic: "true" },
-      { title: "Valid", deadline: "999999999999999999999999 hours" }]) {
+      { title: "Valid", deadline: "999999999999999999999999 hours" },
+      { title: "Valid", stake: 5, deadline: "tomorrow evening" }, { title: "Valid", stake: 5, deadline: "0 hours" },
+      { title: "Valid", stake: 5, deadline: "2027-02-30T10:00:00Z" }]) {
       const rejected = await submit(invalid, body);
       assert.equal(rejected.status, 400, JSON.stringify({ body, rejected }));
     }
