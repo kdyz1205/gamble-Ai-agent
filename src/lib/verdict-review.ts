@@ -3,7 +3,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { isOnChainEnabled, settleChallenge } from "@/lib/credits";
 import { withJudgmentExecutionLock } from "./judgment-execution-lock";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
-import type { Prisma } from "@/generated/prisma/client";
+import type { CreditTx, Prisma } from "@/generated/prisma/client";
 
 export const VerdictDecision = {
   accepted: "accepted",
@@ -18,6 +18,7 @@ const DEFAULT_DISPUTE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_REVIEW_SLA_HOURS = 72;
 export const REVIEW_PROCESSING_TIMEOUT_MS = 6 * 60 * 1000;
 const REVIEW_RESOLUTION_STARTED = "review.resolution.started";
+const CONSENT_SETTLEMENT_STARTED = "verdict.settlement.started";
 type ResolutionSource = "manual_review" | "review_expiry" | "review_recovery";
 interface ReviewResolutionInput {
   reviewId: string;
@@ -26,6 +27,58 @@ interface ReviewResolutionInput {
   winnerId?: string | null;
   notes: string;
   source: ResolutionSource;
+}
+
+function auditPayload(payload: unknown): Record<string, unknown> | null {
+  try {
+    const value = typeof payload === "string" ? JSON.parse(payload) : payload;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch { return null; }
+}
+
+function playerIds(challenge: { creatorId: string; participants: Array<{ userId: string; role: string }> }): string[] {
+  const ids = challenge.participants.map((participant) => participant.userId).sort();
+  const creators = challenge.participants.filter((participant) => participant.role === "creator");
+  if (ids.length < 2 || new Set(ids).size !== ids.length || creators.length !== 1 || creators[0].userId !== challenge.creatorId) {
+    throw new ReviewFlowError("Recorded quest players are inconsistent; reconciliation is required", 409);
+  }
+  return ids;
+}
+
+async function assertRecordedEscrow(challengeId: string, stake: number, participantIds: string[]) {
+  const ledger = await prisma.creditTx.findMany({ where: { challengeId } });
+  if (!Number.isSafeInteger(stake) || stake < 0 || ledger.some((row) => row.type === "stake"
+    && (row.amount >= 0 || !participantIds.includes(row.userId) || stake === 0))) {
+    throw new ReviewFlowError("Recorded stake does not match the quest escrow; reconciliation is required", 409);
+  }
+  const isFeeRefund = (refund: CreditTx) => {
+    const fee = refund.idempotencyKey?.startsWith(`refund:judge-fee:${challengeId}:`)
+      ? ledger.find((row) => row.idempotencyKey === refund.idempotencyKey!.slice("refund:".length)) : null;
+    return !!fee && fee.type === "ai_judge" && fee.userId === refund.userId && fee.amount === -refund.amount && refund.amount > 0;
+  };
+  const outcomes = ledger.filter((row) => row.type === "win" || row.type === "loss" || (row.type === "refund" && !isFeeRefund(row)));
+  if (stake === 0) {
+    if (outcomes.length) throw new ReviewFlowError("Free quest has an unexpected settlement; reconciliation is required", 409);
+    return;
+  }
+  for (const userId of participantIds) {
+    const debits = ledger.filter((row) => row.userId === userId && row.type === "stake");
+    if (debits.some((row) => row.amount >= 0) || debits.reduce((sum, row) => sum - row.amount, 0) !== stake) {
+      throw new ReviewFlowError("Recorded stake does not match the quest escrow; reconciliation is required", 409);
+    }
+  }
+  const marker = ledger.find((row) => row.idempotencyKey === `settlement:${challengeId}`);
+  if (marker) {
+    const validWin = marker.type === "win" && participantIds.includes(marker.userId) && marker.amount === stake * participantIds.length
+      && outcomes.length === participantIds.length && outcomes.filter((row) => row.type === "win").length === 1
+      && participantIds.filter((id) => id !== marker.userId).every((id) => outcomes.some((row) => row.userId === id && row.type === "loss" && row.amount === 0));
+    const validRefund = marker.type === "refund" && participantIds.includes(marker.userId)
+      && outcomes.length === participantIds.length && outcomes.every((row) => row.type === "refund" && row.amount === stake)
+      && participantIds.every((id) => outcomes.some((row) => row.userId === id));
+    if (!validWin && !validRefund) throw new ReviewFlowError("Recorded settlement does not match the stake receipts; reconciliation is required", 409);
+    return;
+  }
+  if (outcomes.length) throw new ReviewFlowError("Unmarked stake return or settlement requires reconciliation", 409);
 }
 
 export class ReviewFlowError extends Error {
@@ -103,10 +156,12 @@ async function finalizeOutcome(input: {
   const challenge = await prisma.challenge.findUnique({
     where: { id: input.challengeId },
     include: {
-      participants: { where: { status: "accepted" }, select: { userId: true } },
+      participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
     },
   });
   if (!challenge) throw new ReviewFlowError("Challenge not found", 404);
+  const participantIds = playerIds(challenge);
+  await assertRecordedEscrow(challenge.id, challenge.stake, participantIds);
   if (challenge.status === ChallengeStatus.settled) {
     return { settled: true, status: ChallengeStatus.settled, settlement: { success: true } };
   }
@@ -139,16 +194,16 @@ async function finalizeOutcome(input: {
     return { settled: false, status: ChallengeStatus.pending_settlement, settlement };
   }
 
-  const completed = await prisma.challenge.updateMany({
-    where: { id: challenge.id, status: ChallengeStatus.pending_settlement },
-    data: { status: ChallengeStatus.settled },
-  });
-
-  if (completed.count > 0) {
+  await prisma.$transaction(async (tx) => {
+    const completed = await tx.challenge.updateMany({
+      where: { id: challenge.id, status: ChallengeStatus.pending_settlement },
+      data: { status: ChallengeStatus.settled },
+    });
+    if (completed.count === 0) return;
     const winner = input.winnerId
-      ? await prisma.user.findUnique({ where: { id: input.winnerId }, select: { username: true } })
+      ? await tx.user.findUnique({ where: { id: input.winnerId }, select: { username: true } })
       : null;
-    await prisma.activityEvent.create({
+    await tx.activityEvent.create({
       data: {
         type: input.winnerId ? "challenge_settled" : "challenge_refunded",
         message: input.winnerId
@@ -158,27 +213,43 @@ async function finalizeOutcome(input: {
         challengeId: challenge.id,
       },
     });
-    await appendAuditLog({
+    await tx.auditLog.create({ data: {
       action: AuditActions.CHALLENGE_SETTLED,
       actorUserId: input.actorUserId,
       challengeId: challenge.id,
-      payload: { source: input.source, judgmentId: input.judgmentId, winnerId: input.winnerId, txHash: settlement.txHash ?? null },
-    });
-  }
+      payload: JSON.stringify({ source: input.source, judgmentId: input.judgmentId, winnerId: input.winnerId, txHash: settlement.txHash ?? null }),
+    } });
+  });
 
   return { settled: true, status: ChallengeStatus.settled, settlement };
 }
 
-export async function recordVerdictDecision(input: {
+interface VerdictDecisionInput {
   challengeId: string;
   userId: string;
   decision: VerdictDecisionValue;
   reason?: string;
-}) {
+}
+
+export async function recordVerdictDecision(input: VerdictDecisionInput) {
+  // Settled retries are read-only and need not contend with another no-op retry.
+  const terminal = await prisma.challenge.findUnique({ where: { id: input.challengeId },
+    include: { participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } }, reviewCase: true } });
+  if (!terminal) throw new ReviewFlowError("Challenge not found", 404);
+  if (!terminal.participants.some((participant) => participant.userId === input.userId)) throw new ReviewFlowError("Only accepted players can respond to the verdict", 403);
+  if (terminal?.status === ChallengeStatus.settled) {
+    return { settled: true, status: terminal.status, waitingForUserIds: [] as string[], reviewCase: terminal.reviewCase };
+  }
+  const result = await withJudgmentExecutionLock(input.challengeId, () => recordClaimedVerdictDecision(input));
+  if (!result) throw new ReviewFlowError("Outcome is already being finalized; retry after it completes", 409);
+  return result;
+}
+
+async function recordClaimedVerdictDecision(input: VerdictDecisionInput) {
   const challenge = await prisma.challenge.findUnique({
     where: { id: input.challengeId },
     include: {
-      participants: { where: { status: "accepted" }, select: { userId: true } },
+      participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
       judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
       verdictResponses: true,
       reviewCase: true,
@@ -191,11 +262,17 @@ export async function recordVerdictDecision(input: {
   if (challenge.status === ChallengeStatus.settled) {
     return { settled: true, status: challenge.status, waitingForUserIds: [] as string[], reviewCase: challenge.reviewCase };
   }
+  if (challenge.status === ChallengeStatus.pending_settlement) {
+    if (input.decision !== VerdictDecision.accepted) throw new ReviewFlowError("Outcome is already being finalized", 409);
+    const finalized = await resumeConsentSettlement(challenge.id);
+    return { ...finalized, waitingForUserIds: [], reviewCase: challenge.reviewCase };
+  }
   if (challenge.status !== ChallengeStatus.disputed) {
     throw new ReviewFlowError(`Verdict response is not allowed in status ${challenge.status}`, 409);
   }
   const judgment = challenge.judgments[0];
   if (!judgment) throw new ReviewFlowError("No completed recommendation found", 400);
+  playerIds(challenge);
 
   if (input.decision === VerdictDecision.reviewRequested) {
     const reason = input.reason?.trim() ?? "";
@@ -248,7 +325,7 @@ export async function recordVerdictDecision(input: {
   const current = await prisma.challenge.findUnique({
     where: { id: challenge.id },
     include: {
-      participants: { where: { status: "accepted" }, select: { userId: true } },
+      participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
       verdictResponses: true,
       reviewCase: true,
     },
@@ -268,19 +345,74 @@ export async function recordVerdictDecision(input: {
     return { settled: false, status: current.status, waitingForUserIds, reviewCase: current.reviewCase };
   }
 
-  const finalized = await finalizeOutcome({
-    challengeId: challenge.id,
-    winnerId: judgment.winnerId,
-    judgmentId: judgment.id,
-    actorUserId: input.userId,
-    source: "mutual_acceptance",
+  const consentingPlayers = playerIds({ creatorId: challenge.creatorId, participants: current.participants });
+  await assertRecordedEscrow(challenge.id, challenge.stake, consentingPlayers);
+
+  await prisma.$transaction(async (tx) => {
+    const claim = await tx.challenge.updateMany({ where: { id: challenge.id, status: ChallengeStatus.disputed }, data: { status: ChallengeStatus.pending_settlement } });
+    if (claim.count === 0) throw new ReviewFlowError("Outcome is already being finalized", 409);
+    await tx.auditLog.create({ data: {
+      action: CONSENT_SETTLEMENT_STARTED, actorUserId: input.userId, challengeId: challenge.id,
+      payload: JSON.stringify({ judgmentId: judgment.id, winnerId: judgment.winnerId,
+        participantIds: consentingPlayers }),
+    } });
   });
+  const finalized = await resumeConsentSettlement(challenge.id, false);
   return { ...finalized, waitingForUserIds: [], reviewCase: current.reviewCase };
 }
 
+/** Called only under the challenge execution lease; never invent a missing intent. */
+async function resumeConsentSettlement(challengeId: string, resuming = true) {
+  const challenge = await prisma.challenge.findUniqueOrThrow({ where: { id: challengeId }, include: {
+    participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } }, verdictResponses: true, reviewCase: true,
+  } });
+  const intentRow = await prisma.auditLog.findFirst({ where: { challengeId, action: CONSENT_SETTLEMENT_STARTED }, orderBy: { createdAt: "desc" } });
+  const intent = auditPayload(intentRow?.payload);
+  const participantIds = playerIds(challenge);
+  const accepted = new Set(challenge.verdictResponses.filter((response) => response.decision === VerdictDecision.accepted).map((response) => response.userId));
+  if (!intent || typeof intent.judgmentId !== "string" || !participantIds.length
+    || JSON.stringify(intent.participantIds) !== JSON.stringify(participantIds)
+    || participantIds.some((userId) => !accepted.has(userId)) || isActiveReview(challenge.reviewCase?.status)
+    || !intentRow?.actorUserId || !participantIds.includes(intentRow.actorUserId)) {
+    throw new ReviewFlowError("Recorded participant consent is incomplete; reconciliation is required", 409);
+  }
+  const judgment = await prisma.judgment.findFirst({ where: { id: intent.judgmentId, challengeId, status: "completed", method: { in: ["ai", "rules"] } } });
+  if (!judgment || judgment.winnerId !== intent.winnerId || (judgment.winnerId && !participantIds.includes(judgment.winnerId))) {
+    throw new ReviewFlowError("Recorded recommendation does not match participant consent; reconciliation is required", 409);
+  }
+  const marker = await prisma.creditTx.findUnique({ where: { idempotencyKey: `settlement:${challengeId}` } });
+  if (marker && (judgment.winnerId === null ? marker.type !== "refund" : marker.type !== "win" || marker.userId !== judgment.winnerId)) {
+    throw new ReviewFlowError("Committed settlement does not match participant consent; reconciliation is required", 409);
+  }
+  if (resuming && challenge.stake > 0 && isOnChainEnabled() && !marker) throw new ReviewFlowError("On-chain settlement status is unknown; reconciliation is required", 409);
+  return finalizeOutcome({ challengeId, winnerId: judgment.winnerId, judgmentId: judgment.id, actorUserId: intentRow.actorUserId, source: "mutual_acceptance" });
+}
+
+export async function recoverPendingConsentSettlements(limit = 20) {
+  const pending = await prisma.challenge.findMany({ where: { status: ChallengeStatus.pending_settlement, reviewCase: null,
+    auditLogs: { some: { action: CONSENT_SETTLEMENT_STARTED } } },
+    select: { id: true }, take: Math.min(Math.max(limit, 1), 100), orderBy: { updatedAt: "asc" } });
+  const outcomes: Array<{ challengeId: string; ok: boolean; error?: string }> = [];
+  for (const quest of pending) {
+    try {
+      const result = await withJudgmentExecutionLock(quest.id, () => resumeConsentSettlement(quest.id));
+      outcomes.push({ challengeId: quest.id, ok: result?.settled === true,
+        ...(result?.settled ? {} : { error: result ? result.settlement.error ?? "Settlement not completed" : "Outcome is already being finalized" }) });
+    } catch (error) { outcomes.push({ challengeId: quest.id, ok: false, error: error instanceof Error ? error.message : "Recovery failed" }); }
+  }
+  return outcomes;
+}
+
 async function resolveReviewCaseCore(input: ReviewResolutionInput) {
-  const row = await prisma.reviewCase.findUnique({ where: { id: input.reviewId }, select: { challengeId: true } });
+  const row = await prisma.reviewCase.findUnique({ where: { id: input.reviewId }, select: {
+    challengeId: true, reviewerUserId: true, status: true,
+    challenge: { select: { creatorId: true, participants: { where: { status: "accepted" }, select: { userId: true } } } },
+  } });
   if (!row) throw new ReviewFlowError("Review case not found", 404);
+  const reviewerId = row.status === "processing" ? row.reviewerUserId : input.reviewerUserId;
+  if (reviewerId && (reviewerId === row.challenge.creatorId || row.challenge.participants.some((participant) => participant.userId === reviewerId))) {
+    throw new ReviewFlowError("A reviewer cannot resolve their own quest or a quest they joined", 403);
+  }
   // Reuse the existing six-minute execution lease. It serializes all outcome
   // writers outside the inference/settlement call and survives a crashed worker.
   const result = await withJudgmentExecutionLock(row.challengeId, () => resolveClaimedReviewCase(input));
@@ -294,7 +426,7 @@ async function resolveClaimedReviewCase(input: ReviewResolutionInput) {
     include: {
       challenge: {
         include: {
-          participants: { where: { status: "accepted" }, select: { userId: true } },
+          participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
           judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
         },
       },
@@ -309,7 +441,11 @@ async function resolveClaimedReviewCase(input: ReviewResolutionInput) {
   }
 
   const resuming = review.status === "processing";
-  const participantIds = review.challenge.participants.map((participant) => participant.userId);
+  const participantIds = playerIds(review.challenge);
+  if (input.source === "manual_review" && input.reviewerUserId
+    && (input.reviewerUserId === review.challenge.creatorId || participantIds.includes(input.reviewerUserId))) {
+    throw new ReviewFlowError("A reviewer cannot resolve their own quest or a quest they joined", 403);
+  }
   let winnerId: string | null;
   let resolutionSource = input.source;
   if (resuming) {
@@ -330,12 +466,10 @@ async function resolveClaimedReviewCase(input: ReviewResolutionInput) {
     const started = await prisma.auditLog.findFirst({ where: {
       challengeId: review.challengeId, action: REVIEW_RESOLUTION_STARTED,
     }, orderBy: { createdAt: "desc" } });
-    if (started?.payload) {
-      try {
-        const intent = JSON.parse(started.payload);
-        if (intent.reviewId === review.id && ["manual_review", "review_expiry"].includes(intent.source)) resolutionSource = intent.source;
-      } catch { /* Legacy records still retain the explicit resolution and manual judgment. */ }
-    }
+    const intent = auditPayload(started?.payload);
+    if (intent?.reviewId === review.id && intent.finalJudgmentId === review.finalJudgmentId
+      && intent.resolution === review.resolution && intent.winnerId === winnerId
+      && (intent.source === "manual_review" || intent.source === "review_expiry")) resolutionSource = intent.source;
   } else {
     const original = await prisma.judgment.findFirst({ where: {
       id: review.originalJudgmentId, challengeId: review.challengeId, method: { in: ["ai", "rules"] }, status: "completed",
@@ -384,7 +518,7 @@ async function resolveClaimedReviewCase(input: ReviewResolutionInput) {
       include: {
         challenge: {
           include: {
-            participants: { where: { status: "accepted" }, select: { userId: true } },
+            participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
             judgments: { where: { method: { in: ["ai", "rules"] }, status: "completed" }, orderBy: { createdAt: "desc" }, take: 1 },
           },
         },

@@ -4,7 +4,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
-import { expireOverdueReviewCases } from "@/lib/verdict-review";
+import { expireOverdueReviewCases, recoverPendingConsentSettlements } from "@/lib/verdict-review";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -36,6 +36,7 @@ async function runCron() {
   // SLA expires, refund every accepted participant through the same
   // idempotent settlement path used by a moderator decision.
   const expiredReviews = await expireOverdueReviewCases();
+  const recoveredConsentSettlements = await recoverPendingConsentSettlements();
 
   // (2) Live → judging for any deadline that has passed.
   const transitioned = await prisma.challenge.updateMany({
@@ -91,6 +92,7 @@ async function runCron() {
   return {
     sweptStuckJobs: sweepResult.swept,
     expiredReviews,
+    recoveredConsentSettlements,
     transitionedToJudging: transitioned.count,
     pendingCount: pending.length,
     outcomes,
