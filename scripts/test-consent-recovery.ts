@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import pg from "pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import type { AuditLog, Challenge, CreditTx, ReviewCase } from "../src/generated/prisma/client";
+import type { AuditLog, Challenge, CreditTx, ReviewCase, User } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 async function main() {
@@ -84,7 +84,7 @@ async function main() {
       console.log(`PASS ${storage}: failed consent settlement resumes exact recorded recommendation; eight terminal retries cannot pay twice`);
 
       const watched = await fixture(`${storage}_spectator`);
-      const spectator = await prisma.user.create({ data: { email: `${storage}-spectator@example.invalid`, username: `${storage}_spectator`, credits: 200 } });
+      const spectator: User = await prisma.user.create({ data: { email: `${storage}-spectator@example.invalid`, username: `${storage}_spectator`, credits: 200 } });
       await prisma.participant.create({ data: { challengeId: watched.id, userId: spectator.id, role: "spectator", status: "accepted" } });
       for (const choice of ["accepted", "review_requested"] as const) await assert.rejects(() => decision({
         challengeId: watched.id, userId: spectator.id, decision: choice, reason: "A spectator must never control the outcome or escrow.",
@@ -164,7 +164,7 @@ async function main() {
             await tx.creditTx.create({ data: { userId, challengeId: f.id, type: "refund", amount: 5, balanceAfter: user.credits, idempotencyKey: `settlement:${f.id}` } });
           });
         }
-        const beforeProof = await balances(f); const foreignBalance = (await prisma.user.findUniqueOrThrow({ where: { id: spectator.id } })).credits;
+        const beforeProof: Array<{ id: string; credits: number }> = await balances(f); const foreignBalance: number = (await prisma.user.findUniqueOrThrow({ where: { id: spectator.id } })).credits;
         const result = (await recoverPendingConsentSettlements(100)).find((item) => item.challengeId === f.id);
         assert.equal(result?.ok, false); assert.match(result?.error ?? "", /settlement does not match the stake receipts/);
         assert.deepEqual(await balances(f), beforeProof);
@@ -174,7 +174,7 @@ async function main() {
       }
       console.log(`PASS ${storage}: wrong marker amount, outsider refund and partial refund fail closed without minting or completing an ambiguous payout`);
 
-      const moderator = await prisma.user.create({ data: { email: `${storage}-moderator@example.invalid`, username: `${storage}_moderator`, credits: 200, isReviewer: true } });
+      const moderator: User = await prisma.user.create({ data: { email: `${storage}-moderator@example.invalid`, username: `${storage}_moderator`, credits: 200, isReviewer: true } });
       const reviewFirst = await fixture(`${storage}_review_first`); await accept(reviewFirst, reviewFirst.b); await requestReview(reviewFirst);
       assert.equal((await accept(reviewFirst, reviewFirst.b)).settled, false);
       const review: ReviewCase = await prisma.reviewCase.findUniqueOrThrow({ where: { challengeId: reviewFirst.id } });
