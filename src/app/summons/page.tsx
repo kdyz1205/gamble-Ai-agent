@@ -17,11 +17,10 @@ export default function SummonsPage() {
       <section className="mx-auto w-full max-w-[960px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3 px-1">
           <div>
-            <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em]">Create a challenge</span>
-            <h1 className="mt-3 max-w-4xl text-3xl font-black leading-tight tracking-[-0.035em] text-[color:var(--sum-ink-deep)] sm:text-4xl">
-              A fair challenge starts here.
+            <h1 className="max-w-4xl text-3xl font-black leading-tight tracking-[-0.035em] text-[color:var(--sum-ink-deep)] sm:text-4xl">
+              What&apos;s the challenge?
             </h1>
-            <p className="mt-2 text-sm font-bold text-[color:var(--sum-muted)]">Agree on the rules. Invite a friend. Submit proof and review the result.</p>
+            <p className="mt-2 text-sm font-medium text-[color:var(--sum-muted)]">Agree on fair rules, invite a friend, and prove the result.</p>
           </div>
           <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 text-[10px] font-black text-[color:var(--sum-muted)] shadow-[0_5px_0_rgba(23,53,75,0.06)] md:inline-flex">
             <QuestGlyph className="h-4 w-4 text-[#157b58]" kind="friends" />

@@ -488,20 +488,17 @@ export default function PactComposer() {
           className="relative z-10 grid gap-3"
         >
           <div className="min-w-0">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-                  Your quest spell
-                </p>
-                <h2 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
-                  Say it like you would to a friend.
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-extrabold leading-tight sm:text-xl" style={{ color: "var(--sum-ink)" }}>
+                  Tell Pico your idea.
                 </h2>
-                <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
-                  Pico turns your words into clear, shared terms before anyone commits.
+                <p className="mt-2 max-w-[34rem] text-sm font-medium leading-5" style={{ color: "var(--sum-muted)" }}>
+                  Review every rule before publishing.
                 </p>
               </div>
               <span
-                className="sum-sticker-badge rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]"
+                className="sum-sticker-badge shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]"
                 style={{
                   background: draftState.readyToPublish ? "linear-gradient(135deg, var(--sum-sun), var(--sum-peach))" : undefined,
                   color: "var(--sum-ink)",
