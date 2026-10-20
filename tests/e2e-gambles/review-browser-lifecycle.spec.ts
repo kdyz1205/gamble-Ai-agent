@@ -56,6 +56,7 @@ test("player requests review and an independent reviewer refunds actual stakes o
     expect((await submitting).status()).toBe(201);
     expect(Date.now()).toBeLessThan(deadline);
     // Real wall-clock expiry and production rules; no SQL deadline/status/verdict fabrication.
+    await creator.page.bringToFront();
     const judge = creator.page.getByRole("button", { name: "Ask Familiar for result · 0 cr", exact: true });
     await expect(judge).toBeVisible({ timeout: Math.max(10_000, deadline - Date.now() + 15_000) });
     expect(Date.now()).toBeGreaterThanOrEqual(deadline);
@@ -78,6 +79,7 @@ test("player requests review and an independent reviewer refunds actual stakes o
     const detail = (await (await creator.context.request.get(`${BASE}/api/challenges/${id}`)).json()).challenge;
     const reviewId = detail.reviewCase.id as string;
     expect((await creator.context.request.post(`${BASE}/api/reviews/${reviewId}/resolve`, { data: { resolution: "refund", notes: "A participant cannot act as independent reviewer." } })).status()).toBe(403);
+    await reviewer.page.bringToFront();
     await reviewer.page.goto(`${BASE}/reviews`);
     const card = reviewer.page.getByTestId("review-card").filter({ hasText: title });
     await expect(card).toContainText(proof);
@@ -98,6 +100,7 @@ test("player requests review and an independent reviewer refunds actual stakes o
     const final = (await (await creator.context.request.get(`${BASE}/api/challenges/${id}`)).json()).challenge;
     expect(final.status).toBe("settled"); expect(final.reviewCase.status).toBe("resolved");
     expect(final.judgments[0]).toMatchObject({ method: "manual", winnerId: null, reasoning: notes });
+    await creator.page.bringToFront();
     await creator.page.reload();
     const receipt = creator.page.getByTestId("result-receipt-card");
     await expect(receipt).toContainText("Quest Settled");

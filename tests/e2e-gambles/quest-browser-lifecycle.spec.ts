@@ -232,7 +232,7 @@ test("zero-credit friends publish and accept through UI; expired no-proof quest 
 
 
 
-    // Exercise the async HTTP admission contract at zero balance as well.
+    // Missing proof must use the deadline-rule path, never enter paid async work.
 
     const asyncChallengeId = `async${suffix}`;
 
@@ -242,29 +242,61 @@ test("zero-credit friends publish and accept through UI; expired no-proof quest 
 
     const asyncResponse = await a.request.post(`${BASE}/api/challenges/${asyncChallengeId}/judge/async`, { data: { tier: 1 } });
 
-    expect(asyncResponse.status(), await asyncResponse.text()).toBe(202);
+    expect(asyncResponse.status(), await asyncResponse.text()).toBe(409);
+    expect((await asyncResponse.json()).error).toContain("Background review needs valid proof from both players");
+    expect((await db.query('SELECT count(*)::int AS count FROM "JudgeJob" WHERE "challengeId"=$1', [asyncChallengeId])).rows[0].count).toBe(0);
+    expect((await db.query('SELECT count(*)::int AS count FROM "CreditTx" WHERE "challengeId"=$1', [asyncChallengeId])).rows[0].count).toBe(0);
+    expect((await db.query('SELECT count(*)::int AS count FROM "Judgment" WHERE "challengeId"=$1', [asyncChallengeId])).rows[0].count).toBe(0);
+    expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [asyncChallengeId])).rows[0].status).toBe("judging");
+    expect((await db.query('SELECT count(*)::int AS count FROM "AuditLog" WHERE "challengeId"=$1 AND action=$2', [asyncChallengeId, "ai.call.reserved"])).rows[0].count).toBe(0);
 
-    const { jobId } = await asyncResponse.json();
-
-    let asyncResult: { status?: string; result?: { challenge: { status: string }; creditsUsed: number } } = {};
-
-    await expect.poll(async () => {
-
-      const response = await a.request.get(`${BASE}/api/judge-jobs/${jobId}`);
-
-      expect(response.status()).toBe(200);
-
-      asyncResult = await response.json();
-
-      return asyncResult.status;
-
-    }, { timeout: 60_000 }).toBe("completed");
-
-    expect(asyncResult.result?.challenge.status).toBe("disputed");
-
-    expect(asyncResult.result?.creditsUsed).toBe(0);
-
-    console.log(JSON.stringify({ asyncChallengeId, jobId, asyncStatus: asyncResult.status, challengeStatus: asyncResult.result?.challenge.status, creditsUsed: asyncResult.result?.creditsUsed }));
+    // CI explicitly disables AI. Exercise eligible intake and real after()/polling
+    // failure rather than inventing a completed recommendation. Never call a paid
+    // provider when this browser spec is run outside that disabled environment.
+    if (process.env.AI_ENABLED === "false") {
+      const created = await a.request.post(`${BASE}/api/challenges`, { data: {
+        title: `Eligible async proof ${suffix}`, stake: 0, evidenceType: "text", deadline: "2 hours",
+        visibility: "invite_only", isPublic: false,
+        rules: "Both players submit their own written answer. Compare the actual answers and explain the result.",
+      } });
+      expect(created.status(), await created.text()).toBe(201);
+      const eligibleId = (await created.json()).challenge.id as string;
+      expect((await b.request.post(`${BASE}/api/challenges/${eligibleId}/accept`)).status()).toBe(200);
+      for (const [context, answer] of [[a, "Creator answer: seven"], [b, "Opponent answer: nine"]] as const) {
+        const submitted = await context.request.post(`${BASE}/api/challenges/${eligibleId}/evidence`, { data: { type: "text", description: `${answer}. ${suffix}` } });
+        expect(submitted.status(), await submitted.text()).toBe(201);
+      }
+      expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [eligibleId])).rows[0].status).toBe("judging");
+      const failedJobs: string[] = [];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const admitted = await a.request.post(`${BASE}/api/challenges/${eligibleId}/judge/async`, { data: { tier: 1, providerId: "openai", model: "gpt-4o-mini" } });
+        expect(admitted.status(), await admitted.text()).toBe(202);
+        const { jobId, reused } = await admitted.json();
+        expect(reused).toBe(false);
+        expect(failedJobs).not.toContain(jobId);
+        failedJobs.push(jobId);
+        let result: { status: string; error?: string; result?: unknown } | undefined;
+        await expect.poll(async () => {
+          const polled = await a.request.get(`${BASE}/api/judge-jobs/${jobId}`);
+          expect(polled.status()).toBe(200);
+          result = await polled.json();
+          return result!.status;
+        }, { timeout: 60_000 }).toBe("failed");
+        expect(result!.error).toContain("AI usage limit reached");
+        expect(result!.result).toBeNull();
+        expect(await (await b.request.get(`${BASE}/api/judge-jobs/${jobId}`)).json()).toEqual(result);
+        expect(await (await a.request.get(`${BASE}/api/judge-jobs/${jobId}`)).json()).toEqual(result);
+      }
+      expect((await db.query('SELECT status FROM "JudgeJob" WHERE "challengeId"=$1', [eligibleId])).rows).toEqual([{ status: "failed" }, { status: "failed" }]);
+      expect((await db.query('SELECT count(*)::int AS count FROM "Judgment" WHERE "challengeId"=$1', [eligibleId])).rows[0].count).toBe(0);
+      expect((await db.query('SELECT count(*)::int AS count FROM "CreditTx" WHERE "challengeId"=$1', [eligibleId])).rows[0].count).toBe(0);
+      expect((await db.query('SELECT count(*)::int AS count FROM "AuditLog" WHERE "challengeId"=$1 AND action=$2', [eligibleId, "ai.call.reserved"])).rows[0].count).toBe(0);
+      expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [eligibleId])).rows[0].status).toBe("judging");
+      console.log(JSON.stringify({ eligibleId, failedJobs, asyncStatus: "failed", reason: "AI explicitly disabled", completedVerdicts: 0, providerCalls: 0 }));
+    } else {
+      console.log("SKIP eligible async inference failure: requires explicit AI_ENABLED=false on test runner and server");
+    }
+    expect((await db.query('SELECT credits FROM "User" WHERE id=ANY($1::text[])', [[creator.id, opponent.id]])).rows.map((row: { credits: number }) => row.credits)).toEqual([0, 0]);
 
   } finally {
 
