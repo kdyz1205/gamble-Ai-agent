@@ -6,6 +6,7 @@ import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
+import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
 
 // Summoner.world proof palette.
 const NAVY = "#1E293B";
@@ -54,6 +55,9 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const [recording, setRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
+  const requiredMedia = mediaProofKind(evidenceType);
+  const writtenProof = ["text", "self_report"].includes(evidenceType.trim().toLowerCase());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -76,6 +80,21 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     };
   }, [stream]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && stream) { video.srcObject = stream; void video.play().catch(() => {}); }
+    return () => { if (video) video.srcObject = null; };
+  }, [stream, mode]);
+
+  useEffect(() => {
+    if (!recordedBlob) { setRecordedPreviewUrl(null); return; }
+    const url = URL.createObjectURL(recordedBlob);
+    setRecordedPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recordedBlob]);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
   const pickFile = (kind: "video" | "photo") => {
     const input = document.createElement("input");
     input.type = "file";
@@ -97,10 +116,6 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
       setStream(s);
       setMode("record");
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-        await videoRef.current.play().catch(() => {});
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not access camera/mic. Grant permission and try again.");
     }
@@ -115,23 +130,26 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
 
   const startRecording = () => {
     if (!stream) return;
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8"
-      : "video/webm";
-    const recorder = new MediaRecorder(stream, { mimeType });
-    chunksRef.current = [];
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
-      setRecordedBlob(blob);
-      setRecordedDuration((Date.now() - recordStartRef.current) / 1000);
+    try {
+      if (typeof MediaRecorder === "undefined") throw new Error("Video recording is unavailable. Upload a video file instead.");
+      const mimeType = recordingMimeType(type => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
-    };
-    mediaRecorderRef.current = recorder;
-    recordStartRef.current = Date.now();
-    recorder.start();
-    setRecording(true);
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || chunksRef.current[0]?.type || "video/webm" });
+        setRecordedBlob(blob);
+        setRecordedDuration((Date.now() - recordStartRef.current) / 1000);
+        chunksRef.current = [];
+      };
+      recorder.onerror = () => { setError("Recording failed. Try again or upload a video file."); setRecording(false); stopCamera(); };
+      mediaRecorderRef.current = recorder;
+      recordStartRef.current = Date.now();
+      recorder.start();
+      setRecording(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not start recording. Upload a video file instead.");
+    }
   };
 
   const stopRecording = () => {
@@ -142,8 +160,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
 
   const takePhoto = async () => {
     setError("");
+    let captureStream: MediaStream | null = null;
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      captureStream = s;
       // Wait a moment for focus, then snap
       const video = document.createElement("video");
       video.srcObject = s;
@@ -164,13 +184,13 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       }, "image/jpeg", 0.92);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not take photo.");
-    }
+    } finally { captureStream?.getTracks().forEach(track => track.stop()); }
   };
 
   const getFileToUpload = (): File | null => {
     if (file) return file;
     if (recordedBlob) {
-      return new File([recordedBlob], `recording-${Date.now()}.webm`, { type: recordedBlob.type || "video/webm" });
+      return new File([recordedBlob], `recording-${Date.now()}.${recordingExtension(recordedBlob.type)}`, { type: recordedBlob.type || "video/webm" });
     }
     return null;
   };
@@ -180,16 +200,15 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     const trimmedDescription = description.trim();
     const trimmedUrl = urlInput.trim();
 
-    if (!f && !trimmedUrl && !trimmedDescription) {
-      setError("Add a file, URL, or description — AI needs something to judge.");
-      return;
-    }
+    const invalid = proofInputError(evidenceType, { fileType: f?.type, url: trimmedUrl, description: trimmedDescription });
+    if (invalid) { setError(invalid); return; }
+    if (f && f.size > 80 * 1024 * 1024) { setError("Proof files must be 80 MB or smaller. Trim the clip before uploading."); return; }
 
     setSubmitting(true);
     setError("");
     try {
       let finalUrl: string | undefined = trimmedUrl || undefined;
-      let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : evidenceType || "text";
+      let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : requiredMedia || evidenceType || "text";
 
       // Upload file via Vercel Blob if present
       if (f) {
@@ -218,15 +237,17 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             });
             const presJson = await pres.json();
             if (pres.ok && presJson?.uploadUrl && presJson?.publicUrl) {
-              await fetch(presJson.uploadUrl, { method: "PUT", body: f, headers: { "Content-Type": f.type } });
+              const uploaded = await fetch(presJson.uploadUrl, { method: "PUT", body: f, headers: { "Content-Type": f.type } });
+              if (!uploaded.ok) throw new Error(`Upload failed (${uploaded.status}). Your proof was not submitted.`);
               finalUrl = presJson.publicUrl;
             } else {
               throw new Error(presJson.error || "Upload failed — configure Vercel Blob or S3.");
             }
-          } catch {
+          } catch (fallbackError) {
             throw new Error(
-              e instanceof Error
-                ? `Upload failed: ${e.message}. Tip: paste a public HTTPS URL instead.`
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : e instanceof Error ? `Upload failed: ${e.message}. Tip: paste a public HTTPS URL instead.`
                 : "Upload failed. Paste a public HTTPS URL instead.",
             );
           }
@@ -267,12 +288,12 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       </div>
 
       {/* Mode chooser — only when no content chosen yet */}
-      {!mode && !hasContent && (
+      {!mode && !hasContent && !writtenProof && (
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <ActionTile kind="proof" label="Record video" hint="One continuous clip" tint={PEACH} onClick={() => startCamera(true)} />
-          <ActionTile kind="spark" label="Take photo" hint="Snap from camera" tint={MINT} onClick={takePhoto} />
-          <ActionTile kind="proof" label="Upload video" hint="MP4 / WebM" tint={LAVENDER} onClick={() => pickFile("video")} />
-          <ActionTile kind="receipt" label="Upload photo" hint="JPG / PNG" tint={PINK} onClick={() => pickFile("photo")} />
+          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Record video" hint="One continuous clip" tint={PEACH} onClick={() => startCamera(true)} />}
+          {requiredMedia !== "video" && <ActionTile kind="spark" label="Take photo" hint="Snap from camera" tint={MINT} onClick={takePhoto} />}
+          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Upload video" hint="MP4 / WebM" tint={LAVENDER} onClick={() => pickFile("video")} />}
+          {requiredMedia !== "video" && <ActionTile kind="receipt" label="Upload photo" hint="JPG / PNG" tint={PINK} onClick={() => pickFile("photo")} />}
           <div className="col-span-2">
             <button onClick={() => setMode("url")}
               className="w-full px-3 py-2 text-xs font-bold active:scale-95 transition-transform"
@@ -315,7 +336,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       {/* Recorded video preview */}
       {recordedBlob && (
         <div className="mb-3">
-          <video controls src={URL.createObjectURL(recordedBlob)}
+          <video controls src={recordedPreviewUrl ?? undefined}
             className="w-full rounded-2xl" style={{ background: "#000", maxHeight: 300 }} />
           <p className="text-xs font-semibold mt-2 px-3 py-1.5 inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}>

@@ -112,6 +112,7 @@ export interface ChallengeData {
   aiReview: boolean;
   isPublic: boolean;
   visibility: string;
+  proofAccess?: "players_only";
   maxParticipants: number;
   createdAt: string;
   creator: { id: string; username: string; image: string | null; credits?: number };

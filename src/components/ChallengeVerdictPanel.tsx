@@ -86,6 +86,7 @@ export default function ChallengeVerdictPanel({
   onCreditsMayChange: () => void;
 }) {
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
+  const proofRestricted = challenge?.proofAccess === "players_only";
   const [loadErr, setLoadErr] = useState("");
   const [busy, setBusy] = useState(false);
   // (evidenceText / evidenceUrl state removed — evidence capture now lives
@@ -114,13 +115,13 @@ export default function ChallengeVerdictPanel({
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    if (!challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
+    if (proofRestricted || !challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
     return startVisiblePolling({ delays: 5_000, task: async () => {
       const current = await refresh();
       if (current?.status === "settled" && pollingChallengeRef.current?.id === challengeId) onCreditsMayChange();
-      return !isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing");
+      return current?.proofAccess !== "players_only" && (!isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing"));
     } });
-  }, [challenge?.status, challenge?.reviewCase?.status, challengeId, refresh, onCreditsMayChange]);
+  }, [challenge?.status, challenge?.reviewCase?.status, proofRestricted, challengeId, refresh, onCreditsMayChange]);
 
   useEffect(() => {
     pollingChallengeRef.current = { id: challengeId, terminal: false };
@@ -145,7 +146,7 @@ export default function ChallengeVerdictPanel({
   }, [challenge, verdictRevealed]);
 
   const me = challenge?.participants.find(p => p.user.id === userId);
-  const accepted = challenge?.participants.filter(p => p.status === "accepted") ?? [];
+  const accepted = challenge?.participants.filter(p => p.status === "accepted" && ["creator", "opponent"].includes(p.role)) ?? [];
   const evidenceByUser = new Map((challenge?.evidence ?? []).map(e => [e.userId, e] as const));
   const myEvidence = challenge?.evidence.find(e => e.userId === userId);
   const allSubmitted = challenge && accepted.length > 0 && accepted.every(p => evidenceByUser.has(p.user.id));
@@ -159,7 +160,7 @@ export default function ChallengeVerdictPanel({
     if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
     return !!proof.description?.trim();
   });
-  const readyForReview = hasAcceptedOpponent && (bothHaveValidProof || deadlineExpired)
+  const readyForReview = !proofRestricted && hasAcceptedOpponent && (bothHaveValidProof || deadlineExpired)
     && ["live", "judging"].includes(challenge?.status);
   const reviewCost = challenge?.stake > 0 && bothHaveProofRows ? TIER_COST[tier] : 0;
 
@@ -207,7 +208,7 @@ export default function ChallengeVerdictPanel({
   };
 
   const runVerdictAsync = async () => {
-    if (!challenge) return;
+    if (!challenge || challenge.status !== "judging" || !bothHaveValidProof) return;
     const cost = reviewCost;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
@@ -334,9 +335,14 @@ export default function ChallengeVerdictPanel({
           </div>
         </div>
 
+        {proofRestricted && (
+          <p role="status" data-testid="private-proof-access" className="text-sm font-semibold text-text-secondary">
+            Proof and results are private. {challenge.status === "open" ? "Sign in and accept this invitation to view them." : "Sign in with an accepted player account to view them."}
+          </p>
+        )}
         {/* Phase track */}
         <div className="flex items-center gap-2 flex-wrap">
-          {phases.map((p, i) => (
+          {!proofRestricted && phases.map((p, i) => (
             <div key={p.key} className="flex items-center gap-2">
               <motion.div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
@@ -415,7 +421,7 @@ export default function ChallengeVerdictPanel({
                     {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
                   </p>
                   <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    {isCreator ? "Creator" : "Challenger"} · {ev ? "Proof in" : ["settled", "cancelled", "disputed"].includes(challenge.status) ? "No proof submitted" : "Waiting"}
+                    {isCreator ? "Creator" : "Challenger"} · {proofRestricted ? "Private proof" : ev ? "Proof in" : ["settled", "cancelled", "disputed"].includes(challenge.status) ? "No proof submitted" : "Waiting"}
                   </p>
                   {ev && (
                     <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
@@ -544,7 +550,7 @@ export default function ChallengeVerdictPanel({
                 >
                   {busy ? "Reviewing…" : `Ask Familiar for result · ${reviewCost} cr`}
                 </motion.button>
-                <motion.button
+                {challenge.status === "judging" && bothHaveValidProof && <motion.button
                   type="button"
                   disabled={busy || !canRunAi}
                   whileTap={{ scale: 0.97 }}
@@ -554,7 +560,7 @@ export default function ChallengeVerdictPanel({
                   style={{ color: "#64748B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
                   Background Familiar review
-                </motion.button>
+                </motion.button>}
                 {asyncHint && (
                   <motion.p
                     className="text-xs font-semibold text-center"
