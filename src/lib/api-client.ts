@@ -205,7 +205,9 @@ export async function acceptChallenge(id: string): Promise<{ challenge: Challeng
   return apiFetch(`/challenges/${id}/accept`, { method: "POST" });
 }
 
-export async function deleteChallenge(id: string): Promise<{ ok: true; deletedId: string; refundedStake: number }> {
+export async function deleteChallenge(id: string): Promise<{
+  ok: true; deletedId: string; status: "cancelled"; retained: true; refundedStake: number; reused: boolean;
+}> {
   return apiFetch(`/challenges/${id}`, { method: "DELETE" });
 }
 

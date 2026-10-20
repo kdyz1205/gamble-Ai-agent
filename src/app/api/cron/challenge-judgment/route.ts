@@ -28,8 +28,8 @@ async function runCron() {
   const now = new Date();
 
   // (1) Sweep stuck async JudgeJobs first so their status stops blocking
-  // the client's poll loop. Runs every cron tick so a crashed lambda's
-  // judgment is failed within ~minutes, not "forever".
+  // the client's poll loop. Recovery runs on each cron tick; the deployed
+  // daily schedule can leave an unattended job waiting until the next day.
   const sweepResult = await sweepStuckJudgeJobs();
 
   // Review cases must never stay frozen forever. Once the configured review

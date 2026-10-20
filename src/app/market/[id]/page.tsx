@@ -3,7 +3,6 @@
 import { useState, useEffect, use, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
@@ -47,7 +46,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const { data: session } = useSession();
   const user = session?.user as { id?: string; username?: string } | undefined;
-  const router = useRouter();
 
   const [market, setMarket] = useState<ChallengeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +53,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const [copied, setCopied] = useState(false);
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "deleting">("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [refundedStake, setRefundedStake] = useState<number | null>(null);
 
   useEffect(() => {
     api.getChallenge(id)
@@ -85,21 +84,20 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     });
   }, [id]);
 
-  // Creator-only delete. Two-step (confirm first) so one accidental tap doesn't
-  // vaporize a market with participants or submitted evidence. Backend guards
-  // on status so only draft / open / cancelled markets are deletable; refund
-  // happens server-side atomically before the row is dropped.
+  // Cancellation retains the quest and refunds only the recorded held stake.
   const deleteMarket = useCallback(async () => {
     setDeleteStep("deleting");
     setDeleteError(null);
     try {
-      await api.deleteChallenge(id);
-      router.push("/markets");
+      const result = await api.deleteChallenge(id);
+      setMarket(current => current ? { ...current, status: result.status } : current);
+      setRefundedStake(result.refundedStake);
+      setDeleteStep("idle");
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete this quest");
+      setDeleteError(err instanceof Error ? err.message : "Could not cancel this quest");
       setDeleteStep("confirm");
     }
-  }, [id, router]);
+  }, [id]);
 
   if (loading) {
     return (
@@ -372,9 +370,14 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {/* Creator-only: delete this market. Hidden once a market is live or
-            past — money is moving, so destruction would orphan audit records. */}
-        {isCreator && ["draft", "open", "cancelled"].includes(market.status) && (
+        {market.status === "cancelled" && (
+          <div role="status" className="mt-8 text-center text-sm" style={{ color: NAVY_DIM }}>
+            <p>Quest cancelled. Your quest record and history are preserved.</p>
+            {refundedStake !== null && <p>{refundedStake} credits returned to your balance.</p>}
+          </div>
+        )}
+        {/* Only unmatched quests can be cancelled. The server checks again. */}
+        {isCreator && ["draft", "open"].includes(market.status) && (
           <div className="mt-8 flex flex-col items-center gap-2">
             {deleteStep === "idle" && (
               <button
@@ -383,19 +386,17 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 className="text-xs font-bold px-4 py-2 active:scale-95 transition-colors"
                 style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "9999px" }}
               >
-                🗑 Delete this quest
+                Cancel this quest
               </button>
             )}
             {deleteStep !== "idle" && (
               <div className="w-full max-w-sm px-4 py-3 flex flex-col items-center gap-2"
                 style={{ background: "#FFFFFF", border: `1px solid ${ROSE_BG}`, borderRadius: "20px" }}>
                 <p className="text-xs font-bold text-center" style={{ color: ROSE_TEXT }}>
-                  Delete this quest permanently?
-                  {market.stake > 0 && (
-                    <span className="block mt-1" style={{ color: NAVY_DIM, fontWeight: 600 }}>
-                      {market.stake} cr will return to your balance.
-                    </span>
-                  )}
+                  Cancel this quest?
+                  <span className="block mt-1" style={{ color: NAVY_DIM, fontWeight: 600 }}>
+                    Any recorded held stake will return to your balance. Your quest history stays available.
+                  </span>
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -405,7 +406,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                     className="text-xs font-extrabold px-4 py-2 disabled:opacity-60"
                     style={{ color: "#FFFFFF", background: ROSE_TEXT, borderRadius: "9999px" }}
                   >
-                    {deleteStep === "deleting" ? "Deleting…" : "Yes, delete"}
+                    {deleteStep === "deleting" ? "Cancelling…" : "Yes, cancel quest"}
                   </button>
                   <button
                     type="button"
@@ -414,7 +415,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                     className="text-xs font-bold px-4 py-2 disabled:opacity-60"
                     style={{ color: NAVY_DIM, background: NAVY_FAINT, borderRadius: "9999px" }}
                   >
-                    Cancel
+                    Keep quest
                   </button>
                 </div>
                 {deleteError && (
