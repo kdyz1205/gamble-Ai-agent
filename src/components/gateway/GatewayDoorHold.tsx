@@ -6,7 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
 const HOLD_MS = 1650;
-const ROUTE_DELAY_MS = 2180;
+const ROUTE_DELAY_MS = 220;
 
 type GatewayPhase = "ready" | "charging" | "opening";
 
@@ -46,8 +46,8 @@ export default function GatewayDoorHold() {
     setPhase("opening");
     playSound("/sfx/gateway/open_004.wav", 0.22);
     chimeTimerRef.current = setTimeout(() => playSound("/sfx/gateway/confirmation_002.wav", 0.16), 420);
-    routeTimerRef.current = setTimeout(() => router.push("/summons?arrival=gateway"), ROUTE_DELAY_MS);
-  }, [clearHoldFrame, playSound, router]);
+    routeTimerRef.current = setTimeout(() => router.push("/summons?arrival=gateway"), reduceMotion ? 0 : ROUTE_DELAY_MS);
+  }, [clearHoldFrame, playSound, reduceMotion, router]);
 
   const tickHold = useCallback(function tickHoldFrame() {
     if (openedRef.current || holdStartedAtRef.current === null) return;

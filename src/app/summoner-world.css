@@ -474,7 +474,7 @@ body {
   bottom: calc(0.7rem + env(safe-area-inset-bottom));
   z-index: 50;
   display: none;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.25rem;
   padding: 0.38rem;
   border: 2px solid rgba(255, 255, 255, 0.88);
@@ -649,7 +649,7 @@ body {
 
 .quest-idea-strip::-webkit-scrollbar { display: none; }
 
-.quest-idea-strip span {
+.quest-idea-strip button {
   flex: 0 0 auto;
   padding: 0.45rem 0.7rem;
   border: 1px solid var(--sum-border);
@@ -658,6 +658,23 @@ body {
   color: var(--sum-muted);
   font-size: 0.66rem;
   font-weight: 800;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.quest-idea-strip button:hover { background: #dff5eb; color: var(--sum-ink); }
+.quest-idea-strip button:focus-visible { outline: 3px solid #157b58; outline-offset: 2px; }
+.quest-idea-strip button:disabled { cursor: wait; opacity: 0.6; }
+.quest-conversation { max-height: 22rem; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 0.75rem; padding: 0.25rem; }
+.quest-conversation__turn { max-width: 94%; padding: 0.85rem 1rem; border: 1px solid var(--sum-border); border-radius: 1.25rem; background: white; color: var(--sum-ink-deep); overflow-wrap: anywhere; }
+.quest-conversation__turn--user { justify-self: end; background: #e2f4ec; }
+.quest-conversation__turn--ai { justify-self: start; }
+
+@media (max-width: 1023px) {
+  /* Keep the keyboard and send action clear of the fixed navigation dock. */
+  .sum-world-shell:has(.quest-composer:focus-within) .quest-mobile-dock,
+  .sum-world-shell:has(textarea:focus) .quest-mobile-dock { display: none; }
+  .quest-composer__prompt { scroll-margin-bottom: calc(7rem + env(safe-area-inset-bottom)); }
 }
 
 .quest-blueprint {

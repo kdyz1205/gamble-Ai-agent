@@ -7,10 +7,16 @@ import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import * as api from "@/lib/api-client";
+import { draftForComposer } from "@/lib/composer-draft";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
 const proofOptions = ["24 hours", "72 hours", "7 days"] as const;
-const promptChips = ["Friend match", "Fitness quest", "Habit streak", "Skill challenge"] as const;
+const promptChips = [
+  ["Friend match", "My friend and I will play badminton. First to 3 points wins."],
+  ["Fitness quest", "My friend and I will compete to do the most pushups in 60 seconds."],
+  ["Habit streak", "My friend and I want to walk every day for 7 days. Help us agree on proof."],
+  ["Skill challenge", "My friend and I want a drawing challenge. Help us define a fair win condition."],
+] as const;
 const placeholderExamples = [
   "First to win 3 badminton rallies...",
   "I can do 20 pushups in 60 seconds...",
@@ -43,15 +49,16 @@ function newRequestId(prefix: string) {
 export default function PactComposer() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLElement>(null);
+  const conversationRef = useRef<HTMLDivElement>(null);
   const castTimersRef = useRef<number[]>([]);
   const publishRequestIdRef = useRef<string | null>(null);
   const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
   const [input, setInput] = useState("");
-  const [stake, setStake] = useState("50");
+  const [stake, setStake] = useState("0");
   const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
-  const [proofWindow, setProofWindow] = useState<(typeof proofOptions)[number]>("24 hours");
+  const [proofWindow, setProofWindow] = useState<string>("24 hours");
   const [turns, setTurns] = useState<api.AgentTurn[]>([]);
   const [draftState, setDraftState] = useState(() => api.emptyAgentDraftState());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,12 +69,12 @@ export default function PactComposer() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  const canSubmit = Boolean(input.trim()) && !isSubmitting;
+  const canSubmit = Boolean(input.trim()) && !isSubmitting && !isRecording && !isTranscribing;
   const latestReply = useMemo(() => turns.filter((turn) => turn.role === "ai").at(-1), [turns]);
   const latestUserTurn = useMemo(() => turns.filter((turn) => turn.role === "user").at(-1), [turns]);
   const challengeTitle = getChallengeTitle(input);
   const storedChallengeTitle = draftState.title || draftState.proposition || getChallengeTitle(latestUserTurn?.content ?? "");
-  const stakeDisplay = stake ? `${stake} credits` : "Unset";
+  const stakeDisplay = stake === "0" ? "Free entry" : stake ? `${stake} credits` : "Unset";
   const hasInput = Boolean(input.trim());
   const displayChallengeTitle = hasInput ? challengeTitle : storedChallengeTitle;
   const castingActive = castPhase !== "idle" || isSubmitting;
@@ -102,13 +109,7 @@ export default function PactComposer() {
   ] as const;
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      const value = inputRef.current?.value ?? "";
-      setInput((current) => (current === value ? current : value));
-    }, 160);
-
     return () => {
-      window.clearInterval(timer);
       clearCastTimers();
       if (voiceRecorderRef.current?.state === "recording") {
         voiceRecorderRef.current.onstop = null;
@@ -119,18 +120,8 @@ export default function PactComposer() {
   }, []);
 
   useEffect(() => {
-    if (!latestReply || !resultRef.current) return undefined;
-
-    const timer = window.setTimeout(() => {
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const mobileViewport = window.innerWidth < 640;
-      resultRef.current?.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: mobileViewport ? "center" : "nearest",
-      });
-    }, 260);
-
-    return () => window.clearTimeout(timer);
+    const log = conversationRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
   }, [latestReply]);
 
   function clearCastTimers() {
@@ -244,20 +235,15 @@ export default function PactComposer() {
   }
 
   function draftWithSelectedSettings(base = draftState): api.AgentDraftState {
-    const parsedStake = stake.trim() === "" ? null : Math.max(0, Math.floor(Number(stake)));
-    const participants = opponentMode === "Invite only"
-      ? "you + 1 invited friend"
-      : opponentMode === "Public pool"
-        ? "you + 1 opponent from the public pool"
-        : "you + 1 open opponent";
-    return {
-      ...base,
-      participants,
-      stake: Number.isFinite(parsedStake) ? parsedStake : null,
-      stakeType: parsedStake === null || !Number.isFinite(parsedStake) ? null : parsedStake === 0 ? "none" : "credits",
-      timeWindow: proofWindow,
-      readyToPublish: base.readyToPublish && parsedStake !== null && Number.isFinite(parsedStake),
-    };
+    return draftForComposer(base, { stake, opponentMode, proofWindow });
+  }
+
+  function applyServerDraft(next: api.AgentDraftState) {
+    setDraftState(next);
+    if (next.stake !== null) setStake(String(next.stake));
+    if (next.timeWindow) setProofWindow(next.timeWindow);
+    if (next.participants) setOpponentMode(/public pool/i.test(next.participants)
+      ? "Public pool" : /open opponent/i.test(next.participants) ? "Open match" : "Invite only");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -284,7 +270,8 @@ export default function PactComposer() {
         { role: "ai", content: response.userVisibleReply },
       ];
       setTurns(nextTurns);
-      setDraftState(response.draftState);
+      applyServerDraft(response.draftState);
+      publishRequestIdRef.current = null;
       setInput("");
 
       if (response.toolError) setError(response.toolError);
@@ -320,7 +307,7 @@ export default function PactComposer() {
     publishRequestIdRef.current ??= newRequestId("publish");
     try {
       const response = await api.publishAgentDraft(selectedDraft, publishRequestIdRef.current);
-      setDraftState(response.draftState);
+      applyServerDraft(response.draftState);
       setTurns((current) => [
         ...current,
         { role: "user", content: "Publish this quest" },
@@ -415,9 +402,9 @@ export default function PactComposer() {
       )}
 
       <div className="qx-result-lockstrip relative z-10 mt-3 grid grid-cols-3 gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
-        <span>Proof ready</span>
-        <span>Familiar judge</span>
-        <span>Receipt next</span>
+        <span>{draftState.readyToPublish ? "Rules ready" : "Rules to confirm"}</span>
+        <span>Invite after publishing</span>
+        <span>Proof comes next</span>
       </div>
 
       <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2">
@@ -452,7 +439,7 @@ export default function PactComposer() {
   return (
     <>
       <div
-        className="quest-composer h-full xl:min-h-[640px]"
+        className="quest-composer h-full"
         data-cast-phase={castPhase}
         data-casting={castingActive ? "true" : "false"}
         data-live={hasInput ? "true" : "false"}
@@ -478,6 +465,7 @@ export default function PactComposer() {
           }}
         />
         <form
+          aria-busy={isSubmitting}
           onSubmit={(event) => { void handleSubmit(event); }}
           className="relative z-10 grid gap-3"
         >
@@ -487,9 +475,9 @@ export default function PactComposer() {
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
                   Your quest spell
                 </p>
-                <h1 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
+                <h2 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
                   Say it like you would to a friend.
-                </h1>
+                </h2>
                 <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
                   Pico turns your words into clear, shared terms before anyone commits.
                 </p>
@@ -506,13 +494,15 @@ export default function PactComposer() {
             </div>
 
             <div className="quest-idea-strip mt-4">
-              {promptChips.map((label) => (
-                <span
+              {promptChips.map(([label, example]) => (
+                <button
                   key={label}
-                  className=""
+                  disabled={isSubmitting || isRecording || isTranscribing}
+                  onClick={() => { setInput(example); inputRef.current?.focus(); }}
+                  type="button"
                 >
                   {label}
-                </span>
+                </button>
               ))}
             </div>
 
@@ -521,7 +511,8 @@ export default function PactComposer() {
                 <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> Quest terms</span>
                 <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{stakeDisplay} · {opponentMode} · {proofWindow}</span>
               </summary>
-              <div className="quest-terms__grid">
+              <fieldset className="quest-terms__grid min-w-0" disabled={isSubmitting}>
+              <legend className="sr-only">Quest terms</legend>
               <label className="quest-control">
                 <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
                   Credits
@@ -585,7 +576,7 @@ export default function PactComposer() {
                   Proof window
                 </span>
                 <div className="quest-choice-grid">
-                  {proofOptions.map((option) => {
+                  {Array.from(new Set([...proofOptions, proofWindow])).map((option) => {
                     const selected = option === proofWindow;
                     return (
                       <button
@@ -605,17 +596,28 @@ export default function PactComposer() {
                   })}
                 </div>
               </div>
-              </div>
+              </fieldset>
             </details>
 
+            {turns.length > 0 && (
+              <div aria-label="Challenge conversation" aria-live="polite" className="quest-conversation mt-4" ref={conversationRef} role="log" tabIndex={0}>
+                {turns.map((turn, index) => (
+                  <div className={`quest-conversation__turn quest-conversation__turn--${turn.role}`} key={index}>
+                    <span className="text-xs font-extrabold">{turn.role === "user" ? "You" : "Pico · AI referee"}</span>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{turn.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="quest-composer__prompt mt-3">
               <textarea
+                aria-label={turns.length ? "Reply to Pico" : "Describe your challenge"}
                 className="qx-challenge-input"
                 data-live={hasInput ? "true" : "false"}
                 disabled={isSubmitting}
                 onChange={handleInput}
                 onInput={handleInput}
-                placeholder={placeholderExamples.join("\n")}
+                placeholder={turns.length ? "Answer the question or change a rule…" : placeholderExamples[0]}
                 ref={inputRef}
                 value={input}
               />
@@ -647,7 +649,7 @@ export default function PactComposer() {
                 type="submit"
               >
                 <QuestGlyph className="h-4 w-4" kind="spark" />
-                {isSubmitting ? "Summoning..." : "Summon quest"}
+                {isSubmitting ? "Thinking…" : turns.length ? "Send reply" : "Summon quest"}
               </RitualButton>
               </div>
             </div>
@@ -707,7 +709,7 @@ export default function PactComposer() {
                     : castPhase === "settling"
                       ? "Quest preview forming..."
                       : latestReply
-                        ? draftState.readyToPublish ? "Ready to publish" : "One answer still needed"
+                        ? draftState.readyToPublish ? "Ready to publish" : "Reply to Pico to finish the rules"
                         : `${stakeDisplay} / ${proofWindow}`}
             </p>
           </div>
@@ -736,7 +738,7 @@ export default function PactComposer() {
         </form>
 
         {error && (
-          <p className="mt-3 rounded-md px-3 py-2 text-sm" style={{ background: "rgba(163,31,52,0.14)", color: "#fecaca" }}>
+          <p className="mt-3 rounded-xl px-4 py-3 text-sm font-semibold" role="alert" style={{ background: "#fff1f2", color: "#9f1239" }}>
             {error}
           </p>
         )}

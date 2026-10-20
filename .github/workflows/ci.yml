@@ -49,3 +49,26 @@ jobs:
       - run: npm run test:production:integration
 
       - run: npx next build
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Verify real browser creation and cancellation against production build
+        env:
+          AI_ENABLED: "false"
+          TEST_BASE_URL: http://localhost:3000
+        run: |
+          npm run start > /tmp/summoner-browser-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
+          npx playwright test tests/e2e-gambles/composer-conversation.spec.ts tests/e2e-gambles/quest-cancellation.spec.ts --workers=1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-flow-evidence
+          path: |
+            playwright-report
+            tests/e2e-gambles/.playwright
+            /tmp/summoner-browser-server.log
+          if-no-files-found: ignore

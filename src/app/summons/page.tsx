@@ -1,6 +1,5 @@
 import PactComposer from "@/components/summons/PactComposer";
 import GatewayArrival from "@/components/summons/GatewayArrival";
-import ChallengeCinematicStage from "@/components/summons/ChallengeCinematicStage";
 import SceneShell from "@/components/scene/SceneShell";
 import QuestGlyph from "@/components/world/QuestGlyph";
 
@@ -13,16 +12,16 @@ const questPath = [
 
 export default function SummonsPage() {
   return (
-    <SceneShell activePath="/summons" particleCount={20} showSidebar tone="world">
+    <SceneShell activePath="/summons" particleCount={8} showSidebar tone="world">
       <GatewayArrival />
-      <section className="mx-auto w-full max-w-[1460px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
+      <section className="mx-auto w-full max-w-[960px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3 px-1">
           <div>
-            <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em]">Quest Meadow</span>
-            <h1 className="mt-3 max-w-4xl text-3xl font-black leading-[0.95] tracking-[-0.045em] text-[color:var(--sum-ink-deep)] sm:text-5xl">
-              What are you challenging your friend to do?
+            <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em]">Create a challenge</span>
+            <h1 className="mt-3 max-w-4xl text-3xl font-black leading-tight tracking-[-0.035em] text-[color:var(--sum-ink-deep)] sm:text-4xl">
+              A fair challenge starts here.
             </h1>
-            <p className="mt-2 text-sm font-bold text-[color:var(--sum-muted)]">Speak naturally. Pico will ask only for the missing rule.</p>
+            <p className="mt-2 text-sm font-bold text-[color:var(--sum-muted)]">Agree on the rules. Invite a friend. Submit proof and review the result.</p>
           </div>
           <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 text-[10px] font-black text-[color:var(--sum-muted)] shadow-[0_5px_0_rgba(23,53,75,0.06)] md:inline-flex">
             <QuestGlyph className="h-4 w-4 text-[#157b58]" kind="friends" />
@@ -30,9 +29,8 @@ export default function SummonsPage() {
           </span>
         </div>
 
-        <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.23fr)_minmax(350px,0.77fr)]">
+        <div className="min-w-0">
           <PactComposer />
-          <ChallengeCinematicStage />
         </div>
 
         <nav aria-label="Quest flow" className="mx-auto mt-5 grid max-w-5xl grid-cols-2 gap-2 rounded-[2rem] border-2 border-white/80 bg-[rgba(255,253,244,0.72)] p-2 shadow-[0_8px_0_rgba(23,53,75,0.07),0_18px_32px_rgba(23,53,75,0.1)] backdrop-blur sm:grid-cols-4">
