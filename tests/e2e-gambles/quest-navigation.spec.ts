@@ -45,7 +45,7 @@ test("primary navigation opens actual owned quests, proof and results with recov
       } else await route.continue();
     });
     await page.goto(`${base}/quests`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("alert")).toContainText("Fixture list transport failure");
+    await expect(page.getByRole("alert").filter({ hasText: "Fixture list transport failure" })).toBeVisible();
     await page.getByRole("button", { name: "Try again", exact: true }).press("Enter");
     await expect(page.getByTestId(`quest-card-${actual.challenges[0].id}`)).toBeVisible();
     await page.unroute("**/api/challenges?*");
@@ -53,6 +53,7 @@ test("primary navigation opens actual owned quests, proof and results with recov
     const hrefs = await primary.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("href")));
     expect(hrefs).toEqual(["/summons", "/quests", "/quests?view=proof", "/quests?view=results", "/me"]);
     const counts: Record<string, number> = {};
+    let screenshotStatus = "not attempted";
     for (const view of ["all", "proof", "results"]) {
       const href = view === "all" ? "/quests" : `/quests?view=${view}`;
       await page.goto(`${base}${href}`, { waitUntil: "domcontentloaded" });
@@ -70,12 +71,17 @@ test("primary navigation opens actual owned quests, proof and results with recov
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       counts[view] = expected.length;
     }
+    try {
+      const screenshot = await page.screenshot({ timeout: 5_000, animations: "disabled" });
+      await testInfo.attach("real-results-mobile", { contentType: "image/png", body: screenshot });
+      screenshotStatus = "captured";
+    } catch { screenshotStatus = "optional screenshot unavailable"; }
     const result = actual.challenges.find(quest => ["settled", "cancelled", "disputed", "pending_settlement"].includes(quest.status));
     expect(result).toBeTruthy();
     await page.getByTestId(`quest-card-${result!.id}`).getByRole("link", { name: "Open quest", exact: true }).press("Enter");
     await expect(page).toHaveURL(`${base}/challenge/${result!.id}`);
     await expect(page.getByRole("heading", { name: result!.title, exact: true }).first()).toBeVisible();
-    await testInfo.attach("real-quest-navigation", { contentType: "application/json", body: Buffer.from(JSON.stringify({ result: "PASS", base, total: actual.total, counts, openedQuestId: result!.id, failedTransportRecovered: failedOnce, writes: "authentication only; no product mutations", providerCalls: 0 })) });
+    await testInfo.attach("real-quest-navigation", { contentType: "application/json", body: Buffer.from(JSON.stringify({ result: "PASS", base, total: actual.total, counts, openedQuestId: result!.id, failedTransportRecovered: failedOnce, screenshotStatus, writes: "authentication only; no product mutations", providerCalls: 0 })) });
     console.log(JSON.stringify({ result: "PASS", counts, openedQuestId: result!.id, providerCalls: 0 }));
   } catch (error) { console.error(error); throw error; }
   finally { await context.close(); }
