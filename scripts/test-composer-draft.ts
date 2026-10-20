@@ -26,10 +26,12 @@ assert.equal(draftForComposer(draft, controls).timeWindow, "1 minute");
 assert.equal(draftForComposer(draft, controls).participants, "you + 1 open opponent");
 assert.equal(draftForComposer({ ...draft, stake: 7, stakeType: "credits", timeWindow: "72 hours" }, { ...controls, stake: "0" }).stake, 7,
   "An explicit updated draft also wins in the opposite ordering");
-for (const stake of ["", "-1", "NaN", "Infinity"]) {
+for (const stake of ["", "-1", "1.5", "NaN", "Infinity"]) {
   const outgoing = draftForComposer(emptyDraftState(), { ...controls, stake });
   assert.equal(outgoing.stake, null);
   assert.equal(outgoing.readyToPublish, false);
+  assert.equal(draftForComposer(draft, { ...controls, stake }).readyToPublish, false,
+    "Invalid explicit controls must block publishing even when an earlier draft was ready");
 }
 const partial = buildDeterministicAgentResponse("我和朋友打羽毛球，5个球定胜负\n\nChallenge settings: stake 0 credits; opponent Invite only; proof window 24 hours.", emptyDraftState());
 const incomplete = normalizeDraftState({ ...emptyDraftState(), ...partial.draftPatch });

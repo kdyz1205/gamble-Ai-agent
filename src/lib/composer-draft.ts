@@ -44,8 +44,7 @@ export function readComposerCheckpoint(raw: string, ownerId: string | null, now 
 /** Server-confirmed conversational edits take precedence over initial controls. */
 export function draftForComposer(base: AgentDraftState, settings: ComposerSettings): AgentDraftState {
   const parsed = settings.stake.trim() === "" ? null : Number(settings.stake);
-  const fallbackStake = parsed !== null && Number.isFinite(parsed) && parsed >= 0
-    ? Math.floor(parsed) : null;
+  const fallbackStake = parsed !== null && Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
   const stake = base.stake ?? fallbackStake;
   return {
     ...base,
@@ -55,6 +54,6 @@ export function draftForComposer(base: AgentDraftState, settings: ComposerSettin
     stake,
     stakeType: stake === null ? null : stake === 0 ? "none" : "credits",
     timeWindow: base.timeWindow || settings.proofWindow,
-    readyToPublish: base.readyToPublish && stake !== null && Number.isFinite(stake) && stake >= 0,
+    readyToPublish: base.readyToPublish && fallbackStake !== null && stake !== null && Number.isSafeInteger(stake) && stake >= 0,
   };
 }
