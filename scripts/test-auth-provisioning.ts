@@ -8,7 +8,7 @@ import type { User } from "next-auth";
 import bcrypt from "bcryptjs";
 import prisma from "../src/lib/db";
 import { authOptions } from "../src/lib/auth-options";
-import { AUTH_UNAVAILABLE_MESSAGE } from "../src/lib/auth-provisioning";
+import { AUTH_UNAVAILABLE_MESSAGE, OAuthLinkRequiredError } from "../src/lib/auth-provisioning";
 import { COSTS } from "../src/lib/credits";
 
 const provider = authOptions.providers.find((item) => item.id === "credentials");
@@ -48,7 +48,8 @@ async function main() {
   // do not prove third-party OAuth verification or adapter account linking.
   const google = async (address: string, id: string) => {
     const user: User = { id, email: address, name: "Callback fixture", image: null };
-    const accepted = await signIn({ user, account: { provider: "google", type: "oauth", providerAccountId: id } });
+    const profile = { email: address, email_verified: true };
+    const accepted = await signIn({ user, account: { provider: "google", type: "oauth", providerAccountId: id }, profile });
     assert.equal(accepted, true); return user;
   };
   const counts = async (userId: string) => ({
@@ -115,15 +116,16 @@ async function main() {
     assert.equal(googleUser.id, googleRow.id); assert.equal(googleRow.passwordHash, null);
     assert(googleRow.emailVerified instanceof Date); assert.equal(googleRow.credits, COSTS.SIGNUP_BONUS);
     assert.deepEqual(await counts(googleRow.id), { bonus: 1, events: 1 });
-    assert.equal((await google(googleEmail, `second_${run}`)).id, googleRow.id);
-    assert.equal((await google(registeredEmail, `linked_${run}`)).id, row.id);
+    assert.equal((await google(googleEmail, `google_${run}`)).id, googleRow.id);
+    await assert.rejects(() => google(registeredEmail, `unlinked_${run}`), OAuthLinkRequiredError);
+    assert.equal(await prisma.account.count({ where: { userId: row.id } }), 0);
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: row.id } })).passwordHash, row.passwordHash);
     assert.deepEqual(await counts(row.id), { bonus: 1, events: 1 });
     const concurrentGoogleEmail = email("google-race");
-    const googleCallbacks = await Promise.all(Array.from({ length: 6 }, (_, i) => google(concurrentGoogleEmail, `google_${run}_${i}`)));
+    const googleCallbacks = await Promise.all(Array.from({ length: 6 }, () => google(concurrentGoogleEmail, `google_race_${run}`)));
     assert.equal(new Set(googleCallbacks.map((user) => user.id)).size, 1);
     assert.deepEqual(await counts(googleCallbacks[0].id), { bonus: 1, events: 1 });
-    console.log("PASS downstream Google callback fixtures preserve existing email identity and converge on one account/bonus under retries and concurrency; OAuth itself is not exercised");
+    console.log("PASS downstream Google callback fixtures reject unverified credential merging and converge on one verified Google identity/bonus under retries and concurrency; OAuth itself is not exercised");
 
     for (const table of ["CreditTx", "ActivityEvent"] as const) {
       const failedEmail = email(`google-${table.toLowerCase()}`);
