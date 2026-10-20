@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import * as api from "@/lib/api-client";
-import { draftForComposer } from "@/lib/composer-draft";
+import { COMPOSER_AUTH_CHECKPOINT, draftForComposer, readComposerCheckpoint } from "@/lib/composer-draft";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
 const proofOptions = ["24 hours", "72 hours", "7 days"] as const;
@@ -47,6 +48,8 @@ function newRequestId(prefix: string) {
 }
 
 export default function PactComposer() {
+  const { data: session, status: sessionStatus } = useSession();
+  const restoredAuthRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -107,6 +110,21 @@ export default function PactComposer() {
     ["Proof", proofHint],
     ["Familiar", "AI referee"],
   ] as const;
+
+  useEffect(() => {
+    if (sessionStatus === "loading" || restoredAuthRef.current) return;
+    restoredAuthRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(COMPOSER_AUTH_CHECKPOINT);
+      if (!raw) return;
+      sessionStorage.removeItem(COMPOSER_AUTH_CHECKPOINT);
+      const saved = readComposerCheckpoint(raw, session?.user?.id ?? null);
+      if (!saved) return;
+      setInput(saved.input); setStake(saved.settings.stake);
+      setOpponentMode(saved.settings.opponentMode as (typeof opponentOptions)[number]);
+      setProofWindow(saved.settings.proofWindow); setDraftState(saved.draft); setTurns(saved.turns);
+    } catch { /* Restricted browser storage must not block challenge creation. */ }
+  }, [sessionStatus, session?.user?.id]);
 
   useEffect(() => {
     return () => {
@@ -747,6 +765,14 @@ export default function PactComposer() {
 
       <AuthModal
         open={authOpen}
+        onBeforeRedirect={() => {
+          try {
+            sessionStorage.setItem(COMPOSER_AUTH_CHECKPOINT, JSON.stringify({
+              ownerId: session?.user?.id ?? null, savedAt: Date.now(), input,
+              settings: { stake, opponentMode, proofWindow }, draft: draftState, turns: turns.slice(-16),
+            }));
+          } catch { /* OAuth remains usable when storage is unavailable. */ }
+        }}
         onClose={() => setAuthOpen(false)}
         onSuccess={() => {
           setAuthOpen(false);

@@ -61,6 +61,17 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     await page.locator("summary").filter({ hasText: "Quest terms" }).click();
     await expect(log).toContainText("make it free");
     await expect(log).toContainText("总共打5个回合");
+    const session = await (await context.request.get(`${BASE}/api/auth/session`)).json();
+    const saved = {
+      ownerId: session.user.id, savedAt: Date.now(), input: "",
+      settings: { stake: "0", opponentMode: "Invite only", proofWindow: "1 minute" }, draft: timed.draftState,
+      turns: [{ role: "user", content: "make it free" }, { role: "ai", content: timed.userVisibleReply }],
+    };
+    await page.evaluate(value => sessionStorage.setItem("summoner:composer:auth-return:v1", JSON.stringify(value)), saved);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Publish free quest", exact: true })).toBeVisible();
+    await expect(log).toContainText("make it free");
+    expect(await page.evaluate(() => sessionStorage.getItem("summoner:composer:auth-return:v1"))).toBeNull();
     const before = await (await context.request.get(`${BASE}/api/tokens`)).json();
     const usageBefore = await (await context.request.get(`${BASE}/api/ai/usage`)).json();
     expect(usageBefore).toEqual(usageAtLogin);

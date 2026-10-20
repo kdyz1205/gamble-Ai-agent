@@ -10,6 +10,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onBeforeRedirect?: () => void;
 }
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
@@ -25,7 +26,7 @@ const PINK = "#FFD1DC";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
-export default function AuthModal({ open, onClose, onSuccess }: Props) {
+export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }: Props) {
   const [mode, setMode] = useState<"login" | "register">("register");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -92,7 +93,8 @@ export default function AuthModal({ open, onClose, onSuccess }: Props) {
     for (const name of staleCookies) {
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     }
-    signIn("google", { callbackUrl: "/", prompt: "select_account" });
+    onBeforeRedirect?.();
+    signIn("google", { callbackUrl: `${window.location.pathname}${window.location.search}` }, { prompt: "select_account" });
   };
 
   const copySiteLink = async () => {
