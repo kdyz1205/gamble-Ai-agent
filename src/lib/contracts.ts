@@ -166,7 +166,10 @@ export async function getOnChainChallenge(challengeId: string) {
 // ── Helpers ──
 
 export function isOnChainEnabled(): boolean {
-  return !!(USAGE_TOKEN_ADDRESS && ESCROW_ADDRESS && process.env.SERVER_PRIVATE_KEY);
+  // Internal-credit release: legacy wallet records have no signature proof,
+  // and the payment path has no verified, replay-safe transaction intake.
+  // Configuring addresses or a server key must never activate asset transfers.
+  return false;
 }
 
 export function txLink(hash: string): string {
