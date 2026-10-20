@@ -20,7 +20,7 @@ export default function DuelDemoPage() {
                 <ellipse cx="400" cy="103" rx="30" ry="8" fill="#112a24" opacity=".45" />
                 <circle cx="260" cy="230" r="24" fill="#f3bca8" stroke="#f7f5ef" strokeWidth="2" /><text x="260" y="237" textAnchor="middle" fill="#1d302d" fontSize="18" fontWeight="700">M</text>
                 <circle cx="400" cy="75" r="23" fill="#eed15c" stroke="#f7f5ef" strokeWidth="2" /><text x="400" y="82" textAnchor="middle" fill="#1d302d" fontSize="18" fontWeight="700">R</text>
-                <path d="M285 215q40-132 92-117" stroke="#f7f5ef" strokeWidth="2" strokeDasharray="5 7" opacity=".6" /><circle cx="328" cy="141" r="5" fill="#f7f5ef" />
+                <path d="M285 215q40-132 92-117" fill="none" stroke="#f7f5ef" strokeWidth="2" strokeDasharray="5 7" opacity=".6" /><circle cx="328" cy="141" r="5" fill="#f7f5ef" />
                 <path d="m307 148 7-5m24-17 6-6" stroke="#f7f5ef" strokeWidth="2" strokeLinecap="round" />
                 <text x="32" y="309" fill="#d8e6d2" fontSize="9" letterSpacing="2">ILLUSTRATION / NOT SUBMITTED FOOTAGE</text>
               </svg>
