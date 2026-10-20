@@ -66,6 +66,8 @@ async function main() {
   process.env.ANTHROPIC_API_KEY = "local-transport-test";
   process.env.ANTHROPIC_BASE_URL = provider.baseUrl;
   const params = { providerId: "openai", model: `local-test-${randomUUID()}`, system: "system", user: "user" };
+  const originalVisionModels = provider.visionModels;
+  provider.visionModels = [...(provider.visionModels ?? []), params.model]; // Explicit simulated transport model, test process only.
   let passed = 0;
   const pass = (name: string) => { passed++; console.log(`PASS ${name}`); };
   try {
@@ -87,10 +89,9 @@ async function main() {
     pass("vision preserves multimodal payload and text result");
 
     const beforeEmptyVision = bodies.length;
-    await completeOracleJudgeVision({ ...params, userText: "text only", images: [] });
-    assert.equal(bodies.length, beforeEmptyVision + 1);
-    assert.equal(bodies.at(-1)?.messages.at(-1)?.content, "text only");
-    pass("empty vision produces exactly one text request");
+    await assert.rejects(completeOracleJudgeVision({ ...params, userText: "text only", images: [] }), /readable image evidence/);
+    assert.equal(bodies.length, beforeEmptyVision);
+    pass("empty vision fails closed without a text request");
 
     reply = (response, body) => response.end(JSON.stringify(body.tools ? {
       choices: [{ message: { content: null, tool_calls: [
@@ -194,6 +195,7 @@ async function main() {
     console.log(`${passed} LLM router transport tests passed`);
   } finally {
     provider.baseUrl = originalBaseUrl;
+    provider.visionModels = originalVisionModels;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
     if (originalTimeout === undefined) delete process.env.AI_TEXT_TIMEOUT_MS;

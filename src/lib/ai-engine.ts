@@ -580,10 +580,16 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
       getVisualsForParticipant("Participant B", evidenceB!),
     ]);
   } catch {
-    // Vision extraction is best-effort; if it fails, fall through to text-only.
+    // Missing media is checked below and requires review without a model call.
   }
   const allVisuals = capJudgeVisuals(visualsA.visuals, visualsB.visuals, 24);
-
+  // A media URL or user description is not a substitute for inspecting proof.
+  if ([{ evidence: evidenceA, prepared: visualsA }, { evidence: evidenceB, prepared: visualsB }].some(
+    ({ evidence, prepared }) => (evidence?.type === "photo" || evidence?.type === "video") && !prepared.visuals.some((image) => allVisuals.includes(image)),
+  )) {
+    return { winnerId: null, confidence: 0.25,
+      reasoning: "Visual proof could not be read for every media submission. No winner can be recommended from descriptions; review or readable proof is required." };
+  }
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
   const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
 description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
@@ -690,7 +696,7 @@ function escalateModelForLowConfidence(
     return "claude-sonnet-4-20250514";
   }
   if (providerId === "google" && m.includes("flash")) {
-    return "gemini-2.5-pro-preview-05-06";
+    return "gemini-2.5-pro";
   }
   return null;
 }

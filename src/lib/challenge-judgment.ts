@@ -5,7 +5,7 @@ import prisma from "./db";
 import { judgeChallenge } from "./ai-engine";
 import { getAiModel, type TierId } from "./auth";
 import { getCredits, spendForInference, TIER_MULTIPLIER } from "./credits";
-import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
+import { getProviderById, resolveJudgmentModel } from "./llm-providers";
 import { ensureAutomaticReviewCase } from "./verdict-review";
 import { currentAiCallCount, withAiContext } from "./ai-governance";
 import { withJudgmentExecutionLock } from "./judgment-execution-lock";
@@ -141,6 +141,18 @@ async function executeClaimedJudgment(
   if ((!evidenceA || !evidenceB) && (!challenge.deadline || challenge.deadline.getTime() > Date.now())) {
     return { ok: false, error: "Both participants must submit proof before early judgment", status: 409 };
   }
+  let providerId: string;
+  let judgeModel: string;
+  try {
+    ({ providerId, model: judgeModel } = resolveJudgmentModel({
+      providerId: options?.providerId, model: options?.model,
+      fallbackModel: getAiModel(tierId).model,
+      needsVision: Boolean(evidenceA && evidenceB && [evidenceA, evidenceB].some((e) => e.type === "photo" || e.type === "video")),
+    }));
+  } catch {
+    return { ok: false, status: 400, error: "Choose a supported visual judgment provider and model, or configure one before retrying." };
+  }
+  const pdef = getProviderById(providerId);
   if (challenge.status === "live") {
     const claimed = await prisma.challenge.updateMany({ where: { id: challengeId, status: "live" }, data: { status: "judging" } });
     if (claimed.count === 0) return { ok: false, error: "Challenge state changed", status: 409 };
@@ -195,31 +207,6 @@ async function executeClaimedJudgment(
         }
       : null;
 
-  const bothHaveVideoUrl =
-    evidenceA?.type === "video" &&
-    evidenceB?.type === "video" &&
-    Boolean(String(evidenceA?.url ?? "").trim()) &&
-    Boolean(String(evidenceB?.url ?? "").trim());
-  const googleVisionReady =
-    Boolean(process.env.GOOGLE_AI_API_KEY) && Boolean(getProviderById("google"));
-
-  const tierMeta = getAiModel(tierId);
-  const envDefault = process.env.ORACLE_DEFAULT_PROVIDER;
-  let providerId =
-    options?.providerId ??
-    (envDefault && getProviderById(envDefault) ? envDefault : DEFAULT_LLM_PROVIDER_ID);
-  if (!options?.providerId && bothHaveVideoUrl && googleVisionReady) {
-    providerId = "google";
-  }
-  const pdef = getProviderById(providerId);
-  let judgeModel =
-    options?.model?.trim() ||
-    (providerId === DEFAULT_LLM_PROVIDER_ID
-      ? tierMeta.model
-      : (pdef?.defaultModel ?? tierMeta.model));
-  if (!options?.model?.trim() && bothHaveVideoUrl && googleVisionReady) {
-    judgeModel = "gemini-2.0-flash";
-  }
   let aiModelLabel = `${pdef?.shortLabel ?? "LLM"} · ${judgeModel}`;
 
   // Wrap judgeChallenge so a throw (provider timeout, bad JSON, etc.) refunds

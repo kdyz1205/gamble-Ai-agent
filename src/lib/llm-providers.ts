@@ -15,6 +15,8 @@ export interface LlmProviderDefinition {
   defaultModel: string;
   /** Suggested models in the collapsed panel */
   models: string[];
+  /** Explicitly verified image-input models; unknown models fail closed. */
+  visionModels?: string[];
   docsUrl: string;
 }
 
@@ -27,6 +29,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     envVar: "ANTHROPIC_API_KEY",
     defaultModel: "claude-haiku-4-5-20251001",
     models: ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
+    visionModels: ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514", "claude-opus-4-20250514"],
     docsUrl: "https://docs.anthropic.com",
   },
   {
@@ -43,6 +46,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     // judge auto-escalates to gpt-4o for a second pass (see ai-engine.ts).
     defaultModel: "gpt-4o-mini",
     models: ["gpt-4o-mini", "gpt-4o", "o4-mini", "o3-mini"],
+    visionModels: ["gpt-4o-mini", "gpt-4o", "o4-mini"],
     docsUrl: "https://platform.openai.com/docs",
   },
   {
@@ -55,6 +59,7 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     envVar: "AZURE_OPENAI_API_KEY",
     defaultModel: "gpt-4o-mini",
     models: [],
+    visionModels: ["gpt-4o-mini", "gpt-4o", "o4-mini"],
     docsUrl: "https://learn.microsoft.com/azure/ai-services/openai/",
   },
   {
@@ -63,8 +68,9 @@ export const LLM_PROVIDERS: LlmProviderDefinition[] = [
     shortLabel: "Google",
     kind: "google",
     envVar: "GOOGLE_AI_API_KEY",
-    defaultModel: "gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-2.5-pro-preview-05-06", "gemini-1.5-pro"],
+    defaultModel: "gemini-2.5-flash-lite",
+    models: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
+    visionModels: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
     docsUrl: "https://ai.google.dev/docs",
   },
   {
@@ -140,3 +146,32 @@ export function getProviderById(id: string): LlmProviderDefinition | undefined {
 }
 
 export const DEFAULT_LLM_PROVIDER_ID = "anthropic";
+
+/** Refuse unsupported or unverified image transports before any provider reservation. */
+export function assertVisionModel(providerId: string, model: string): void {
+  if (!getProviderById(providerId)?.visionModels?.includes(model)) {
+    throw new Error(`Provider/model does not support verified visual judgment: ${providerId} / ${model}`);
+  }
+}
+
+/** Keep explicit choices; automatically select an available vision backend for media. */
+export function resolveJudgmentModel(params: {
+  providerId?: string; model?: string; fallbackModel: string; needsVision: boolean;
+}): { providerId: string; model: string } {
+  const defaultId = process.env.ORACLE_DEFAULT_PROVIDER?.replace(/^\uFEFF+/, "").trim();
+  let providerId = params.providerId ?? (defaultId && getProviderById(defaultId) ? defaultId : DEFAULT_LLM_PROVIDER_ID);
+  if (params.needsVision && !params.providerId && !params.model?.trim()) {
+    const current = getProviderById(providerId);
+    if (!current?.visionModels?.includes(current.defaultModel) || !process.env[current.envVar]?.trim()) {
+      const available = ["google", "openai", "anthropic"].map(getProviderById).find((p) =>
+        p?.visionModels?.includes(p.defaultModel) && process.env[p.envVar]?.replace(/^\uFEFF+/, "").trim());
+      if (!available) throw new Error("No configured visual judgment provider is available");
+      providerId = available.id;
+    }
+  }
+  const provider = getProviderById(providerId);
+  if (!provider) throw new Error("Unknown judgment provider");
+  const model = params.model?.trim() || (providerId === DEFAULT_LLM_PROVIDER_ID ? params.fallbackModel : provider.defaultModel);
+  if (params.needsVision) assertVisionModel(providerId, model);
+  return { providerId, model };
+}

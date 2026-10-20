@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getProviderById, type LlmProviderDefinition } from "./llm-providers";
+import { assertVisionModel, getProviderById, type LlmProviderDefinition } from "./llm-providers";
 import type { JudgeVisionImage } from "./media/prepare-evidence-visuals";
 import { executeOracleTool, type OpenAiTool, type OracleToolResult } from "./oracle-tools";
 import { meteredAiCall, recordAiResponse, remainingAiTimeMs } from "./ai-governance";
@@ -47,7 +47,7 @@ async function providerJson(
 }
 
 async function anthropicComplete(def: LlmProviderDefinition, model: string, system: string, user: string, maxTokens: number, temperature?: number) {
-  const key = process.env[def.envVar];
+  const key = process.env[def.envVar]?.replace(/^\uFEFF+/, "").trim();
   if (!key) throw new Error(`${def.envVar} is not set`);
   const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: requestTimeout("text") });
   const response = await meteredAiCall({ providerId: def.id, model, kind: "text", maxOutputTokens: maxTokens }, async () => {
@@ -99,10 +99,10 @@ async function openAiCompatibleComplete(
 }
 
 async function googleComplete(model: string, system: string, user: string, maxTokens: number, apiKey: string, temperature?: number) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const data = await providerJson("google", model, "text", maxTokens, url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text: user }] }],
@@ -124,14 +124,14 @@ async function googleCompleteVision(
   apiKey: string,
   temperature?: number,
 ) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [{ text: userText }];
   for (const img of images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
   const data = await providerJson("google", model, "vision", maxTokens, url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts }],
@@ -153,7 +153,7 @@ async function anthropicCompleteVision(
   maxTokens: number,
   temperature?: number,
 ) {
-  const key = process.env[def.envVar];
+  const key = process.env[def.envVar]?.replace(/^\uFEFF+/, "").trim();
   if (!key) throw new Error(`${def.envVar} is not set`);
   const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: requestTimeout("vision") });
   const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [
@@ -236,7 +236,7 @@ export async function completeOraclePrompt(params: LlmCompleteParams): Promise<s
 
   const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = process.env[def.envVar]?.replace(/^\uFEFF+/, "").trim();
 
   switch (def.kind) {
     case "anthropic":
@@ -393,7 +393,7 @@ export async function completeOraclePromptWithTools(params: {
 
   const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = process.env[def.envVar]?.replace(/^\uFEFF+/, "").trim();
 
   if (def.kind !== "openai_compat") {
     // Graceful degrade: use plain prompt, no tools.
@@ -451,19 +451,14 @@ export async function completeOracleJudgeVision(params: {
   const def = getProviderById(params.providerId);
   if (!def) throw new Error(`Unknown provider: ${params.providerId}`);
 
+  assertVisionModel(params.providerId, params.model);
+
   const maxTokens = boundedInteger(params.maxTokens, 1024, 4096);
   const temperature = params.temperature;
-  const key = process.env[def.envVar];
+  const key = process.env[def.envVar]?.replace(/^\uFEFF+/, "").trim();
 
   if (params.images.length === 0) {
-    return completeOraclePrompt({
-      providerId: params.providerId,
-      model: params.model,
-      system: params.system,
-      user: params.userText,
-      maxTokens,
-      temperature,
-    });
+    throw new Error("Visual judgment requires readable image evidence");
   }
 
   switch (def.kind) {
