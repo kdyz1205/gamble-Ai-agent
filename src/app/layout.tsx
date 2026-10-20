@@ -4,12 +4,11 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
 import "./globals.css";
 import "./summoner-world.css";
-import "./editorial-world.css";
-import "./editorial-secondary.css";
+import "./sum-universe.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
-  title: "Summon World",
+  title: "SUM — A world of quests",
   description:
     "Summon quests, invite challengers, submit proof, and let AI familiars referee the result.",
   manifest: "/manifest.webmanifest",
@@ -31,7 +30,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#C8EFFF",
+  themeColor: "#F4F8F6",
   colorScheme: "light",
 };
 

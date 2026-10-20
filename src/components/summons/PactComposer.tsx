@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
+import { questSeeds } from "@/components/universe/quest-seeds";
 import * as api from "@/lib/api-client";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
@@ -63,6 +64,10 @@ export default function PactComposer() {
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   useEffect(() => {
+    // Allow only the curated seed identifiers; choosing one never submits a quest.
+    const seedId = new URLSearchParams(window.location.search).get("seed");
+    const seed = questSeeds.find((item) => item.id === seedId);
+    if (seed) setInput(seed.prompt);
     const chooseExample = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== "string") return;
       setInput(event.detail);

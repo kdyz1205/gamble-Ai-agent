@@ -1,12 +1,7 @@
 "use client";
-import { ArrowMark } from "@/components/world/EditorialMarks";
-
-const ideas = [
-  ["Meet me on the court", "Challenge my friend to a badminton match: first to win 3 rallies. Each person uploads a continuous video within 24 hours."],
-  ["A week of showing up", "Challenge my friend to walk for 20 minutes every day for 7 days. We each upload our daily activity record."],
-  ["One minute. Twenty pushups.", "Challenge my friend to do 20 pushups in 60 seconds, with one unedited video showing the full attempt."],
-] as const;
+import { Arrow, WorldGlyph } from "@/components/universe/WorldUI";
+import { questSeeds } from "@/components/universe/quest-seeds";
 
 export default function QuestIdeaDeck() {
-  return <section aria-labelledby="idea-deck-title"><h2 className="ed-eyebrow" id="idea-deck-title">NEED A STARTING POINT?</h2>{ideas.map(([label, idea]) => <button type="button" key={label} className="ed-starter" onClick={() => window.dispatchEvent(new CustomEvent("summoner:choose-example", { detail: idea }))}>{label}<ArrowMark /></button>)}<p className="ed-note" style={{ marginTop: 14 }}>Examples only. Edit the details before creating your quest.</p></section>;
+  return <section className="sw-seeds" aria-labelledby="quest-seeds-title"><h2 id="quest-seeds-title">CHOOSE A STARTING SPARK</h2>{questSeeds.map(quest => <button key={quest.id} type="button" onClick={() => window.dispatchEvent(new CustomEvent("summoner:choose-example", { detail: quest.prompt }))}><WorldGlyph kind={quest.kind} /><span><strong>{quest.name}</strong><small>{quest.realm} · Example quest</small></span><Arrow /></button>)}</section>;
 }

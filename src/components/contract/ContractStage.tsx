@@ -1,28 +1,18 @@
 import Link from "next/link";
-import PicoFamiliar from "@/components/familiar/PicoFamiliar";
-import { ArrowMark } from "@/components/world/EditorialMarks";
+import { Arrow, FamiliarNote, PageIntro, QuestJourney, SummonSigil } from "@/components/universe/WorldUI";
 
-const exampleTerms = [
-  ["The finish line", "First player to win three badminton rallies. Agree on the court boundaries and service order before starting."],
-  ["What counts as proof", "One continuous video showing both players, the court and every rally. Each player may add their own record."],
-  ["The deadline", "Upload proof within 24 hours after both players accept. The live quest shows its exact deadline before acceptance."],
-  ["When it is not clear", "An unclear rally is left unresolved for review. No guessed points, hidden rule changes or automatic claims of victory."],
-] as const;
+const terms = [
+  ["The shared goal", "First player to win three badminton rallies. Agree on court boundaries and service order before starting."],
+  ["The proof", "One continuous recording showing both players, the court, and the full attempt. Each Summoner may add their own evidence."],
+  ["The deadline", "For this example, proof is due within 24 hours after both players accept. A live quest shows its exact deadline before acceptance."],
+  ["When it is unclear", "Uncertain evidence stays open for review. A Familiar cannot change agreed terms or accept the pact on your behalf."],
+];
+const principles = [["Two Summoners. One agreement.", "Both participants see the same objective and proof requirements."], ["Consent comes before commitment.", "Any internal credits and acceptance conditions appear in the actual quest."], ["Clarity is part of the adventure.", "Missing or disputed evidence is a reason to review, not to guess."]];
 
 export default function ContractStage() {
-  return (
-    <section className="ed-page" data-testid="contract-stage">
-      <header className="ed-page-header"><div><p className="ed-eyebrow">02 / THE HANDSHAKE</p><h1>Good rivals.<br /><em>Same rules.</em></h1></div><p>The best competition starts with an agreement.<br />Everyone sees the same quest before deciding to join.</p></header>
-      <div className="ed-agreement">
-        <article className="ed-agreement-paper" aria-labelledby="agreement-title">
-          <div className="ed-paper-heading"><div><p className="ed-eyebrow">SUMMONER.WORLD / SHARED TERMS</p><span className="ed-example-tag" style={{marginTop:10}}>ILLUSTRATIVE AGREEMENT</span></div><PicoFamiliar mood="referee" /></div>
-          <h2 id="agreement-title">Three rallies.<br />One friendly rivalry.</h2>
-          <div className="ed-people-line"><div className="ed-person"><span>M</span><div>Mira<small style={{display:"block",fontWeight:500,marginTop:3}}>Quest creator</small></div></div><span className="ed-versus">vs.</span><div className="ed-person"><span>R</span><div>Ren<small style={{display:"block",fontWeight:500,marginTop:3}}>Invited friend</small></div></div></div>
-          <dl className="ed-terms-list">{exampleTerms.map(([label, text], i) => <div key={label}><span>0{i+1}</span><div><dt>{label}</dt><dd>{text}</dd></div></div>)}</dl>
-          <div className="ed-paper-bottom"><p>This is a sample, not a live agreement. No invitation is accepted or credits committed on this page.</p><Link className="ed-button ed-button--ink" href="/summons">Make your own quest <ArrowMark /></Link></div>
-        </article>
-        <aside className="ed-explainer"><p className="ed-eyebrow">BEFORE ANYONE SAYS “I&apos;M IN”</p><h2>A handshake,<br />not a guessing game.</h2><ol><li>Know who&apos;s playing.<small>Both participants and their roles are visible.</small></li><li>Agree on the finish line.<small>A measurable goal. A shared deadline. The same proof requirements.</small></li><li>See the terms first.<small>Any internal credits and consent requirements appear in the actual quest.</small></li><li>Leave room for review.<small>Uncertain evidence is not a reason to invent an outcome.</small></li></ol><p className="ed-note">Pico can help clarify the wording. Only the participants can accept the agreement.</p></aside>
-      </div>
-    </section>
-  );
+  return <section className="sw-page" data-testid="contract-stage"><PageIntro number="02" location="THE PACT CLEARING" title="A shared quest." accent="A pact, made together." example>A quest becomes shared when both Summoners understand the terms. Review the goal, the proof, and the commitment before joining.</PageIntro><QuestJourney current={1} />
+    <div className="sw-pact-grid"><article className="sw-pact-card"><div className="sw-pact-card__top"><div><strong>SUMMONER PACT / EXAMPLE 001</strong><small>An illustrative agreement, not an invitation to accept.</small></div><SummonSigil /></div><div className="sw-pact-card__body"><h2>Three rallies.<br />One shared adventure.</h2><div className="sw-summoners"><div className="sw-summoner"><span className="sw-summoner__avatar">M</span><span><strong>Mira</strong><small>Quest creator · example</small></span></div><span className="sw-summoners__bond" aria-hidden="true"><SummonSigil /></span><div className="sw-summoner"><span><strong>Ren</strong><small>Invited friend · example</small></span><span className="sw-summoner__avatar">R</span></div></div><dl className="sw-pact-terms">{terms.map(([label,description],index) => <div key={label}><span>0{index+1}</span><dt>{label}</dt><dd>{description}</dd></div>)}</dl><div className="sw-pact-card__bottom"><Link className="sw-button" href="/summons">Summon your own pact <Arrow /></Link><p>No real quest is accepted or created on this example page.</p></div></div></article>
+      <aside className="sw-pact-aside"><FamiliarNote title="I can clarify the pact. Only you can accept it.">Your terms belong to you and your fellow Summoner. I help make them understandable.</FamiliarNote><section><h2>Same rules.<br />Room for both sides.</h2><ul className="sw-principles">{principles.map(([title,description]) => <li key={title}><span aria-hidden="true">✧</span><div><strong>{title}</strong><p>{description}</p></div></li>)}</ul></section><Link className="sw-text-link" href="/duel/demo">Next: the Proof Archive <Arrow /></Link></aside>
+    </div>
+  </section>;
 }
