@@ -6,7 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 
 const HOLD_MS = 1650;
-const ROUTE_DELAY_MS = 2180;
+const ROUTE_DELAY_MS = 850;
 
 type GatewayPhase = "ready" | "charging" | "opening";
 
@@ -64,7 +64,7 @@ export default function GatewayDoorHold() {
     holdFrameRef.current = window.requestAnimationFrame(tickHoldFrame);
   }, [openGateway, reduceMotion]);
 
-  const startHold = useCallback((event?: PointerEvent<HTMLButtonElement>) => {
+  const startHold = useCallback((event?: PointerEvent<HTMLAnchorElement>) => {
     if (openedRef.current) return;
     if (event && event.pointerType === "mouse" && event.button !== 0) return;
 
@@ -97,22 +97,23 @@ export default function GatewayDoorHold() {
 
   return (
     <section className="gateway-door" data-phase={phase} data-testid="gateway-door-hold">
-      <button
+      <a
+        href="/summons"
+        role="button"
         aria-label="Enter World"
         aria-disabled={isOpening}
         className="gateway-door__button outline-none focus-visible:ring-4 focus-visible:ring-white/70"
         data-testid="gateway-handle"
-        disabled={isOpening}
-        onClick={openGateway}
+        tabIndex={isOpening ? -1 : 0}
+        onClick={(event) => { event.preventDefault(); openGateway(); }}
         onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") openGateway();
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openGateway(); }
         }}
         onPointerCancel={cancelHold}
         onPointerDown={startHold}
         onPointerLeave={cancelHold}
         onPointerUp={cancelHold}
         style={{ touchAction: "none" }}
-        type="button"
       >
         <motion.span
           aria-hidden
@@ -137,7 +138,7 @@ export default function GatewayDoorHold() {
           </span>
         </span>
         <span className="gateway-door__arrow relative z-10" aria-hidden>→</span>
-      </button>
+      </a>
       <p className="px-3 pb-1 pt-3 text-center text-[11px] font-extrabold text-[color:var(--sum-muted)]">
         Tap once, or hold to open the portal
       </p>

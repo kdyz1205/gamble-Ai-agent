@@ -89,8 +89,8 @@ export default function SceneTransition({
           <motion.div
             className="absolute inset-x-[12%] bottom-[8%] h-px"
             style={{
-              background: "linear-gradient(90deg, transparent, rgba(0,240,181,0.16), rgba(255,79,189,0.72), transparent)",
-              boxShadow: "0 0 34px rgba(255,79,189,0.24)",
+              background: "linear-gradient(90deg, transparent, rgba(112,214,165,0.18), rgba(255,216,95,0.52), transparent)",
+              boxShadow: "0 0 34px rgba(255,216,95,0.16)",
             }}
             initial={{ scaleX: 0.16, opacity: 0.62 }}
             animate={{ scaleX: 0.86, opacity: 0 }}

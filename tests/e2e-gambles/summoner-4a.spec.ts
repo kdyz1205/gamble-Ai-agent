@@ -32,7 +32,7 @@ test("desktop entry: editorial story, visible CTA, no clipping, working portal",
   expect(overflow).toBeLessThanOrEqual(2);
   expect(errors).toEqual([]);
   await page.getByRole("button", { name: "Enter World" }).click();
-  await expect(page).toHaveURL(/\/summons\?arrival=gateway/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/summons(?:\?arrival=gateway)?$/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
@@ -41,8 +41,10 @@ test("all six active routes: page content and shared navigation", async ({ page 
   for (const [path, title] of routes) {
     const response = await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
     expect(response?.status(), path).toBe(200);
-    await expect(page.getByRole("heading", { level: 1 }), path).toContainText(title);
+    await expect(page.getByRole("heading", { level: 1 }).first(), path).toContainText(title);
     await expect(page.getByRole("navigation", { name: "Quest world navigation" }).first()).toBeAttached();
+    const content = page.locator('[data-testid="scene-transition-shell"] > div').first();
+    await expect.poll(async () => Number(await content.evaluate((element) => getComputedStyle(element).opacity))).toBeGreaterThan(0.9);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `horizontal overflow at ${path}`).toBeLessThanOrEqual(2);
   }

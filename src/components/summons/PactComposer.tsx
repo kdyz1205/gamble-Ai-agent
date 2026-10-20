@@ -487,9 +487,9 @@ export default function PactComposer() {
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
                   Your quest spell
                 </p>
-                <h1 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
+                <h2 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
                   Say it like you would to a friend.
-                </h1>
+                </h2>
                 <p className="mt-2 max-w-[34rem] text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
                   Pico turns your words into clear, shared terms before anyone commits.
                 </p>
