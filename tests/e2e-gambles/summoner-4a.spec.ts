@@ -1,73 +1,53 @@
 import { expect, test } from "@playwright/test";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 
-const BASE = process.env.TEST_BASE_URL ?? "http://127.0.0.1:3037";
-const SCREENSHOTS = join(process.cwd(), "output", "summoner-4a-20261020");
-const routes = [
-  ["/summons", /challenging your friend/i],
-  ["/contracts/bind", /everyone sees the same quest/i],
-  ["/duel/demo", /bring the quest proof together/i],
-  ["/rituals", /familiar/i],
-  ["/judgment/demo", /result you can actually understand/i],
-] as const;
-
+const BASE = process.env.TEST_BASE_URL ?? "http://127.0.0.1:3047";
+const routes = ["/enter", "/summons", "/contracts/bind", "/duel/demo", "/rituals", "/judgment/demo"];
 test.use({ channel: "chrome" });
-test.beforeAll(() => mkdirSync(SCREENSHOTS, { recursive: true }));
-test.setTimeout(150_000);
 
-test("desktop entry: editorial story, visible CTA, no clipping, working portal", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const response = await page.goto(`${BASE}/enter`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-  expect(response?.status()).toBe(200);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Say it.");
-  await expect(page.getByRole("heading", { name: /from a friendly dare to a clear result/i })).toBeVisible();
-  await expect(page.locator(".gateway-story__step")).toHaveCount(4);
-  await expect(page.getByRole("button", { name: "Enter World" })).toBeVisible();
-  await expect(page.getByRole("link", { name: /skip to main content/i })).toHaveCount(1);
-  await page.screenshot({ path: join(SCREENSHOTS, "landing-desktop.png"), fullPage: true, animations: "disabled" });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(2);
-  expect(errors).toEqual([]);
-  await page.getByRole("button", { name: "Enter World" }).click();
-  await expect(page).toHaveURL(/\/summons(?:\?arrival=gateway)?$/, { timeout: 30_000 });
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+test("editorial landing is a new composition and the primary CTA works", async ({ page }) => {
+  await page.goto(`${BASE}/enter`);
+  await expect(page.locator('[data-design-version="editorial-v2"]')).toBeVisible();
+  await expect(page.locator("h1")).toContainText("Less scrolling.");
+  await expect(page.locator(".quest-world-scene")).toHaveCount(0);
+  await page.getByRole("link", { name: "Make your first quest" }).click();
+  await expect(page).toHaveURL(/\/summons$/);
+  await expect(page.getByRole("textbox", { name: "Describe your challenge" })).toBeVisible();
 });
 
-test("all six active routes: page content and shared navigation", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  for (const [path, title] of routes) {
-    const response = await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-    expect(response?.status(), path).toBe(200);
-    await expect(page.getByRole("heading", { level: 1 }).first(), path).toContainText(title);
-    await expect(page.getByRole("navigation", { name: "Quest world navigation" }).first()).toBeAttached();
-    const content = page.locator('[data-testid="scene-transition-shell"] > div').first();
-    await expect.poll(async () => Number(await content.evaluate((element) => getComputedStyle(element).opacity))).toBeGreaterThan(0.9);
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(overflow, `horizontal overflow at ${path}`).toBeLessThanOrEqual(2);
+test("all six pages share the new navigation and visible content", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const route of routes) {
+    const response = await page.goto(`${BASE}${route}`);
+    expect(response?.status(), route).toBe(200);
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page.locator("h1")).toBeVisible();
+    await expect(page.locator(".ed-desktop-nav")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), route).toBeLessThanOrEqual(1);
   }
-  await page.goto(`${BASE}/judgment/demo`, { waitUntil: "domcontentloaded" });
-  await expect(page.getByText(/illustrative demo, not a real participant/i)).toBeVisible();
-  await page.screenshot({ path: join(SCREENSHOTS, "results-desktop.png"), fullPage: true, animations: "disabled" });
 });
 
-test("mobile entry and results: legible, keyboard-friendly navigation, no overflow", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ["/enter", "/judgment/demo"]) {
-    const response = await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(overflow, `mobile overflow at ${path}`).toBeLessThanOrEqual(2);
-    await page.screenshot({ path: join(SCREENSHOTS, path === "/enter" ? "landing-mobile.png" : "results-mobile.png"), fullPage: true, animations: "disabled" });
+test("mobile pages do not overflow", async ({ page }) => {
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const route of routes) {
+      await page.goto(`${BASE}${route}`);
+      await expect(page.locator("h1")).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), `${route} ${width}`).toBeLessThanOrEqual(1);
+    }
   }
-  await expect(page.getByRole("navigation", { name: "Quest world navigation" }).last()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Results", exact: true }).last()).toBeVisible();
 });
 
-test("legacy profile is routed to the existing account page", async ({ page }) => {
-  await page.goto(`${BASE}/profile`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+test("sample idea updates the existing composer without publishing", async ({ page }) => {
+  await page.goto(`${BASE}/summons`);
+  await page.getByRole("button", { name: "Meet me on the court" }).click();
+  await expect(page.getByRole("textbox", { name: "Describe your challenge" })).toHaveValue(/first to win 3 rallies/i);
+  await expect(page.getByRole("button", { name: "Summon", exact: true })).toBeEnabled();
+});
+
+test("example results are not presented as verified real results", async ({ page }) => {
+  await page.goto(`${BASE}/judgment/demo`);
+  await expect(page.getByText("EXAMPLE ONLY · NOT A VERIFIED RESULT")).toBeVisible();
+  await expect(page.getByText("98%", { exact: true })).toHaveCount(0);
+  await page.goto(`${BASE}/profile`);
   await expect(page).toHaveURL(/\/me(?:\?|$)/);
 });

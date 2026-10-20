@@ -1,107 +1,60 @@
-import GatewayDoorHold from "@/components/gateway/GatewayDoorHold";
-import QuestGlyph from "@/components/world/QuestGlyph";
-import QuestWorldScene from "@/components/world/QuestWorldScene";
+import Link from "next/link";
+import SceneTopBar from "@/components/scene/SceneTopBar";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import { ArrowMark, RacketArtwork, SparkMark } from "@/components/world/EditorialMarks";
 
-const promises = [
-  { icon: "friends" as const, title: "Challenge friends", body: "Private by default" },
-  { icon: "proof" as const, title: "Show what happened", body: "Video, photo, or check-in" },
-  { icon: "receipt" as const, title: "Get a clear result", body: "Explainable, reviewable" },
+export const metadata = { title: "Summoner.world — Make a little more of real life", description: "Turn a friendly challenge into a shared quest. Clear rules, your proof, and a result you can understand." };
+const steps = [
+  ["01", "Say the thing.", "A race to the finish. A week of showing up. Start with a challenge in your own words."],
+  ["02", "Make it fair.", "Agree on the goal, deadline and proof. Both friends see the same rules before accepting."],
+  ["03", "Keep the story.", "Bring your evidence. Understand the result. Leave uncertain moments open for review."],
 ] as const;
 
 export default function EnterPage() {
   return (
-    <main className="ios-entry-shell summoner-gateway px-4 sm:px-6 lg:px-8">
-      <a className="sum-skip-link" href="#world-introduction">Skip to main content</a>
-      <header className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-[calc(1rem+env(safe-area-inset-top))]">
-        <span className="summoner-wordmark text-lg sm:text-xl">
-          <span className="summoner-wordmark__crest" aria-hidden>
-            <QuestGlyph className="h-5 w-5" kind="spark" />
-          </span>
-          Summoner<span className="ml-[-0.65rem] text-[#e85f4e]">.world</span>
-        </span>
-        <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 text-[11px] font-extrabold text-[color:var(--sum-muted)] shadow-[0_6px_0_rgba(23,53,75,0.06)] backdrop-blur sm:inline-flex">
-          <span className="h-2 w-2 rounded-full bg-[color:var(--sum-mint)] shadow-[0_0_0_4px_rgba(112,214,165,0.18)]" />
-          Built for challenges between friends
-        </span>
-      </header>
-
-      <section id="world-introduction" tabIndex={-1} className="relative z-10 mx-auto grid min-h-[calc(100dvh-88px)] w-full max-w-[1440px] items-center gap-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(480px,1.1fr)] lg:gap-12 lg:pb-16">
-        <div className="gateway-copy order-1">
-          <span className="sum-sticker-badge px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.18em]">
-            <QuestGlyph className="h-4 w-4" kind="spark" />
-            Your world of real challenges
-          </span>
-          <h1 className="mt-7">
-            Say it.
-            <em>Make it a quest.</em>
-          </h1>
-          <p className="gateway-copy__lead mt-6 text-pretty text-[color:var(--sum-muted)]">
-            Challenge a friend in one sentence. Pico helps you agree on clear rules, bring your proof together, and understand the result.
-          </p>
-
-          <div className="mt-7">
-            <GatewayDoorHold />
+    <div className="ed-site" data-design-version="editorial-v2">
+      <a className="ed-skip-link" href="#world-introduction">Skip to main content</a>
+      <SceneTopBar activePath="/enter" />
+      <main id="world-introduction" tabIndex={-1}>
+        <section className="ed-hero ed-container" aria-labelledby="hero-title">
+          <div className="ed-hero__copy">
+            <p className="ed-eyebrow"><span className="ed-dot" /> REAL LIFE. A LITTLE MORE PLAY.</p>
+            <h1 id="hero-title">Less scrolling.<br />More <em>“you&apos;re on.”</em></h1>
+            <p className="ed-hero__lead">That friendly dare? Make it a quest.<br className="ed-desktop-break" /> Set the rules, bring the proof, and give your friends<br className="ed-wide-break" /> something to talk about.</p>
+            <div className="ed-hero__actions"><Link href="/summons" className="ed-button ed-button--coral" data-testid="editorial-create-cta">Make your first quest <ArrowMark /></Link><a href="#how-it-works" className="ed-text-link">How it works <span aria-hidden="true">↘</span></a></div>
+            <div className="ed-hero__aside"><span className="ed-avatars" aria-hidden="true"><span>M</span><span>R</span><span>YOU</span></span><p>For friends. Not followers.<br /><strong>One shared challenge at a time.</strong></p></div>
           </div>
-
-          <div className="gateway-promise mt-5" aria-label="How Summoner.world works">
-            {promises.map((item) => (
-              <article key={item.title}>
-                <span><QuestGlyph className="h-4 w-4" kind={item.icon} /></span>
-                <span className="min-w-0">
-                  <strong className="block">{item.title}</strong>
-                  <small className="mt-0.5 block text-[color:var(--sum-muted)]">{item.body}</small>
-                </span>
-              </article>
-            ))}
+          <div className="ed-hero__art" aria-label="Example collectible badminton challenge card">
+            <div className="ed-card-back ed-card-back--coral" aria-hidden="true" />
+            <div className="ed-card-back ed-card-back--yellow" aria-hidden="true" />
+            <article className="ed-quest-poster">
+              <div className="ed-poster__top"><span>THE FRIENDLY RIVALRY CLUB</span><span>NO. 001</span></div>
+              <h2>ALL TALK?<br /><em>COURT TIME.</em></h2>
+              <RacketArtwork className="ed-poster__art" />
+              <div className="ed-poster__bottom"><div><span>THE CHALLENGE</span><strong>First to win 3 rallies.</strong></div><span className="ed-poster__arrow"><ArrowMark /></span></div>
+              <div className="ed-poster__tear"><span>2 FRIENDS</span><span>1 GOOD STORY</span><span>EXAMPLE QUEST</span></div>
+            </article>
+            <div className="ed-seal"><SparkMark /><span>LESS FEED.<br />MORE<br /><b>FEELING.</b></span></div>
+            <div className="ed-pico-note"><PicoFamiliar mood="guide" /><span>“I&apos;ll help with the rules.<br /><strong>You bring the rivalry.”</strong></span><small>— PICO, YOUR AI FAMILIAR</small></div>
+            <span className="ed-art-caption">A little competition. A lot to remember.</span>
           </div>
-        </div>
-
-        <div className="order-2">
-          <QuestWorldScene />
-          <div className="gateway-sample-card mx-auto -mt-4 flex w-[88%] flex-wrap items-center justify-between gap-3 rounded-[1.35rem] px-4 py-3 backdrop-blur">
-            <div className="min-w-0">
-              <p className="gateway-sample-card__label font-black uppercase text-[#267a66]">Example quest</p>
-              <p className="mt-1 truncate text-sm font-black text-[color:var(--sum-ink)]">First to win 3 badminton rallies</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-[rgba(112,214,165,0.2)] px-3 py-1.5 text-[10px] font-black text-[#157b58]">No scoreboard needed</span>
+        </section>
+        <div className="ed-ribbon" aria-hidden="true"><span>FRIENDLY RIVALRIES</span><SparkMark /><span>REAL-WORLD STORIES</span><SparkMark /><span>CHALLENGE ACCEPTED</span><SparkMark /><span>FRIENDLY RIVALRIES</span></div>
+        <section className="ed-how ed-container" id="how-it-works" aria-labelledby="how-title">
+          <div className="ed-section-intro"><p className="ed-eyebrow">GOOD TIMES. CLEAR TERMS.</p><h2 id="how-title">The fun is yours.<br /><em>The structure is ours.</em></h2><p>No rulebook required. Pico helps turn your idea into a clear, shared challenge — without making up a winner.</p></div>
+          <ol className="ed-how__steps">{steps.map(([n, title, detail]) => <li key={n}><span>{n}</span><div><h3>{title}</h3><p>{detail}</p></div><ArrowMark /></li>)}</ol>
+        </section>
+        <section className="ed-ideas ed-container" aria-labelledby="ideas-title">
+          <div className="ed-section-row"><div><p className="ed-eyebrow">WHAT&apos;S YOUR NEXT “BET I CAN”?</p><h2 id="ideas-title">Small challenges.<br />Big main-character energy.</h2></div><Link href="/summons" className="ed-text-link">Start with your own idea <ArrowMark /></Link></div>
+          <div className="ed-idea-grid">
+            <Link className="ed-idea ed-idea--sport" href="/summons"><span className="ed-eyebrow">01 / FRIENDLY COMPETITION</span><h3>Meet you<br />on the court.</h3><RacketArtwork /><span className="ed-idea__footer">A little skill. A little bragging. <ArrowMark /></span></Link>
+            <Link className="ed-idea ed-idea--habit" href="/summons"><span className="ed-eyebrow">02 / SHOWING UP</span><h3>Seven days.<br />Zero excuses.</h3><div className="ed-week" aria-hidden="true">{["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i} data-done={i < 4}>{d}<b>{i < 4 ? "✓" : "·"}</b></span>)}</div><span className="ed-idea__footer">Make a habit worth keeping. <ArrowMark /></span></Link>
+            <Link className="ed-idea ed-idea--wild" href="/summons"><span className="ed-eyebrow">03 / YOUR WILD CARD</span><h3>That thing<br />you keep saying.</h3><div className="ed-wild-star" aria-hidden="true"><SparkMark /><b>DO<br />IT.</b></div><span className="ed-idea__footer">You know the one. <ArrowMark /></span></Link>
           </div>
-        </div>
-      </section>
-
-      <section className="gateway-story" aria-labelledby="gateway-story-title">
-        <div className="gateway-story__inner">
-          <div>
-            <span className="world-eyebrow">
-              <QuestGlyph className="h-4 w-4" kind="spark" />
-              Four moments. One shared story.
-            </span>
-            <h2 id="gateway-story-title">From a friendly dare to a clear result.</h2>
-            <p className="gateway-story__intro">
-              Bring the idea. Pico helps make the rules understandable, keeps everyone&apos;s evidence together,
-              and leaves room for review when something isn&apos;t clear.
-            </p>
-          </div>
-          <div>
-            <ol className="gateway-story__steps">
-              {[
-                ["01", "Say it your way", "Start with an everyday challenge. You don't need to write a rulebook."],
-                ["02", "Agree together", "Both friends see the objective, deadline and proof requirements before accepting."],
-                ["03", "Show what happened", "Each person can add their own evidence. Unclear moments stay open for review."],
-                ["04", "Understand the result", "Get a readable receipt explaining the outcome and what supported it."],
-              ].map(([number, title, description]) => (
-                <li className="gateway-story__step" key={number}>
-                  <span className="gateway-story__number" aria-hidden="true">{number}</span>
-                  <h3>{title}</h3>
-                  <p>{description}</p>
-                </li>
-              ))}
-            </ol>
-            <p className="gateway-story__footnote">
-              A quest is only as clear as its rules and evidence. Pico does not invent a winner when proof is inconclusive.
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
+        </section>
+        <section className="ed-final-call"><div className="ed-container"><p className="ed-eyebrow">THE GROUP CHAT CAN WAIT.</p><h2>Go make<br /><em>a good story.</em></h2><Link className="ed-button ed-button--cream" href="/summons">Challenge a friend <ArrowMark /></Link><PicoFamiliar mood="celebrate" className="ed-final-pico" /></div></section>
+      </main>
+      <footer className="ed-site-footer ed-container"><Link className="ed-footer-brand" href="/enter">summoner.world</Link><span>Real challenges. Shared rules. Clearer results.</span><nav aria-label="Policies and support"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/support">Support</Link></nav></footer>
+    </div>
   );
 }

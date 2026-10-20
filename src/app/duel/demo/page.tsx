@@ -1,115 +1,36 @@
-import PicoFamiliar from "@/components/familiar/PicoFamiliar";
-import RitualButton from "@/components/scene/RitualButton";
+import Link from "next/link";
 import SceneShell from "@/components/scene/SceneShell";
-
-const participants = [
-  { name: "Mira", role: "Quest creator", proof: "3 items", tone: "peach" as const },
-  { name: "Ren", role: "Challenger", proof: "2 items", tone: "mint" as const },
-] as const;
-
-const proofEvents = [
-  ["Quest accepted", "Both players"],
-  ["Mira submitted", "Continuous video"],
-  ["Ren submitted", "Match record"],
-  ["Familiar review", "Opens when ready"],
-] as const;
+import { ArrowMark } from "@/components/world/EditorialMarks";
 
 export default function DuelDemoPage() {
   return (
-    <SceneShell activePath="/duel/demo" particleCount={24} tone="contract">
-      <section className="mx-auto w-full max-w-[1280px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
-        <header className="mx-auto max-w-3xl text-center">
-          <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em]">Proof portal</span>
-          <h1 className="mt-3 text-3xl font-extrabold leading-none text-[color:var(--sum-ink)] sm:text-4xl">Bring the quest proof together.</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">
-            Each Summoner uploads their own record. Pico keeps the files attributed, ordered, and ready for a fair result.
-          </p>
-        </header>
-
-        <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-[minmax(220px,0.7fr)_minmax(440px,1.35fr)_minmax(220px,0.7fr)]">
-          <ParticipantProofCard {...participants[0]} align="left" />
-          <ProofPortalStage />
-          <ParticipantProofCard {...participants[1]} align="right" />
+    <SceneShell activePath="/duel/demo">
+      <section className="ed-page ed-proof" data-testid="editorial-proof-page">
+        <header className="ed-page-header"><div><p className="ed-eyebrow">03 / THE PROOF ROOM</p><h1>Show the moment.<br /><em>Not just your word.</em></h1></div><p>Good proof makes a good story clearer. Keep the whole attempt in view and let both sides add their perspective.</p></header>
+        <div className="ed-proof-layout">
+          <div>
+            <section className="ed-proof-stage" aria-label="Illustrated example of a badminton proof recording">
+              <div className="ed-proof-stage__top"><span>BADMINTON / FIRST TO 3 RALLIES</span><span className="ed-example-tag">EXAMPLE</span></div>
+              <svg viewBox="0 0 640 330" role="img" aria-label="An illustrated badminton court with two players. No video is attached.">
+                <path d="M0 0h640v330H0z" fill="#29483e" />
+                <path d="M65 40h510v250H65zM90 40v250M550 40v250M65 165h510M65 95h510M65 235h510M320 40v55m0 140v55" stroke="#e4ebcb" strokeWidth="2" fill="none" opacity=".8" />
+                <path d="M42 165h556" stroke="#f5d65e" strokeWidth="3" />
+                <path d="M42 161v10m556-10v10" stroke="#f5d65e" strokeWidth="5" />
+                <ellipse cx="260" cy="262" rx="33" ry="8" fill="#112a24" opacity=".45" />
+                <ellipse cx="400" cy="103" rx="30" ry="8" fill="#112a24" opacity=".45" />
+                <circle cx="260" cy="230" r="24" fill="#f3bca8" stroke="#f7f5ef" strokeWidth="2" /><text x="260" y="237" textAnchor="middle" fill="#1d302d" fontSize="18" fontWeight="700">M</text>
+                <circle cx="400" cy="75" r="23" fill="#eed15c" stroke="#f7f5ef" strokeWidth="2" /><text x="400" y="82" textAnchor="middle" fill="#1d302d" fontSize="18" fontWeight="700">R</text>
+                <path d="M285 215q40-132 92-117" stroke="#f7f5ef" strokeWidth="2" strokeDasharray="5 7" opacity=".6" /><circle cx="328" cy="141" r="5" fill="#f7f5ef" />
+                <path d="m307 148 7-5m24-17 6-6" stroke="#f7f5ef" strokeWidth="2" strokeLinecap="round" />
+                <text x="32" y="309" fill="#d8e6d2" fontSize="9" letterSpacing="2">ILLUSTRATION / NOT SUBMITTED FOOTAGE</text>
+              </svg>
+              <div className="ed-proof-stage__caption"><span className="ed-eyebrow">ONE CONTINUOUS ATTEMPT</span><span>Both players. Every rally. Full context.</span></div>
+            </section>
+            <section className="ed-evidence-ledger" aria-labelledby="evidence-title"><div className="ed-section-row"><h2 id="evidence-title">The evidence, in order.</h2><span className="ed-eyebrow">SAMPLE RECORDS</span></div>{[["01", "Full-match recording", "Mira / continuous video"], ["02", "Match notes", "Ren / player details"]].map(([number, title, detail]) => <div className="ed-evidence-row" key={number}><span>{number}</span><div><h3>{title}</h3><p>{detail}</p></div><span className="ed-example-tag">EXAMPLE ONLY</span></div>)}<p className="ed-note">These entries illustrate the layout. No files have been uploaded or reviewed on this demo page.</p></section>
+          </div>
+          <aside className="ed-proof-notebook"><p className="ed-eyebrow">THE BETTER-PROOF CHECKLIST</p><h2>Give the whole<br />picture.</h2><ol><li><span>01</span><div><h3>Keep the attempt continuous.</h3><p>Start before the action and finish after the outcome. Avoid missing context.</p></div></li><li><span>02</span><div><h3>Make each player identifiable.</h3><p>Show who is taking part and which person each record belongs to.</p></div></li><li><span>03</span><div><h3>Follow the agreed rules.</h3><p>The live quest specifies proof requirements and its submission deadline.</p></div></li></ol><div className="ed-proof-review"><strong>Not clear? Not decided.</strong><p>When evidence cannot establish the outcome, the quest needs review — not a guess.</p></div><Link className="ed-button ed-button--ink" href="/summons">Create your own quest <ArrowMark /></Link></aside>
         </div>
-
-        <EvidenceTimeline />
       </section>
     </SceneShell>
-  );
-}
-
-function ParticipantProofCard({ align, name, proof, role, tone }: { align: "left" | "right"; name: string; proof: string; role: string; tone: "peach" | "mint" }) {
-  return (
-    <aside className="sum-world-panel flex flex-col items-center justify-center p-5 text-center" data-testid={`duel-proof-panel-${align}`}>
-      <span className="rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--sum-ink)]" style={{ background: tone === "peach" ? "var(--sum-peach)" : "var(--sum-mint)" }}>{role}</span>
-      <PicoFamiliar className="mt-4 h-28 w-28" mood={tone === "peach" ? "guide" : "referee"} />
-      <h2 className="mt-2 text-xl font-extrabold text-[color:var(--sum-ink)]">{name}</h2>
-      <p className="mt-1 text-xs font-semibold text-[color:var(--sum-muted)]">{proof} submitted</p>
-      <div className="mt-4 flex gap-1.5" aria-label={`${proof} submitted`}>
-        {Array.from({ length: 3 }).map((_, index) => (
-          <span className="h-3 w-3 rounded-full" key={index} style={{ background: index < Number(proof[0]) ? "var(--sum-mint)" : "rgba(96,117,138,0.18)" }} />
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function ProofPortalStage() {
-  return (
-    <section className="sum-world-panel relative isolate min-h-[430px] overflow-hidden p-5 sm:p-6" data-testid="proof-altar-stage">
-      <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-[color:var(--sum-sun)] opacity-30 blur-3xl" aria-hidden />
-      <div className="absolute -bottom-10 -left-10 h-36 w-36 rounded-full bg-[color:var(--sum-mint)] opacity-30 blur-3xl" aria-hidden />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Shared proof bundle</p>
-          <h2 className="mt-2 text-2xl font-extrabold text-[color:var(--sum-ink)]">First to 3 badminton rallies</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">No scoreboard required · one continuous clip recommended</p>
-        </div>
-        <PicoFamiliar className="h-20 w-20 shrink-0" mood="referee" />
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        {[
-          ["Video", "Mira · 01:42"],
-          ["Player ID", "Blue / white shirts"],
-          ["Match note", "First to 3 rallies"],
-          ["Deadline", "Today · 8:00 PM"],
-        ].map(([label, value], index) => (
-          <article className="rounded-[18px] border border-[color:var(--sum-border)] bg-white/76 p-3" key={label}>
-            <span className="grid h-8 w-8 place-items-center rounded-full text-xs font-extrabold text-[color:var(--sum-ink)]" style={{ background: index % 2 ? "var(--sum-mint)" : "var(--sum-peach)" }}>{index + 1}</span>
-            <p className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--sum-muted)]">{label}</p>
-            <p className="mt-1 text-sm font-extrabold text-[color:var(--sum-ink)]">{value}</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-[20px] border border-[rgba(143,230,193,0.54)] bg-[rgba(143,230,193,0.18)] p-4 text-center">
-        <p className="text-xs font-semibold leading-5 text-[color:var(--sum-muted)]">Pico will return rally winners only. The app derives the running score and routes unclear moments to review.</p>
-        <RitualButton className="mt-3 min-h-12 w-full px-8 text-sm sm:w-auto" data-testid="present-evidence-button" type="button">Submit proof</RitualButton>
-      </div>
-    </section>
-  );
-}
-
-function EvidenceTimeline() {
-  return (
-    <section className="sum-world-panel mt-4 p-4 sm:p-5" data-testid="evidence-timeline">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Proof timeline</p>
-          <h2 className="mt-1 text-xl font-extrabold text-[color:var(--sum-ink)]">Every record stays attributed</h2>
-        </div>
-        <p className="text-xs font-semibold text-[color:var(--sum-muted)]">Familiar review opens after required proof arrives.</p>
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {proofEvents.map(([label, detail], index) => (
-          <article className="rounded-[18px] border border-[color:var(--sum-border)] bg-white/72 p-3" key={label}>
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-[color:var(--sum-mint)] text-xs font-extrabold text-[color:var(--sum-ink)]">{index + 1}</span>
-            <h3 className="mt-2 text-sm font-extrabold text-[color:var(--sum-ink)]">{label}</h3>
-            <p className="mt-1 text-[11px] font-semibold text-[color:var(--sum-muted)]">{detail}</p>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }

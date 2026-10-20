@@ -1,9 +1,7 @@
-import SceneBackground from "@/components/scene/SceneBackground";
-import SceneMobileNav from "@/components/scene/SceneMobileNav";
-import SceneSidebar from "@/components/scene/SceneSidebar";
+import Link from "next/link";
 import SceneTopBar from "@/components/scene/SceneTopBar";
-import SceneTransition from "@/components/scene/SceneTransition";
-import { sceneTokens, type SceneTone } from "@/lib/scene/scene-tokens";
+import SceneMobileNav from "@/components/scene/SceneMobileNav";
+import type { SceneTone } from "@/lib/scene/scene-tokens";
 
 interface SceneShellProps {
   activePath: string;
@@ -14,26 +12,14 @@ interface SceneShellProps {
   topBarRight?: React.ReactNode;
 }
 
-export default function SceneShell({
-  activePath,
-  children,
-  particleCount = 72,
-  showSidebar = true,
-  tone = "gateway",
-  topBarRight,
-}: SceneShellProps) {
+export default function SceneShell({ activePath, children, showSidebar = true, topBarRight }: SceneShellProps) {
   return (
-    <main className="sum-world-shell relative min-h-screen overflow-hidden" style={{ color: sceneTokens.color.text }}>
-      <a className="sum-skip-link" href="#quest-main">Skip to main content</a>
-      <SceneBackground tone={tone} particleCount={particleCount} />
-      <SceneTopBar rightSlot={topBarRight} />
+    <div className="ed-app" data-design-version="editorial-v2">
+      <a className="ed-skip-link" href="#quest-main">Skip to main content</a>
+      <SceneTopBar activePath={activePath} rightSlot={topBarRight} />
+      <main id="quest-main" tabIndex={-1} className="ed-main">{children}</main>
+      <footer className="ed-app-footer"><span>A little competition. A story worth keeping.</span><div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/support">Support</Link></div></footer>
       {showSidebar && <SceneMobileNav active={activePath} />}
-      <div className="relative z-10 flex min-h-[calc(100vh-76px)]">
-        {showSidebar && <SceneSidebar active={activePath} />}
-        <section id="quest-main" tabIndex={-1} className="min-w-0 flex-1 pb-24 lg:pb-0">
-          <SceneTransition transitionKey={activePath}>{children}</SceneTransition>
-        </section>
-      </div>
-    </main>
+    </div>
   );
 }

@@ -7,7 +7,7 @@ export default function EntryPolicyLinks() {
   const pathname = usePathname();
   const isPublicGateway = pathname === "/enter" || pathname === "/privacy" || pathname === "/terms" || pathname === "/support";
 
-  if (!isPublicGateway) return null;
+  if (!isPublicGateway || pathname === "/enter") return null;
 
   return (
     <nav

@@ -4,7 +4,8 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
 import "./globals.css";
 import "./summoner-world.css";
-import "./summoner-refinement.css";
+import "./editorial-world.css";
+import "./editorial-secondary.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",

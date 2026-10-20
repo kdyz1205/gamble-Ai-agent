@@ -62,6 +62,16 @@ export default function PactComposer() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
+  useEffect(() => {
+    const chooseExample = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== "string") return;
+      setInput(event.detail);
+      inputRef.current?.focus();
+    };
+    window.addEventListener("summoner:choose-example", chooseExample);
+    return () => window.removeEventListener("summoner:choose-example", chooseExample);
+  }, []);
+
   const canSubmit = Boolean(input.trim()) && !isSubmitting;
   const latestReply = useMemo(() => turns.filter((turn) => turn.role === "ai").at(-1), [turns]);
   const latestUserTurn = useMemo(() => turns.filter((turn) => turn.role === "user").at(-1), [turns]);
@@ -485,7 +495,7 @@ export default function PactComposer() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-                  Your quest spell
+                  YOUR CHALLENGE
                 </p>
                 <h2 className="mt-1.5 text-xl font-extrabold leading-[1.12] sm:text-2xl" style={{ color: "var(--sum-ink)" }}>
                   Say it like you would to a friend.
@@ -610,12 +620,13 @@ export default function PactComposer() {
 
             <div className="quest-composer__prompt mt-3">
               <textarea
+                aria-label="Describe your challenge"
                 className="qx-challenge-input"
                 data-live={hasInput ? "true" : "false"}
                 disabled={isSubmitting}
                 onChange={handleInput}
                 onInput={handleInput}
-                placeholder={placeholderExamples.join("\n")}
+                placeholder={placeholderExamples[0]}
                 ref={inputRef}
                 value={input}
               />
