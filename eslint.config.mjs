@@ -9,6 +9,7 @@ const config = [
     ignores: [
       ".fastembed_cache/**",
       ".next/**",
+      ".next-*/**",
       "build/**",
       "gambles-recordings/**",
       "node_modules/**",

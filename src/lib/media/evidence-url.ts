@@ -3,6 +3,9 @@
  * Server-side only.
  */
 
+import { lookup } from "node:dns/promises";
+import { request } from "node:https";
+
 const DEFAULT_IMAGE_MAX = 12 * 1024 * 1024;
 const DEFAULT_FETCH_TIMEOUT_MS = 90_000;
 
@@ -32,6 +35,9 @@ function isPrivateOrReservedIpv4(ip: string): boolean {
   if (a === 192 && b === 168) return true;
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmark
+  if (a === 192 && (b === 0 || b === 2)) return true;
+  if (a === 198 && b === 51 && parts[2] === 100) return true;
+  if (a === 203 && b === 0 && parts[2] === 113) return true;
   if (a >= 224) return true; // multicast + reserved
   return false;
 }
@@ -72,8 +78,9 @@ export function isEvidenceUrlAllowed(raw: string): boolean {
     return false;
   }
   if (u.protocol !== "https:") return false;
+  if (u.username || u.password || (u.port && u.port !== "443")) return false;
 
-  const host = u.hostname.toLowerCase();
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost")) return false;
   if (host === "0.0.0.0") return false;
   // Reject `.local`, `.internal`, `.lan` etc. commonly used for intranet.
@@ -107,40 +114,89 @@ export async function fetchBinaryCapped(
   url: string,
   maxBytes: number = DEFAULT_IMAGE_MAX,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+  options?: { method: "POST"; body: string },
 ): Promise<{ buffer: Buffer; contentType: string | null }> {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: ac.signal,
-      redirect: "follow",
-      headers: { Accept: "image/*,video/*,application/octet-stream,*/*" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const ct = res.headers.get("content-type");
-    const len = res.headers.get("content-length");
-    if (len && Number(len) > maxBytes) {
-      throw new Error(`Content-Length ${len} exceeds cap ${maxBytes}`);
-    }
-    if (!res.body) throw new Error("No body");
-    const reader = res.body.getReader();
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.byteLength;
-        if (total > maxBytes) {
-          throw new Error(`Stream exceeded ${maxBytes} bytes`);
-        }
-        chunks.push(Buffer.from(value));
-      }
-    }
-    return { buffer: Buffer.concat(chunks), contentType: ct };
-  } finally {
-    clearTimeout(t);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("Invalid evidence download budget");
   }
+  const deadline = Date.now() + timeoutMs;
+  for (let redirects = 0; redirects <= 4; redirects++) {
+    if (!isEvidenceUrlAllowed(url)) throw new Error("Evidence URL rejected: public HTTPS media required");
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("Evidence download timeout");
+    const result = await new Promise<{ buffer: Buffer; contentType: string | null } | { redirect: string }>((resolve, reject) => {
+      // Resolve inside the transport's lookup and pin the actual socket to a
+      // vetted address. A preflight DNS check followed by fetch would permit
+      // DNS rebinding between validation and connection.
+      const req = request(url, {
+        agent: false,
+        method: options?.method ?? "GET",
+        headers: { Accept: "image/*,video/*,application/octet-stream", ...(options ? { "Content-Type": "application/json" } : {}) },
+        lookup(host, _options, callback) {
+          lookup(host, { family: 4, all: true }).then((addresses) => {
+            if (!addresses.length || addresses.some(({ address }) => isPrivateOrReservedIpv4(address))) {
+              callback(new Error("Evidence host resolves to a private or reserved address"), []);
+              return;
+            }
+            // Node may request all addresses (autoSelectFamily). Never hand
+            // the connector an address that was not checked above.
+            if (_options.all) callback(null, addresses);
+            else callback(null, addresses[0].address, 4);
+          }, (error: Error) => callback(error, []));
+        },
+      });
+      const timer = setTimeout(() => req.destroy(new Error("Evidence download timeout")), remaining);
+      req.once("error", reject);
+      req.once("close", () => clearTimeout(timer));
+      req.once("response", (res) => {
+        const status = res.statusCode ?? 0;
+        if ([301, 302, 303, 307, 308].includes(status) && res.headers.location) {
+          if (options) {
+            res.destroy();
+            reject(new Error("Webhook redirects are forbidden"));
+            return;
+          }
+          try {
+            const next = new URL(res.headers.location, url).href;
+            res.destroy();
+            resolve({ redirect: next });
+          } catch {
+            res.destroy();
+            reject(new Error("Evidence redirect URL is malformed"));
+          }
+          return;
+        }
+        if (status < 200 || status >= 300) {
+          res.destroy();
+          reject(new Error(`Evidence HTTP ${status}`));
+          return;
+        }
+        const length = Number(res.headers["content-length"]);
+        if (Number.isFinite(length) && length > maxBytes) {
+          res.destroy();
+          reject(new Error(`Evidence Content-Length exceeds cap ${maxBytes}`));
+          return;
+        }
+        let total = 0;
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => {
+          total += chunk.length;
+          if (total > maxBytes) {
+            res.destroy(new Error(`Evidence stream exceeded ${maxBytes} bytes`));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.once("error", reject);
+        res.once("aborted", () => reject(new Error("Evidence response interrupted")));
+        res.once("end", () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers["content-type"] ?? null }));
+      });
+      req.end(options?.body);
+    });
+    if (!("redirect" in result)) return result;
+    url = result.redirect;
+  }
+  throw new Error("Evidence redirect limit exceeded");
 }
 
 export function looksLikeImageMime(ct: string | null, pathOrUrl: string): boolean {

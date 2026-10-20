@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await authorizeEvidenceUpload({ userId: user.userId, challengeId: id, pathname: body.payload.pathname });
     }
     if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) return Response.json({ error: 'Direct upload is unavailable. Use a public HTTPS proof URL or try again later.', configured: false }, { status: 503 });
-    const jsonResponse = await handleUpload({ request: req, body,
+    const jsonResponse = await handleUpload({ request: req, body, token: process.env.BLOB_READ_WRITE_TOKEN?.trim(),
       onBeforeGenerateToken: async pathname => {
         const user = await getAuthUser();
         if (!user) throw new EvidenceUploadPolicyError('Authentication required', 401);

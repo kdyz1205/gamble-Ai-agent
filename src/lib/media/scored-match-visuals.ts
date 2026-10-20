@@ -1,3 +1,5 @@
+import { mediaTimeBudget } from "./media-budget";
+import { stageEvidenceVideo } from "./local-evidence-video";
 import sharp from "sharp";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { join } from "path";
@@ -6,7 +8,6 @@ import { fetchBinaryCapped, isEvidenceUrlAllowed } from "./evidence-url";
 import {
   extractTimelineFrames,
   extractTimestampedRallyWindow,
-  ffprobeDurationFromUrl,
   type TimestampedFrame,
 } from "./ffmpeg-helpers";
 import type { JudgeVisionImage } from "./prepare-evidence-visuals";
@@ -136,18 +137,15 @@ export async function prepareScoredMatchTimeline(
   url: string,
 ): Promise<ScoredTimelineVisuals> {
   if (!isEvidenceUrlAllowed(url)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
-  const durationSec = await ffprobeDurationFromUrl(url);
-  if (durationSec == null) throw new Error("Could not measure scored-match video duration.");
-  if (durationSec > 240) throw new Error("Short-match automatic judging requires a continuous video of 4 minutes or less.");
-
-  const plan = planScoredTimeline(durationSec);
-  if (plan.framesPerSecond < 0.9) {
-    throw new Error(`Timeline density ${plan.framesPerSecond.toFixed(2)}fps is too low for reliable rally detection.`);
-  }
-
   const temp = await mkdtemp(join(tmpdir(), "scored-timeline-"));
   try {
-    const frames = await extractTimelineFrames(url, plan.framesPerSecond, plan.frameCount, temp);
+    const remaining = mediaTimeBudget(120_000);
+    const { path: localVideo, duration: durationSec } = await stageEvidenceVideo(url, temp, remaining);
+    if (durationSec == null) throw new Error("Could not measure scored-match video duration.");
+    if (durationSec > 240) throw new Error("Short-match automatic judging requires a continuous video of 4 minutes or less.");
+    const plan = planScoredTimeline(durationSec);
+    if (plan.framesPerSecond < 0.9) throw new Error("Timeline density is too low for reliable rally detection.");
+    const frames = await extractTimelineFrames(localVideo, plan.framesPerSecond, plan.frameCount, temp, remaining());
     if (frames.length < 3) throw new Error("Too few timeline frames were extracted.");
     return {
       durationSec,
@@ -171,8 +169,9 @@ export async function prepareRallyDetailVisuals(
   try {
     // Download once, then seek all rally windows locally. Seeking the remote
     // URL once per rally multiplies latency and bandwidth by up to 11x.
+    const remaining = mediaTimeBudget(120_000);
     const localVideo = join(temp, "source-video");
-    const { buffer } = await fetchBinaryCapped(url, 160 * 1024 * 1024, 180_000);
+    const { buffer } = await fetchBinaryCapped(url, 160 * 1024 * 1024, Math.min(90_000, remaining()));
     await writeFile(localVideo, buffer);
     const frameGroups: TimestampedFrame[][] = [];
     const limitedCandidates = candidates.slice(0, 11);
@@ -188,6 +187,7 @@ export async function prepareRallyDetailVisuals(
         candidate.endSec,
         rallyDirectory,
         {
+          timeoutMs: Math.min(90_000, remaining()),
           beforeSec: 1.5,
           afterSec: 1.5,
           fps: framesPerSecond,
