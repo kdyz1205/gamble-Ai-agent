@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { preExtractAndPersistFrames } from "@/lib/media/pre-extract-frames";
 import { submitChallengeEvidence, EvidenceSubmissionError } from "@/lib/evidence-submission";
+import { canReadQuestProof } from "@/lib/quest-proof-access";
 
 // Vision frame extraction + Blob upload can take 5-20s for a longer video.
 // Allow the background `after()` task to run up to 5min (Vercel Pro/Enterprise).
@@ -28,7 +29,8 @@ export async function POST(
     const { type, url } = evidence;
     // Media preparation runs only after proof and readiness have committed.
     if (shouldPrepare && url && ["video", "photo", "image"].includes(type)) {
-      after(() => preExtractAndPersistFrames({ evidenceId: evidence.id, challengeId: id, userId: user.userId, type, url }));
+      after(() => preExtractAndPersistFrames({ evidenceId: evidence.id, challengeId: id, userId: user.userId,
+        type, url, description: evidence.description, metadata: evidence.metadata }));
     }
     return Response.json({ evidence }, { status: 201 });
   } catch (error) {
@@ -47,6 +49,9 @@ export async function GET(
 ) {
   const { id } = await params;
 
+  const quest = await prisma.challenge.findUnique({ where: { id }, include: { participants: { select: { userId: true, status: true } } } });
+  if (!quest) return Response.json({ error: "Quest not found" }, { status: 404 });
+  if (!await canReadQuestProof(quest)) return Response.json({ error: "Private proof is available only to quest participants" }, { status: 403 });
   const evidence = await prisma.evidence.findMany({
     where: { challengeId: id },
     include: {
@@ -55,5 +60,5 @@ export async function GET(
     orderBy: { createdAt: "desc" },
   });
 
-  return Response.json({ evidence });
+  return Response.json({ evidence }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -7,12 +7,12 @@ import prisma from "@/lib/db";
  */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const limit  = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
-  const offset = parseInt(url.searchParams.get("offset") || "0");
+  const limit  = Math.min(Math.max(Number.parseInt(url.searchParams.get("limit") || "20") || 20, 1), 50);
+  const offset = Math.max(Number.parseInt(url.searchParams.get("offset") || "0") || 0, 0);
   const type   = url.searchParams.get("type"); // filter by event type
 
-  const where: Record<string, unknown> = {};
-  if (type) where.type = type;
+  const where = { OR: [{ challengeId: null }, { challenge: { is: { isPublic: true, visibility: "public" } } }],
+    ...(type ? { type } : {}) };
 
   const [events, total] = await Promise.all([
     prisma.activityEvent.findMany({

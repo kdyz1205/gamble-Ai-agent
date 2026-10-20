@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   if (hasGeo) {
     // Fetch a larger pool so we can sort by distance then trim.
     const pool = await prisma.challenge.findMany({
-      where: { status: ChallengeStatus.open, isPublic: true },
+      where: { status: ChallengeStatus.open, isPublic: true, visibility: "public" },
       include: {
         ...CHALLENGE_SELECT,
         // Include creator geo fields for distance calc only — stripped below.
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 2: global fallback ──────────────────────────────────────────────
   const globalRows = await prisma.challenge.findMany({
-    where: { status: ChallengeStatus.open, isPublic: true },
+    where: { status: ChallengeStatus.open, isPublic: true, visibility: "public" },
     include: CHALLENGE_SELECT,
     orderBy: [{ stake: "desc" }, { createdAt: "desc" }],
     take: limit,

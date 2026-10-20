@@ -13,11 +13,12 @@ export async function GET(req: NextRequest) {
 
   const user = await getAuthUser();
 
-  const where: Record<string, unknown> = { isPublic: true };
+  const where: Record<string, unknown> = { isPublic: true, visibility: "public" };
   if (status) where.status = status;
   if (type)   where.type = type;
   if (mine && user) {
     delete where.isPublic;
+    delete where.visibility;
     where.OR = [
       { creatorId: user.userId },
       { participants: { some: { userId: user.userId } } },

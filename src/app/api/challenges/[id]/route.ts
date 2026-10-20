@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { cancelChallengeAtomic } from "@/lib/challenge-cancellation";
+import { canReadQuestProof } from "@/lib/quest-proof-access";
 
 /**
  * GET /api/challenges/[id] — Get a single challenge with full details
@@ -54,12 +55,16 @@ export async function GET(
   if (!challenge) {
     return Response.json({ error: "Challenge not found" }, { status: 404 });
   }
+  if (!await canReadQuestProof(challenge)) {
+    return Response.json({ challenge: { ...challenge, evidence: [], judgments: [], verdictResponses: [], reviewCase: null,
+      _count: { ...challenge._count, evidence: 0 }, proofAccess: "players_only" } }, { headers: { "Cache-Control": "private, no-store" } });
+  }
 
   // Settlement can commit before a crashed review finishes its final record.
   // Publishing the older recommendation then would show a different winner
   // from the credit ledger. Keep the result unavailable until recovery ends.
   const awaitingReviewCompletion = challenge.status === "settled" && challenge.reviewCase?.status === "processing";
-  return Response.json({ challenge: awaitingReviewCompletion ? { ...challenge, judgments: [] } : challenge });
+  return Response.json({ challenge: awaitingReviewCompletion ? { ...challenge, judgments: [] } : challenge }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 /** DELETE retains the quest as cancelled; legacy success fields remain available. */
