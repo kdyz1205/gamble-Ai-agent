@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
-import { JUDGE_JOB_TIMEOUT_MS, sweepStuckJudgeJobs } from "@/lib/judge-async";
+import { JUDGE_JOB_TIMEOUT_MS, reconcileJudgeJob, sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -35,6 +35,12 @@ export async function GET(
     !!participant;
   if (!allowed) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Only after authorization: finish a committed recommendation's job receipt.
+  if (job.status !== "completed" && await reconcileJudgeJob(job.id)) {
+    job = await prisma.judgeJob.findUniqueOrThrow({ where: { id: jobId },
+      include: { challenge: { select: { id: true, creatorId: true, title: true, status: true } } } });
   }
 
   // Recovery also runs when the owner polls. The daily maintenance cron alone
