@@ -2,7 +2,6 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { sceneMotion } from "@/lib/scene/scene-motion";
 
 export default function SceneTransition({
   children,
@@ -25,15 +24,9 @@ export default function SceneTransition({
 
   return (
     <div className="relative z-10 h-full overflow-hidden" data-testid="scene-transition-shell">
-      <motion.div
-        key={sceneKey}
-        className="relative z-10 h-full"
-        initial={false}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        transition={reduceMotion ? { duration: 0 } : sceneMotion.page.transition}
-      >
+      <div key={sceneKey} className="relative z-10 h-full">
         {children}
-      </motion.div>
+      </div>
 
       {!reduceMotion && revealId > 0 && (
         <div
