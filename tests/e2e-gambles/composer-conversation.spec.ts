@@ -16,6 +16,8 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/agent/respond") requests++; });
     const run = randomUUID().replaceAll("-", "");
     await page.goto(`${BASE}/summons`);
+    const content = page.getByTestId("scene-transition-shell").locator(":scope > div").first();
+    await expect(content).toHaveCSS("filter", "blur(0px)");
     await page.getByRole("button", { name: "Friend match", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Describe your challenge" })).toHaveValue(/badminton/);
     const input = page.locator("textarea").first();
@@ -69,6 +71,7 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     };
     await page.evaluate(value => sessionStorage.setItem("summoner:composer:auth-return:v1", JSON.stringify(value)), saved);
     await page.reload();
+    await expect(content).toHaveCSS("filter", "blur(0px)");
     await expect(page.getByRole("button", { name: "Publish free quest", exact: true })).toBeVisible();
     await expect(log).toContainText("make it free");
     expect(await page.evaluate(() => sessionStorage.getItem("summoner:composer:auth-return:v1"))).toBeNull();
@@ -76,7 +79,6 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     const usageBefore = await (await context.request.get(`${BASE}/api/ai/usage`)).json();
     expect(usageBefore).toEqual(usageAtLogin);
     const publication = page.waitForResponse(r => new URL(r.url()).pathname === "/api/agent/respond" && r.request().method() === "POST");
-    const started = Date.now();
     await page.getByRole("button", { name: "Publish free quest", exact: true }).click();
     const published = await publication;
     expect(published.status(), await published.text()).toBe(200);
@@ -89,8 +91,11 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     const { challenge } = await detail.json();
     expect(challenge.stake).toBe(0);
     expect(challenge.status).toBe("open");
-    expect(new Date(challenge.deadline).getTime() - started).toBeGreaterThan(40_000);
-    expect(new Date(challenge.deadline).getTime() - started).toBeLessThanOrEqual(65_000);
+    // Server timestamps measure the agreed window, without browser actionability
+    // waits, client/server clock skew or network transit changing the oracle.
+    const serverWindow = new Date(challenge.deadline).getTime() - new Date(challenge.createdAt).getTime();
+    expect(serverWindow).toBeGreaterThanOrEqual(55_000);
+    expect(serverWindow).toBeLessThanOrEqual(61_000);
     const after = await (await context.request.get(`${BASE}/api/tokens`)).json();
     expect(after.offChain.credits).toBe(before.offChain.credits);
     expect(after.transactions.filter((row: { challengeId: string; amount: number }) => row.challengeId === id).every((row: { amount: number }) => row.amount === 0)).toBe(true);
