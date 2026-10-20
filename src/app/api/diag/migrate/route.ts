@@ -2,11 +2,12 @@
  * POST /api/diag/migrate
  *
  * Inspect the lambda's actual DATABASE_URL catalog without reading user rows,
- * then apply explicitly selected additive schema statements. Historical data
- * cleanup/backfill entries remain documented below but cannot be executed.
+ * then apply explicitly selected additive schema statements or the reviewed
+ * CreditTx foreign-key metadata repair. Historical data cleanup/backfill
+ * entries remain documented below but cannot be executed.
  *
  * Gated by x-diag-token == DIAG_TOKEN. Dry-runs by default. Inspect catalog
- * metadata with ?inspect=1; apply only explicitly selected additive DDL IDs
+ * metadata with ?inspect=1; apply only explicitly selected reviewed DDL IDs
  * with ?apply=1&ids=... or a JSON { ids: [...] } body.
  *
  * This exists because Vercel redacts DATABASE_URL in `env pull`, so a dev
@@ -21,9 +22,9 @@ import prisma from "@/lib/db";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Historical schema-sync catalog. Only the additive entries can be selected;
-// destructive cleanup and data backfill IDs are blocked below. Selected
-// statements retain dependency order and IF NOT EXISTS retry behavior.
+// Reviewed catalog: additive schema entries plus the exact ledger-owner FK
+// repair. Destructive cleanup/data backfill IDs remain blocked. The metadata
+// repair is one atomic DO statement; it never changes user or ledger rows.
 const DDL: Array<{ id: string; sql: string }> = [
   // ── ChallengeStatus enum values (Neon DB uses a real Postgres ENUM; our
   //    Prisma schema treats status as String and introduced values the enum
@@ -92,6 +93,31 @@ const DDL: Array<{ id: string; sql: string }> = [
   { id: "user_isReviewer", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isReviewer" BOOLEAN NOT NULL DEFAULT false` },
   { id: "credittx_idempotencyKey", sql: `ALTER TABLE "CreditTx" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT` },
   { id: "credittx_idempotencyKey_unique", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "CreditTx_idempotencyKey_key" ON "CreditTx" ("idempotencyKey")` },
+  { id: "credittx_user_fk_restrict", sql: `
+    DO $$
+    DECLARE prior RECORD;
+    BEGIN
+      LOCK TABLE public."CreditTx" IN ACCESS EXCLUSIVE MODE;
+      SELECT * INTO prior FROM pg_constraint
+      WHERE conrelid = 'public."CreditTx"'::regclass AND conname = 'CreditTx_userId_fkey';
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Expected CreditTx_userId_fkey is missing; reconciliation is required';
+      END IF;
+      IF prior.contype <> 'f' OR prior.confrelid <> 'public."User"'::regclass
+        OR prior.conkey <> ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'public."CreditTx"'::regclass AND attname = 'userId')]
+        OR prior.confkey <> ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'public."User"'::regclass AND attname = 'id')]
+        OR prior.confupdtype <> 'c' OR prior.confdeltype NOT IN ('c', 'r') THEN
+        RAISE EXCEPTION 'Unexpected CreditTx_userId_fkey definition; reconciliation is required';
+      END IF;
+      IF prior.confdeltype = 'c' THEN
+        ALTER TABLE public."CreditTx" DROP CONSTRAINT "CreditTx_userId_fkey";
+        ALTER TABLE public."CreditTx" ADD CONSTRAINT "CreditTx_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES public."User"("id")
+          ON DELETE RESTRICT ON UPDATE CASCADE NOT VALID;
+      END IF;
+      ALTER TABLE public."CreditTx" VALIDATE CONSTRAINT "CreditTx_userId_fkey";
+    END $$
+  ` },
   { id: "verdict_response_table", sql: `
     CREATE TABLE IF NOT EXISTS "VerdictResponse" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -155,7 +181,7 @@ const DDL: Array<{ id: string; sql: string }> = [
 ];
 
 const BLOCKED_IDS = new Set(["evidence_unique_challenge_user", "review_case_low_confidence_backfill"]);
-const additiveDDL = DDL.filter((statement) => !BLOCKED_IDS.has(statement.id));
+const reviewedDDL = DDL.filter((statement) => !BLOCKED_IDS.has(statement.id));
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 async function inspectSchema() {
@@ -182,7 +208,7 @@ async function handle(req: NextRequest, inspectOnly = false) {
   if (inspectOnly || req.nextUrl.searchParams.get("inspect") === "1") {
     if (apply) return json({ error: "Inspection cannot be combined with apply" }, 400);
     try {
-      return json({ mode: "inspect", schema: "public", inventory: await inspectSchema(), availableStatements: additiveDDL, blockedIds: [...BLOCKED_IDS] });
+      return json({ mode: "inspect", schema: "public", inventory: await inspectSchema(), availableStatements: reviewedDDL, blockedIds: [...BLOCKED_IDS] });
     } catch {
       return json({ error: "Schema inspection failed" }, 500);
     }
@@ -207,11 +233,11 @@ async function handle(req: NextRequest, inspectOnly = false) {
   if (queryIds.length && bodyIds !== undefined) return json({ error: "Select ids in either the query or body" }, 400);
   const ids = [...new Set(queryIds.length ? queryIds : bodyIds as string[] | undefined ?? [])];
   if (ids.some((id) => BLOCKED_IDS.has(id))) return json({ error: "Destructive and data-backfill statements are prohibited", blockedIds: ids.filter((id) => BLOCKED_IDS.has(id)) }, 400);
-  const unknownIds = ids.filter((id) => !additiveDDL.some((statement) => statement.id === id));
+  const unknownIds = ids.filter((id) => !reviewedDDL.some((statement) => statement.id === id));
   if (unknownIds.length) return json({ error: "Unknown statement IDs", unknownIds }, 400);
-  if (apply && !ids.length) return json({ error: "Explicit additive statement ids are required to apply" }, 400);
+  if (apply && !ids.length) return json({ error: "Explicit reviewed statement ids are required to apply" }, 400);
   // Execute in the catalog's dependency order, regardless of request order.
-  const selected = ids.length ? additiveDDL.filter((statement) => ids.includes(statement.id)) : additiveDDL;
+  const selected = ids.length ? reviewedDDL.filter((statement) => ids.includes(statement.id)) : reviewedDDL;
 
   // Identify which DB we're about to touch so dev can cross-check
   const dbHost = (() => {
@@ -227,7 +253,7 @@ async function handle(req: NextRequest, inspectOnly = false) {
       wouldRun: selected.map((d) => d.id),
       statements: selected,
       blockedIds: [...BLOCKED_IDS],
-      note: "Inspect with ?inspect=1. Apply explicitly selected additive ids with ?apply=1&ids=... or JSON {ids:[...]}.",
+      note: "Inspect with ?inspect=1. Apply explicitly selected reviewed ids with ?apply=1&ids=... or JSON {ids:[...]}.",
     });
   }
 
