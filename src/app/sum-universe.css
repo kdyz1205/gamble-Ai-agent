@@ -34,3 +34,33 @@
 
 /* On phones, prioritize the actual portal over duplicate companion metadata. */
 @media(max-width:699px){.sw-hero__companion,.sw-hero__identity{display:none}.sw-hero__copy{padding-bottom:0}.sw-portal__caption{color:var(--sw-muted)}}
+
+/* Signature summoning interaction: driven by actual input and draft readiness. */
+.sw-app .sw-formation{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:center;margin:5px 0 23px;padding:18px 20px;border:1px solid #c7dccd;border-radius:16px;background:linear-gradient(130deg,#eaf3ed,#e8ebf5);overflow:hidden;position:relative}
+.sw-app .sw-formation__visual{position:relative;height:170px;display:grid;place-items:center}
+.sw-app .sw-formation__outer,.sw-app .sw-formation__inner{position:absolute;border-radius:50%;left:50%;top:46%;transform:translate(-50%,-50%);border:6px solid #b6c6e4;box-shadow:inset 0 0 0 2px #fbfffd,0 0 0 1px #a9c5b3}
+.sw-app .sw-formation__outer{width:124px;height:145px}
+.sw-app .sw-formation__inner{width:99px;height:121px;border:1px solid #fff;box-shadow:none;background:linear-gradient(150deg,#e7e5fd99,#e2fae999)}
+.sw-app .sw-formation__pico{position:relative;z-index:2;margin-top:-9px}
+.sw-app .sw-formation__pico .sum-familiar{width:91px;height:91px;filter:drop-shadow(0 6px 5px #6e9e8e25)}
+.sw-app .sw-formation__platform{position:absolute;bottom:5px;width:138px;height:18px;background:#a3cbb98a;border:1px solid #98baa5;border-radius:50%;box-shadow:0 5px 0 #d1e7d4}
+.sw-app .sw-formation__runes{position:absolute;inset:0}
+.sw-app .sw-formation__runes i{position:absolute;width:9px;height:9px;background:#f9fefa;border:1px solid #98bfae;transform:rotate(45deg);left:47%;top:6%}
+.sw-app .sw-formation__runes i:nth-child(2){top:36%;left:9%}.sw-app .sw-formation__runes i:nth-child(3){top:29%;left:84%}.sw-app .sw-formation__runes i:nth-child(4){top:84%;left:75%}
+.sw-app .sw-formation__content{min-width:0}.sw-app .sw-formation__content>.sw-small-label{color:#4e7966;font-size:9px}
+.sw-app .sw-formation__content h3{font-size:17px;line-height:1.4;letter-spacing:-.3px;margin-top:8px}
+.sw-app .sw-formation__content>p{font-size:11px;line-height:1.8;color:#607d70;margin-top:6px}
+.sw-app .sw-formation__artifact{margin-top:12px;padding:12px;border:1px solid #bfd7c4;border-radius:11px;background:#fffffce0;min-width:0}
+.sw-app .sw-formation__artifact-top{display:flex;align-items:center;gap:7px;color:#5d8471;font-size:8px;font-weight:800;letter-spacing:.6px}
+.sw-app .sw-formation__artifact-top svg{width:18px;height:18px}
+.sw-app .sw-formation__artifact>strong{display:block;max-width:100%;overflow-wrap:anywhere;font-size:11px;line-height:1.55;margin:5px 0 8px}
+.sw-app .sw-formation__artifact dl{display:grid;gap:5px}.sw-app .sw-formation__artifact dl>div{display:grid;grid-template-columns:75px minmax(0,1fr);gap:8px;font-size:9px;line-height:1.5}
+.sw-app .sw-formation__artifact dt{color:#789080}.sw-app .sw-formation__artifact dd{margin:0;overflow-wrap:anywhere;font-weight:650}
+.sw-app .sw-formation[data-stage=listening] .sw-formation__outer{border-color:#98c5b5}
+.sw-app .sw-formation[data-stage=working] .sw-formation__outer{border-color:#a6a5d5;animation:sw-gate-pulse 1.7s ease-in-out infinite alternate}
+.sw-app .sw-formation[data-stage=clarifying] .sw-formation__outer{border-color:#d1bca1}
+.sw-app .sw-formation[data-stage=formed]{background:linear-gradient(140deg,#e5f3db,#ebeffb);border-color:#a5c59d}
+.sw-app .sw-formation[data-stage=formed] .sw-formation__outer{border-color:#9ec5a1}
+@keyframes sw-gate-pulse{from{box-shadow:0 0 0 1px #a9c5b3,0 0 6px #abbde54d}to{box-shadow:0 0 0 1px #a9c5b3,0 0 22px #abbde5bb}}
+@media(max-width:699px){.sw-app .sw-formation{grid-template-columns:90px minmax(0,1fr);gap:12px;padding:12px;margin-bottom:17px}.sw-app .sw-formation__visual{height:110px}.sw-app .sw-formation__outer{width:75px;height:91px;border-width:4px}.sw-app .sw-formation__inner{width:60px;height:77px}.sw-app .sw-formation__pico .sum-familiar{width:62px;height:62px}.sw-app .sw-formation__platform{width:87px;height:13px;bottom:3px}.sw-app .sw-formation__runes i{width:6px;height:6px}.sw-app .sw-formation__content h3{font-size:13px}.sw-app .sw-formation__content>p{font-size:10px}.sw-app .sw-formation__content>.sw-small-label{font-size:7px}.sw-app .sw-formation__artifact{grid-column:1/-1}.sw-app .sw-formation__artifact dl>div{grid-template-columns:58px minmax(0,1fr);font-size:8px}}
+@media(prefers-reduced-motion:reduce){.sw-app .sw-formation *{animation:none!important;transition:none!important}}

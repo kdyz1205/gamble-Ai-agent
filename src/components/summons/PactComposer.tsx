@@ -7,6 +7,7 @@ import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import { questSeeds } from "@/components/universe/quest-seeds";
+import LiveQuestFormation from "@/components/summons/LiveQuestFormation";
 import * as api from "@/lib/api-client";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
@@ -491,6 +492,16 @@ export default function PactComposer() {
             background: "linear-gradient(90deg, transparent, rgba(143,230,193,0.72), rgba(255,185,120,0.58), transparent)",
             boxShadow: "0 0 36px rgba(143,230,193,0.3)",
           }}
+        />
+        <LiveQuestFormation
+          hasInput={hasInput}
+          isWorking={isSubmitting}
+          hasReply={Boolean(latestReply)}
+          readyToPublish={draftState.readyToPublish}
+          challengeTitle={displayChallengeTitle}
+          participants={resultParticipants}
+          proof={resultProof}
+          deadline={resultTiming}
         />
         <form
           onSubmit={(event) => { void handleSubmit(event); }}
