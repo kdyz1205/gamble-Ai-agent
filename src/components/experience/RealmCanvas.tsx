@@ -10,8 +10,9 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
   const rootRef=useRef<HTMLDivElement>(null);
   const canvasRef=useRef<HTMLCanvasElement>(null);
   const values=useRef({state,realm});
+  const redraw=useRef<(()=>void)|null>(null);
   const [mode,setMode]=useState<"fallback"|"webgl">("fallback");
-  useEffect(()=>{values.current={state,realm};},[state,realm]);
+  useEffect(()=>{values.current={state,realm};redraw.current?.();},[state,realm]);
   useEffect(()=>{
     const root=rootRef.current;
     const canvas=canvasRef.current;
@@ -145,12 +146,12 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
           const inView=new IntersectionObserver(events=>{visible=events.some(e=>e.isIntersecting);},{threshold:.01});
           inView.observe(root);
           const animate=(now:number)=>{
-            raf=requestAnimationFrame(animate);
-            if(!visible||now-last<33)return;last=now;
+            if(!reduce.matches)raf=requestAnimationFrame(animate);
+            if(!visible||(!reduce.matches&&now-last<33))return;last=now;
             const t=reduce.matches?0:(now-startedAt)/1000;
             const snapshot=values.current;
-            lensMaterial.uniforms.uTint.value.lerp(new T.Color(palette[snapshot.realm]),.055);
-            lensMaterial.uniforms.uEnergy.value+=(levels[snapshot.state]-lensMaterial.uniforms.uEnergy.value)*.075;
+            lensMaterial.uniforms.uTint.value.lerp(new T.Color(palette[snapshot.realm]),reduce.matches?1:.055);
+            lensMaterial.uniforms.uEnergy.value+=(levels[snapshot.state]-lensMaterial.uniforms.uEnergy.value)*(reduce.matches?1:.075);
             lensMaterial.uniforms.uTime.value=t;
             gate.rotation.y+=(-.16+(reduce.matches?0:mouseX*.075)-gate.rotation.y)*.035;
             world.rotation.y+=((reduce.matches?0:mouseX*.025)-world.rotation.y)*.03;
@@ -158,12 +159,13 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
             if(!reduce.matches){runes.rotation.y=t*.028;sparkRoot.rotation.z=Math.sin(t*.26)*.035;orbit.rotation.z=Math.sin(t*.2)*.03;}
             camera.lookAt(0,.28,0);renderer.render(scene,camera);
           };
+          redraw.current=()=>{if(reduce.matches)animate(performance.now());};
           raf=requestAnimationFrame(animate);
           setMode("webgl");
           const onLost=(event:Event)=>{event.preventDefault();visible=false;setMode("fallback");};
           canvas.addEventListener("webglcontextlost",onLost);
           destroy=()=>{
-            cancelAnimationFrame(raf);sizeObserver.disconnect();inView.disconnect();
+            cancelAnimationFrame(raf);redraw.current=null;sizeObserver.disconnect();inView.disconnect();
             root.removeEventListener("pointermove",onPointer);canvas.removeEventListener("webglcontextlost",onLost);
             scene.traverse(object=>{
               if(object instanceof T.Mesh){
