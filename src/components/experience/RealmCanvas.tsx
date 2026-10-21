@@ -34,27 +34,27 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
           const renderer=new T.WebGLRenderer({canvas,alpha:true,antialias:window.devicePixelRatio<2,powerPreference:"low-power"});
           renderer.outputColorSpace=T.SRGBColorSpace;
           renderer.toneMapping=T.ACESFilmicToneMapping;
-          renderer.toneMappingExposure=1.65;
+          renderer.toneMappingExposure=1.22;
           renderer.setClearColor(0,0);
           renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
           const scene=new T.Scene();
           const camera=new T.PerspectiveCamera(35,1,.1,100);
-          camera.position.set(0,2.25,11.7);
+          camera.position.set(0,3.35,10.6);
           camera.lookAt(0,.3,0);
           const world=new T.Group();scene.add(world);
-          scene.add(new T.HemisphereLight("#ffffff","#7eaaa0",3.1));
-          const key=new T.DirectionalLight("#fff7dc",3.0);key.position.set(-3,8,7);scene.add(key);
-          const edge=new T.DirectionalLight("#c0d0fa",2.5);edge.position.set(4,3,-3);scene.add(edge);
+          scene.add(new T.HemisphereLight("#ffffff","#608f83",1.7));
+          const key=new T.DirectionalLight("#fff7e0",2.3);key.position.set(-3,8,7);scene.add(key);
+          const edge=new T.DirectionalLight("#b5c9ef",1.7);edge.position.set(4,3,-3);scene.add(edge);
           const standard=(color:string,metalness=.09,roughness=.4)=>new T.MeshStandardMaterial({color,metalness,roughness});
           const materials={
-            porcelain:standard("#eff6ef",.16,.3),
-            stone:standard("#a9c6b7",.18,.52),
-            earth:standard("#769a8c",.05,.72),
-            forest:standard("#487d6b",.08,.44),
-            mint:standard("#d4efe4",.15,.34),
-            gold:standard("#dcc994",.43,.24),
-            silver:new T.MeshPhysicalMaterial({color:"#e1eaf2",metalness:.64,roughness:.18,clearcoat:1,clearcoatRoughness:.14}),
-            opal:new T.MeshPhysicalMaterial({color:"#c9d0ee",metalness:.25,roughness:.16,clearcoat:1,clearcoatRoughness:.1}),
+            porcelain:standard("#dfeee7",.08,.34),
+            stone:standard("#87ad9e",.12,.46),
+            earth:standard("#5c877b",.08,.54),
+            forest:standard("#316c5a",.08,.40),
+            mint:standard("#b9ddc9",.15,.30),
+            gold:standard("#e5c381",.36,.25),
+            silver:new T.MeshPhysicalMaterial({color:"#cadce5",metalness:.44,roughness:.20,clearcoat:1,clearcoatRoughness:.14}),
+            opal:new T.MeshPhysicalMaterial({color:"#b3b1df",metalness:.28,roughness:.18,clearcoat:1,clearcoatRoughness:.1}),
           };
           function cylinder(top:number,bottom:number,h:number,y:number,mat:Material) {
             const mesh=new T.Mesh(new T.CylinderGeometry(top,bottom,h,92),mat);
@@ -70,7 +70,7 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
             const mesh=new T.Mesh(new T.TorusGeometry(radius,tube,22,128),mat);
             mesh.scale.set(.83,1.2,1);mesh.position.z=z;gate.add(mesh);return mesh;
           }
-          ring(1.91,.205,materials.silver,.045);
+          ring(1.91,.245,materials.silver,.045);
           ring(1.86,.09,materials.opal,.16);
           ring(1.77,.019,materials.porcelain,.244);
           ring(2.04,.008,materials.mint,-.15);
@@ -89,14 +89,86 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
               "float r=length(p*vec2(1.3,1.0));",
               "float s=1.0-smoothstep(0.0,0.57,r);",
               "float ribbon=0.5+0.5*sin(p.y*15.0+sin(p.x*8.0+uTime*0.5)+uTime*0.35);",
-              "vec3 shade=mix(vec3(0.98,0.99,0.95),uTint,0.36+ribbon*0.25);",
-              "gl_FragColor=vec4(shade,0.07+s*(0.26+0.15*ribbon+0.2*uEnergy));",
+              "vec3 shade=mix(vec3(0.74,0.80,0.91),uTint,0.37+ribbon*0.27);",
+              "gl_FragColor=vec4(shade,0.13+s*(0.40+0.15*ribbon+0.17*uEnergy));",
               "}",
             ].join("\n"),
             transparent:true,depthWrite:false,side:T.DoubleSide,
           });
           const lens=new T.Mesh(new T.CircleGeometry(1.76,96),lensMaterial);
           lens.scale.set(.85,1.19,1);lens.position.z=.06;gate.add(lens);
+          // Pico is a small porcelain object inside the same spatial world.
+          // The fallback uses the exact canonical SVG character for consistency.
+          const pico = new T.Group();
+          pico.position.set(0,-.03,.76);
+          gate.add(pico);
+          const picoCream=standard("#fff9ea",.03,.26);
+          const picoEar=standard("#91dac0",.02,.44);
+          const picoLeaf=standard("#d1e9bd",.02,.4);
+          const picoInk=standard("#254a43",.06,.32);
+          const picoBlush=standard("#f2b9a9",.02,.6);
+          const picoWhite=standard("#ffffff",.02,.2);
+          const shell=new T.Mesh(new T.SphereGeometry(.73,44,32),picoCream);
+          shell.scale.set(1,.97,.44);shell.position.set(0,.10,0);
+          pico.add(shell);
+          const earGeometry=new T.SphereGeometry(.31,24,20);
+          for(const side of [-1,1]){
+            const ear=new T.Mesh(earGeometry,picoEar);
+            ear.position.set(side*.57,.74,-.07);
+            ear.scale.set(.77,1.32,.48);
+            ear.rotation.z=side*.42;
+            pico.add(ear);
+            const earInterior=new T.Mesh(new T.SphereGeometry(.20,20,14),picoLeaf);
+            earInterior.position.set(side*.57,.78,.105);
+            earInterior.scale.set(.56,1.18,.34);
+            earInterior.rotation.z=side*.42;
+            pico.add(earInterior);
+          }
+          const bud=new T.Mesh(new T.SphereGeometry(.22,22,18),picoLeaf);
+          bud.scale.set(.75,1.5,.50);bud.rotation.z=-.36;bud.position.set(.03,.88,-.04);
+          pico.add(bud);
+          const cheeks=new T.Group();pico.add(cheeks);
+          [-1,1].forEach(side=>{
+            const cheek=new T.Mesh(new T.SphereGeometry(.16,22,14),picoBlush);
+            cheek.scale.set(1.15,.61,.18);
+            cheek.position.set(side*.43,.045,.324);
+            cheeks.add(cheek);
+          });
+          const closedEyes=new T.Group(),openEyes=new T.Group();
+          pico.add(closedEyes,openEyes);
+          const stroke=(coords:Array<[number,number,number]>,radius:number,mat:Material)=>{
+            const curve=new T.CatmullRomCurve3(coords.map(([x,y,z])=>new T.Vector3(x,y,z)));
+            return new T.Mesh(new T.TubeGeometry(curve,18,radius,6,false),mat);
+          };
+          [-1,1].forEach(side=>{
+            const x=side*.254;
+            closedEyes.add(stroke([[x-.095,.23,.326],[x,.27,.351],[x+.096,.23,.326]],.026,picoInk));
+            const eye=new T.Mesh(new T.SphereGeometry(.057,16,12),picoInk);
+            eye.scale.set(.95,1.23,.55);
+            eye.position.set(x,.23,.355);
+            openEyes.add(eye);
+            const highlight=new T.Mesh(new T.SphereGeometry(.016,12,8),picoWhite);
+            highlight.position.set(x+.016,.252,.389);
+            openEyes.add(highlight);
+          });
+          const smile=stroke([[-.135,-.14,.358],[0,-.196,.385],[.135,-.14,.358]],.027,picoInk);
+          pico.add(smile);
+          const celebration=stroke([[-.19,-.14,.355],[0,-.25,.388],[.19,-.14,.355]],.029,picoInk);
+          pico.add(celebration);
+          const starShape=new T.Shape();
+          for(let i=0;i<8;i++){
+            const a=i*Math.PI/4-Math.PI/2;
+            const r=i%2===0?.23:.095;
+            const x=Math.cos(a)*r,y=Math.sin(a)*r;
+            if(i===0)starShape.moveTo(x,y);else starShape.lineTo(x,y);
+          }
+          starShape.closePath();
+          const star=new T.Mesh(new T.ExtrudeGeometry(starShape,{
+            depth:.06,bevelEnabled:true,bevelSize:.022,bevelThickness:.026,bevelSegments:2,steps:1,
+          }),materials.gold);
+          star.rotation.z=.17;
+          star.position.set(.73,.72,.16);
+          pico.add(star);
           const runes=new T.Group();
           const runePositions=[[-2.35,1.85,-.7,.15],[2.17,2.30,.35,.2],[-1.76,-.28,.1,.1],[2.55,-.10,-.7,.11],[.35,3,-.7,.13]];
           runePositions.forEach(([x,y,z,s])=>{
@@ -158,8 +230,16 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
             lensMaterial.uniforms.uTime.value=t;
             gate.rotation.y+=(-.16+(reduce.matches?0:mouseX*.075)-gate.rotation.y)*.035;
             world.rotation.y+=((reduce.matches?0:mouseX*.025)-world.rotation.y)*.03;
-            camera.position.y+=((reduce.matches?2.25:2.25-mouseY*.13)-camera.position.y)*.03;
-            if(!reduce.matches){runes.rotation.y=t*.028;sparkRoot.rotation.z=Math.sin(t*.26)*.035;orbit.rotation.z=Math.sin(t*.2)*.03;}
+            camera.position.y+=((reduce.matches?3.35:3.35-mouseY*.13)-camera.position.y)*.03;
+            const isAttentive=snapshot.state==='listening'||snapshot.state==='clarifying'||snapshot.state==='working';
+            openEyes.visible=isAttentive;
+            closedEyes.visible=!isAttentive;
+            celebration.visible=snapshot.state==='formed';
+            smile.visible=snapshot.state!=='formed';
+            if(!reduce.matches){
+              runes.rotation.y=t*.028;sparkRoot.rotation.z=Math.sin(t*.26)*.035;orbit.rotation.z=Math.sin(t*.2)*.03;
+              pico.position.y=-.03+Math.sin(t*.86)*.023;
+            }
             camera.lookAt(0,.28,0);renderer.render(scene,camera);
           };
           redraw.current=()=>{if(reduce.matches)animate(performance.now());};

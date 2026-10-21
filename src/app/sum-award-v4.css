@@ -488,3 +488,12 @@
 .sum-v4-familiar .sw-sanctuary-promises{margin-top:70px}
 @media(max-width:959px){.sum-v4-pico-vocabulary__grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sum-v4-familiar__display{min-height:420px}.sw-app .sum-v4-familiar__display>.sum-familiar{width:215px;height:215px}}
 @media(max-width:699px){.sum-v4-pico-vocabulary{margin-top:43px;padding-top:25px}.sum-v4-pico-vocabulary__heading{display:block}.sum-v4-pico-vocabulary__heading h2{font-size:29px}.sum-v4-pico-vocabulary__heading>p{font-size:11px;margin-top:10px}.sum-v4-pico-vocabulary__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.sum-v4-pico-vocabulary__item{padding:17px 9px 16px}.sum-v4-pico-vocabulary__item>.sum-familiar{width:72px;height:72px}.sum-v4-pico-vocabulary__item strong{margin-top:10px}.sum-v4-familiar__display{min-height:385px}.sw-app .sum-v4-familiar__display>.sum-familiar{width:200px;height:200px}.sum-v4-familiar .sw-sanctuary-promises{margin-top:43px}}
+
+/* Real 3D Pico replaces the flat fallback face only after the spatial renderer is ready. */
+.sum-gate:has(.sum-realm-canvas[data-renderer="webgl"]) .sum-gate__character>.sum-familiar,
+.sum-live-nexus:has(.sum-realm-canvas[data-renderer="webgl"]) .sum-live-nexus__pico>.sum-familiar{opacity:0}
+.sum-gate:has(.sum-realm-canvas[data-renderer="webgl"]) .sum-gate__character>span{margin-top:92px}
+.sum-realm-canvas__fallback{filter:drop-shadow(0 12px 17px #48755c20)}
+.sum-realm-canvas__fallback-ring{box-shadow:inset 18px 1px 20px #6f8cb733,inset -13px -5px 18px #fafffb,0 0 0 2px #f2fffb,13px 23px 23px #41695923}
+.sum-realm-canvas__fallback-plinth{background:linear-gradient(135deg,#d3e6d9,#94b9a5 68%,#83ad9d);box-shadow:0 14px 0 #a3c8b6,0 18px 1px #6e9d8a,0 31px 26px #36644935}
+.sum-realm-canvas__fallback-core{background:radial-gradient(ellipse at 35% 32%,#fcfff5db,#c2dfdbba 54%,#a3b9e3a8 76%,transparent 100%);box-shadow:inset 0 0 20px #b6e7d57a}
