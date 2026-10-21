@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
 /**
  * Optional local ffmpeg/ffprobe (bundled binaries). Used for video duration + frame grab.
  * Supports three extraction modes:
@@ -9,36 +7,39 @@
  */
 
 import { readdir } from "fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "path";
 import { execFile } from "child_process";
-import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 
-let configured = false;
-
 export function ffmpegAvailable(): boolean {
-  return Boolean(ffmpegPath && ffprobeStatic.path);
+  return Boolean(ffmpegPath && existsSync(ffmpegPath) && ffprobeStatic.path && existsSync(ffprobeStatic.path));
 }
 
 function ensureConfigured(): boolean {
-  if (configured) return ffmpegAvailable();
-  configured = true;
-  if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
-  if (ffprobeStatic.path) ffmpeg.setFfprobePath(ffprobeStatic.path);
   return ffmpegAvailable();
 }
 
+function requireLocalInput(path: string): void {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) {
+    throw new Error("Decoder requires a staged local media file");
+  }
+  if (path.startsWith("\\\\") || path.startsWith("//")) throw new Error("Network media paths are forbidden");
+}
+
 export function ffprobeDurationFromUrl(url: string, timeoutMs = 45_000): Promise<number | null> {
+  requireLocalInput(url);
   if (!ensureConfigured()) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const t = setTimeout(() => resolve(null), timeoutMs);
-    ffmpeg.ffprobe(url, (err, meta) => {
-      clearTimeout(t);
-      if (err) return resolve(null);
-      const d = Number(meta.format?.duration);
-      resolve(Number.isFinite(d) && d > 0 ? d : null);
-    });
+    execFile(ffprobeStatic.path, ["-v", "error", "-protocol_whitelist", "file,pipe", "-show_entries", "format=duration", "-of", "json", url],
+      { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 }, (error, stdout) => {
+        if (error) return resolve(null);
+        try {
+          const duration = Number(JSON.parse(stdout).format?.duration);
+          resolve(Number.isFinite(duration) && duration > 0 ? duration : null);
+        } catch { resolve(null); }
+      });
   });
 }
 
@@ -75,6 +76,7 @@ export async function extractTimelineFrames(
   outDir: string,
   timeoutMs = 180_000,
 ): Promise<TimestampedFrame[]> {
+  requireLocalInput(url);
   if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
   if (!Number.isFinite(framesPerSecond) || framesPerSecond <= 0 || maxFrames <= 0) return [];
 
@@ -83,7 +85,9 @@ export async function extractTimelineFrames(
   const outPattern = join(outDir, `${prefix}%05d.jpg`);
   const args = [
     "-y",
-    "-i", url,
+    "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1",
+    "-protocol_whitelist", "file,pipe",
+    "-i", url, "-threads", "2",
     "-vf", `fps=${fps.toFixed(6)},scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:black`,
     "-frames:v", String(maxFrames),
     "-q:v", "4",
@@ -92,9 +96,7 @@ export async function extractTimelineFrames(
   ];
 
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeline extraction timeout")), timeoutMs);
-    execFile(ffmpegPath!, args, { timeout: timeoutMs }, (error) => {
-      clearTimeout(timer);
+    execFile(ffmpegPath!, args, { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 }, (error) => {
       if (error) reject(error);
       else resolve();
     });
@@ -112,6 +114,7 @@ export async function extractTimestampedRallyWindow(
   outDir: string,
   options?: { beforeSec?: number; afterSec?: number; fps?: number; width?: number; height?: number; timeoutMs?: number },
 ): Promise<TimestampedFrame[]> {
+  requireLocalInput(url);
   if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
   const beforeSec = options?.beforeSec ?? 1.5;
   const afterSec = options?.afterSec ?? 1.5;
@@ -127,7 +130,9 @@ export async function extractTimestampedRallyWindow(
   const args = [
     "-y",
     "-ss", startSec.toFixed(3),
-    "-i", url,
+    "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1",
+    "-protocol_whitelist", "file,pipe",
+    "-i", url, "-threads", "2",
     "-t", durationSec.toFixed(3),
     "-vf", `fps=${fps.toFixed(6)},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
     "-frames:v", String(maxFrames),
@@ -137,9 +142,7 @@ export async function extractTimestampedRallyWindow(
   ];
 
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`rally ${rallyIndex} extraction timeout`)), timeoutMs);
-    execFile(ffmpegPath!, args, { timeout: timeoutMs }, (error) => {
-      clearTimeout(timer);
+    execFile(ffmpegPath!, args, { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 }, (error) => {
       if (error) reject(error);
       else resolve();
     });
@@ -154,37 +157,28 @@ export async function extractTimestampedRallyWindow(
 }
 
 /** Evenly spaced JPEG screenshots saved to folder; returns absolute file paths sorted. */
-export function extractScreenshotsFromUrl(
+export async function extractScreenshotsFromUrl(
   url: string,
   count: number,
   outDir: string,
   timeoutMs = 180_000,
 ): Promise<string[]> {
-  if (!ensureConfigured()) return Promise.reject(new Error("ffmpeg/ffprobe not available"));
-  if (count <= 0) return Promise.resolve([]);
-
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("ffmpeg screenshot timeout")), timeoutMs);
-    ffmpeg(url)
-      .screenshots({
-        count,
-        folder: outDir,
-        filename: "evidence-%i.jpg",
-        size: "1280x?",
-      })
-      .on("end", async () => {
-        clearTimeout(t);
-        try {
-          resolve(await collectJpgs(outDir));
-        } catch (e) {
-          reject(e);
-        }
-      })
-      .on("error", (err: Error) => {
-        clearTimeout(t);
-        reject(err);
-      });
+  requireLocalInput(url);
+  if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
+  if (count <= 0) return [];
+  const expiresAt = Date.now() + timeoutMs;
+  const duration = await ffprobeDurationFromUrl(url, Math.min(timeoutMs, 45_000));
+  if (duration == null) throw new Error("Cannot sample video without a measured duration");
+  const remaining = expiresAt - Date.now();
+  if (remaining <= 0) throw new Error("Video sampling time limit reached");
+  const args = ["-y", "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1", "-protocol_whitelist", "file,pipe", "-i", url, "-threads", "2",
+    "-vf", `fps=${count / duration},scale=1280:-1`, "-frames:v", String(count),
+    "-q:v", "3", join(outDir, "evidence-%04d.jpg")];
+  await new Promise<void>((resolve, reject) => {
+    execFile(ffmpegPath!, args, { timeout: remaining, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 },
+      (error) => error ? reject(error) : resolve());
   });
+  return collectJpgsWithPrefix(outDir, "evidence-");
 }
 
 /**
@@ -200,15 +194,24 @@ export async function extractSceneChangeFrames(
   outDir: string,
   timeoutMs = 180_000,
 ): Promise<{ paths: string[]; mode: "scene_change" | "uniform_fallback" }> {
+  requireLocalInput(url);
   if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
   if (maxFrames <= 0) return { paths: [], mode: "scene_change" };
 
+  const expiresAt = Date.now() + timeoutMs;
+  const remaining = () => {
+    const left = expiresAt - Date.now();
+    if (left <= 0) throw new Error("Video extraction time limit reached");
+    return left;
+  };
   const bin = ffmpegPath!;
   const outPattern = join(outDir, "scene-%04d.jpg");
 
   // scene threshold 0.25 = moderate sensitivity; captures action without noise
   const args = [
-    "-i", url,
+    "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1",
+    "-protocol_whitelist", "file,pipe",
+    "-i", url, "-threads", "2",
     "-vf", `select='gt(scene\\,0.25)',scale=1280:-1`, // <-- scene-change filter
     "-vsync", "vfr",
     "-frames:v", String(maxFrames * 2), // grab extra, we'll trim
@@ -218,15 +221,13 @@ export async function extractSceneChangeFrames(
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("scene-change extraction timeout")), timeoutMs);
-      execFile(bin, args, { timeout: timeoutMs }, (err) => {
-        clearTimeout(t);
+      execFile(bin, args, { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 }, (err) => {
         if (err) reject(err);
         else resolve();
       });
     });
 
-    let paths = await collectJpgs(outDir);
+    let paths = await collectJpgsWithPrefix(outDir, "scene-");
 
     // Evenly subsample if we got too many
     if (paths.length > maxFrames) {
@@ -237,7 +238,7 @@ export async function extractSceneChangeFrames(
     // If scene-change yielded too few useful frames (< 50% of budget), fall back
     if (paths.length < Math.max(2, Math.floor(maxFrames * 0.5))) {
       return {
-        paths: await extractScreenshotsFromUrl(url, maxFrames, outDir, timeoutMs),
+        paths: await extractScreenshotsFromUrl(url, maxFrames, outDir, remaining()),
         mode: "uniform_fallback",
       };
     }
@@ -246,7 +247,7 @@ export async function extractSceneChangeFrames(
   } catch {
     // Fallback to uniform if scene-change filter fails (e.g. codec issues)
     return {
-      paths: await extractScreenshotsFromUrl(url, maxFrames, outDir, timeoutMs),
+      paths: await extractScreenshotsFromUrl(url, maxFrames, outDir, remaining()),
       mode: "uniform_fallback",
     };
   }
@@ -265,6 +266,7 @@ export async function extractHighlightFrames(
   fps = 4,
   timeoutMs = 120_000,
 ): Promise<string[]> {
+  requireLocalInput(url);
   if (!ensureConfigured()) throw new Error("ffmpeg/ffprobe not available");
 
   const bin = ffmpegPath!;
@@ -274,7 +276,9 @@ export async function extractHighlightFrames(
 
   const args = [
     "-ss", String(start),
-    "-i", url,
+    "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1",
+    "-protocol_whitelist", "file,pipe",
+    "-i", url, "-threads", "2",
     "-t", String(duration),
     "-vf", `fps=${fps},scale=1280:-1`,
     "-q:v", "3",
@@ -282,9 +286,7 @@ export async function extractHighlightFrames(
   ];
 
   await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("highlight extraction timeout")), timeoutMs);
-    execFile(bin, args, { timeout: timeoutMs }, (err) => {
-      clearTimeout(t);
+    execFile(bin, args, { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 1024 * 1024 }, (err) => {
       if (err) reject(err);
       else resolve();
     });

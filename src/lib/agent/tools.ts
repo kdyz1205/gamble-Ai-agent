@@ -1,3 +1,4 @@
+import { parseProofDeadline } from "../proof-deadline";
 /**
  * Agent Orchestrator — tool implementations.
  *
@@ -13,7 +14,8 @@
  * credits.ts atomic helpers.
  */
 import prisma from "@/lib/db";
-import { spendCredits, addCredits } from "@/lib/credits";
+import { submitChallengeEvidence, EvidenceSubmissionError } from "@/lib/evidence-submission";
+import { acceptChallenge } from "@/lib/challenge-acceptance";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "@/lib/verdict-review";
 import { createHash } from "node:crypto";
@@ -95,7 +97,8 @@ async function createChallengeTool(ctx: ToolContext, args: Record<string, unknow
   }
 
   // Parse timeWindow into a deadline Date, same logic as POST /api/challenges
-  const deadline = parseTimeWindowToDate(timeWindow);
+  const deadline = parseProofDeadline(timeWindow);
+  if (!deadline) return { ok: false, error: "Proof window must be an explicit duration or future ISO timestamp with timezone" };
   const safeRequestId = typeof ctx.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(ctx.requestId)
     ? ctx.requestId
     : null;
@@ -205,21 +208,6 @@ function challengeResult(
   };
 }
 
-function parseTimeWindowToDate(tw: string): Date {
-  const s = tw.toLowerCase();
-  const now = Date.now();
-  const hr = /(\d+)\s*(?:hours?|hrs?|小时|小時)/i.exec(s);
-  const min = /(\d+)\s*(?:mins?|minutes?|分钟|分鐘)/i.exec(s);
-  const day = /(\d+)\s*(?:days?|天)/i.exec(s);
-  const week = /(\d+)\s*(?:weeks?|周|週)/i.exec(s);
-  let addMs = 24 * 60 * 60 * 1000;
-  if (hr) addMs = Math.max(1, Number(hr[1])) * 60 * 60 * 1000;
-  else if (min) addMs = Math.max(1, Number(min[1])) * 60 * 1000;
-  else if (day) addMs = Math.max(1, Number(day[1])) * 24 * 60 * 60 * 1000;
-  else if (week) addMs = Math.max(1, Number(week[1])) * 7 * 24 * 60 * 60 * 1000;
-  else if (/tomorrow|明天/.test(s)) addMs = 24 * 60 * 60 * 1000;
-  return new Date(now + addMs);
-}
 
 function inferTypeFromTitle(title: string): string {
   const t = title.toLowerCase();
@@ -237,46 +225,13 @@ function inferTypeFromTitle(title: string): string {
 async function acceptChallengeTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
   if (!challengeId) return { ok: false, error: "challengeId required" };
-  // Delegate to the existing atomic accept logic via direct prisma transaction.
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    include: { participants: true },
-  });
-  if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (challenge.status !== "open") return { ok: false, error: `Challenge not open (status=${challenge.status})` };
-  if (challenge.creatorId === ctx.userId) return { ok: false, error: "You cannot accept your own challenge" };
-  if (challenge.participants.some((p) => p.userId === ctx.userId)) {
-    return { ok: false, error: "You are already in this challenge" };
-  }
-
-  if (challenge.stake > 0) {
-    const spend = await spendCredits(ctx.userId, challenge.stake, "stake", `Staked ${challenge.stake} credits on "${challenge.title.slice(0, 40)}"`, challengeId);
-    if (!spend.success) return { ok: false, error: spend.error || "Insufficient credits" };
-  }
   try {
-    await prisma.$transaction(async (tx) => {
-      const count = await tx.participant.count({
-        where: { challengeId, status: { in: ["pending", "accepted"] } },
-      });
-      if (count >= challenge.maxParticipants) throw new Error("FULL");
-      await tx.participant.create({
-        data: { challengeId, userId: ctx.userId, role: "opponent", status: "accepted" },
-      });
-    });
-  } catch (e) {
-    if (challenge.stake > 0) {
-      await addCredits(ctx.userId, challenge.stake, "refund", `Refund — could not join "${challenge.title.slice(0, 40)}"`, challengeId);
-    }
-    return { ok: false, error: e instanceof Error ? e.message === "FULL" ? "Challenge full — stake refunded" : e.message : "Accept failed" };
+    const result = await acceptChallenge(challengeId, ctx.userId);
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, data: { challengeId, status: result.challenge.status, reused: result.reused } };
+  } catch {
+    return { ok: false, error: "Could not accept quest. No credits or seat changes were committed." };
   }
-
-  const fresh = await prisma.participant.count({
-    where: { challengeId, status: { in: ["pending", "accepted"] } },
-  });
-  const newStatus = fresh >= challenge.maxParticipants ? "live" : "open";
-  await prisma.challenge.update({ where: { id: challengeId }, data: { status: newStatus } });
-
-  return { ok: true, data: { challengeId, status: newStatus } };
 }
 
 /* ─────────────────────────────────────────────── */
@@ -300,52 +255,14 @@ async function generateShareLinkTool(ctx: ToolContext, args: Record<string, unkn
 
 async function uploadEvidenceTool(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult> {
   const challengeId = String(args.challengeId ?? "").trim();
-  const type = String(args.type ?? "text");
-  const description = args.description ? String(args.description) : null;
-  const url = args.url ? String(args.url) : null;
   if (!challengeId) return { ok: false, error: "challengeId required" };
-
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    include: { participants: true },
-  });
-  if (!challenge) return { ok: false, error: "Challenge not found" };
-  if (!["live", "matched"].includes(challenge.status)) {
-    return { ok: false, error: `Challenge is not active (status=${challenge.status})` };
+  try {
+    const user = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { username: true } });
+    const { evidence } = await submitChallengeEvidence({ userId: ctx.userId, username: user?.username ?? "Player" }, challengeId, args);
+    return { ok: true, data: { evidenceId: evidence.id, challengeId, type: evidence.type, hasUrl: Boolean(evidence.url) } };
+  } catch (error) {
+    return { ok: false, error: error instanceof EvidenceSubmissionError ? error.message : "Proof could not be saved. Please retry." };
   }
-  if (!challenge.participants.some((p) => p.userId === ctx.userId)) {
-    return { ok: false, error: "You are not a participant" };
-  }
-
-  const evidence = await prisma.evidence.upsert({
-    where: { challengeId_userId: { challengeId, userId: ctx.userId } },
-    create: { challengeId, userId: ctx.userId, type, url, description },
-    update: {
-      type,
-      url,
-      description,
-      preparedFrames: null,
-      preparedAt: null,
-      preparedDurationSec: null,
-      preparedMode: null,
-      prepareError: null,
-    },
-  });
-
-  const activeParticipants = challenge.participants.filter((p) => p.status === "accepted");
-  const evCount = await prisma.evidence.findMany({
-    where: { challengeId },
-    select: { userId: true },
-    distinct: ["userId"],
-  });
-  if (evCount.length >= activeParticipants.length) {
-    await prisma.challenge.updateMany({
-      where: { id: challengeId, status: { in: ["live", "matched"] } },
-      data: { status: "judging" },
-    });
-  }
-
-  return { ok: true, data: { evidenceId: evidence.id, challengeId, type, hasUrl: !!url } };
 }
 
 /* ─────────────────────────────────────────────── */
@@ -366,6 +283,7 @@ async function runVisionJudgeTool(ctx: ToolContext, args: Record<string, unknown
     ok: true,
     data: {
       judgmentId: result.judgment.id,
+      method: result.judgment.method,
       winnerId: result.judgment.winnerId,
       confidence: result.judgment.confidence,
       aiModel: result.judgment.aiModel,

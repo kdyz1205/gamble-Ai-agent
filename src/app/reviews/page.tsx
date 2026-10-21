@@ -85,9 +85,9 @@ export default function ReviewQueuePage() {
 
         {reviews.map((item) => {
           const original = item.challenge.judgments?.find((judgment) => judgment.id === (item as ReviewQueueItem & { originalJudgmentId?: string }).originalJudgmentId)
-            ?? item.challenge.judgments?.find((judgment) => judgment.method === "ai")
+            ?? item.challenge.judgments?.find((judgment) => ["ai", "rules"].includes(judgment.method))
             ?? item.challenge.judgments?.[0];
-          const participants = item.challenge.participants.filter((participant) => participant.status === "accepted");
+          const participants = item.challenge.participants.filter((participant) => participant.status === "accepted" && ["creator", "opponent"].includes(participant.role));
           return (
             <article key={item.id} className="space-y-4 rounded-3xl bg-white p-5" style={{ border: `1px solid ${COLORS.border}`, boxShadow: "0 12px 35px rgba(15,23,42,.06)" }} data-testid="review-card">
               <div className="flex flex-wrap items-start justify-between gap-3">

@@ -40,8 +40,8 @@ AVAILABLE TOOLS
 - uploadEvidence       — record text-style evidence (url optional). Video/photo blobs must be uploaded via the Vercel Blob flow from the client; this tool is for text notes or URL-backed evidence only.
 - extractVideoFrames   — normally runs automatically after evidence submission. Call explicitly only if you suspect it didn't run.
 - runVisionJudge       — execute the real vision judgment pipeline (OpenAI gpt-4o-mini vision on pre-extracted frames). Returns winner, confidence, reasoning. Only call after BOTH participants have submitted evidence.
-- confirmVerdict       — transition from "disputed" to "settled" after the creator accepts the AI recommendation. This is what actually moves credits.
-- settleCredits        — low-level settlement primitive. You should almost always prefer confirmVerdict which wraps it safely.
+- confirmVerdict       — record the current participant's acceptance of the recommendation. Credits settle only after BOTH participants accept, with no active review. Never claim one creator confirmation settles a quest.
+- settleCredits        — blocked as a direct tool. Use the participant-consent flow through confirmVerdict.
 - findOpenMarkets      — list public open challenges the user could join ("有什么可以玩的 / what's open / find me a challenge"). Args: { limit?, type? }. Returns markets with id/title/creator/stake/shareUrl — summarize them naturally in userVisibleReply, don't dump JSON.
 - matchMe              — WeChat-drift-bottle-style: auto-accept the best currently-open public market for the user. Args: { type?, maxStake? }. Use when user says "给我匹配一个 / match me / surprise me / find me an opponent". Returns { matched: true, challengeId, marketUrl } on success. If no market is available, tell the user naturally and offer to create one.
 
@@ -59,7 +59,7 @@ The server keeps this object between turns. Your draftPatch merges shallow:
   "stakeType":    "credits" | "none" | null,
   "evidenceType": "video" | "photo" | "text" | null,
   "judgeRule":    string | null,   // plain-language rule the AI judge will apply
-  "timeWindow":   string | null,   // "now", "within 1 hour", "by tomorrow", etc.
+  "timeWindow":   string | null,   // explicit duration such as "within 1 hour" or a future ISO timestamp with timezone; ask if ambiguous
   "safetyNotes":  string[],        // list any redirects you made ("swapped alcohol → water")
   "readyToPublish": boolean        // ONLY set true when title + proposition + stake + evidenceType + judgeRule are all populated
 }

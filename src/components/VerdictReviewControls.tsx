@@ -21,12 +21,12 @@ export default function VerdictReviewControls({
   const [notice, setNotice] = useState("");
 
   const acceptedParticipants = useMemo(
-    () => challenge.participants.filter((participant) => participant.status === "accepted"),
+    () => challenge.participants.filter((participant) => participant.status === "accepted" && ["creator", "opponent"].includes(participant.role)),
     [challenge.participants],
   );
   const isParticipant = acceptedParticipants.some((participant) => participant.user.id === userId);
-  const myResponse = challenge.verdictResponses?.find((response) => response.userId === userId);
-  const acceptedCount = challenge.verdictResponses?.filter((response) => response.decision === "accepted").length ?? 0;
+  const myResponse = isParticipant ? challenge.verdictResponses?.find((response) => response.userId === userId) : undefined;
+  const acceptedCount = challenge.verdictResponses?.filter((response) => response.decision === "accepted" && acceptedParticipants.some((participant) => participant.user.id === response.userId)).length ?? 0;
   const activeReview = challenge.reviewCase && ["pending", "processing"].includes(challenge.reviewCase.status);
 
   if (challenge.status !== "disputed" || !challenge.judgments?.length) return null;

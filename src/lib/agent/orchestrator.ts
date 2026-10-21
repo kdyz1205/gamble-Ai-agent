@@ -2,7 +2,7 @@
  * GambleAI Agent Orchestrator.
  *
  * One turn = one user message + current conversation history + current hidden
- * draft state → one LLM call → structured JSON → merge draftPatch → optionally
+ * draft state → exact local edit or one LLM call → merge draftPatch → optionally
  * execute a single tool → return an AgentResponse.
  *
  * The LLM's contract is enforced by:
@@ -17,15 +17,16 @@
  * delegates here.
  */
 import { completeOraclePrompt } from "@/lib/llm-router";
+import { AiBudgetError } from "@/lib/ai-governance";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import { AGENT_SYSTEM_PROMPT } from "./system-prompt";
-import { executeAgentTool } from "./tools";
+import { executeAgentTool, type ToolResult } from "./tools";
 import {
-  buildDeterministicAgentResponse,
   draftIssueQuestion,
   getDraftIssues,
   normalizeDraftState,
 } from "./draft-policy";
+import { boundedAgentHistory, MAX_AGENT_MESSAGE_CHARS, tryLocalAgentResponse } from "./local-routing";
 import {
   emptyDraftState,
   type AgentAction,
@@ -61,6 +62,14 @@ export interface AgentTurnInput {
  */
 export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse> {
   const draftState = normalizeDraftState(input.draftState ?? emptyDraftState());
+  if (input.message.length > MAX_AGENT_MESSAGE_CHARS) {
+    return {
+      userVisibleReply: /[\u3400-\u9fff]/.test(input.message)
+        ? `消息过长，请将本次要求缩短到 ${MAX_AGENT_MESSAGE_CHARS} 个字符以内；现有草稿已保留。`
+        : `Please shorten this message to ${MAX_AGENT_MESSAGE_CHARS} characters. Your existing draft is preserved.`,
+      agentAction: "ask_followup", draftPatch: {}, toolName: null, toolArgs: null, draftState,
+    };
+  }
 
   // Resolve provider/model
   const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
@@ -72,25 +81,22 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   //   (a) the hidden draft state as JSON,
   //   (b) recent conversation history as plain text,
   //   (c) the user's new message.
-  const historyText = input.history
-    .slice(-16) // keep last 16 turns to stay under context budget
-    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
-    .join("\n\n");
+  const historyText = boundedAgentHistory(input.history);
 
   const userPayload = [
     `Hidden draft state (merge your draftPatch into this):`,
     "```json",
-    JSON.stringify(draftState, null, 2),
+    JSON.stringify(draftState),
     "```",
     "",
-    historyText ? `Conversation so far:\n${historyText}\n` : "Conversation so far: (this is the first turn)\n",
+    historyText ? `Recent conversation excerpts (may be incomplete; the structured draft is the current state):\n${historyText}\n` : "No earlier conversation supplied.\n",
     `User's new message:\n${input.message}`,
     "",
     `Respond with the JSON object only. No markdown, no preamble, no explanation.`,
   ].join("\n");
 
-  let parsed: RawAgentResponse | null = null;
-  try {
+  let parsed: RawAgentResponse | null = tryLocalAgentResponse(input.message, draftState);
+  if (!parsed) try {
     const rawText = await completeOraclePrompt({
       providerId,
       model,
@@ -101,14 +107,19 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
     });
     parsed = safeParseAgentJson(rawText);
   } catch (err) {
-    console.error("[agent] LLM turn failed; using deterministic challenge compiler:", err instanceof Error ? err.message : err);
+    if (err instanceof AiBudgetError) throw err;
+    console.error("[agent] LLM turn failed; preserving draft:", err instanceof Error ? err.message : err);
   }
 
-  // A provider outage, exhausted account, missing key, or malformed JSON must
-  // not turn the product's main entry point into a 500. The local compiler
-  // covers the common friend-challenge path and remains conservative when the
-  // win condition is genuinely ambiguous.
-  if (!parsed) parsed = buildDeterministicAgentResponse(input.message, draftState);
+  // Never turn unsupported requests into plausible generic rules on outage,
+  // and never publish from a local natural-language guess.
+  if (!parsed) return {
+    userVisibleReply: /[\u3400-\u9fff]/.test(input.message)
+      ? "AI 暂时无法处理这次要求，现有草稿已保留。请稍后重试；若草稿已确认，可使用发布按钮。"
+      : "The AI could not process this request. Your draft is preserved. Try again shortly; a reviewed draft can still be published with the publish button.",
+    agentAction: "ask_followup", draftPatch: {}, toolName: null, toolArgs: null,
+    draftState,
+  };
 
   const validated = validateAgentResponse(parsed);
   const newDraftState = normalizeDraftState({
@@ -152,14 +163,12 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
   // dropped and the LLM's userVisibleReply became a hallucination of data it
   // never actually queried. Instead, treat any valid `toolName` as intent to
   // call the tool, promote the action to "call_tool" for client consistency,
-  // and — if the reply was composed without tool results — do a 2nd grounded
-  // LLM round so we don't show a fabricated answer.
+  // and compose the reply from the actual tool receipt. Tool narration never
+  // needs a second inference or gets to mutate the draft.
   let toolResult: unknown = undefined;
   let toolError: string | undefined;
   let finalReply = validated.userVisibleReply;
   let finalAction = validated.agentAction;
-  let finalPatch = validated.draftPatch;
-  let finalDraftState = newDraftState;
 
   if (validated.toolName) {
     const result = await executeAgentTool(
@@ -173,55 +182,19 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentResponse
       toolError = result.error;
     }
 
-    // The first model reply was written before the tool result existed. Never
-    // leave a false "publishing now" message visible when creation failed.
-    if (validated.toolName === "createChallenge") {
-      const chinese = /[\u3400-\u9fff]/.test(input.message);
-      finalReply = result.ok
-        ? (chinese ? "Quest 已发布。现在可以把邀请链接发给朋友。" : "Quest published. You can now send the invite link to your friend.")
-        : (chinese ? `发布失败：${result.error ?? "未知错误"}` : `Could not publish the quest: ${result.error ?? "unknown error"}`);
-    }
+    finalReply = agentToolReceipt(validated.toolName, result, /[\u3400-\u9fff]/.test(input.message));
 
     // Always normalize to call_tool — we did actually call a tool.
     finalAction = "call_tool";
-
-    // If the first-turn reply was generated with no knowledge of the tool
-    // outcome (LLM chose ask_followup/show_draft/etc but still requested a
-    // tool), do a grounded 2nd turn so the reply reflects real data. For
-    // clean `call_tool` responses we trust the first reply (usually a short
-    // "doing it now…" placeholder before the client renders toolResult).
-    const firstReplyWasUngrounded = validated.agentAction !== "call_tool" && validated.toolName !== "createChallenge";
-    if (firstReplyWasUngrounded) {
-      const grounded = await groundedReplyTurn({
-        providerId,
-        model,
-        historyText,
-        userMessage: input.message,
-        draftStateBeforeTool: newDraftState,
-        toolName: validated.toolName,
-        toolArgs: validated.toolArgs ?? {},
-        toolResult,
-        toolError,
-      });
-      if (grounded) {
-        finalReply = grounded.userVisibleReply || finalReply;
-        finalPatch = { ...finalPatch, ...grounded.draftPatch };
-        finalDraftState = normalizeDraftState({
-          ...newDraftState,
-          ...grounded.draftPatch,
-          safetyNotes: mergeSafetyNotes(newDraftState.safetyNotes, grounded.draftPatch.safetyNotes),
-        });
-      }
-    }
   }
 
   return {
     userVisibleReply: finalReply,
     agentAction: finalAction,
-    draftPatch: finalPatch,
+    draftPatch: validated.draftPatch,
     toolName: validated.toolName,
     toolArgs: validated.toolArgs,
-    draftState: finalDraftState,
+    draftState: newDraftState,
     toolResult,
     toolError,
   };
@@ -249,9 +222,7 @@ export async function publishAgentDraft(input: Pick<AgentTurnInput, "userId" | "
     {},
   );
   return {
-    userVisibleReply: result.ok
-      ? (chinese ? "Quest 已发布。现在可以把邀请链接发给朋友。" : "Quest published. You can now send the invite link to your friend.")
-      : (chinese ? `发布失败：${result.error ?? "未知错误"}` : `Could not publish the quest: ${result.error ?? "unknown error"}`),
+    userVisibleReply: agentToolReceipt("createChallenge", result, chinese),
     agentAction: "call_tool",
     draftPatch: {},
     toolName: "createChallenge",
@@ -262,68 +233,50 @@ export async function publishAgentDraft(input: Pick<AgentTurnInput, "userId" | "
   };
 }
 
-/**
- * Second LLM pass that runs AFTER a tool executed. We feed the real tool
- * result back into the model so its userVisibleReply is grounded in reality
- * instead of hallucinated. We keep this cheap (short prompt, low tokens) and
- * ignore it on failure — the first-turn reply remains as a fallback.
- */
-async function groundedReplyTurn(args: {
-  providerId: string;
-  model: string;
-  historyText: string;
-  userMessage: string;
-  draftStateBeforeTool: DraftState;
-  toolName: AgentToolName;
-  toolArgs: Record<string, unknown>;
-  toolResult: unknown;
-  toolError: string | undefined;
-}): Promise<RawAgentResponse | null> {
-  const toolPayload = args.toolError
-    ? { error: args.toolError }
-    : { data: args.toolResult };
-
-  const userPayload = [
-    `You just called the backend tool \`${args.toolName}\` with these args:`,
-    "```json",
-    JSON.stringify(args.toolArgs, null, 2),
-    "```",
-    "",
-    `The tool returned:`,
-    "```json",
-    JSON.stringify(toolPayload, null, 2),
-    "```",
-    "",
-    `Current hidden draft state:`,
-    "```json",
-    JSON.stringify(args.draftStateBeforeTool, null, 2),
-    "```",
-    "",
-    args.historyText ? `Conversation so far:\n${args.historyText}\n` : "",
-    `Original user message:\n${args.userMessage}`,
-    "",
-    `Now write ONE short natural reply (userVisibleReply) grounded in the actual tool result — no invented details. If the tool failed or returned nothing useful, say so naturally and offer a next step.`,
-    `Respond with the same JSON object format (userVisibleReply, agentAction, draftPatch, toolName: null, toolArgs: null). Do NOT request another tool. No markdown fences. agentAction should reflect what you want to do NEXT (usually ask_followup or show_draft or refuse_or_redirect).`,
-  ].join("\n");
-
-  try {
-    const rawText = await completeOraclePrompt({
-      providerId: args.providerId,
-      model: args.model,
-      system: AGENT_SYSTEM_PROMPT,
-      user: userPayload,
-      maxTokens: 400,
-      temperature: 0.3,
-    });
-    const parsed = safeParseAgentJson(rawText);
-    if (!parsed) return null;
-    const validated = validateAgentResponse(parsed);
-    // Defensive: strip any tool re-request so we don't infinite-loop.
-    validated.toolName = null;
-    validated.toolArgs = null;
-    return validated;
-  } catch {
-    return null;
+/** Render backend facts only; a tool's pre-execution model reply is never a receipt. */
+export function agentToolReceipt(name: AgentToolName, result: ToolResult, chinese = false): string {
+  if (!result.ok) return chinese
+    ? `操作失败：${result.error ?? "未知错误"}`
+    : `Could not complete the action: ${result.error ?? "unknown error"}`;
+  const data = result.data && typeof result.data === "object" ? result.data as Record<string, unknown> : {};
+  const text = (key: string) => typeof data[key] === "string" ? (data[key] as string) : "";
+  switch (name) {
+    case "createChallenge":
+      return chinese
+        ? `Quest ${data.deduplicated === true ? "已存在" : "已发布"}。状态：${text("status") || "未知"}。${text("shareUrl")}`
+        : `Quest ${data.deduplicated === true ? "already exists" : "published"}. Status: ${text("status") || "unknown"}. ${text("shareUrl")}`;
+    case "acceptChallenge":
+      return chinese ? `已加入 Quest。状态：${text("status") || "未知"}。` : `You joined the quest. Status: ${text("status") || "unknown"}.`;
+    case "generateShareLink":
+      return chinese ? `邀请链接：${text("shareUrl")}` : `Invite link: ${text("shareUrl")}`;
+    case "uploadEvidence":
+      return chinese ? "证明已保存。" : "Proof saved.";
+    case "updateDraft":
+      return chinese ? "请检查当前草稿，确认规则后再发布。" : "Review the current draft and its rules before publishing.";
+    case "extractVideoFrames":
+      return chinese ? "提交证明时会自动触发视频抽帧。" : "Video frame extraction is triggered automatically when proof is submitted.";
+    case "runVisionJudge":
+      return chinese
+        ? `${data.method === "rules" ? "规则判定" : "AI 裁判"}建议已记录，仍需参与者确认或复核。${text("winnerId") ? "已提出赢家建议。" : "尚未建议赢家。"}`
+        : `${data.method === "rules" ? "Rule" : "AI referee"} recommendation recorded; participant confirmation or review is still required. ${text("winnerId") ? "A winner was recommended." : "No winner recommended."}`;
+    case "confirmVerdict": {
+      if (data.settled === true && data.status === "settled") return chinese ? "Quest 已结算。" : "Quest settled.";
+      if (data.reviewStatus === "pending" || data.reviewStatus === "processing") return chinese ? "确认已记录，正在等待复核。" : "Confirmation recorded; review is pending.";
+      const waiting = Array.isArray(data.waitingForUserIds) ? data.waitingForUserIds.length : 0;
+      if (waiting > 0) return chinese ? `确认已记录，等待 ${waiting} 位参与者确认。` : `Confirmation recorded; waiting for ${waiting} participant${waiting === 1 ? "" : "s"} to confirm.`;
+      return chinese ? `确认已记录。状态：${text("status") || "未知"}。` : `Confirmation recorded. Status: ${text("status") || "unknown"}.`;
+    }
+    case "findOpenMarkets": {
+      const markets = Array.isArray(data.markets) ? data.markets : [];
+      if (markets.length === 0) return chinese ? "暂时没有返回可加入的公开 Quest。" : "No open public quests were returned.";
+      const titles = markets.slice(0, 3).map(market => market && typeof market === "object" && "title" in market && typeof market.title === "string" ? market.title.slice(0, 100) : "").filter(Boolean).join("; ");
+      return chinese ? `找到 ${markets.length} 个公开 Quest：${titles}` : `Found ${markets.length} open public quest${markets.length === 1 ? "" : "s"}: ${titles}`;
+    }
+    case "matchMe":
+      if (data.matched === true) return chinese ? `已匹配并加入 Quest：${text("title")}。${text("marketUrl")}` : `Matched and joined the quest: ${text("title")}. ${text("marketUrl")}`;
+      return chinese ? `尚未匹配到 Quest。${text("reason")}` : `No quest was matched. ${text("reason")}`;
+    case "settleCredits":
+      return chinese ? "请通过参与者确认流程查看结算结果。" : "Check the settlement result through participant confirmation.";
   }
 }
 

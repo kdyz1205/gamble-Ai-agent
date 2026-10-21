@@ -11,7 +11,7 @@ type Participant = ChallengeData["participants"][number];
 interface ResultReceiptCardProps {
   challenge: Pick<
     ChallengeData,
-    "id" | "title" | "evidenceType" | "participants" | "creator" | "status"
+    "id" | "title" | "evidenceType" | "evidence" | "participants" | "creator" | "status"
   >;
   judgment: Judgment;
   shareUrl?: string;
@@ -89,7 +89,7 @@ function shareText(challenge: ResultReceiptCardProps["challenge"], judgment: Jud
   return [
     `Quest Settled: ${challenge.title}`,
     `Winner: ${winner}`,
-    `Confidence: ${confidence}`,
+    judgment.method === "manual" ? "Decision: Human review" : judgment.method === "rules" ? `Decision: ${judgment.aiModel || "Quest rules"}` : `Confidence: ${confidence}`,
     reasons.length ? `Proof reason: ${reasons[0]}` : null,
   ].filter(Boolean).join("\n");
 }
@@ -123,10 +123,15 @@ export default function ResultReceiptCard({
   className = "",
 }: ResultReceiptCardProps) {
   const [shareState, setShareState] = useState<"idle" | "shared" | "failed">("idle");
-  const reasons = useMemo(() => proofReasons(judgment.reasoning), [judgment.reasoning]);
+  const rulesDecision = judgment.method === "rules";
+  const manualDecision = judgment.method === "manual";
+  const nonModelDecision = rulesDecision || manualDecision;
+  const reasons = useMemo(() => nonModelDecision
+    ? [judgment.reasoning || (manualDecision ? "See the recorded moderator decision." : "The configured quest rules determined this result.")]
+    : proofReasons(judgment.reasoning), [judgment.reasoning, manualDecision, nonModelDecision]);
   const opponent = participantName(findOpponent(challenge.participants ?? [], judgment.winnerId));
   const winner = judgment.winner?.username || "No clear winner";
-  const familiar = "AI Familiar";
+  const familiar = manualDecision ? "Human reviewer" : rulesDecision ? judgment.aiModel || "Quest rules" : judgment.aiModel || "AI Familiar";
   const receiptUrl = shareUrl || (typeof window !== "undefined" ? window.location.href : "");
   const isSettled = challenge.status === "settled";
 
@@ -195,7 +200,7 @@ export default function ResultReceiptCard({
           )}
           {!judgment.winner && (
             <p className="mt-2 rounded-full px-3 py-1 text-xs font-black inline-flex" style={{ background: PEACH, color: INK }}>
-              Manual review or inconclusive result
+              {rulesDecision ? (isSettled ? "Void result accepted by both players" : "No winner — awaiting player confirmation") : "Manual review or inconclusive result"}
             </p>
           )}
         </div>
@@ -203,7 +208,7 @@ export default function ResultReceiptCard({
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255, 255, 255, 0.68)", border: `1px solid ${BORDER}` }}>
             <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-              AI Familiar
+              {nonModelDecision ? "Decision source" : "AI Familiar"}
             </p>
             <p className="mt-1 text-sm font-black" style={{ color: INK }}>
               {familiar}
@@ -211,25 +216,25 @@ export default function ResultReceiptCard({
           </div>
           <div className="rounded-2xl px-4 py-3" style={{ background: "rgba(255, 255, 255, 0.68)", border: `1px solid ${BORDER}` }}>
             <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-              Confidence
+              {nonModelDecision ? "Decision type" : "Confidence"}
             </p>
             <p className="mt-1 text-sm font-black" style={{ color: INK }}>
-              {confidenceLabel(judgment.confidence)}
+              {manualDecision ? "Human review" : rulesDecision ? "Rule-based · no AI call" : confidenceLabel(judgment.confidence)}
             </p>
           </div>
           <div className="col-span-2 rounded-2xl px-4 py-3" style={{ background: "rgba(255, 255, 255, 0.68)", border: `1px solid ${BORDER}` }}>
             <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-              Proof Type
+              {rulesDecision ? "Proof received" : "Proof Type"}
             </p>
             <p className="mt-1 text-sm font-black" style={{ color: INK }}>
-              {formatLabel(challenge.evidenceType)} proof
+              {rulesDecision ? (challenge.evidence === undefined ? "See quest proof" : challenge.evidence.length ? `${challenge.evidence.length} submissions` : "No proof submitted") : `${formatLabel(challenge.evidenceType)} proof`}
             </p>
           </div>
         </div>
 
         <div className="mt-4 rounded-[24px] p-4" style={{ background: "rgba(255, 255, 255, 0.72)", border: `1px solid ${BORDER}` }}>
           <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-            Proof Reasons
+            {manualDecision ? "Review notes" : rulesDecision ? "Rule explanation" : "Proof Reasons"}
           </p>
           <ul className="mt-3 space-y-2">
             {reasons.map((reason, index) => (

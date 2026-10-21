@@ -1,3 +1,5 @@
+import { mediaTimeBudget } from "./media-budget";
+import { stageEvidenceVideo } from "./local-evidence-video";
 /**
  * Pre-extract vision frames when evidence is submitted, so that when the judge
  * later runs we can skip ffmpeg entirely — just fetch already-normalized JPEGs
@@ -22,9 +24,7 @@ import {
   looksLikeImageMime,
   looksLikeVideoMime,
 } from "./evidence-url";
-import { planVideoVisuals } from "./video-strategy";
 import {
-  ffprobeDurationFromUrl,
   extractScreenshotsFromUrl,
   extractSceneChangeFrames,
   ffmpegAvailable,
@@ -36,6 +36,8 @@ interface PrepareInput {
   userId: string;
   type: string;
   url: string | null;
+  description?: string | null;
+  metadata?: string | null;
 }
 
 interface PrepareOutput {
@@ -84,7 +86,7 @@ async function uploadFrame(
     access: "public",
     contentType: "image/jpeg",
     addRandomSuffix: true,
-    token: process.env.BLOB_READ_WRITE_TOKEN,
+    token: process.env.BLOB_READ_WRITE_TOKEN?.trim(),
   });
   return blob.url;
 }
@@ -112,11 +114,12 @@ async function prepareVideo(
     return { frames: [], durationSec: null, mode: "none", error: "ffmpeg unavailable on host." };
   }
 
-  const duration = await ffprobeDurationFromUrl(url);
-  const plan = planVideoVisuals(duration);
+
 
   const tmp = await mkdtemp(join(tmpdir(), "preextract-"));
   try {
+    const remaining = mediaTimeBudget(150_000);
+    const { path: localVideo, duration, plan } = await stageEvidenceVideo(url, tmp, remaining);
     let paths: string[];
     let mode: "scene_change" | "uniform_fallback" = "uniform_fallback";
 
@@ -125,11 +128,11 @@ async function prepareVideo(
     // once before giving up entirely.
     const tryExtract = async () => {
       if (plan.extractionMode === "scene_change") {
-        const result = await extractSceneChangeFrames(url, plan.frameCount, tmp);
+        const result = await extractSceneChangeFrames(localVideo, plan.frameCount, tmp, remaining());
         return { paths: result.paths, mode: result.mode };
       }
       return {
-        paths: await extractScreenshotsFromUrl(url, plan.frameCount, tmp),
+        paths: await extractScreenshotsFromUrl(localVideo, plan.frameCount, tmp, remaining()),
         mode: "uniform_fallback" as const,
       };
     };
@@ -141,7 +144,7 @@ async function prepareVideo(
     } catch (firstErr) {
       console.warn("[pre-extract] first extraction attempt failed, retrying uniform:", firstErr);
       try {
-        paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
+        paths = await extractScreenshotsFromUrl(localVideo, plan.frameCount, tmp, remaining());
         mode = "uniform_fallback";
       } catch (secondErr) {
         return {
@@ -235,8 +238,11 @@ export async function preExtractAndPersistFrames(input: PrepareInput): Promise<v
   const started = Date.now();
   try {
     const out = await prepareFrames(input);
-    await prisma.evidence.update({
-      where: { id: input.evidenceId },
+    await prisma.evidence.updateMany({
+      where: { id: input.evidenceId, challengeId: input.challengeId, userId: input.userId,
+        type: input.type, url: input.url,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}) },
       data: {
         preparedFrames: out.frames.length > 0 ? JSON.stringify(out.frames) : null,
         preparedAt: new Date(),
@@ -252,8 +258,11 @@ export async function preExtractAndPersistFrames(input: PrepareInput): Promise<v
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     try {
-      await prisma.evidence.update({
-        where: { id: input.evidenceId },
+      await prisma.evidence.updateMany({
+        where: { id: input.evidenceId, challengeId: input.challengeId, userId: input.userId,
+          type: input.type, url: input.url,
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.metadata !== undefined ? { metadata: input.metadata } : {}) },
         data: {
           preparedFrames: null,
           preparedAt: new Date(),

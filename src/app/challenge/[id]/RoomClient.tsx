@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -9,12 +9,6 @@ import ChallengeVerdictPanel from "@/components/ChallengeVerdictPanel";
 import AuthModal from "@/components/AuthModal";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
-import * as api from "@/lib/api-client";
-
-const MINT = "#BFF3C7";
-const MINT_TEXT = "#157B58";
-const ROSE_BG = "#FECACA";
-const ROSE_TEXT = "#991B1B";
 
 export default function RoomClient({
   challengeId,
@@ -30,26 +24,6 @@ export default function RoomClient({
   const router = useRouter();
 
   const [showAuth, setShowAuth] = useState(false);
-  const [joinMsg, setJoinMsg] = useState("");
-  const [joinErr, setJoinErr] = useState(false);
-
-  const handleAccept = useCallback(async () => {
-    if (!user) {
-      setShowAuth(true);
-      return;
-    }
-
-    try {
-      await api.acceptChallenge(challengeId);
-      setJoinMsg("You joined the quest. Submit your proof below.");
-      setJoinErr(false);
-      await updateSession();
-    } catch (err) {
-      setJoinMsg(err instanceof Error ? err.message : "Could not join — you may already be in this quest.");
-      setJoinErr(true);
-    }
-  }, [challengeId, user, updateSession]);
-
   return (
     <div className="quest-room-world sum-map-world sum-world-shell relative min-h-screen">
       <header className="quest-hud">
@@ -96,17 +70,6 @@ export default function RoomClient({
           </div>
         </div>
 
-        {joinMsg && (
-          <motion.div
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-[18px] px-4 py-3 text-sm font-bold"
-            initial={{ opacity: 0, y: -4 }}
-            style={{ background: joinErr ? ROSE_BG : MINT, color: joinErr ? ROSE_TEXT : MINT_TEXT }}
-          >
-            {joinMsg}
-          </motion.div>
-        )}
-
         {user ? (
           <ChallengeVerdictPanel
             challengeId={challengeId}
@@ -125,19 +88,6 @@ export default function RoomClient({
               Sign in to continue
             </motion.button>
           </motion.div>
-        )}
-
-        {user && (
-          <div className="flex justify-center">
-            <motion.button
-              className="sum-world-button px-6 py-3 text-sm font-extrabold"
-              onClick={handleAccept}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Accept quest
-            </motion.button>
-          </div>
         )}
       </main>
 

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, type TierId } from "@/lib/auth";
 import { parseChallenge, generateClarifications, type ParsedChallenge } from "@/lib/ai-engine";
 import { getCredits } from "@/lib/credits";
+import { AiBudgetError, withAiContext } from "@/lib/ai-governance";
 
 /**
  * Per-user rate limit. Parse is free so anyone with a free signup bonus could
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
     if (!input || typeof input !== "string") {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
+    if (input.length > 8000) return Response.json({ error: "Input too long (maximum 8000 characters)." }, { status: 413 });
+    if (rawPrior && JSON.stringify(rawPrior).length > 16000) return Response.json({ error: "Prior draft too large." }, { status: 413 });
 
     const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
     const balance = await getCredits(user.userId);
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
     // scare off new users before they experience the product. Credit cost kicks
     // in later when real stakes + AI judgment are involved.
     const { model: modelName } = getAiModel(tierId);
-    const parsed = await parseChallenge(input, modelName, priorDraft);
+    const parsed = await withAiContext({ userId: user.userId, purpose: "challenge.parse" }, () => parseChallenge(input, modelName, priorDraft));
     const clarifications = generateClarifications(parsed);
 
     return Response.json({
@@ -95,6 +98,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Parse error:", err);
-    return Response.json({ error: "Failed to parse challenge" }, { status: 500 });
+    return Response.json({ error: err instanceof AiBudgetError ? err.message : "Failed to parse challenge" }, { status: err instanceof AiBudgetError ? 429 : 500 });
   }
 }

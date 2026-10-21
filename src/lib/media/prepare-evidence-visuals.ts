@@ -1,3 +1,5 @@
+import { mediaTimeBudget } from "./media-budget";
+import { stageEvidenceVideo } from "./local-evidence-video";
 /**
  * Turn evidence URLs into JPEG tiles the vision models can actually see.
  * Video: duration-based frame budget via ffmpeg; image: fetch + sharp normalize.
@@ -15,8 +17,7 @@ import {
   looksLikeImageMime,
   looksLikeVideoMime,
 } from "./evidence-url";
-import { planVideoVisuals } from "./video-strategy";
-import { ffprobeDurationFromUrl, extractScreenshotsFromUrl, extractSceneChangeFrames, ffmpegAvailable } from "./ffmpeg-helpers";
+import { extractScreenshotsFromUrl, extractSceneChangeFrames, ffmpegAvailable } from "./ffmpeg-helpers";
 
 export interface JudgeVisionImage {
   caption: string;
@@ -88,23 +89,24 @@ async function runVideoPipeline(
     return { preambleLines, visuals };
   }
 
-  const duration = await ffprobeDurationFromUrl(url);
-  const plan = planVideoVisuals(duration);
-  preambleLines.push(`  → Video: ${plan.label} (fetch/stream handled by ffmpeg; cap hint ${Math.round(plan.maxDownloadBytes / (1024 * 1024))}MB).`);
+
 
   const tmp = await mkdtemp(join(tmpdir(), "evidence-vid-"));
   try {
+    const remaining = mediaTimeBudget(150_000);
+    const { path: localVideo, duration, plan } = await stageEvidenceVideo(url, tmp, remaining);
+    preambleLines.push(`  Video: ${plan.label}; bounded download, local decoding.`);
     let paths: string[];
     let extractionLabel: string;
 
     if (plan.extractionMode === "scene_change") {
-      const result = await extractSceneChangeFrames(url, plan.frameCount, tmp);
+      const result = await extractSceneChangeFrames(localVideo, plan.frameCount, tmp, remaining());
       paths = result.paths;
       extractionLabel = result.mode === "scene_change"
         ? "scene-change detected"
         : "uniform fallback (scene detection yielded too few)";
     } else {
-      paths = await extractScreenshotsFromUrl(url, plan.frameCount, tmp);
+      paths = await extractScreenshotsFromUrl(localVideo, plan.frameCount, tmp, remaining());
       extractionLabel = "evenly spaced";
     }
     preambleLines.push(`  → Extraction mode: ${extractionLabel}, ${paths.length} frames captured.`);
@@ -214,19 +216,23 @@ export function capJudgeVisuals(
   maxTotal = 24,
   maxTotalBytes = 12 * 1024 * 1024,
 ): JudgeVisionImage[] {
-  const all = [...a, ...b];
-  let picked = all;
-  if (picked.length > maxTotal) {
-    const step = Math.ceil(picked.length / maxTotal);
-    picked = picked.filter((_, i) => i % step === 0).slice(0, maxTotal);
+  if (maxTotal < Number(a.length > 0) + Number(b.length > 0) || maxTotalBytes <= 0) return [];
+  const sample = (items: JudgeVisionImage[], count: number) => {
+    if (count >= items.length) return items;
+    if (count === 1) return [items[Math.floor(items.length / 2)]];
+    return Array.from({ length: count }, (_, index) => items[Math.round(index * (items.length - 1) / (count - 1))]);
+  };
+  let countA = a.length;
+  let countB = b.length;
+  for (;;) {
+    const picked = [...sample(a, countA), ...sample(b, countB)];
+    if (picked.length <= maxTotal && picked.reduce((size, image) => size + image.base64.length, 0) <= maxTotalBytes) return picked;
+    // Keep representation from each submitted side, including a single photo
+    // opposite a densely sampled video. Never silently drop that player's proof.
+    if (countA > 1 && (countA >= countB || countB <= 1)) countA--;
+    else if (countB > 1) countB--;
+    else return []; // Even the minimum complete evidence set exceeds the hard cap.
   }
-  // Estimate payload by base64 length (each char = 1 byte).
-  const size = (arr: JudgeVisionImage[]) => arr.reduce((acc, im) => acc + im.base64.length, 0);
-  while (size(picked) > maxTotalBytes && picked.length > 2) {
-    // Drop every other frame until we fit. Preserves first/last context.
-    picked = picked.filter((_, i) => i % 2 === 0);
-  }
-  return picked;
 }
 
 /**
@@ -253,10 +259,7 @@ export async function prepareParticipantVisualsFast(
   const fetched = await Promise.all(
     preparedFrames.map(async (url, i) => {
       try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) return null;
-        const ab = await res.arrayBuffer();
-        const buf = Buffer.from(ab);
+        const { buffer: buf } = await fetchBinaryCapped(url, 4.5 * 1024 * 1024, 30_000);
         // Frames were already normalized at pre-extract time — don't re-encode.
         if (buf.length > 4.5 * 1024 * 1024) return null;
         const approxSec =

@@ -9,6 +9,7 @@ import {
 } from "./media/prepare-evidence-visuals";
 import { detectScoredMatchContract } from "./scored-match";
 import { judgeShortScoredMatch } from "./scored-match-judge";
+import { AiBudgetError } from "./ai-governance";
 
 /**
  * Resolve the effective LLM provider + model for non-vision text calls (parse,
@@ -110,6 +111,7 @@ export interface JudgmentResult {
   winnerId: string | null;
   reasoning: string;
   confidence: number;
+  unavailable?: boolean;
 }
 
 const MARKET_COMPILER_PROMPT = `You are the AI brain of a challenge/betting platform. The user describes a challenge in natural language (any language — English, Chinese, mixed, Spanish, etc.). You must ALWAYS respond in the user's input language for any human-facing text fields (labels, reasoning, clarifyingQuestion, recommendationSummary, redFlags).
@@ -332,6 +334,7 @@ ${input}
 If the new input clearly references a NEW independent bet, treat it as a fresh draft (ignore context). If it sounds like a continuation ("another one", "再来一个", "different flavor", "bigger stake", "similar but harder"), produce a DIFFERENT challenge from the same family/type, or a modification — don't repeat the exact same draft.`;
   })();
 
+  let providerFailed = false;
   const runOnce = async (useModel: string): Promise<{ parsed: ParsedChallenge | null; invocations: ToolInvocation[] }> => {
     try {
       // OpenAI-compat backends get the real tool-calling loop; others fall through.
@@ -360,6 +363,8 @@ If the new input clearly references a NEW independent bet, treat it as a fresh d
       });
       return { parsed: safeParseJson(text) as ParsedChallenge | null, invocations: [] };
     } catch (err) {
+      if (err instanceof AiBudgetError) throw err;
+      providerFailed = true;
       console.error(`[parseChallenge] LLM call failed (provider=${providerId}, model=${useModel}):`, err instanceof Error ? err.message : err);
       return { parsed: null, invocations: [] };
     }
@@ -376,7 +381,7 @@ If the new input clearly references a NEW independent bet, treat it as a fresh d
     (parsed.rules && parsed.rules.length > 10)
   );
   const escalated = escalateModelForLowConfidence(providerId, model, parsed ? (looksStub ? 0.4 : 1) : 0);
-  if ((!parsed || looksStub) && escalated && escalated !== model) {
+  if (!providerFailed && (!parsed || looksStub) && escalated && escalated !== model) {
     console.log(`[parseChallenge] self-correcting via ${escalated} (first pass was weak/failed)`);
     const second = await runOnce(escalated);
     if (second.parsed) {
@@ -469,9 +474,25 @@ async function getVisualsForParticipant(
 export async function judgeChallenge(params: JudgeChallengeParams): Promise<JudgmentResult> {
   const { evidenceA, evidenceB, participantAId, participantBId, title, type, rules } = params;
 
+  // A row's existence is not proof that the agreed evidence was submitted.
+  // Check before deadline/forfeit rules so a text note cannot win a video quest.
+  const required = params.evidencePolicy?.trim().toLowerCase();
+  const invalidProof = [evidenceA, evidenceB].some((evidence) => {
+    if (!evidence) return false;
+    if (required === "video" || required === "photo") {
+      return evidence.type !== required || !evidence.url?.trim();
+    }
+    if (required === "text" || required === "self_report") {
+      return !evidence.description?.trim();
+    }
+    return false;
+  });
+  if (invalidProof) return { winnerId: null, confidence: 0.25,
+    reasoning: "Submitted proof does not meet the agreed evidence requirements. No winner can be recommended; review is required." };
+
   // Forfeit / void cases — no LLM needed.
   if (!evidenceA && !evidenceB) {
-    return { winnerId: null, reasoning: "Neither participant submitted evidence. Challenge voided — credits refunded.", confidence: 0.95 };
+    return { winnerId: null, reasoning: "Neither participant submitted evidence. Recommend voiding the quest. Reserved credits return after both participants accept or review resolves the outcome.", confidence: 0.95 };
   }
   if (evidenceA && !evidenceB && participantBId) {
     return { winnerId: participantAId, reasoning: `Only participant A submitted ${evidenceA.type} evidence. Winner by default.`, confidence: 0.85 };
@@ -521,7 +542,8 @@ Your job:
 
 RUBRIC (apply in order):
 - If exactly one participant's evidence satisfies the rules → they win.
-- If both satisfy, pick whichever is clearer, more complete, or more convincingly demonstrates the claim. If truly tied, prefer the earlier submission timestamp (if given).
+- If both satisfy, compare the observable results using the agreed win condition: count, elapsed time, accuracy, distance, or another explicit measure. State the result for each participant and the comparison. Proof clarity determines whether a result is verifiable; it never grants extra points or overrides a better measured result.
+- If the measured results tie, return null unless the agreed rules explicitly define a tiebreaker. Never invent a submission-time tiebreaker.
 - If neither satisfies, or evidence is too ambiguous, return winner: null.
 - If you suspect tampering, misleading framing, or fraud on one side, do NOT award that side the win; describe the concern in analysis.
 
@@ -558,10 +580,16 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
       getVisualsForParticipant("Participant B", evidenceB!),
     ]);
   } catch {
-    // Vision extraction is best-effort; if it fails, fall through to text-only.
+    // Missing media is checked below and requires review without a model call.
   }
   const allVisuals = capJudgeVisuals(visualsA.visuals, visualsB.visuals, 24);
-
+  // A media URL or user description is not a substitute for inspecting proof.
+  if ([{ evidence: evidenceA, prepared: visualsA }, { evidence: evidenceB, prepared: visualsB }].some(
+    ({ evidence, prepared }) => (evidence?.type === "photo" || evidence?.type === "video") && !prepared.visuals.some((image) => allVisuals.includes(image)),
+  )) {
+    return { winnerId: null, confidence: 0.25,
+      reasoning: "Visual proof could not be read for every media submission. No winner can be recommended from descriptions; review or readable proof is required." };
+  }
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
   const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
 description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
@@ -600,9 +628,18 @@ ${visualPreamble ? `Vision extraction notes:\n${visualPreamble}\n\n` : ""}${allV
           });
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;
-      return JSON.parse(jsonMatch[0]) as { winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string };
-    } catch {
-      return null;
+      let parsed: { winner: "A" | "B" | null; reasoning: string; confidence: number; analysis?: string };
+      try { parsed = JSON.parse(jsonMatch[0]); } catch { return null; }
+      if (!parsed || !["A", "B", null].includes(parsed.winner) ||
+        typeof parsed.confidence !== "number" || !Number.isFinite(parsed.confidence) ||
+        parsed.confidence < 0 || parsed.confidence > 1 ||
+        typeof parsed.reasoning !== "string" || !parsed.reasoning.trim() ||
+        (parsed.analysis !== undefined && typeof parsed.analysis !== "string")) return null;
+      return parsed;
+    } catch (error) {
+      // Infrastructure/quota failures are not low confidence. Do not pay a
+      // second model to repeat a failed request or manufacture a verdict.
+      throw error;
     }
   };
 
@@ -659,7 +696,7 @@ function escalateModelForLowConfidence(
     return "claude-sonnet-4-20250514";
   }
   if (providerId === "google" && m.includes("flash")) {
-    return "gemini-2.5-pro-preview-05-06";
+    return "gemini-2.5-pro";
   }
   return null;
 }
@@ -766,6 +803,7 @@ function judgeChallengeFallback(
   _participantBId: string,
 ): JudgmentResult {
   return {
+    unavailable: true,
     winnerId: null,
     // Below both the 0.70 escalation trigger and the 0.85 auto-settle gate
     // — guarantees this cannot settle credits automatically.

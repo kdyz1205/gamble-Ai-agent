@@ -30,7 +30,7 @@ export interface DraftState {
   stakeType: "credits" | "none" | null;
   evidenceType: "video" | "photo" | "text" | null;
   judgeRule: string | null;      // natural-language rule the vision judge will follow
-  timeWindow: string | null;     // e.g. "now", "by tomorrow", "within 1 hour"
+  timeWindow: string | null;     // explicit duration or future ISO timestamp with timezone
   safetyNotes: string[];         // anything the AI flagged as a redirect/risk
   readyToPublish: boolean;       // AI sets true once the draft is complete enough to createChallenge
 }

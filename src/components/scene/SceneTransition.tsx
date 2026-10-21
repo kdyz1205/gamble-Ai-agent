@@ -28,8 +28,8 @@ export default function SceneTransition({
       <motion.div
         key={sceneKey}
         className="relative z-10 h-full"
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, filter: "blur(5px)" }}
-        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
+        initial={reduceMotion ? { opacity: 0, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 16, filter: "blur(5px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={reduceMotion ? { duration: 0.22 } : sceneMotion.page.transition}
       >
         {children}

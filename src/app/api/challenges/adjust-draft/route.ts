@@ -4,6 +4,7 @@ import { getCredits } from "@/lib/credits";
 import { completeOraclePrompt } from "@/lib/llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "@/lib/llm-providers";
 import type { ParsedChallenge } from "@/lib/ai-engine";
+import { AiBudgetError, withAiContext } from "@/lib/ai-governance";
 
 /**
  * POST /api/challenges/adjust-draft
@@ -26,10 +27,13 @@ export async function POST(req: NextRequest) {
   if (!instruction || typeof instruction !== "string" || !draft) {
     return Response.json({ error: "instruction and draft required" }, { status: 400 });
   }
+  if (instruction.length > 8000 || JSON.stringify(draft).length > 16000) {
+    return Response.json({ error: "Draft adjustment is too large." }, { status: 413 });
+  }
 
   const credits = await getCredits(user.userId);
 
-  const providerId = DEFAULT_LLM_PROVIDER_ID;
+  const providerId = getProviderById(process.env.ORACLE_DEFAULT_PROVIDER ?? "")?.id ?? DEFAULT_LLM_PROVIDER_ID;
   const def = getProviderById(providerId);
   const model = def?.defaultModel ?? "claude-haiku-4-5-20251001";
 
@@ -95,14 +99,14 @@ CURRENT DRAFT:
 ${currentJson}`;
 
   try {
-    const raw = await completeOraclePrompt({
+    const raw = await withAiContext({ userId: user.userId, purpose: "challenge.adjust" }, () => completeOraclePrompt({
       providerId,
       model,
       system,
       user: instruction,
       maxTokens: 2000,
       temperature: 0.3,
-    });
+    }));
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -132,6 +136,7 @@ ${currentJson}`;
       credits,
     });
   } catch (err) {
+    if (err instanceof AiBudgetError) return Response.json({ error: err.message }, { status: 429 });
     console.error("[adjust-draft]", err);
     return Response.json({
       draft,

@@ -10,6 +10,7 @@ import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import EvidenceUploader from "./EvidenceUploader";
 import ResultReceiptCard from "./ResultReceiptCard";
 import VerdictReviewControls from "./VerdictReviewControls";
+import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
 const TIER_COST: Record<1 | 2 | 3, number> = { 1: 1, 2: 5, 3: 25 };
 const TIER_LABEL: Record<1 | 2 | 3, string> = { 1: "Haiku", 2: "Sonnet", 3: "Opus" };
@@ -85,6 +86,7 @@ export default function ChallengeVerdictPanel({
   onCreditsMayChange: () => void;
 }) {
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
+  const proofRestricted = challenge?.proofAccess === "players_only";
   const [loadErr, setLoadErr] = useState("");
   const [busy, setBusy] = useState(false);
   // (evidenceText / evidenceUrl state removed — evidence capture now lives
@@ -94,7 +96,9 @@ export default function ChallengeVerdictPanel({
   const [asyncHint, setAsyncHint] = useState("");
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const pollRef = useRef<(() => void) | null>(null);
+  const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!challengeId) return;
@@ -102,6 +106,7 @@ export default function ChallengeVerdictPanel({
     try {
       const { challenge: c } = await api.getChallenge(challengeId);
       setChallenge(c);
+      return c;
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : "Failed to load challenge");
     }
@@ -110,8 +115,27 @@ export default function ChallengeVerdictPanel({
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    if (proofRestricted || !challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
+    return startVisiblePolling({ delays: 5_000, task: async () => {
+      const current = await refresh();
+      if (current?.status === "settled" && pollingChallengeRef.current?.id === challengeId) onCreditsMayChange();
+      return current?.proofAccess !== "players_only" && (!isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing"));
+    } });
+  }, [challenge?.status, challenge?.reviewCase?.status, proofRestricted, challengeId, refresh, onCreditsMayChange]);
+
+  useEffect(() => {
+    pollingChallengeRef.current = { id: challengeId, terminal: false };
+    return () => { pollingChallengeRef.current = null; pollRef.current?.(); pollRef.current = null; };
+  }, [challengeId]);
+
+  useEffect(() => {
+    if (pollingChallengeRef.current) pollingChallengeRef.current.terminal = isTerminalChallenge(challenge?.status);
+    if (isTerminalChallenge(challenge?.status)) {
+      pollRef.current?.();
+      pollRef.current = null;
+      setBusy(false);
+    }
+  }, [challenge?.status]);
 
   // Dramatic verdict reveal delay
   useEffect(() => {
@@ -122,14 +146,37 @@ export default function ChallengeVerdictPanel({
   }, [challenge, verdictRevealed]);
 
   const me = challenge?.participants.find(p => p.user.id === userId);
-  const accepted = challenge?.participants.filter(p => p.status === "accepted") ?? [];
+  const accepted = challenge?.participants.filter(p => p.status === "accepted" && ["creator", "opponent"].includes(p.role)) ?? [];
   const evidenceByUser = new Map((challenge?.evidence ?? []).map(e => [e.userId, e] as const));
   const myEvidence = challenge?.evidence.find(e => e.userId === userId);
   const allSubmitted = challenge && accepted.length > 0 && accepted.every(p => evidenceByUser.has(p.user.id));
+  const deadlineMs = challenge?.deadline ? new Date(challenge.deadline).getTime() : NaN;
+  const deadlineExpired = Number.isFinite(deadlineMs) && now >= deadlineMs;
+  const players = accepted.filter(p => p.role === "creator" || p.role === "opponent");
+  const hasAcceptedOpponent = players.some(p => p.role === "opponent") && players.some(p => p.role === "creator");
+  const bothHaveProofRows = hasAcceptedOpponent && players.every(p => evidenceByUser.has(p.user.id));
+  const bothHaveValidProof = bothHaveProofRows && players.every(p => {
+    const proof = evidenceByUser.get(p.user.id);
+    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
+    return !!proof.description?.trim();
+  });
+  const readyForReview = !proofRestricted && hasAcceptedOpponent && (bothHaveValidProof || deadlineExpired)
+    && ["live", "judging"].includes(challenge?.status);
+  const reviewCost = challenge?.stake > 0 && bothHaveProofRows ? TIER_COST[tier] : 0;
+
+  useEffect(() => {
+    if (!Number.isFinite(deadlineMs) || isTerminalChallenge(challenge?.status)) return;
+    return startVisiblePolling({ immediate: true, delays: 1_000, task: async () => {
+      const current = Date.now();
+      if (current >= deadlineMs) setNow(current);
+      return current < deadlineMs;
+    } });
+  }, [deadlineMs, challenge?.status]);
 
   const isCreator = challenge?.creatorId === userId;
-  const canSubmitEvidence = challenge && ["open", "live"].includes(challenge.status) && !!me && !myEvidence;
-  const canRunAi = challenge && challenge.status === "judging" && isCreator && challenge.judgments.length === 0;
+  const canSubmitEvidence = challenge && ["live", "matched"].includes(challenge.status) && !!me
+    && me.status === "accepted" && ["creator", "opponent"].includes(me.role) && !myEvidence && !deadlineExpired;
+  const canRunAi = readyForReview && isCreator && challenge.judgments.length === 0;
   const settled = challenge?.status === "settled";
 
   // Evidence submission moved to the dedicated <EvidenceUploader /> component
@@ -138,7 +185,7 @@ export default function ChallengeVerdictPanel({
 
   const runVerdict = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = reviewCost;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -161,8 +208,8 @@ export default function ChallengeVerdictPanel({
   };
 
   const runVerdictAsync = async () => {
-    if (!challenge) return;
-    const cost = TIER_COST[tier];
+    if (!challenge || challenge.status !== "judging" || !bothHaveValidProof) return;
+    const cost = reviewCost;
     if (credits < cost) {
       setVerdictErr(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`);
       return;
@@ -176,56 +223,33 @@ export default function ChallengeVerdictPanel({
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (pollingChallengeRef.current?.id !== challenge.id || pollingChallengeRef.current.terminal) return;
       setAsyncHint("Familiar is reviewing proof (video frames + vision)...");
 
-      // Exponential backoff polling: 2s → 3s → 5s → 8s → 12s → 20s → 30s cap.
-      // Replaces the old 2s-forever loop that at 1000 concurrent waiters did
-      // 500 req/s against /api/judge-jobs/[id] for as long as anyone was
-      // watching. Stops automatically after 15min (maxDuration + grace) so
-      // even a stuck job doesn't loop forever.
-      const BACKOFF_SEQUENCE = [2000, 3000, 5000, 8000, 12000, 20000, 30000];
-      const MAX_TOTAL_MS = 15 * 60 * 1000; // hard stop at 15 minutes
-      const pollStart = Date.now();
-      let attempt = 0;
-      let cancelled = false;
-
-      const scheduleNext = () => {
-        if (cancelled) return;
-        if (Date.now() - pollStart > MAX_TOTAL_MS) {
+      pollRef.current?.();
+      pollRef.current = startVisiblePolling({
+        delays: JUDGE_POLL_DELAYS,
+        timeoutMs: JUDGE_POLL_TIMEOUT_MS,
+        onTimeout: () => {
           setBusy(false);
           setAsyncHint("");
           setVerdictErr("Familiar review is taking longer than expected — please reload to check status.");
-          return;
-        }
-        const delay = BACKOFF_SEQUENCE[Math.min(attempt, BACKOFF_SEQUENCE.length - 1)];
-        attempt++;
-        // Use nested setTimeout instead of setInterval so each tick is independently schedulable.
-        const timerId = setTimeout(async () => {
-          if (cancelled) return;
-          try {
-            const j = await api.getJudgeJob(res.jobId);
-            if (j.status === "completed" || j.status === "failed") {
-              cancelled = true;
-              setBusy(false);
-              setAsyncHint("");
-              if (j.status === "failed") setVerdictErr(j.error || "Background Familiar review failed");
-              await refresh();
-              onCreditsMayChange();
-              return;
-            }
-            scheduleNext();
-          } catch {
-            cancelled = true;
+        },
+        onError: () => setAsyncHint("Could not check the review. Retrying when this page is visible..."),
+        task: async (signal) => {
+          const j = await api.getJudgeJob(res.jobId);
+          if (signal.aborted) return false;
+          if (document.visibilityState === "hidden") return;
+          if (j.status === "completed" || j.status === "failed") {
             setBusy(false);
             setAsyncHint("");
+            if (j.status === "failed") setVerdictErr(j.error || "Background Familiar review failed");
+            await refresh();
+            if (pollingChallengeRef.current?.id === challenge.id) onCreditsMayChange();
+            return false;
           }
-        }, delay);
-        // Store the timer so we can cancel on unmount — reuse pollRef to minimize code diff.
-        pollRef.current = timerId as unknown as ReturnType<typeof setInterval>;
-      };
-
-      if (pollRef.current) clearInterval(pollRef.current);
-      scheduleNext();
+        },
+      });
     } catch (e) {
       setVerdictErr(e instanceof Error ? e.message : "Could not start background Familiar review");
       setBusy(false);
@@ -266,11 +290,13 @@ export default function ChallengeVerdictPanel({
   const phaseMatchDone = hasOpponent || challenge.status !== "open";
   const phases = [
     { key: "match", done: phaseMatchDone, label: "Challenger", icon: "👤" },
-    { key: "ev", done: Boolean(allSubmitted || settled), label: "Proof", icon: "📸" },
-    { key: "ai", done: Boolean(settled), label: "Familiar Result", icon: "⚡" },
+    { key: "ev", done: Boolean(allSubmitted || settled), label: settled && !allSubmitted ? "Proof window closed" : "Proof", icon: "📸" },
+    { key: "ai", done: Boolean(settled), label: challenge.judgments?.[0]?.method === "manual" ? "Human review" : challenge.judgments?.[0]?.method === "rules" ? "Rule result" : "Familiar Result", icon: "⚡" },
   ];
 
   const verdictRow = challenge.judgments?.[0] ?? null;
+  const rulesDecision = verdictRow?.method === "rules";
+  const manualDecision = verdictRow?.method === "manual";
   const sc = statusColor(challenge.status);
   const showLegacyReceipt = false;
 
@@ -301,7 +327,7 @@ export default function ChallengeVerdictPanel({
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
             >
-              {statusLabel(challenge.status)}
+              {manualDecision && challenge.status === "disputed" ? "Human review ready" : rulesDecision && challenge.status === "disputed" ? "Rule result ready" : statusLabel(challenge.status)}
             </motion.span>
             {challenge.stake > 0 && (
               <span className="text-xs font-bold text-amber-400">{challenge.stake} quest credits</span>
@@ -309,9 +335,14 @@ export default function ChallengeVerdictPanel({
           </div>
         </div>
 
+        {proofRestricted && (
+          <p role="status" data-testid="private-proof-access" className="text-sm font-semibold text-text-secondary">
+            Proof and results are private. {challenge.status === "open" ? "Sign in and accept this invitation to view them." : "Sign in with an accepted player account to view them."}
+          </p>
+        )}
         {/* Phase track */}
         <div className="flex items-center gap-2 flex-wrap">
-          {phases.map((p, i) => (
+          {!proofRestricted && phases.map((p, i) => (
             <div key={p.key} className="flex items-center gap-2">
               <motion.div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
@@ -342,6 +373,19 @@ export default function ChallengeVerdictPanel({
             </div>
           ))}
         </div>
+
+        {challenge.status === "open" && (!me || me.status === "pending") && !isCreator && (
+          <button type="button" className="sum-world-button px-6 py-3 text-sm font-extrabold" disabled={busy}
+            onClick={() => {
+              setBusy(true); setVerdictErr("");
+              void api.acceptChallenge(challenge.id).then(async () => {
+                await refresh(); onCreditsMayChange();
+              }).catch((error) => setVerdictErr(error instanceof Error ? error.message : "Could not join quest"))
+                .finally(() => setBusy(false));
+            }}>
+            {busy ? "Accepting…" : "Accept quest"}
+          </button>
+        )}
 
         {/* Participants + evidence checklist */}
         <div className="grid gap-2 sm:grid-cols-2">
@@ -377,7 +421,7 @@ export default function ChallengeVerdictPanel({
                     {isMe && <span className="text-[10px] ml-1.5 font-semibold" style={{ color: "#64748B" }}>(you)</span>}
                   </p>
                   <p className="text-[11px] font-semibold" style={{ color: "#64748B" }}>
-                    {isCreator ? "Creator" : "Challenger"} · {ev ? "Proof in" : "Waiting"}
+                    {isCreator ? "Creator" : "Challenger"} · {proofRestricted ? "Private proof" : ev ? "Proof in" : ["settled", "cancelled", "disputed"].includes(challenge.status) ? "No proof submitted" : "Waiting"}
                   </p>
                   {ev && (
                     <p className="text-xs font-medium mt-1.5 line-clamp-2" style={{ color: "#334155", lineHeight: 1.5 }}>{ev.description || ev.url || "—"}</p>
@@ -431,7 +475,7 @@ export default function ChallengeVerdictPanel({
         </AnimatePresence>
 
         {/* AI Judge section */}
-        {challenge.status === "judging" && (
+        {readyForReview && (
           <motion.div
             className="space-y-4 p-5"
             style={{
@@ -453,7 +497,7 @@ export default function ChallengeVerdictPanel({
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>All proof is in</p>
+                <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{deadlineExpired && !bothHaveValidProof ? "Proof window closed" : "All proof is in"}</p>
                 <p className="text-xs font-medium mt-0.5" style={{ color: "#64748B", lineHeight: 1.5 }}>
                   {isCreator ? "Familiar writes a result. You confirm before credits update." : "Waiting for the creator to start Familiar review."}
                 </p>
@@ -484,7 +528,7 @@ export default function ChallengeVerdictPanel({
                         </p>
                         <p className="text-[10px] font-medium mt-0.5" style={{ color: selected ? "#9A3412" : "#64748B" }}>{TIER_DESC[t]}</p>
                         <p className="text-[11px] font-bold mt-1" style={{ color: selected ? "#7C2D12" : "#94A3B8" }}>
-                          {TIER_COST[t]} cr
+                          {(challenge.stake > 0 && bothHaveProofRows ? TIER_COST[t] : 0)} cr
                         </p>
                       </motion.button>
                     );
@@ -504,9 +548,9 @@ export default function ChallengeVerdictPanel({
                     boxShadow: busy ? "none" : "0 4px 14px 0 rgba(251,146,60,0.39)",
                   }}
                 >
-                  {busy ? "Reviewing…" : `Ask Familiar for result · ${TIER_COST[tier]} cr`}
+                  {busy ? "Reviewing…" : `Ask Familiar for result · ${reviewCost} cr`}
                 </motion.button>
-                <motion.button
+                {challenge.status === "judging" && bothHaveValidProof && <motion.button
                   type="button"
                   disabled={busy || !canRunAi}
                   whileTap={{ scale: 0.97 }}
@@ -516,7 +560,7 @@ export default function ChallengeVerdictPanel({
                   style={{ color: "#64748B", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "9999px" }}
                 >
                   Background Familiar review
-                </motion.button>
+                </motion.button>}
                 {asyncHint && (
                   <motion.p
                     className="text-xs font-semibold text-center"
@@ -569,7 +613,7 @@ export default function ChallengeVerdictPanel({
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </motion.div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{manualDecision ? "Human review" : rulesDecision ? "Rule result" : "Familiar Result"}</p>
               </div>
 
               {/* Winner */}
@@ -588,10 +632,10 @@ export default function ChallengeVerdictPanel({
               <div className="flex flex-wrap justify-center gap-2">
                 {verdictRow.aiModel && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                    {verdictRow.aiModel}
+                    {manualDecision ? "Human review" : verdictRow.aiModel}
                   </span>
                 )}
-                {typeof verdictRow.confidence === "number" && (
+                {!rulesDecision && !manualDecision && typeof verdictRow.confidence === "number" && (
                   <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
                         style={{
                           background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",
@@ -605,7 +649,7 @@ export default function ChallengeVerdictPanel({
 
               {/* Reasoning with typewriter effect */}
               <div className="p-4" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px" }}>
-                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>Familiar Reasoning</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "#64748B" }}>{manualDecision ? "Review explanation" : rulesDecision ? "Rule explanation" : "Familiar Reasoning"}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap leading-relaxed" style={{ color: "#334155", lineHeight: 1.6 }}>
                   <TypewriterReasoning text={verdictRow.reasoning ?? ""} />
                 </p>
@@ -642,7 +686,7 @@ export default function ChallengeVerdictPanel({
                   Result receipt
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
-                  {verdictRow.aiModel}
+                  {manualDecision ? "Human review" : verdictRow.aiModel}
                 </span>
               </div>
 
@@ -668,7 +712,7 @@ export default function ChallengeVerdictPanel({
                 </p>
               )}
 
-              {verdictRow.confidence != null && (
+              {!rulesDecision && !manualDecision && verdictRow.confidence != null && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-semibold" style={{ color: "#64748B" }}>
                     <span>Confidence</span>
@@ -691,7 +735,10 @@ export default function ChallengeVerdictPanel({
 
               <motion.button
                 onClick={() => {
-                  const text = `Quest result: "${challenge.title}" — ${verdictRow.winner?.username ?? "Draw"} wins (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)\n\n"${verdictRow.reasoning}"\n\nRefereed by ${verdictRow.aiModel}`;
+                  const outcome = verdictRow.winner?.username ? `${verdictRow.winner.username} wins` : "No winner";
+                  const confidence = rulesDecision || manualDecision ? "" : ` (${Math.round((verdictRow.confidence ?? 0) * 100)}% confidence)`;
+                  const source = manualDecision ? "Decision: Human review" : `${rulesDecision ? "Decision" : "Refereed by"}: ${verdictRow.aiModel}`;
+                  const text = `Quest result: "${challenge.title}" — ${outcome}${confidence}\n\n"${verdictRow.reasoning}"\n\n${source}`;
                   void navigator.clipboard.writeText(text);
                 }}
                 whileTap={{ scale: 0.97 }}

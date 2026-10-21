@@ -179,6 +179,8 @@ async function testProductionJudgeInterception() {
   };
   const ambiguous = await judgeChallenge({
     ...base,
+    evidenceA: { ...base.evidenceA, url: "https://example.invalid/participant-a.mp4" },
+    evidenceB: { ...base.evidenceB, url: "https://example.invalid/participant-b.mp4" },
     title: "羽毛球5个球的比赛",
     rules: "录视频判断谁赢",
   });
@@ -191,7 +193,8 @@ async function testProductionJudgeInterception() {
     rules: "Exactly 5 rallies; higher score wins.",
   });
   assert.equal(noVideo.winnerId, null);
-  assert.match(noVideo.reasoning, /at least one shared, direct video/);
+  assert.match(noVideo.reasoning, /agreed evidence requirements/);
+  assert.ok(noVideo.confidence < 0.85);
 }
 
 function frameSvg(rallyIndex: number, frameWithinRally: number, fps: number): Buffer {

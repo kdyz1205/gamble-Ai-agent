@@ -4,7 +4,7 @@ import { ChallengeStatus } from "@/lib/enums";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
-import { expireOverdueReviewCases } from "@/lib/verdict-review";
+import { expireOverdueReviewCases, recoverPendingConsentSettlements } from "@/lib/verdict-review";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -28,14 +28,15 @@ async function runCron() {
   const now = new Date();
 
   // (1) Sweep stuck async JudgeJobs first so their status stops blocking
-  // the client's poll loop. Runs every cron tick so a crashed lambda's
-  // judgment is failed within ~minutes, not "forever".
+  // the client's poll loop. Recovery runs on each cron tick; the deployed
+  // daily schedule can leave an unattended job waiting until the next day.
   const sweepResult = await sweepStuckJudgeJobs();
 
   // Review cases must never stay frozen forever. Once the configured review
   // SLA expires, refund every accepted participant through the same
   // idempotent settlement path used by a moderator decision.
   const expiredReviews = await expireOverdueReviewCases();
+  const recoveredConsentSettlements = await recoverPendingConsentSettlements();
 
   // (2) Live → judging for any deadline that has passed.
   const transitioned = await prisma.challenge.updateMany({
@@ -91,6 +92,7 @@ async function runCron() {
   return {
     sweptStuckJobs: sweepResult.swept,
     expiredReviews,
+    recoveredConsentSettlements,
     transitionedToJudging: transitioned.count,
     pendingCount: pending.length,
     outcomes,

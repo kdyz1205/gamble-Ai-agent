@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { AiBudgetError, meteredAiCall, recordAiResponse, remainingAiTimeMs, withAiContext } from "@/lib/ai-governance";
 
 // Default to classic whisper-1 because it is the most battle-tested multilingual
 // transcription model on OpenAI's platform — Chinese, Spanish, Arabic, Hindi,
@@ -42,108 +43,117 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
 
-  const rl = hitRate(user.userId);
-  if (!rl.ok) {
-    return Response.json(
-      { error: `Too many transcription requests. Try again in ${rl.retryInSec}s.` },
-      { status: 429 },
-    );
-  }
+  return withAiContext({ userId: user.userId, purpose: "voice.transcribe" }, async () => {
 
-  try {
-    const form = await req.formData();
-    const file = form.get("file");
-    const previewText = String(form.get("previewText") || "").trim();
-    const languageHintRaw = String(form.get("languageHint") || "").trim().toLowerCase();
-    const languageHint = languageHintRaw === "zh" || languageHintRaw === "en" ? languageHintRaw : "";
-
-    if (!(file instanceof File) && !previewText) {
-      return Response.json({ error: "audio file or preview text is required" }, { status: 400 });
-    }
-    if (file instanceof File && file.size > MAX_AUDIO_BYTES) {
+    const rl = hitRate(user.userId);
+    if (!rl.ok) {
       return Response.json(
-        { error: `Audio file too large (${file.size} bytes). Max ${MAX_AUDIO_BYTES} bytes.` },
-        { status: 413 },
+        { error: `Too many transcription requests. Try again in ${rl.retryInSec}s.` },
+        { status: 429 },
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    try {
+      const form = await req.formData();
+      const file = form.get("file");
+      const previewText = String(form.get("previewText") || "").trim();
+      const languageHintRaw = String(form.get("languageHint") || "").trim().toLowerCase();
+      const languageHint = languageHintRaw === "zh" || languageHintRaw === "en" ? languageHintRaw : "";
+
+      if (!(file instanceof File) && !previewText) {
+        return Response.json({ error: "audio file or preview text is required" }, { status: 400 });
+      }
+      if (file instanceof File && file.size > MAX_AUDIO_BYTES) {
+        return Response.json(
+          { error: `Audio file too large (${file.size} bytes). Max ${MAX_AUDIO_BYTES} bytes.` },
+          { status: 413 },
+        );
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        return Response.json({
+          transcript: previewText,
+          language: languageHint || "unknown",
+          provider: "preview_fallback",
+          usedFallback: true,
+        });
+      }
+
+      if (!(file instanceof File)) {
+        return Response.json({
+          transcript: previewText,
+          language: languageHint || "unknown",
+          provider: "preview_fallback",
+          usedFallback: true,
+        });
+      }
+
+      // Single-shot call builder — reused for primary + fallback so the audio
+      // `File` isn't accidentally consumed between attempts.
+      const callWhisper = async (modelName: string, audioFile: File): Promise<Response> => {
+        const upstream = new FormData();
+        upstream.append("file", audioFile, audioFile.name || "voice.webm");
+        upstream.append("model", modelName);
+        upstream.append("response_format", "json");
+        if (languageHint) upstream.append("language", languageHint);
+        return meteredAiCall({
+          providerId: "openai", model: modelName, kind: "transcription", maxOutputTokens: 0,
+        }, async () => {
+          const response = await fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+            body: upstream,
+            signal: AbortSignal.timeout(remainingAiTimeMs(40_000)),
+          });
+          if (response.ok) recordAiResponse(await response.clone().json(), "openai");
+          return response;
+        });
+      };
+
+      let response = await callWhisper(DEFAULT_MODEL, file);
+      let modelUsed = DEFAULT_MODEL;
+
+      // Model-not-available / permission errors from OpenAI come back as 4xx.
+      // Retry once on `whisper-1` — it's ubiquitously available and excellent
+      // for Chinese. Keeps Chinese input working even if the newer model isn't
+      // enabled on this key.
+      if ([400, 403, 404].includes(response.status) && DEFAULT_MODEL !== FALLBACK_MODEL) {
+        console.warn(`[transcribe] primary model "${DEFAULT_MODEL}" failed (${response.status}). Falling back to ${FALLBACK_MODEL}.`);
+        response = await callWhisper(FALLBACK_MODEL, file);
+        modelUsed = FALLBACK_MODEL;
+      }
+
+      if (!response.ok) {
+        console.error(`[transcribe] upstream failed (${response.status})`);
+        return Response.json({
+          transcript: previewText,
+          language: languageHint || "unknown",
+          provider: "preview_fallback",
+          usedFallback: true,
+          error: `Transcription unavailable (${response.status}). Please try again.`,
+          model: modelUsed,
+        }, { status: 200 });
+      }
+
+      const data = await response.json() as { text?: string; language?: string };
+      const transcript = (data.text || previewText || "").trim();
+      if (!transcript) {
+        console.warn(`[transcribe] empty transcript from ${modelUsed}, lang=${data.language ?? "n/a"}`);
+      }
+
       return Response.json({
-        transcript: previewText,
-        language: languageHint || "unknown",
-        provider: "preview_fallback",
-        usedFallback: true,
-      });
-    }
-
-    if (!(file instanceof File)) {
-      return Response.json({
-        transcript: previewText,
-        language: languageHint || "unknown",
-        provider: "preview_fallback",
-        usedFallback: true,
-      });
-    }
-
-    // Single-shot call builder — reused for primary + fallback so the audio
-    // `File` isn't accidentally consumed between attempts.
-    const callWhisper = async (modelName: string, audioFile: File): Promise<Response> => {
-      const upstream = new FormData();
-      upstream.append("file", audioFile, audioFile.name || "voice.webm");
-      upstream.append("model", modelName);
-      upstream.append("response_format", "json");
-      if (languageHint) upstream.append("language", languageHint);
-      return fetch(`${OPENAI_BASE_URL}/audio/transcriptions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-        body: upstream,
-      });
-    };
-
-    let response = await callWhisper(DEFAULT_MODEL, file);
-    let modelUsed = DEFAULT_MODEL;
-
-    // Model-not-available / permission errors from OpenAI come back as 4xx.
-    // Retry once on `whisper-1` — it's ubiquitously available and excellent
-    // for Chinese. Keeps Chinese input working even if the newer model isn't
-    // enabled on this key.
-    if (!response.ok && DEFAULT_MODEL !== FALLBACK_MODEL) {
-      const errBody = await response.text().catch(() => "");
-      console.warn(`[transcribe] primary model "${DEFAULT_MODEL}" failed (${response.status}): ${errBody.slice(0, 160)}. Falling back to ${FALLBACK_MODEL}.`);
-      response = await callWhisper(FALLBACK_MODEL, file);
-      modelUsed = FALLBACK_MODEL;
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[transcribe] upstream failed (${response.status}): ${errorText.slice(0, 300)}`);
-      return Response.json({
-        transcript: previewText,
-        language: languageHint || "unknown",
-        provider: "preview_fallback",
-        usedFallback: true,
-        error: `Upstream transcription failed (${response.status}): ${errorText.slice(0, 200)}`,
+        transcript,
+        language: data.language || languageHint || "unknown",
+        provider: "openai_audio_transcriptions",
         model: modelUsed,
-      }, { status: 200 });
+        usedFallback: !data.text,
+      });
+    } catch (err) {
+      if (err instanceof AiBudgetError) return Response.json({ error: err.message }, { status: 429 });
+      console.error("[transcribe] exception:", err);
+      return Response.json({
+        error: err instanceof Error ? err.message : "Failed to transcribe audio",
+      }, { status: 500 });
     }
-
-    const data = await response.json() as { text?: string; language?: string };
-    const transcript = (data.text || previewText || "").trim();
-    if (!transcript) {
-      console.warn(`[transcribe] empty transcript from ${modelUsed}, lang=${data.language ?? "n/a"}`);
-    }
-
-    return Response.json({
-      transcript,
-      language: data.language || languageHint || "unknown",
-      provider: "openai_audio_transcriptions",
-      model: modelUsed,
-      usedFallback: !data.text,
-    });
-  } catch (err) {
-    console.error("[transcribe] exception:", err);
-    return Response.json({
-      error: err instanceof Error ? err.message : "Failed to transcribe audio",
-    }, { status: 500 });
-  }
+  });
 }

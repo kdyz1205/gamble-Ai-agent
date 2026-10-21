@@ -1,93 +1,44 @@
-import { NextRequest } from "next/server";
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import prisma from "@/lib/db";
-import { getAuthUser, unauthorized } from "@/lib/auth";
+import { NextRequest } from 'next/server';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { getAuthUser, unauthorized } from '@/lib/auth';
+import { authorizeEvidenceUpload, EvidenceUploadPolicyError } from '@/lib/evidence-upload-policy';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-const MAX_BYTES = 80 * 1024 * 1024;
-
-function blobConfigured() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
-}
-
-/**
- * POST /api/challenges/[id]/evidence/blob-handle
- * Vercel Blob client-upload handshake (token generation). Bytes go to Blob storage, not through this route.
- */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  if (!blobConfigured()) {
-    return Response.json(
-      {
-        error:
-          "Vercel Blob is not configured. In Vercel: Storage → Blob → connect store (adds BLOB_READ_WRITE_TOKEN).",
-        configured: false,
-      },
-      { status: 503 },
-    );
-  }
-
+/** Storage callbacks retain SDK signature verification; token generation requires a current player session. */
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-
-  let body: HandleUploadBody;
-  try {
-    body = (await req.json()) as HandleUploadBody;
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return Response.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return Response.json({ error: 'An upload object is required' }, { status: 400 });
+  const candidate = raw as Record<string, unknown>;
+  if (!['blob.generate-client-token', 'blob.upload-completed'].includes(String(candidate.type))
+    || !candidate.payload || typeof candidate.payload !== 'object' || Array.isArray(candidate.payload)) {
+    return Response.json({ error: 'Invalid upload request' }, { status: 400 });
   }
-
-  const user = await getAuthUser();
-
-  if (body.type === "blob.generate-client-token") {
-    if (!user) return unauthorized();
-    const challenge = await prisma.challenge.findUnique({
-      where: { id },
-      include: { participants: true },
-    });
-    if (!challenge) {
-      return Response.json({ error: "Challenge not found" }, { status: 404 });
-    }
-    if (!["open", "live"].includes(challenge.status)) {
-      return Response.json(
-        { error: "Evidence locked — challenge is judging, settled, or closed." },
-        { status: 400 },
-      );
-    }
-    const isParticipant = challenge.participants.some((p) => p.userId === user.userId);
-    if (!isParticipant) {
-      return Response.json({ error: "You are not a participant in this challenge" }, { status: 403 });
-    }
-
-    const prefix = `evidence/${id}/`;
-    if (!body.payload.pathname.startsWith(prefix)) {
-      return Response.json({ error: "Invalid pathname" }, { status: 400 });
-    }
+  const body = raw as HandleUploadBody;
+  if (body.type === 'blob.generate-client-token' && typeof body.payload.pathname !== 'string') {
+    return Response.json({ error: 'Invalid upload pathname' }, { status: 400 });
   }
-
   try {
-    const jsonResponse = await handleUpload({
-      request: req,
-      body,
-      onBeforeGenerateToken: async (pathname) => {
-        const prefix = `evidence/${id}/`;
-        if (!pathname.startsWith(prefix)) {
-          throw new Error("Invalid pathname");
-        }
-        return {
-          allowedContentTypes: ["video/*", "image/*"],
-          maximumSizeInBytes: MAX_BYTES,
-          addRandomSuffix: true,
-        };
+    if (body.type === 'blob.generate-client-token') {
+      const user = await getAuthUser();
+      if (!user) return unauthorized();
+      await authorizeEvidenceUpload({ userId: user.userId, challengeId: id, pathname: body.payload.pathname });
+    }
+    if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) return Response.json({ error: 'Direct upload is unavailable. Use a public HTTPS proof URL or try again later.', configured: false }, { status: 503 });
+    const jsonResponse = await handleUpload({ request: req, body, token: process.env.BLOB_READ_WRITE_TOKEN?.trim(),
+      onBeforeGenerateToken: async pathname => {
+        const user = await getAuthUser();
+        if (!user) throw new EvidenceUploadPolicyError('Authentication required', 401);
+        const policy = await authorizeEvidenceUpload({ userId: user.userId, challengeId: id, pathname });
+        return { ...policy, addRandomSuffix: true };
       },
     });
     return Response.json(jsonResponse);
-  } catch (e) {
-    return Response.json(
-      { error: e instanceof Error ? e.message : "Blob upload failed" },
-      { status: 400 },
-    );
+  } catch (error) {
+    if (error instanceof EvidenceUploadPolicyError) return Response.json({ error: error.message }, { status: error.status });
+    return Response.json({ error: 'Upload could not be authorized. Please retry.', configured: false }, { status: 400 });
   }
 }

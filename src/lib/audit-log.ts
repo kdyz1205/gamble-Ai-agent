@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
 import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db";
 
@@ -34,7 +32,7 @@ export async function appendAuditLog(entry: {
         actorUserId: entry.actorUserId ?? undefined,
         targetUserId: entry.targetUserId ?? undefined,
         challengeId: entry.challengeId ?? undefined,
-        payload: entry.payload ?? undefined,
+        payload: entry.payload === undefined ? undefined : JSON.stringify(entry.payload),
       },
     });
   } catch (e) {

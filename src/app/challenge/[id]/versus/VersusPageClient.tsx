@@ -11,6 +11,8 @@ import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ParticleBackground from "@/components/ParticleBackground";
+import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
+import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
 /* ── Helpers ── */
 function evidenceBlobPathname(challengeId: string, filename: string): string {
@@ -76,12 +78,14 @@ function PlayerSide({
   isMe,
   side,
   challengeStatus,
+  proofRestricted,
 }: {
   participant: ChallengeDetail["participants"][0] | null;
   evidence: ChallengeDetail["evidence"][0] | undefined;
   isMe: boolean;
   side: "left" | "right";
   challengeStatus: string;
+  proofRestricted: boolean;
 }) {
   const isLeft = side === "left";
   const gradFrom = isLeft ? "#7c5cfc" : "#00d4c8";
@@ -202,7 +206,7 @@ function PlayerSide({
               </motion.div>
             )}
             <span className={`text-xs font-bold ${hasEvidence ? "text-success" : "text-text-muted"}`}>
-              {hasEvidence ? "Proof submitted" : "Waiting for proof"}
+              {proofRestricted ? "Private proof" : hasEvidence ? "Proof submitted" : ["settled", "cancelled", "disputed"].includes(challengeStatus) ? "No proof submitted" : "Waiting for proof"}
             </span>
           </div>
 
@@ -243,6 +247,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const credits = (session?.user as { credits?: number } | undefined)?.credits ?? 0;
 
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
+  const proofRestricted = challenge?.proofAccess === "players_only";
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -251,7 +256,9 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const [tier, setTier] = useState<1 | 2 | 3>(1);
   const [verdictRevealed, setVerdictRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const pollRef = useRef<(() => void) | null>(null);
+  const pollingChallengeRef = useRef<{ id: string; terminal: boolean } | null>(null);
 
   // Camera recording state
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -261,6 +268,12 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    const video = videoPreviewRef.current;
+    if (video && cameraStream) { video.srcObject = cameraStream; void video.play().catch(() => {}); }
+    return () => { if (video) video.srcObject = null; cameraStream?.getTracks().forEach(track => track.stop()); };
+  }, [cameraStream]);
 
   const showNote = (msg: string, type: "error" | "success" | "info" = "info") => {
     setNote(msg);
@@ -273,6 +286,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
     try {
       const { challenge: c } = await api.getChallenge(challengeId);
       setChallenge(c);
+      return c;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }
@@ -281,14 +295,26 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    if (!challenge || challenge.status === "settled") return;
-    const t = setInterval(() => void refresh(), 5000);
-    return () => clearInterval(t);
-  }, [challenge, refresh]);
+    if (proofRestricted || !challenge?.status || (isTerminalChallenge(challenge.status) && !(challenge.status === "settled" && challenge.reviewCase?.status === "processing"))) return;
+    return startVisiblePolling({ delays: 5000, task: async () => {
+      const current = await refresh();
+      return current?.proofAccess !== "players_only" && (!isTerminalChallenge(current?.status) || (current?.status === "settled" && current.reviewCase?.status === "processing"));
+    } });
+  }, [challenge?.status, challenge?.reviewCase?.status, proofRestricted, refresh]);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    pollingChallengeRef.current = { id: challengeId, terminal: false };
+    return () => { pollingChallengeRef.current = null; pollRef.current?.(); pollRef.current = null; };
+  }, [challengeId]);
+
+  useEffect(() => {
+    if (pollingChallengeRef.current) pollingChallengeRef.current.terminal = isTerminalChallenge(challenge?.status);
+    if (isTerminalChallenge(challenge?.status)) {
+      pollRef.current?.();
+      pollRef.current = null;
+      setBusy(false);
+    }
+  }, [challenge?.status]);
 
   // Reveal verdict with delay for drama
   useEffect(() => {
@@ -301,12 +327,39 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const creator = challenge?.participants.find((p) => p.role === "creator");
   const opponent = challenge?.participants.find((p) => p.role === "opponent");
   const myEvidence = challenge?.evidence.find((e) => e.userId === uid);
+  const requiredMedia = mediaProofKind(challenge?.evidenceType ?? "");
+  const isWrittenProof = ["text", "self_report"].includes(challenge?.evidenceType?.toLowerCase());
+  const acceptedPlayers = challenge?.participants.filter(p => p.status === "accepted" && (p.role === "creator" || p.role === "opponent")) ?? [];
+  const hasOpponent = acceptedPlayers.some(p => p.role === "creator") && acceptedPlayers.some(p => p.role === "opponent");
+  const bothHaveProofRows = hasOpponent && acceptedPlayers.every(p => challenge.evidence.some(e => e.userId === p.user.id));
+  const bothHaveValidProof = bothHaveProofRows && acceptedPlayers.every(p => {
+    const proof = challenge.evidence.find(e => e.userId === p.user.id);
+    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
+    return !!proof.description?.trim();
+  });
+  const deadlineMs = challenge?.deadline ? new Date(challenge.deadline).getTime() : NaN;
+  const deadlineExpired = Number.isFinite(deadlineMs) && now >= deadlineMs;
+  const readyForReview = !proofRestricted && hasOpponent && (bothHaveValidProof || deadlineExpired) && ["live", "judging"].includes(challenge?.status);
+  const reviewCost = challenge?.stake > 0 && bothHaveProofRows ? TIER_COST[tier] : 0;
+
+  useEffect(() => {
+    if (!Number.isFinite(deadlineMs) || isTerminalChallenge(challenge?.status)) return;
+    return startVisiblePolling({ immediate: true, delays: 1_000, task: async () => {
+      const current = Date.now();
+      if (current >= deadlineMs) setNow(current);
+      return current < deadlineMs;
+    } });
+  }, [deadlineMs, challenge?.status]);
   const isCreator = uid && challenge?.creatorId === uid;
-  const canCapture = challenge && ["open", "live"].includes(challenge.status) && !myEvidence && challenge.participants.some(p => p.user.id === uid);
+  const canCapture = challenge && ["live", "matched"].includes(challenge.status) && !myEvidence && !deadlineExpired
+    && challenge.participants.some(p => p.user.id === uid && p.status === "accepted" && ["creator", "opponent"].includes(p.role));
   const canJoin = challenge && challenge.status === "open" && uid && challenge.creatorId !== uid && !challenge.participants.some(p => p.user.id === uid);
 
   const uploadFile = async (file: File) => {
-    if (!challenge || !uid) return;
+    if (!challenge || !uid) return false;
+    const invalid = proofInputError(challenge.evidenceType, { fileType: file.type });
+    if (invalid) { showNote(invalid, "error"); return false; }
+    if (file.size > 80 * 1024 * 1024) { showNote("Proof files must be 80 MB or smaller. Trim the clip before uploading.", "error"); return false; }
     setBusy(true);
     setNote("");
     const hint = "Configure S3 or Vercel Blob, or paste a public https URL.";
@@ -348,8 +401,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
       showNote("Proof uploaded!", "success");
       await refresh();
       await updateSession?.();
+      return true;
     } catch (e) {
       showNote(e instanceof Error ? `${e.message} — ${hint}` : `Upload failed — ${hint}`, "error");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -357,13 +412,15 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const submitUrl = async () => {
     if (!challenge || !uid || !pasteUrl.trim()) return;
+    const invalid = proofInputError(challenge.evidenceType, { url: pasteUrl.trim() });
+    if (invalid) { showNote(invalid, "error"); return; }
     setBusy(true);
     setNote("");
     try {
       await api.submitEvidence(challenge.id, {
-        type: "video",
+        type: requiredMedia ?? "video",
         url: pasteUrl.trim(),
-        description: "Video URL (manual)",
+        description: `${requiredMedia ?? "Media"} proof link`,
       });
       setPasteUrl("");
       showNote("Proof submitted!", "success");
@@ -378,7 +435,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const runJudge = async () => {
     if (!challenge) return;
-    const cost = TIER_COST[tier];
+    const cost = reviewCost;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -401,8 +458,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   };
 
   const runJudgeAsync = async () => {
-    if (!challenge) return;
-    const cost = TIER_COST[tier];
+    if (!challenge || challenge.status !== "judging" || !bothHaveValidProof) return;
+    const cost = reviewCost;
     if (credits < cost) {
       showNote(`Need ${cost} credits for ${TIER_LABEL[tier]}. You have ${credits}.`, "error");
       return;
@@ -415,25 +472,27 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         providerId: prefs.providerId,
         ...(prefs.model ? { model: prefs.model } : {}),
       });
+      if (pollingChallengeRef.current?.id !== challenge.id || pollingChallengeRef.current.terminal) return;
       showNote("Familiar is reviewing proof... you can leave this page.", "info");
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
+      pollRef.current?.();
+      pollRef.current = startVisiblePolling({
+        delays: JUDGE_POLL_DELAYS,
+        timeoutMs: JUDGE_POLL_TIMEOUT_MS,
+        onTimeout: () => { setBusy(false); showNote("Familiar review is taking longer than expected — reload to check its status.", "error"); },
+        onError: () => showNote("Could not check Familiar review. Retrying when this page is visible.", "error"),
+        task: async (signal) => {
           const j = await api.getJudgeJob(res.jobId);
+          if (signal.aborted) return false;
+          if (document.visibilityState === "hidden") return;
           if (j.status === "completed" || j.status === "failed") {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
             setBusy(false);
             if (j.status === "failed") showNote(j.error || "Familiar review failed", "error");
             await refresh();
-            await updateSession?.();
+            if (pollingChallengeRef.current?.id === challenge.id) await updateSession?.();
+            return false;
           }
-        } catch {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          setBusy(false);
-        }
-      }, 2000);
+        },
+      });
     } catch (e) {
       showNote(e instanceof Error ? e.message : "Could not start Familiar review", "error");
       setBusy(false);
@@ -469,9 +528,6 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         audio: true,
       });
       setCameraStream(stream);
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
-      }
     } catch {
       setCameraError("Camera access helps verify proof. Please allow camera access to submit proof.");
     }
@@ -479,23 +535,23 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const startRecording = () => {
     if (!cameraStream) return;
-    chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm";
-    const recorder = new MediaRecorder(cameraStream, { mimeType });
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      setRecordedBlob(blob);
-      cameraStream.getTracks().forEach((t) => t.stop());
-      setCameraStream(null);
-    };
-    mediaRecorderRef.current = recorder;
-    recorder.start(1000);
-    setIsRecording(true);
+    try {
+      if (typeof MediaRecorder === "undefined") throw new Error("Recording is unavailable. Upload a video file instead.");
+      chunksRef.current = [];
+      const mimeType = recordingMimeType(type => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(cameraStream, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || chunksRef.current[0]?.type || "video/webm" });
+        setRecordedBlob(blob);
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setCameraStream(null);
+      };
+      recorder.onerror = () => { setCameraError("Recording failed. Try again or upload a video file."); setIsRecording(false); cameraStream.getTracks().forEach(track => track.stop()); setCameraStream(null); };
+      mediaRecorderRef.current = recorder;
+      recorder.start(1000);
+      setIsRecording(true);
+    } catch (caught) { setCameraError(caught instanceof Error ? caught.message : "Could not record video. Upload a video file instead."); }
   };
 
   const stopRecording = () => {
@@ -505,9 +561,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const submitRecordedVideo = async () => {
     if (!recordedBlob) return;
-    const file = new File([recordedBlob], `evidence-${Date.now()}.webm`, { type: "video/webm" });
-    setRecordedBlob(null);
-    await uploadFile(file);
+    const file = new File([recordedBlob], `evidence-${Date.now()}.${recordingExtension(recordedBlob.type)}`, { type: recordedBlob.type });
+    if (await uploadFile(file)) setRecordedBlob(null);
   };
 
   /* ── Auth guard ── */
@@ -523,7 +578,9 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             </svg>
           </div>
           <h2 className="text-xl font-black text-text-primary">Sign in to enter the arena</h2>
-          <p className="text-sm text-text-secondary">You need an account to view and join quests</p>
+          <p className="text-sm text-text-secondary" data-testid={proofRestricted ? "private-proof-access" : undefined}>
+            {proofRestricted ? "Proof and results are private. Sign in and accept this invitation to view them." : "You need an account to view and join quests"}
+          </p>
           <Link href="/" className="inline-block px-6 py-3 rounded-xl text-sm font-extrabold text-white"
                 style={{ background: "linear-gradient(135deg, #7c5cfc, #5b3fd9)", boxShadow: "0 4px 20px rgba(124,92,252,0.3)" }}>
             Go to Home
@@ -557,6 +614,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   const status = statusConfig(challenge.status);
   const verdictRow = challenge.judgments?.[0] ?? null;
+  const manualDecision = verdictRow?.method === "manual";
   const creatorEvidence = challenge.evidence.find(e => e.userId === creator?.user.id);
   const opponentEvidence = challenge.evidence.find(e => e.userId === opponent?.user.id);
 
@@ -656,6 +714,11 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
           </div>
         </motion.div>
 
+        {proofRestricted && (
+          <p role="status" data-testid="private-proof-access" className="text-sm text-center text-text-secondary">
+            Proof and results are private. {challenge.status === "open" ? "Sign in and accept this invitation to view them." : "Sign in with an accepted player account to view them."}
+          </p>
+        )}
         {/* ══ BATTLE ARENA — Split Screen ══ */}
         <div className="flex flex-col md:flex-row gap-4 md:gap-0 items-stretch">
           {/* Left: Creator */}
@@ -665,6 +728,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             isMe={creator?.user.id === uid}
             side="left"
             challengeStatus={challenge.status}
+            proofRestricted={proofRestricted}
           />
 
           {/* VS Divider */}
@@ -701,6 +765,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             isMe={opponent?.user.id === uid}
             side="right"
             challengeStatus={challenge.status}
+            proofRestricted={proofRestricted}
           />
         </div>
 
@@ -772,10 +837,16 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </div>
                   <div>
                     <p className="text-sm font-extrabold text-text-primary">Submit Your Proof</p>
-                    <p className="text-[10px] text-text-muted">Record live video or paste a public URL</p>
+                    <p className="text-[10px] text-text-muted">{isWrittenProof ? "Add your written proof in the quest room." : requiredMedia === "photo" ? "Upload a photo or paste a public photo URL." : "Record or upload a video, or paste a public video URL."}</p>
                   </div>
                 </div>
 
+                {isWrittenProof ? <Link href={`/challenge/${challenge.id}`} className="block rounded-xl p-4 text-sm font-bold text-accent">Submit written proof in quest room</Link> : <>
+                <label className="block rounded-xl p-3 text-sm font-bold text-text-primary">
+                  Upload {requiredMedia === "photo" ? "photo" : "video"} proof
+                  <input type="file" aria-label="Upload proof file" accept={requiredMedia === "photo" ? "image/*" : "video/*"} disabled={busy}
+                    onChange={event => { const input = event.currentTarget; const file = input.files?.[0]; if (file) void uploadFile(file).finally(() => { input.value = ""; }); }} />
+                </label>
                 {/* Camera permission error */}
                 {cameraError && (
                   <div className="px-4 py-3 rounded-xl"
@@ -785,7 +856,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 )}
 
                 {/* Camera Recording Section */}
-                <div className="space-y-3">
+                {requiredMedia !== "photo" && <div className="space-y-3">
                   {!cameraStream && !recordedBlob && (
                     <motion.button
                       onClick={() => void startCamera()}
@@ -862,7 +933,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 {/* URL paste fallback */}
                 <div className="flex flex-col gap-2 p-4 rounded-xl" style={{ background: "rgba(0,212,200,0.04)", border: "1px solid rgba(0,212,200,0.12)" }}>
@@ -891,6 +962,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     {busy ? "Uploading..." : "Submit URL"}
                   </motion.button>
                 </div>
+                </>}
               </div>
             </motion.div>
           )}
@@ -898,7 +970,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
         {/* ── AI Judge Section ── */}
         <AnimatePresence>
-          {challenge.status === "judging" && isCreator && challenge.judgments.length === 0 && (
+          {readyForReview && isCreator && challenge.judgments.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -925,7 +997,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </motion.div>
                   <div>
                     <h3 className="text-base font-black text-text-primary">Familiar Ready</h3>
-                    <p className="text-[10px] text-text-muted">All proof is in. Choose your Familiar tier and create the result.</p>
+                    <p className="text-[10px] text-text-muted">{deadlineExpired && !bothHaveValidProof ? "The proof window closed. Request the deadline-rule result." : "All proof is in. Choose your Familiar tier and create the result."}</p>
                   </div>
                 </div>
 
@@ -957,7 +1029,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                         </p>
                         <p className="text-[10px] text-text-muted mt-0.5">{TIER_DESC[t]}</p>
                         <p className="text-xs font-bold mt-1" style={{ color: tier === t ? "#f5a623" : "rgba(240,240,255,0.35)" }}>
-                          {TIER_COST[t]} credits
+                          {challenge.stake > 0 && bothHaveProofRows ? TIER_COST[t] : 0} credits
                         </p>
                       </div>
                     </motion.button>
@@ -977,9 +1049,9 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       boxShadow: "0 8px 32px rgba(245,166,35,0.2)",
                     }}
                   >
-                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${TIER_COST[tier]} cr)`}
+                    {busy ? "Familiar Reviewing..." : `Ask Familiar (${reviewCost} cr)`}
                   </motion.button>
-                  <motion.button
+                  {challenge.status === "judging" && bothHaveValidProof && <motion.button
                     type="button"
                     disabled={busy}
                     whileHover={{ scale: 1.01 }}
@@ -989,7 +1061,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                     style={{ background: "rgba(245,166,35,0.06)" }}
                   >
                     Background Familiar Review
-                  </motion.button>
+                  </motion.button>}
                 </div>
               </div>
             </motion.div>
@@ -997,7 +1069,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
         </AnimatePresence>
 
         {/* ── Non-creator waiting for judge ── */}
-        {challenge.status === "judging" && !isCreator && (
+        {readyForReview && !isCreator && (
           <motion.div
             className="rounded-2xl p-5 text-center"
             style={{ background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.15)" }}
@@ -1047,7 +1119,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                   </motion.div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">Familiar Result</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{manualDecision ? "Human review" : verdictRow.method === "rules" ? "Rule result" : "Familiar Result"}</p>
                   <h2 className="text-2xl font-black text-text-primary">
                     Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
                   </h2>
@@ -1057,10 +1129,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                 <div className="flex flex-wrap justify-center gap-2">
                   {verdictRow.aiModel && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-white/5 text-text-muted border border-border-subtle">
-                      Model: {verdictRow.aiModel}
+                      {manualDecision || verdictRow.method === "rules" ? "Decision" : "Model"}: {manualDecision ? "Human review" : verdictRow.aiModel}
                     </span>
                   )}
-                  {typeof verdictRow.confidence === "number" && (
+                  {!manualDecision && verdictRow.method !== "rules" && typeof verdictRow.confidence === "number" && (
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold"
                           style={{
                             background: verdictRow.confidence > 0.7 ? "rgba(0,232,122,0.1)" : "rgba(245,166,35,0.1)",
@@ -1074,7 +1146,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
                 {/* Reasoning with typewriter */}
                 <div className="rounded-xl p-5" style={{ background: "rgba(6,6,15,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">Familiar Reasoning</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-3">{manualDecision ? "Review explanation" : verdictRow.method === "rules" ? "Rule explanation" : "Familiar Reasoning"}</p>
                   <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
                     <TypewriterText text={verdictRow.reasoning ?? ""} speed={12} />
                   </p>

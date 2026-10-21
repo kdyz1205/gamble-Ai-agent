@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
+import { JUDGE_JOB_TIMEOUT_MS, reconcileJudgeJob, sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function GET(
   if (!user) return unauthorized();
 
   const { jobId } = await params;
-  const job = await prisma.judgeJob.findUnique({
+  let job = await prisma.judgeJob.findUnique({
     where: { id: jobId },
     include: {
       challenge: { select: { id: true, creatorId: true, title: true, status: true } },
@@ -34,6 +35,28 @@ export async function GET(
     !!participant;
   if (!allowed) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Only after authorization: finish a committed recommendation's job receipt.
+  if (job.status !== "completed" && await reconcileJudgeJob(job.id)) {
+    job = await prisma.judgeJob.findUniqueOrThrow({ where: { id: jobId },
+      include: { challenge: { select: { id: true, creatorId: true, title: true, status: true } } } });
+  }
+
+  // Recovery also runs when the owner polls. The daily maintenance cron alone
+  // cannot give a six-minute timeout to a crashed background invocation.
+  const timeoutAt = Date.now() - JUDGE_JOB_TIMEOUT_MS;
+  const stale = job.status === "pending"
+    ? job.createdAt.getTime() < timeoutAt
+    : job.status === "processing" && (job.startedAt ?? job.updatedAt).getTime() < timeoutAt;
+  if (stale) {
+    const recovered = await sweepStuckJudgeJobs(job.id);
+    if (recovered.swept > 0) {
+      job = await prisma.judgeJob.findUniqueOrThrow({
+        where: { id: jobId },
+        include: { challenge: { select: { id: true, creatorId: true, title: true, status: true } } },
+      });
+    }
   }
 
   let result: unknown = null;
