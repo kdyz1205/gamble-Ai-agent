@@ -72,7 +72,8 @@ test("player requests review and an independent reviewer refunds actual stakes o
     const requesting = creator.page.waitForResponse(r => new URL(r.url()).pathname === `/api/challenges/${id}/verdict-response` && r.request().method() === "POST");
     await controls.getByRole("button", { name: "Freeze settlement and open review", exact: true }).click();
     const requested = await requesting;
-    expect(requested.status(), await requested.text()).toBe(200);
+    expect(requested.status(), await requested.text()).toBe(202);
+    expect(await requested.json()).toMatchObject({ settled: false, status: "disputed", reviewCase: { status: "pending" } });
     await expect(controls.getByTestId("review-case-status")).toContainText("Review pending");
     expect((await balances()).map(row => row.credits)).toEqual([45, 45]);
     expect(await ledger()).toHaveLength(2);
