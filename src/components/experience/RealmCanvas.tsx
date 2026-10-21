@@ -18,6 +18,9 @@ export default function RealmCanvas({state="dormant",realm="move",className=""}:
     const canvas=canvasRef.current;
     if(!root||!canvas||!window.WebGL2RenderingContext)return;
     const reduce=window.matchMedia("(prefers-reduced-motion: reduce)");
+    // Reduced-motion users receive the equivalent static opal gate, with no GPU loop.
+    // State changes still update the accessible DOM and CSS treatment.
+    if(reduce.matches)return;
     let disposed=false;
     let initialized=false;
     let destroy:(()=>void)|undefined;
