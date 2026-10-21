@@ -20,7 +20,7 @@ async function check(name,fn){
   catch(error){report.tests.push({name,passed:false,error:error.message});console.log('FAIL',name,error.message);}
 }
 async function main(){
-  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader']});
+  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',args:['--disable-webgl']});
   try{
     for(const width of WIDTHS){
       const context=await browser.newContext({viewport:{width,height:width<=430?844:950},deviceScaleFactor:1,reducedMotion:'reduce'});
@@ -87,7 +87,7 @@ async function main(){
       await page.waitForTimeout(240);
       assert.equal(await gate.getAttribute('data-stage'),'listening');
       assert((await gate.getByRole('article').count())>0||await gate.getByTestId('live-quest-artifact').count()>0);
-      assert((await gate.getByRole('img',{name:/Pico/}).getAttribute('data-mood'))==='listening');
+      assert((await gate.locator('.sum-live-nexus__pico .sum-familiar').getAttribute('data-mood'))==='listening');
       await editor.fill('');
       await page.waitForTimeout(240);
       assert.equal(await gate.getAttribute('data-stage'),'dormant');
