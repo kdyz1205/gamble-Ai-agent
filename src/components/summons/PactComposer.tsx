@@ -8,6 +8,7 @@ import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import { questSeeds } from "@/components/universe/quest-seeds";
 import LiveQuestFormation from "@/components/summons/LiveQuestFormation";
+import type { PortalRealm } from "@/components/experience/RealmCanvas";
 import * as api from "@/lib/api-client";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
@@ -51,6 +52,7 @@ export default function PactComposer() {
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
   const [input, setInput] = useState("");
+  const [selectedRealm, setSelectedRealm] = useState<PortalRealm>("move");
   const [stake, setStake] = useState("50");
   const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
   const [proofWindow, setProofWindow] = useState<(typeof proofOptions)[number]>("24 hours");
@@ -68,10 +70,12 @@ export default function PactComposer() {
     // Allow only the curated seed identifiers; choosing one never submits a quest.
     const seedId = new URLSearchParams(window.location.search).get("seed");
     const seed = questSeeds.find((item) => item.id === seedId);
-    if (seed) setInput(seed.prompt);
+    if (seed) { setInput(seed.prompt); setSelectedRealm(seed.id); }
     const chooseExample = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail !== "string") return;
       setInput(event.detail);
+      const match = questSeeds.find((item) => item.prompt === event.detail);
+      if (match) setSelectedRealm(match.id);
       inputRef.current?.focus();
     };
     window.addEventListener("summoner:choose-example", chooseExample);
@@ -502,6 +506,8 @@ export default function PactComposer() {
           participants={resultParticipants}
           proof={resultProof}
           deadline={resultTiming}
+          realm={selectedRealm}
+          error={error}
         />
         <form
           onSubmit={(event) => { void handleSubmit(event); }}

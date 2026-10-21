@@ -5,10 +5,11 @@ import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
 import "./globals.css";
 import "./summoner-world.css";
 import "./sum-universe.css";
+import "./sum-award-v4.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
-  title: "SUM — A world of quests",
+  title: "SUM — Make Reality Summonable",
   description:
     "Summon quests, invite challengers, submit proof, and let AI familiars referee the result.",
   manifest: "/manifest.webmanifest",
@@ -30,7 +31,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#F4F8F6",
+  themeColor: "#F7FAF5",
   colorScheme: "light",
 };
 
@@ -63,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@300;400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;1,9..144,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
           rel="stylesheet"
         />
       </head>

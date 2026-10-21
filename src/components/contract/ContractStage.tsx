@@ -1,18 +1,45 @@
 import Link from "next/link";
-import { Arrow, FamiliarNote, PageIntro, QuestJourney, SummonSigil } from "@/components/universe/WorldUI";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import QuestArtifact from "@/components/experience/QuestArtifact";
+import {Arrow, PageIntro, QuestJourney, SummonSigil} from "@/components/universe/WorldUI";
 
 const terms = [
-  ["The shared goal", "First player to win three badminton rallies. Agree on court boundaries and service order before starting."],
-  ["The proof", "One continuous recording showing both players, the court, and the full attempt. Each Summoner may add their own evidence."],
-  ["The deadline", "For this example, proof is due within 24 hours after both players accept. A live quest shows its exact deadline before acceptance."],
-  ["When it is unclear", "Uncertain evidence stays open for review. A Familiar cannot change agreed terms or accept the pact on your behalf."],
+  ["What counts as a win", "First player to win three rallies, with the court and scoring agreed before play."],
+  ["What counts as proof", "One continuous recording showing both players and each rally."],
+  ["When it closes", "An agreed window for submitting evidence. The live Quest shows the exact deadline."],
+  ["When proof is unclear", "Uncertain moments are flagged for review, rather than silently guessed."],
 ];
-const principles = [["Two Summoners. One agreement.", "Both participants see the same objective and proof requirements."], ["Consent comes before commitment.", "Any internal credits and acceptance conditions appear in the actual quest."], ["Clarity is part of the adventure.", "Missing or disputed evidence is a reason to review, not to guess."]];
 
 export default function ContractStage() {
-  return <section className="sw-page" data-testid="contract-stage"><PageIntro number="02" location="THE PACT CLEARING" title="A shared quest." accent="A pact, made together." example>A quest becomes shared when both Summoners understand the terms. Review the goal, the proof, and the commitment before joining.</PageIntro><QuestJourney current={1} />
-    <div className="sw-pact-grid"><article className="sw-pact-card"><div className="sw-pact-card__top"><div><strong>SUMMONER PACT / EXAMPLE 001</strong><small>An illustrative agreement, not an invitation to accept.</small></div><SummonSigil /></div><div className="sw-pact-card__body"><h2>Three rallies.<br />One shared adventure.</h2><div className="sw-summoners"><div className="sw-summoner"><span className="sw-summoner__avatar">M</span><span><strong>Mira</strong><small>Quest creator · example</small></span></div><span className="sw-summoners__bond" aria-hidden="true"><SummonSigil /></span><div className="sw-summoner"><span><strong>Ren</strong><small>Invited friend · example</small></span><span className="sw-summoner__avatar">R</span></div></div><dl className="sw-pact-terms">{terms.map(([label,description],index) => <div key={label}><span>0{index+1}</span><dt>{label}</dt><dd>{description}</dd></div>)}</dl><div className="sw-pact-card__bottom"><Link className="sw-button" href="/summons">Summon your own pact <Arrow /></Link><p>No real quest is accepted or created on this example page.</p></div></div></article>
-      <aside className="sw-pact-aside"><FamiliarNote title="I can clarify the pact. Only you can accept it.">Your terms belong to you and your fellow Summoner. I help make them understandable.</FamiliarNote><section><h2>Same rules.<br />Room for both sides.</h2><ul className="sw-principles">{principles.map(([title,description]) => <li key={title}><span aria-hidden="true">✧</span><div><strong>{title}</strong><p>{description}</p></div></li>)}</ul></section><Link className="sw-text-link" href="/duel/demo">Next: the Proof Archive <Arrow /></Link></aside>
-    </div>
-  </section>;
+  return (
+    <section className="sw-page sum-v4-page sum-v4-chapter-pact" data-testid="contract-stage">
+      <PageIntro number="02" location="THE PACT CLEARING" title="Two people." accent="One shared truth." example>
+        The moment a Quest becomes shared should feel important. Nothing is accepted until both Summoners understand the same terms.
+      </PageIntro>
+      <QuestJourney current={1}/>
+      <div className="sum-v4-chapter">
+        <div className="sum-v4-chapter__artifact">
+          <QuestArtifact stage="pact" title="Three rallies. One shared adventure."
+            id="EXAMPLE-001" participants="Mira / Ren — illustrative players"
+            proof="Continuous match video" deadline="24 hours after acceptance" sample
+          >
+            <div className="sum-v4-pact-bond">
+              <span className="sum-v4-pact-bond__person"><b>M</b><span>Mira<small>Quest creator</small></span></span>
+              <span className="sum-v4-pact-bond__middle" aria-hidden="true"><SummonSigil/></span>
+              <span className="sum-v4-pact-bond__person"><b>R</b><span>Ren<small>Invited Summoner</small></span></span>
+            </div>
+          </QuestArtifact>
+        </div>
+        <aside className="sum-v4-chapter__guide">
+          <span className="sum-v4-chapter__counter">CHAPTER 02 / THE AGREEMENT</span>
+          <div className="sum-v4-chapter__pico"><PicoFamiliar mood="clarify"/><div><strong>Pico keeps the meaning clear.</strong><p>The decision to accept belongs to the people, not to the Familiar.</p></div></div>
+          <h2>A pact is more than a button.</h2>
+          <p>These conditions should be understandable before the real Quest begins.</p>
+          <ol className="sum-v4-conditions">{terms.map(([title,detail],index)=><li key={title}><span>0{index+1}</span><div><strong>{title}</strong><p>{detail}</p></div></li>)}</ol>
+          <Link className="sw-button sum-v4-chapter__cta" href="/summons">Create your own Quest <Arrow/></Link>
+          <small className="sum-v4-chapter__disclaimer">This walkthrough never accepts a real agreement.</small>
+        </aside>
+      </div>
+    </section>
+  );
 }
