@@ -29,7 +29,12 @@ const backdrop = `<svg width="2732" height="2732" viewBox="0 0 2732 2732" xmlns=
 async function main() {
   const icon = path.join(root, "public/icon-512.png");
   const logo = await sharp(icon).resize(990).png().toBuffer();
-  const image = await sharp(Buffer.from(backdrop)).composite([{ input: logo, left: 871, top: 690 }]).flatten({ background: "#fff8f2" }).png().toBuffer();
+  const image = await sharp(Buffer.from(backdrop))
+    .composite([{ input: logo, left: 871, top: 690 }])
+    .flatten({ background: "#fff8f2" })
+    .removeAlpha() // iOS launch assets must be opaque RGB, not transparent RGBA
+    .png()
+    .toBuffer();
   fs.mkdirSync(outputDir, { recursive: true });
   for (const name of ["splash-2732x2732.png","splash-2732x2732-1.png","splash-2732x2732-2.png"]) {
     const out = path.join(outputDir, name);
