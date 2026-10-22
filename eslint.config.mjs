@@ -41,6 +41,14 @@ const config = [
       ],
     },
   },
+  {
+    files: ["**/*.cjs"],
+    rules: {
+      // CommonJS build/QA scripts intentionally use require(); the TypeScript
+      // no-require-imports rule applies to TS/ESM sources, not .cjs modules.
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ];
 
 export default config;
