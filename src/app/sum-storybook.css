@@ -547,3 +547,178 @@ body.sum-storybook-body .sum-storybook-review article[data-testid=review-card] {
   .sum-kawaii-home .sw-realm__storybook { width: 100%; }
   .sum-kawaii-home .sum-award-hero { gap: 11px; }
 }
+
+
+/* 2026-10-22 PIXEL FIDELITY PASS: real rendered reference art, not CSS imitation.
+   Live HTML and quest buttons remain separate from the illustrations. */
+.sum-kawaii-home .sum-gate__scene {
+  height: 570px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: radial-gradient(ellipse at 49% 46%,#f9e8fa,transparent 68%);
+  isolation: isolate;
+}
+.sum-kawaii-home .sum-gate__premium-image {
+  position: absolute;
+  display: block;
+  z-index: 2;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: center 48%;
+  mask-image: radial-gradient(ellipse 82% 84% at 50% 47%, #000 62%, #000c 79%, transparent 100%);
+  filter: saturate(1.08) contrast(1.02) drop-shadow(0 22px 25px #9f82984d);
+  transition: filter .4s ease;
+}
+.sum-kawaii-home .sum-gate[data-realm="craft"] .sum-gate__premium-image {
+  filter: saturate(1.07) hue-rotate(-7deg) drop-shadow(0 22px 25px #ad8a9f44);
+}
+.sum-kawaii-home .sum-gate[data-realm="grow"] .sum-gate__premium-image {
+  filter: saturate(1.02) hue-rotate(7deg) drop-shadow(0 22px 25px #8eae9844);
+}
+.sum-kawaii-home .sum-storybook-portal-art,
+.sum-kawaii-home .sum-gate__character,
+.sum-kawaii-home .sum-gate__canvas,
+.sum-kawaii-home .sum-gate__halo {
+  display: none !important;
+}
+.sum-kawaii-home .sum-gate__bottom {
+  position: relative;
+  z-index: 8;
+  margin: -27px 15px 0;
+  border: 1px solid #e9d7e4;
+  background: rgba(255,253,250,.95);
+  box-shadow: 0 18px 35px #836f802b, inset 0 1px #fff;
+  backdrop-filter: blur(16px);
+}
+.sum-kawaii-home .sw-realm__storybook {
+  background: #f7edf2;
+  height: 244px;
+  border-radius: 26px 26px 30px 30px;
+  overflow: hidden;
+}
+.sum-kawaii-home .sw-realm__storybook .sum-storybook-realm-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform .55s cubic-bezier(.2,1,.25,1), filter .4s ease;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sum-kawaii-home .sw-realm:hover .sum-storybook-realm-img {
+    transform: scale(1.055);
+    filter: saturate(1.07);
+  }
+}
+.sum-kawaii-home .sum-kawaii-companion-landscape {
+  opacity: 1;
+  border-radius: inherit;
+  overflow: hidden;
+}
+.sum-kawaii-home .sum-storybook-companion-img {
+  object-fit: cover;
+  object-position: 46% 50%;
+  filter: saturate(1.08);
+}
+.sum-kawaii-home .sw-companion-section__visual > .sum-familiar,
+.sum-kawaii-home .sw-companion-orbit { display: none; }
+.sum-kawaii-home .sw-companion-section__visual { border: 1px solid #f3e2df; }
+.sum-kawaii-home .sum-award-endcap {
+  background:
+    linear-gradient(90deg,rgba(26,52,49,.85),rgba(31,55,51,.65) 36%,rgba(58,70,67,.15) 80%),
+    url("/storybook-premium/hero3.webp") center 52% / cover !important;
+  box-shadow: 0 19px 49px rgba(45,75,64,.17);
+  border-color: rgba(250,249,244,.3);
+}
+.sum-kawaii-home .sum-award-endcap :where(h2,p,.sw-eyebrow) {
+  color: #fff9f4 !important;
+  text-shadow: 0 2px 15px #26403877;
+}
+.sum-kawaii-home .sum-award-endcap .sw-button--light {
+  background: #fff9f5;
+  color: #30584d!important;
+  border-color: #fffaf4;
+}
+body.sum-storybook-body .sum-v4-familiar__display {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(130deg,#ebecfb,#fff7e9)!important;
+  border-color: #e9d7e2;
+}
+body.sum-storybook-body .sum-v4-familiar__display .sum-sanctuary-premium-image {
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(1.05);
+}
+body.sum-storybook-body .sum-v4-familiar__display::before,
+body.sum-storybook-body .sum-v4-familiar__display::after,
+body.sum-storybook-body .sum-v4-familiar__display .sum-v4-familiar__orbital,
+body.sum-storybook-body .sum-v4-familiar__display > .sum-familiar,
+body.sum-storybook-body .sum-v4-familiar__display > .sw-familiar-display__star { display: none; }
+body.sum-storybook-body .sum-v4-familiar__display .sw-familiar-display__base {
+  position: absolute;
+  z-index: 3;
+  bottom: 22px;
+  left: 17px;
+  right: 17px;
+  width: auto;
+  background: #fffaf5ed;
+  border: 1px solid #fff8f3;
+  backdrop-filter: blur(15px);
+}
+body.sum-storybook-body .sum-storybook-guest {
+  background:
+    linear-gradient(180deg,#fff9f5ad,#f6fbf4bc),
+    url("/storybook-premium/pico2.webp") 50% 29% / auto 66% no-repeat,
+    linear-gradient(140deg,#fff6f1,#f4effa 58%,#e8f7ed);
+}
+body.sum-storybook-body .sum-storybook-guest > .sum-guest-pico { opacity: 0; }
+body.sum-storybook-body .sw-app .sum-live-nexus__art {
+  background:
+    linear-gradient(180deg,transparent 60%,#f1f9f1bf),
+    url("/storybook-premium/hero2.webp") center 38% / cover;
+  border-radius: 21px;
+}
+body.sum-storybook-body .sw-app .sum-live-nexus__art .sum-realm-canvas,
+body.sum-storybook-body .sw-app .sum-live-nexus__art .sum-live-nexus__pico { opacity: 0!important; pointer-events:none!important; }
+body.sum-storybook-body .sw-app .sum-live-nexus__art::after {
+  content: "Pico is with you";
+  position: absolute;
+  z-index: 3;
+  left: 17px;
+  bottom: 16px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #fffdf8df;
+  border: 1px solid #ffffffb6;
+  font-size: 10px;
+  color: #577166;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+@media (max-width: 959px) {
+  .sum-kawaii-home .sum-gate__scene { height: min(500px, 69vw); }
+  .sum-kawaii-home .sum-gate__bottom { margin: -12px 8px 0; }
+}
+@media (max-width: 699px) {
+  .sum-kawaii-home .sum-gate__scene { height: 350px; border-radius: 30px; }
+  .sum-kawaii-home .sum-gate__premium-image {
+    mask-image: radial-gradient(ellipse 78% 85% at 50% 50%,#000 59%,#000c 77%,transparent 100%);
+    object-position: center 50%;
+  }
+  .sum-kawaii-home .sum-gate__bottom { margin: -8px 0 0; }
+  .sum-kawaii-home .sw-realm__storybook { height: 215px; }
+  .sum-kawaii-home .sum-award-endcap {
+    background:
+      linear-gradient(180deg,rgba(29,60,52,.82),rgba(38,72,62,.48) 67%,rgba(47,73,61,.4)),
+      url("/storybook-premium/hero3.webp") center / cover !important;
+  }
+  body.sum-storybook-body .sum-v4-familiar__display { min-height: 365px; }
+  body.sum-storybook-body .sum-storybook-guest { background-size: auto 54%,auto,auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sum-kawaii-home .sum-storybook-realm-img,
+  .sum-kawaii-home .sum-gate__premium-image { transition: none !important; }
+}

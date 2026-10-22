@@ -67,6 +67,10 @@ async function main() {
                 dockSelected: dock ? [...dock.querySelectorAll("a[aria-current=page]")].map(a => a.getAttribute("href")) : [],
                 title: document.title,
                 h1: header?.innerText,
+                premiumImages: [...document.querySelectorAll("img")]
+                  .filter(img => img.getAttribute("src")?.includes("storybook-premium"))
+                  .map(img => ({src:img.getAttribute("src"),loaded:img.complete && img.naturalWidth>0,width:img.naturalWidth,height:img.naturalHeight})),
+                premiumHeroVisible: Boolean(document.querySelector('[data-testid="sum-premium-hero-art"]')?.getBoundingClientRect().width),
               };
             });
             assert(data.overflow <= 1, "horizontal overflow " + data.overflow + "px");
@@ -74,6 +78,13 @@ async function main() {
             assert.equal(data.dockVisible, width < 960, "responsive app dock visibility");
             assert.equal(data.dockLabels.length, 5, "app nav needs five destinations");
             assert(errors.length === 0, "uncaught JavaScript errors: " + errors.join("; "));
+            if (route === "/enter" || route === "/rituals") {
+              const required = route === "/enter" ? 5 : 1;
+              await page.locator('img[src*="storybook-premium"]').first().waitFor({ state:"visible",timeout:12000 });
+              await page.waitForFunction(required => [...document.querySelectorAll('img[src*="storybook-premium"]')].filter(img => img.complete && img.naturalWidth > 0).length >= required, required, {timeout:15000});
+              const afterImages = await page.locator('img[src*="storybook-premium"]').evaluateAll(els => els.map(img => ({loaded:img.complete && img.naturalWidth>0, src:img.getAttribute("src")})));
+              assert(afterImages.filter(img=>img.loaded).length >= required, "Actual reference pixel artwork must load, not the SVG fallback");
+            }
             if (["/enter", "/summons", "/me", "/rituals"].includes(route)) {
               assert(data.h1?.length, "expected visible semantic page heading");
             }

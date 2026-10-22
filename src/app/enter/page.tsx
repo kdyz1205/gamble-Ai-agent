@@ -1,10 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import SceneTopBar from "@/components/scene/SceneTopBar";
 import SummoningPortal from "@/components/universe/SummoningPortal";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import { Arrow, Eyebrow, QuestJourney, SummonSigil, WorldFooter, WorldGlyph } from "@/components/universe/WorldUI";
 import { questSeeds } from "@/components/universe/quest-seeds";
-import { StorybookRealmArt } from "@/components/universe/StorybookWorldArt";
+
 
 export default function EnterPage() {
   return (
@@ -49,7 +50,7 @@ export default function EnterPage() {
             {questSeeds.map((quest,index) => (
               <Link className={"sw-realm sw-realm--"+quest.id} href={"/summons?seed="+quest.id} key={quest.id}>
                 <div className="sw-realm__header"><span className="sw-small-label">0{index+1} / {quest.realm}</span><WorldGlyph kind={quest.kind}/></div>
-                <div className="sw-realm__storybook" aria-hidden="true"><StorybookRealmArt realm={quest.id}/><span className="sum-realm__spark"><WorldGlyph kind={quest.kind}/></span></div>
+                <div className="sw-realm__storybook" aria-hidden="true"><Image src={quest.id === "move" ? "/storybook-premium/realm1.webp" : quest.id === "craft" ? "/storybook-premium/realm2.webp" : "/storybook-premium/realm3.webp"} width={620} height={400} className="sum-storybook-realm-img" alt="" sizes="(max-width:699px) 100vw, (max-width:959px) 50vw, 33vw"/><span className="sum-realm__spark"><WorldGlyph kind={quest.kind}/></span></div>
                 <h3>{quest.name}</h3><p>{quest.hint}</p>
                 <span className="sw-realm__action">Enter this realm <Arrow/></span>
               </Link>
@@ -60,7 +61,7 @@ export default function EnterPage() {
         <section className="sw-companion-section sw-container sum-award-familiar" aria-labelledby="companion-title">
           <div className="sw-companion-section__visual">
             <div className="sw-companion-orbit" aria-hidden="true"/>
-            <div className="sum-kawaii-companion-landscape" aria-hidden="true"><StorybookRealmArt realm="grow"/></div>
+            <div className="sum-kawaii-companion-landscape" aria-hidden="true"><Image src="/storybook-premium/pico3.webp" alt="" fill sizes="(max-width:699px) 100vw, 44vw" className="sum-storybook-companion-img"/></div>
             <PicoFamiliar className="sw-companion-section__pico" mood="listening"/>
             <span className="sw-companion-section__tag"><span>FAMILIAR / 001</span><b>PICO</b><small>A little clarity, by your side.</small></span>
           </div>
