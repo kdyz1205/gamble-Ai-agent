@@ -6,12 +6,12 @@ import * as api from "@/lib/api-client";
 import type { ReviewQueueItem } from "@/lib/api-client";
 
 const COLORS = {
-  navy: "#1E293B",
-  muted: "#64748B",
-  border: "#E2E8F0",
-  peach: "#FED7AA",
-  peachText: "#7C2D12",
-  mint: "#A7F3D0",
+  navy: "#2b493e",
+  muted: "#637a70",
+  border: "#dce7e0",
+  peach: "#e3f2de",
+  peachText: "#315e52",
+  mint: "#c6ead0",
   mintText: "#065F46",
   rose: "#FECACA",
   roseText: "#991B1B",
@@ -63,14 +63,14 @@ export default function ReviewQueuePage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-8" style={{ background: "#FFF7ED" }}>
+    <main className="sum-storybook-review min-h-screen px-4 py-8" style={{ background: "#FFF7ED" }}>
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-widest" style={{ color: COLORS.peachText }}>Reviewer portal</p>
             <h1 className="mt-1 text-2xl font-extrabold" style={{ color: COLORS.navy }}>Proof review queue</h1>
           </div>
-          <Link href="/" className="rounded-full bg-white px-4 py-2 text-xs font-bold" style={{ color: COLORS.navy, border: `1px solid ${COLORS.border}` }}>
+          <Link href="/markets" className="rounded-full bg-white px-4 py-2 text-xs font-bold" style={{ color: COLORS.navy, border: `1px solid ${COLORS.border}` }}>
             Back to quests
           </Link>
         </header>

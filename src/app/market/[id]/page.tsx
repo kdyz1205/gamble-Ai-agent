@@ -10,18 +10,18 @@ import type { ChallengeData } from "@/lib/api-client";
 import VerdictReviewControls from "@/components/VerdictReviewControls";
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
-const NAVY = "#1E293B";
-const NAVY_DIM = "#64748B";
-const NAVY_FAINT = "#E2E8F0";
-const PEACH = "#FED7AA";
-const PEACH_DARK = "#FDBA74";
-const PEACH_TEXT = "#7C2D12";
-const ORANGE_GLOW = "rgba(251,146,60,0.39)";
-const MINT = "#A7F3D0";
+const NAVY = "#2b493e";
+const NAVY_DIM = "#637a70";
+const NAVY_FAINT = "#dce7e0";
+const PEACH = "#e3f2de";
+const PEACH_DARK = "#43806a";
+const PEACH_TEXT = "#315e52";
+const ORANGE_GLOW = "rgba(85,140,105,0.18)";
+const MINT = "#c6ead0";
 const MINT_TEXT = "#065F46";
-const LAVENDER = "#E9D5FF";
+const LAVENDER = "#ebdef8";
 const LAVENDER_TEXT = "#6B21A8";
-const CREAM = "#FFEDD5";
+const CREAM = "#fff1eb";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
@@ -122,7 +122,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           quest id: {id}
         </p>
         <div className="flex items-center gap-2 mt-2">
-          <Link href="/"
+          <Link href="/summons"
             className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
             style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
             Summon a new quest ✨

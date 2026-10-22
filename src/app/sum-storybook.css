@@ -1,0 +1,549 @@
+/* SUM Storybook / same character, color and interaction system on web + iOS */
+:root {
+  --sum-sky: #fff8f2;
+  --sum-sky-soft: #fff8f2;
+  --sum-cloud: #fffcf8;
+  --sum-paper: #fffdfa;
+  --sum-peach: #f6c6c9;
+  --sum-mint: #b8e7c6;
+  --sum-grass: #b8e7c6;
+  --sum-ink: #273c38;
+  --sum-muted: #5b7174;
+  --sum-border: rgba(110, 132, 111, .2);
+  --sum-card: rgba(255, 254, 252, .96);
+  --storybook-forest: #315e52;
+  --storybook-ink: #273c38;
+  --storybook-blush: #fad5de;
+  --storybook-shadow: 0 23px 60px rgba(111, 103, 131, .12), 0 2px 9px rgba(99, 129, 114, .05);
+}
+body.sum-storybook-body {
+  background:
+    radial-gradient(ellipse 900px 630px at 83% 0%, rgba(227, 208, 250, .30), transparent 76%),
+    radial-gradient(ellipse 700px 520px at 8% 15%, rgba(250, 227, 210, .32), transparent 73%),
+    linear-gradient(180deg, #fffaf7 0%, #f8fbf6 55%, #fff9f5 100%);
+  color: var(--storybook-ink);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  min-width: 0;
+}
+body.sum-storybook-body :where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 3px solid #526fbc;
+  outline-offset: 3px;
+}
+body.sum-storybook-body :where(button, a) { -webkit-tap-highlight-color: transparent; }
+body.sum-storybook-body :where(.lp-glass, .sum-world-panel, .sum-quest-card) {
+  border: 1px solid rgba(152, 182, 159, .45);
+  background: rgba(255, 254, 250, .94);
+  border-radius: 28px;
+  box-shadow: var(--storybook-shadow);
+}
+body.sum-storybook-body :where(.sum-map-world, .sum-world-shell, .quest-room-world) {
+  background:
+    radial-gradient(ellipse at 93% 8%, rgba(226, 215, 249, .65), transparent 34%),
+    radial-gradient(ellipse at 10% 30%, rgba(250, 225, 218, .60), transparent 42%),
+    linear-gradient(180deg, #fffaf6, #f2faf5 57%, #fff7f3);
+}
+body.sum-storybook-body :where(.sw-app) {
+  --sw-paper: #fffaf6;
+  --sw-ink: #273c38;
+  --sw-deep: #234a40;
+  --sw-muted: #637777;
+  --sw-teal: #406c5a;
+  --sw-line: #d9e7dc;
+  --sum-v4-forest: #315e52;
+  --sum-v4-ink: #273c38;
+  color: #273c38;
+  background: radial-gradient(ellipse at 70% 0, #f0e7fb85, transparent 38%), linear-gradient(#fffaf6, #f4faf7 70%, #fff9f5);
+}
+body.sum-storybook-body :where(.sw-app) .sw-header {
+  border-color: #d8e5de;
+  background: rgba(255, 251, 248, .92);
+  box-shadow: 0 8px 30px rgba(90, 91, 110, .05);
+}
+body.sum-storybook-body :where(.sw-app) .sw-brand > svg { color: #437a68; }
+body.sum-storybook-body :where(.sw-app) .sw-button:not(.sw-button--light) {
+  background: linear-gradient(120deg, #315e52, #467b65);
+  border-color: #406b58;
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(49, 94, 82, .17);
+}
+body.sum-storybook-body :where(.sw-app) .sw-page-intro h1 > span,
+body.sum-storybook-body :where(.sw-app) .sw-chronicle-copy h1 > span,
+body.sum-storybook-body :where(.sw-app) .sw-sanctuary-copy h1 > span {
+  color: #9779b6;
+}
+body.sum-storybook-body :where(.sw-app) .sum-v4-nexus,
+body.sum-storybook-body :where(.sw-app) .sum-artifact,
+body.sum-storybook-body :where(.sw-app) .sw-proof-viewer,
+body.sum-storybook-body :where(.sw-app) .sw-pact-card,
+body.sum-storybook-body :where(.sw-app) .sw-chronicle-display {
+  border-color: #d9e3da;
+  box-shadow: var(--storybook-shadow);
+  border-radius: 28px;
+}
+body.sum-storybook-body .sw-app .sum-live-nexus {
+  border-radius: 24px;
+  background: linear-gradient(155deg, #f1eefa, #eef9ed);
+}
+body.sum-storybook-body .sw-app .sum-v4-nexus__header {
+  background: linear-gradient(110deg, #fff2eb, #eff7f1 70%, #f1ebfa);
+}
+body.sum-storybook-body .sw-app .sum-v4-nexus__below {
+  background: linear-gradient(125deg, #eff8f1, #f8f0f7);
+}
+body.sum-storybook-body .sw-app .sw-familiar-display {
+  background: radial-gradient(ellipse at 50% 30%, #fffdfb, #f9eafa 58%, #d7eee5) !important;
+  border-color: #e2d4e6;
+}
+body.sum-storybook-body .sw-app .sw-familiar-display > .sum-familiar {
+  filter: drop-shadow(0 24px 24px rgba(122, 87, 118, .16));
+}
+
+/* New illustrated, accessible homepage. The interactive quest components remain genuine. */
+.sum-kawaii-home {
+  overflow: clip;
+  background:
+    radial-gradient(ellipse 720px 540px at 85% 7%, rgba(227, 216, 251, .56), transparent 78%),
+    radial-gradient(ellipse 570px 650px at 0 16%, rgba(255, 227, 213, .48), transparent 78%),
+    linear-gradient(180deg, #fffaf7, #fafdf8 57%, #fff8f5) !important;
+}
+.sum-kawaii-home .sw-header__inner { max-width: 1440px; }
+.sum-kawaii-home .sw-brand b { font-family: "Fraunces", Georgia, serif; font-size: 32px; letter-spacing: -.085em; }
+.sum-kawaii-home .sw-brand small { letter-spacing: .13em; }
+.sum-kawaii-home .sw-desktop-nav a { color: #536b64; }
+.sum-kawaii-home .sw-desktop-nav a:hover { color: #293e36; }
+.sum-kawaii-home .sum-award-hero {
+  position: relative;
+  min-height: 785px;
+  padding-top: 34px;
+  padding-bottom: 58px;
+  grid-template-columns: minmax(0, .90fr) minmax(0, 1.1fr);
+  gap: 22px;
+}
+.sum-kawaii-home .sum-award-hero::before { display: none; }
+.sum-kawaii-home .sum-award-hero__copy { padding-left: 15px; }
+.sum-kawaii-home .sw-eyebrow { color: #637e6e; }
+.sum-kawaii-home .sum-award-hero h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 480;
+  line-height: 1.035;
+  font-size: clamp(64px, 6.25vw, 104px);
+  letter-spacing: -.068em;
+  margin: 22px 0 26px;
+  color: #233d34;
+}
+.sum-kawaii-home .sum-award-hero h1 em {
+  font-size: .96em;
+  font-style: italic;
+  font-weight: 420;
+  color: #7e9c80;
+  letter-spacing: -.052em;
+}
+.sum-kawaii-home .sum-award-hero .sw-hero__lead {
+  max-width: 430px;
+  color: #5c7169;
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.9;
+}
+.sum-kawaii-home .sum-award-cta { min-height: 59px; font-size: 13px; }
+.sum-kawaii-home .sum-kawaii-hero__whisper {
+  color: #a07e9d;
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 17px;
+  margin: 20px 0 -26px;
+  transform: rotate(-3deg);
+}
+.sum-kawaii-hero__whisper span { color: #efb9a8; margin-right: 6px; }
+.sum-kawaii-home .sum-award-hero__meta { margin-top: 52px; }
+.sum-kawaii-home .sum-award-hero__meaning > .sum-familiar { width: 60px; height: 60px; }
+.sum-kawaii-home .sum-award-hero__meaning strong { font-size: 13px; }
+.sum-kawaii-home .sum-award-hero__meaning span { font-size: 11px; }
+.sum-kawaii-home .sum-gate { max-width: 760px; }
+.sum-kawaii-home .sum-gate__meta { color: #7c8c7e; }
+.sum-kawaii-home .sum-gate__scene {
+  height: 565px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 51% 58%, #f5e6f3, #e9f7f1a0 57%, transparent 78%);
+  border-radius: 50% 50% 26% 26%;
+}
+.sum-kawaii-home .sum-storybook-portal-art {
+  position: absolute;
+  inset: -6px 0 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(0 23px 30px rgba(154, 128, 162, .19));
+}
+.sum-kawaii-home .sum-realm-canvas {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.sum-kawaii-home .sum-gate__halo { display: none; }
+.sum-kawaii-home .sum-gate__character {
+  z-index: 5;
+  top: 51%;
+  left: 52%;
+  width: 240px;
+  filter: drop-shadow(0 15px 20px #9a799d45);
+}
+.sum-kawaii-home .sum-gate__character > .sum-familiar {
+  width: 228px;
+  height: 228px;
+  opacity: 1 !important;
+}
+.sum-kawaii-home .sum-gate__character > span:not(.sum-familiar) {
+  background: rgba(255, 253, 248, .91);
+  border: 1px solid #f5e5e2;
+  padding: 7px 15px;
+  border-radius: 20px;
+  margin-top: -2px !important;
+  font-size: 11px;
+  letter-spacing: .17em;
+  box-shadow: 0 8px 17px #846a8c15;
+}
+.sum-kawaii-home .sum-gate__character small { font-size: 7px; }
+.sum-kawaii-home .sum-gate__relic,
+.sum-kawaii-home .sum-gate__coordinate { display: none; }
+.sum-kawaii-home .sum-gate__bottom {
+  background: rgba(255, 252, 250, .92);
+  border: 1px solid #ebdae4;
+  border-radius: 26px;
+  padding: 19px;
+  box-shadow: 0 20px 47px rgba(123, 101, 133, .17);
+  margin: -26px 24px 0;
+}
+.sum-kawaii-home .sum-gate__intro h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  font-weight: 480;
+  letter-spacing: -.03em;
+}
+.sum-kawaii-home .sum-gate__intro h2 em { color: #997eb6; }
+.sum-kawaii-home .sum-gate__tabs button[aria-pressed=true] { background: #e3f5e8; }
+.sum-kawaii-home .sum-gate__choice { background: #f2f6ee; border-radius: 15px; }
+.sum-kawaii-home .sum-gate__choice:hover { background: #e9f4e8; }
+.sum-kawaii-home .sum-gate__foot { color: #748479; font-size: 10px; }
+.sum-kawaii-home .sum-award-path { padding-top: 54px; border-color: #e8e0de; }
+.sum-kawaii-home .sum-award-path h2,
+.sum-kawaii-home .sum-award-realms h2,
+.sum-kawaii-home .sum-award-familiar h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 470;
+  color: #2d4239;
+}
+.sum-kawaii-home .sum-award-path h2 em { color: #a28ab2; }
+.sum-kawaii-home .sw-journey>a {
+  border-top: 1px solid #dfd4df;
+  border-radius: 13px;
+}
+.sum-kawaii-home .sw-journey__number {
+  background: #fdf6f2;
+  border-color: #e6d7d5;
+  border-radius: 50%;
+}
+.sum-kawaii-home .sum-award-realms { padding-top: 54px; }
+.sum-kawaii-home .sw-realms { gap: 23px; }
+.sum-kawaii-home .sw-realm {
+  padding: 0 0 22px;
+  border-radius: 27px;
+  background: #fffdf9;
+  border: 1px solid #eadfdf;
+  box-shadow: var(--storybook-shadow);
+  transform: none;
+}
+.sum-kawaii-home .sw-realm--craft { background: #fffbfe; border-color: #e8d9ed; }
+.sum-kawaii-home .sw-realm--grow { background: #fffdf3; border-color: #e7e5cb; }
+.sum-kawaii-home .sw-realm__header { order: 1; padding: 15px 21px 2px; }
+.sum-kawaii-home .sw-realm__header>.sw-small-label { font-size: 10px; color: #67816e; }
+.sum-kawaii-home .sw-realm__storybook {
+  position: relative;
+  height: 200px;
+  width: 100%;
+  overflow: hidden;
+  order: 0;
+  border-radius: 27px 27px 36% 36% / 27px 27px 14% 14%;
+}
+.sum-kawaii-home .sw-realm__storybook > svg {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+.sum-kawaii-home .sum-realm__spark {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fffdf8e8;
+  border: 1px solid #fff;
+  color: #527f68;
+  box-shadow: 0 5px 15px #856e7f20;
+}
+.sum-kawaii-home .sum-realm__spark svg { width: 21px; height: 21px; }
+.sum-kawaii-home .sw-realm h3 {
+  order: 2; padding: 4px 21px 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 520; font-size: 26px; color: #32453d;
+}
+.sum-kawaii-home .sw-realm > p {
+  order: 3; padding: 0 21px; margin: 10px 0 22px;
+  font-size: 12px; color: #62736a;
+}
+.sum-kawaii-home .sw-realm__action {
+  order: 4; margin: auto 21px 0; padding-top: 14px;
+  border-color: #e5dcdb; min-height: 44px;
+}
+.sum-kawaii-home .sw-companion-section__visual {
+  position: relative;
+  min-height: 445px;
+  border: 1px solid #e7d6e9;
+  border-radius: 42% 42% 35px 35px;
+  overflow: hidden;
+  background: radial-gradient(circle at 44% 28%, #fff9ef 0, #f0e6fa 56%, #d3ede0);
+}
+.sum-kawaii-home .sum-kawaii-companion-landscape {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: .7;
+}
+.sum-kawaii-home .sum-kawaii-companion-landscape svg { width: 100%; height: 100%; }
+.sum-kawaii-home .sw-companion-section__visual>.sum-familiar {
+  width: 295px !important;
+  height: 295px !important;
+  z-index: 3;
+  margin-top: -20px;
+  filter: drop-shadow(0 24px 22px #af8c9b55);
+}
+.sum-kawaii-home .sw-companion-section__tag { z-index: 4; background: #fffaf8ec; border-color: #e9dbe3; }
+.sum-kawaii-home .sw-companion-section__tag b { color: #466e5d; }
+.sum-kawaii-home .sum-award-endcap {
+  border: 1px solid #e4d4dd;
+  border-radius: 33px;
+  background: radial-gradient(ellipse at 78% 34%, #e7d3fb, transparent 55%),
+              linear-gradient(120deg, #487769, #345e54) !important;
+  box-shadow: var(--storybook-shadow);
+}
+.sum-kawaii-home .sum-award-endcap h2 { font-family: "Fraunces",Georgia,serif; font-weight: 470; }
+.sum-kawaii-home .sw-footer { background: transparent; }
+
+/* Every iOS route gets the same appropriately sized bottom navigation. */
+.sum-app-dock, .sw-app .sum-app-dock, .sw-app .quest-mobile-dock {
+  position: fixed;
+  z-index: 190;
+  inset: auto 10px calc(9px + env(safe-area-inset-bottom)) 10px;
+  display: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 253, 249, .96);
+  border: 1px solid rgba(202, 210, 197, .92);
+  border-radius: 26px;
+  padding: 7px 8px;
+  box-shadow: 0 12px 36px rgba(90, 85, 101, .19), inset 0 1px #fff;
+  backdrop-filter: blur(24px) saturate(120%);
+}
+.sum-app-dock__item, .sw-app .sum-app-dock__item {
+  position: relative;
+  border-radius: 19px;
+  min-height: 57px;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #78857e;
+  text-decoration: none;
+  transition: background .2s ease, transform .2s ease, color .2s ease;
+}
+.sum-app-dock__item.is-selected, .sw-app .sum-app-dock__item.is-selected {
+  color: #2b6450;
+  background: linear-gradient(150deg, #e6f5df, #f5f5e8);
+}
+.sum-app-dock__item:active { transform: scale(.96); }
+.sum-app-dock__icon { width: 26px; height: 26px; display: grid; place-items: center; }
+.sum-app-dock__icon svg { display: block; width: 26px; height: 26px; }
+.sum-app-dock__label { font-weight: 800; font-size: 10px; letter-spacing: -.015em; }
+.sum-app-dock__item[aria-label=Create] .sum-app-dock__icon {
+  border-radius: 50%;
+  background: #e9d8f5;
+  color: #795c97;
+  width: 34px;
+  height: 34px;
+  margin-top: -8px;
+  box-shadow: 0 5px 11px rgba(117, 91, 159, .14);
+}
+.sum-app-dock__item[aria-label=Create] .sum-app-dock__icon svg { width: 25px; height: 25px; }
+@media (max-width: 959px) {
+  body.sum-storybook-body { padding-bottom: calc(95px + env(safe-area-inset-bottom)); }
+  .sum-app-dock, .sw-app .sum-app-dock, .sw-app .quest-mobile-dock { display: grid; }
+  .sw-app:not(.sw-home) > .sw-footer { padding-bottom: 46px; }
+  body.sum-storybook-body :where(input, select, textarea) { font-size: max(16px, 1em); }
+}
+@media (min-width: 960px) {
+  .sum-app-dock, .sw-app .sum-app-dock, .sw-app .quest-mobile-dock { display: none !important; }
+}
+@media (max-width: 959px) {
+  .sum-kawaii-home .sum-award-hero {
+    grid-template-columns: 1fr;
+    gap: 21px;
+    width: min(700px, calc(100% - 36px));
+    min-height: 0;
+    padding-top: 36px;
+  }
+  .sum-kawaii-home .sum-award-hero__copy { padding: 0; }
+  .sum-kawaii-home .sum-award-hero h1 { font-size: clamp(49px, 10vw, 78px); }
+  .sum-kawaii-home .sum-gate__bottom { margin: -26px 10px 0; }
+  .sum-kawaii-home .sum-gate__scene { height: 480px; }
+  .sum-kawaii-home .sum-gate__character { top: 51%; }
+}
+@media (max-width: 699px) {
+  .sum-kawaii-home .sum-award-hero { width: calc(100% - 36px); padding: 29px 0 42px; }
+  .sum-kawaii-home .sum-award-hero h1 {
+    font-size: clamp(43px, 11.4vw, 62px);
+    line-height: 1.08;
+    letter-spacing: -.045em;
+    margin: 14px 0 18px;
+  }
+  .sum-kawaii-home .sum-award-hero h1 em { white-space: normal; }
+  .sum-kawaii-home .sum-award-hero .sw-hero__lead { font-size: 13px; line-height: 1.83; }
+  .sum-kawaii-home .sum-award-hero__meta { margin-top: 34px; }
+  .sum-kawaii-home .sum-kawaii-hero__whisper { font-size: 14px; margin: 12px 0 -20px; }
+  .sum-kawaii-home .sum-gate__scene { height: 370px; border-radius: 40% 40% 22% 22%; }
+  .sum-kawaii-home .sum-gate__character {
+    top: 49%; left: 52%; width: 145px;
+  }
+  .sum-kawaii-home .sum-gate__character>.sum-familiar { width: 144px; height: 144px; }
+  .sum-kawaii-home .sum-gate__character>span:not(.sum-familiar) { padding: 5px 7px; font-size: 9px; }
+  .sum-kawaii-home .sum-gate__character small { font-size: 6px; }
+  .sum-kawaii-home .sum-gate__bottom { margin: -9px 0 0; padding: 16px; }
+  .sum-kawaii-home .sum-gate__intro h2 { font-size: 20px; }
+  .sum-kawaii-home .sum-gate__meta { font-size: 9px; }
+  .sum-kawaii-home .sw-realms { grid-template-columns: 1fr; }
+  .sum-kawaii-home .sw-realm__storybook { height: 195px; }
+  .sum-kawaii-home .sum-award-familiar { padding-bottom: 50px; }
+  .sum-kawaii-home .sw-companion-section__visual { min-height: 355px; }
+  .sum-kawaii-home .sw-companion-section__visual>.sum-familiar { width: 226px !important; height: 226px !important; }
+  .sum-kawaii-home .sum-award-path { padding-top: 22px; }
+  .sum-kawaii-home .sum-award-endcap { border-radius: 24px; }
+}
+@media (max-width: 359px) {
+  .sum-kawaii-home .sum-award-hero { width: calc(100% - 28px); }
+  .sum-kawaii-home .sum-award-hero h1 { font-size: 39px; }
+  .sum-kawaii-home .sum-gate__scene { height: 315px; }
+  .sum-kawaii-home .sum-gate__character>.sum-familiar { width: 125px; height: 125px; }
+  .sum-app-dock__label { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sum-app-dock *, .sum-kawaii-home .sw-realm *,
+  .sum-kawaii-home .sum-gate * { animation: none !important; transition: none !important; }
+}
+
+/* Auth, discovery, personal quest and reviewer screens share the Pico universe. */
+body.sum-storybook-body .sum-storybook-guest {
+  padding: 45px 28px calc(115px + env(safe-area-inset-bottom));
+  background: radial-gradient(ellipse 85% 32% at 51% 34%, #f4e5f5 0, transparent 85%),
+              linear-gradient(140deg, #fff8f4, #f1faf0);
+}
+body.sum-storybook-body .sum-storybook-guest .sum-guest-pico,
+body.sum-storybook-body .sum-guest-pico {
+  display: grid;
+  place-items: center;
+  width: 154px;
+  height: 154px;
+  filter: drop-shadow(0 16px 16px rgba(112, 93, 126, .19));
+}
+body.sum-storybook-body .sum-storybook-guest h1 {
+  font-family: "Fraunces", Georgia, serif;
+  letter-spacing: -.035em;
+  font-size: 32px;
+  max-width: 12ch;
+  line-height: 1.18;
+}
+body.sum-storybook-body .sum-storybook-guest p { max-width: 280px; line-height: 1.65; }
+body.sum-storybook-body .sum-guest-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 49px;
+  padding: 10px 25px;
+  border-radius: 999px;
+  background: linear-gradient(135deg,#315e52,#4c8869);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 780;
+  font-size: 13px;
+  box-shadow: 0 13px 24px #315e5233;
+}
+body.sum-storybook-body .sum-empty-pico {
+  display: block;
+  width: 118px;
+  height: 118px;
+  margin: 0 auto 8px;
+}
+body.sum-storybook-body .quest-market-world > header,
+body.sum-storybook-body .quest-room-world > header,
+body.sum-storybook-body .sum-storybook-account > header,
+body.sum-storybook-body .sum-storybook-discover > header {
+  background: rgba(255, 251, 247, .92);
+  border-bottom: 1px solid #e5e8df;
+  backdrop-filter: blur(14px);
+}
+body.sum-storybook-body .sum-storybook-account h1,
+body.sum-storybook-body .sum-storybook-discover h1,
+body.sum-storybook-body .quest-market-world h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -.028em;
+}
+body.sum-storybook-body .sum-storybook-account main,
+body.sum-storybook-body .sum-storybook-discover main {
+  padding-bottom: 40px;
+}
+body.sum-storybook-body .sum-storybook-discover .lp-glass,
+body.sum-storybook-body .sum-storybook-account .lp-glass {
+  border-radius: 26px !important;
+  box-shadow: 0 15px 35px #7d829115 !important;
+}
+body.sum-storybook-body .sum-storybook-account button,
+body.sum-storybook-body .sum-storybook-discover button,
+body.sum-storybook-body .quest-market-world button,
+body.sum-storybook-body .quest-room-world button {
+  min-height: 44px;
+}
+body.sum-storybook-body .sum-storybook-account a,
+body.sum-storybook-body .sum-storybook-discover a,
+body.sum-storybook-body .quest-market-world a,
+body.sum-storybook-body .quest-room-world a {
+  -webkit-tap-highlight-color: transparent;
+}
+body.sum-storybook-body .sum-storybook-review > div > header h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 560;
+  font-size: clamp(24px, 4vw, 37px);
+}
+body.sum-storybook-body .sum-storybook-review article[data-testid=review-card] {
+  border-radius: 27px;
+  border-color: #d8e4dd;
+  box-shadow: 0 14px 34px #6c788b12;
+}
+@media (max-width: 959px) {
+  body.sum-storybook-body .sw-app .sw-header__inner {
+    padding-inline: 19px;
+    min-height: 66px;
+  }
+  body.sum-storybook-body .sw-app .sw-brand { min-width: 0; }
+  body.sum-storybook-body .sw-app .sw-brand>svg { width: 32px; height: 32px; }
+  body.sum-storybook-body .sw-app .sw-brand b { font-size: 23px; }
+  body.sum-storybook-body .sw-app .sw-brand small { font-size: 7px; }
+  body.sum-storybook-body .sum-app-dock__item { min-height: 56px; }
+}
+
+/* Mobile reality check: cards must fill their one-column grid, not inherit the old two-column artwork slot. */
+.sum-kawaii-home .sw-realm { display: flex; flex-direction: column; grid-template-columns: none; }
+@media(max-width: 699px) {
+  .sum-kawaii-home .sum-award-hero__meta { display: none; }
+  .sum-kawaii-home .sum-kawaii-hero__whisper { margin: 14px 0 -2px; }
+  .sum-kawaii-home .sw-realm__storybook { width: 100%; }
+  .sum-kawaii-home .sum-award-hero { gap: 11px; }
+}

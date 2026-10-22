@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from "next";
 import Providers from "@/components/Providers";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
+import QuestAppNav from "@/components/QuestAppNav";
 import "./globals.css";
 import "./summoner-world.css";
 import "./sum-universe.css";
 import "./sum-award-v4.css";
+import "./sum-storybook.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
@@ -31,7 +33,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#F7FAF5",
+  themeColor: "#FFF8F2",
   colorScheme: "light",
 };
 
@@ -69,13 +71,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body
-        className="min-h-screen antialiased"
+        className="min-h-screen antialiased sum-storybook-body"
         style={{
           background: "var(--sum-sky)",
           color: "var(--sum-ink)",
         }}
       >
-        <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
+        <Providers><ErrorBoundary>{children}</ErrorBoundary><QuestAppNav /></Providers>
         <EntryPolicyLinks />
       </body>
     </html>
