@@ -80,9 +80,17 @@ async function main() {
             assert(errors.length === 0, "uncaught JavaScript errors: " + errors.join("; "));
             if (route === "/enter" || route === "/rituals") {
               const required = route === "/enter" ? 5 : 1;
-              await page.locator('img[src*="storybook-premium"]').first().waitFor({ state:"visible",timeout:12000 });
-              await page.waitForFunction(required => [...document.querySelectorAll('img[src*="storybook-premium"]')].filter(img => img.complete && img.naturalWidth > 0).length >= required, required, {timeout:15000});
-              const afterImages = await page.locator('img[src*="storybook-premium"]').evaluateAll(els => els.map(img => ({loaded:img.complete && img.naturalWidth>0, src:img.getAttribute("src")})));
+              const images = page.locator('img[src*="storybook-premium"]');
+              assert((await images.count()) >= required, "Premium assets must exist in real page DOM");
+              // Native browser lazy-loading defers below-fold artwork. Scroll each
+              // image into view before declaring a missing network asset.
+              for (let i = 0; i < await images.count(); i++) {
+                const art = images.nth(i);
+                await art.scrollIntoViewIfNeeded({timeout:12000});
+                await art.evaluate(img => img.decode(), {timeout:15000});
+              }
+              await page.evaluate(() => window.scrollTo(0,0));
+              const afterImages = await images.evaluateAll(els => els.map(img => ({loaded:img.complete && img.naturalWidth>0, src:img.getAttribute("src")})));
               assert(afterImages.filter(img=>img.loaded).length >= required, "Actual reference pixel artwork must load, not the SVG fallback");
             }
             if (["/enter", "/summons", "/me", "/rituals"].includes(route)) {

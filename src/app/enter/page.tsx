@@ -34,6 +34,38 @@ export default function EnterPage() {
           </div>
           <SummoningPortal/>
         </section>
+        <nav className="sum-premium-shortcuts sw-container" aria-label="Explore the SUM world">
+          {[
+            { href: "/summons", image: "/storybook-premium/realm2.webp", label: "Summon Ideas", text: "Turn a spark into a real plan." },
+            { href: "/rituals", image: "/storybook-premium/hero2.webp", label: "Meet Pico", text: "A little companion at your side." },
+            { href: "/markets", image: "/storybook-premium/realm1.webp", label: "Explore Quests", text: "Find an adventure worth sharing." },
+            { href: "/judgment/demo", image: "/storybook-premium/pico3.webp", label: "Keep the Story", text: "Remember the moments that matter." },
+          ].map(item => (
+            <Link href={item.href} key={item.href} className="sum-premium-shortcut">
+              <span className="sum-premium-shortcut__art" aria-hidden="true">
+                <Image src={item.image} width={90} height={90} sizes="90px" alt="" />
+              </span>
+              <span className="sum-premium-shortcut__copy">
+                <strong>{item.label}</strong>
+                <small>{item.text}</small>
+              </span>
+              <Arrow/>
+            </Link>
+          ))}
+        </nav>
+        <section className="sum-premium-story sw-container" aria-labelledby="sum-premium-story-heading">
+          <div className="sum-premium-story__art">
+            <Image src="/storybook-premium/pico2.webp" fill sizes="(max-width: 959px) 100vw, 52vw" alt="Pico looking out across a glowing flower-filled fantasy world"/>
+            <span className="sum-premium-story__caption">A little magic for the moments that matter.</span>
+          </div>
+          <div className="sum-premium-story__copy">
+            <Eyebrow>A WORLD YOU CAN HELP CREATE</Eyebrow>
+            <h2 id="sum-premium-story-heading">Quests for a<br/><em>brighter tomorrow.</em></h2>
+            <p>Bring your imagination into the real world. A Quest starts as an idea, becomes something both people agree to, and ends with proof and a story you can look back on.</p>
+            <Link className="sw-text-link" href="/summons">Start your own story <Arrow/></Link>
+            <p className="sum-premium-story__note">Every example is illustrative. Real results are determined from accepted rules and evidence.</p>
+          </div>
+        </section>
         <section className="sw-path-section sw-container sum-award-path" id="how-it-works" aria-labelledby="path-title">
           <div className="sw-section-heading">
             <div><Eyebrow>ONE IDEA / MANY FORMS</Eyebrow><h2 id="path-title">The world changes<br/><em>when you act.</em></h2></div>
