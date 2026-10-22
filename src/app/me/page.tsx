@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 
@@ -19,14 +20,13 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 // LuckyPlay canonical palette — see project_luckyplay_design_system memory
-const NAVY = "#1E293B";        // slate-800 headlines
-const NAVY_DIM = "#64748B";    // slate-500 muted text
-const NAVY_FAINT = "#E2E8F0";  // slate-200 hairline borders
-const PEACH = "#FED7AA";       // orange-200 — primary CTA bg
-const PEACH_DARK = "#FDBA74";  // orange-300 — hover
-const PEACH_TEXT = "#7C2D12";  // orange-900 — text on peach
-const ORANGE_GLOW = "rgba(251,146,60,0.39)"; // colored shadow
-const CREAM = "#FFEDD5";       // orange-100 soft fill
+const NAVY = "#2b493e";        // slate-800 headlines
+const NAVY_DIM = "#637a70";    // slate-500 muted text
+const NAVY_FAINT = "#dce7e0";  // slate-200 hairline borders
+const PEACH = "#e3f2de";       // orange-200 — primary CTA bg
+const PEACH_TEXT = "#315e52";  // orange-900 — text on peach
+const ORANGE_GLOW = "rgba(85,140,105,0.18)"; // colored shadow
+const CREAM = "#fff1eb";       // orange-100 soft fill
 
 type Tab = "all" | "open" | "live" | "settled";
 
@@ -47,9 +47,11 @@ export default function MePage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-sm" style={{ color: NAVY_DIM }}>Sign in to view your profile.</p>
-        <Link href="/" className="text-xs font-semibold underline" style={{ color: PEACH_DARK }}>Go home</Link>
+      <div className="sum-storybook-guest min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <PicoFamiliar mood="guide" className="sum-guest-pico"/>
+        <h1 className="text-2xl font-bold" style={{ color: NAVY }}>A little world of your own.</h1>
+        <p className="text-sm" style={{ color: NAVY_DIM }}>Sign in to see your Quests, your shared stories, and your account.</p>
+        <Link href="/summons" className="sum-guest-cta">Start with a Quest →</Link>
       </div>
     );
   }
@@ -67,11 +69,11 @@ export default function MePage() {
     : markets.filter(m => m.status === "settled" || m.status === "cancelled");
 
   return (
-    <div className="min-h-screen">
+    <div className="sum-storybook-account min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>Summoner.world</Link>
-        <Link href="/" className="text-xs font-bold px-4 py-2"
+        <Link href="/summons" className="text-xs font-bold px-4 py-2"
           style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
           + New Quest
         </Link>
@@ -148,7 +150,7 @@ export default function MePage() {
               {tab === "all" ? "No quests yet — summon a friendly challenge!" : `No ${tab} quests right now.`}
             </p>
             {tab === "all" && (
-              <Link href="/" className="inline-block px-5 py-2.5 text-sm font-bold"
+              <Link href="/summons" className="inline-block px-5 py-2.5 text-sm font-bold"
                 style={{ background: PEACH, color: PEACH_TEXT, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
                 ✨ Summon your first quest
               </Link>

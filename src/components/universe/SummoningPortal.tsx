@@ -5,6 +5,7 @@ import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import RealmCanvas from "@/components/experience/RealmCanvas";
 import { Arrow, WorldGlyph, SummonSigil } from "./WorldUI";
 import { questSeeds } from "./quest-seeds";
+import { StorybookPortalArt } from "./StorybookWorldArt";
 
 export default function SummoningPortal() {
   const [selected,setSelected] = useState(0);
@@ -19,10 +20,11 @@ export default function SummoningPortal() {
       </div>
       <div className="sum-gate__scene">
         <div className="sum-gate__halo" aria-hidden="true"/>
+        <StorybookPortalArt/>
         <RealmCanvas realm={quest.id} className="sum-gate__canvas"/>
         <div className="sum-gate__character">
           <PicoFamiliar mood="guide"/>
-          <span>PICO <small>YOUR AI FAMILIAR</small></span>
+          <span>PICO <small>YOUR LITTLE CO-CREATOR</small></span>
         </div>
         <span className="sum-gate__coordinate sum-gate__coordinate--left">41° / POSSIBILITY</span>
         <span className="sum-gate__coordinate sum-gate__coordinate--right">WORLD / 001</span>

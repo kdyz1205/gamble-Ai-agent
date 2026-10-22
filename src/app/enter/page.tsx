@@ -4,19 +4,20 @@ import SummoningPortal from "@/components/universe/SummoningPortal";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import { Arrow, Eyebrow, QuestJourney, SummonSigil, WorldFooter, WorldGlyph } from "@/components/universe/WorldUI";
 import { questSeeds } from "@/components/universe/quest-seeds";
+import { StorybookRealmArt } from "@/components/universe/StorybookWorldArt";
 
 export default function EnterPage() {
   return (
-    <div className="sw-app sw-home sum-award-home" data-design-version="sum-world-v3" data-art-direction="living-threshold">
+    <div className="sw-app sw-home sum-award-home sum-kawaii-home" data-design-version="sum-world-v3" data-art-direction="storybook-world">
       <a className="sw-skip-link" href="#world-introduction">Skip to main content</a>
       <SceneTopBar activePath="/enter"/>
       <main id="world-introduction" tabIndex={-1}>
         <section className="sw-hero sw-container sum-award-hero" aria-labelledby="world-title">
           <div className="sw-hero__copy sum-award-hero__copy">
-            <Eyebrow>SUM / AN EXTRAORDINARY WAY TO BE HUMAN</Eyebrow>
+            <Eyebrow>AN EXTRAORDINARY WAY TO BE HUMAN</Eyebrow>
             <h1 id="world-title">Make reality<br/><em>summonable.</em></h1>
             <p className="sw-hero__lead">
-              You have an idea. Pico helps you give it a form. Create real-life Quests, bring your people, and turn ordinary moments into stories worth keeping.
+              A little spark can become a real adventure. Create a Quest, invite your people, share your proof, and let Pico help you make the moment count.
             </p>
             <div className="sw-hero__actions">
               <Link className="sw-button sum-award-cta" href="/summons" data-testid="world-summon-cta">
@@ -24,6 +25,7 @@ export default function EnterPage() {
               </Link>
               <Link className="sw-text-link" href="/rituals">Meet Pico, your Familiar <Arrow/></Link>
             </div>
+            <div className="sum-kawaii-hero__whisper" aria-hidden="true"><span>✦</span> Small ideas. Brighter tomorrows.</div>
             <div className="sum-award-hero__meta">
               <div className="sum-award-hero__line" aria-hidden="true"><span>01</span><i/><span>06</span></div>
               <div className="sum-award-hero__meaning"><PicoFamiliar mood="guide"/><p><strong>You are the Summoner.</strong><span>Your imagination becomes the beginning.</span></p></div>
@@ -47,7 +49,7 @@ export default function EnterPage() {
             {questSeeds.map((quest,index) => (
               <Link className={"sw-realm sw-realm--"+quest.id} href={"/summons?seed="+quest.id} key={quest.id}>
                 <div className="sw-realm__header"><span className="sw-small-label">0{index+1} / {quest.realm}</span><WorldGlyph kind={quest.kind}/></div>
-                <div className="sw-realm__sculpture" aria-hidden="true"><span/><span/><span/><WorldGlyph kind={quest.kind}/></div>
+                <div className="sw-realm__storybook" aria-hidden="true"><StorybookRealmArt realm={quest.id}/><span className="sum-realm__spark"><WorldGlyph kind={quest.kind}/></span></div>
                 <h3>{quest.name}</h3><p>{quest.hint}</p>
                 <span className="sw-realm__action">Enter this realm <Arrow/></span>
               </Link>
@@ -58,6 +60,7 @@ export default function EnterPage() {
         <section className="sw-companion-section sw-container sum-award-familiar" aria-labelledby="companion-title">
           <div className="sw-companion-section__visual">
             <div className="sw-companion-orbit" aria-hidden="true"/>
+            <div className="sum-kawaii-companion-landscape" aria-hidden="true"><StorybookRealmArt realm="grow"/></div>
             <PicoFamiliar className="sw-companion-section__pico" mood="listening"/>
             <span className="sw-companion-section__tag"><span>FAMILIAR / 001</span><b>PICO</b><small>A little clarity, by your side.</small></span>
           </div>

@@ -4,21 +4,22 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 
 // LuckyPlay palette
-const NAVY = "#1E293B";
-const NAVY_DIM = "#64748B";
-const NAVY_FAINT = "#E2E8F0";
-const PEACH = "#FED7AA";
-const PEACH_TEXT = "#7C2D12";
-const ORANGE_GLOW = "rgba(251,146,60,0.39)";
-const MINT = "#A7F3D0";
+const NAVY = "#2b493e";
+const NAVY_DIM = "#637a70";
+const NAVY_FAINT = "#dce7e0";
+const PEACH = "#e3f2de";
+const PEACH_TEXT = "#315e52";
+const ORANGE_GLOW = "rgba(85,140,105,0.18)";
+const MINT = "#c6ead0";
 const MINT_TEXT = "#065F46";
-const LAVENDER = "#E9D5FF";
+const LAVENDER = "#ebdef8";
 const LAVENDER_TEXT = "#6B21A8";
-const CREAM = "#FFEDD5";
+const CREAM = "#fff1eb";
 const ROSE_BG = "#FECACA";
 const ROSE_TEXT = "#991B1B";
 
@@ -85,25 +86,25 @@ export default function MarketsPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-5">
-        <div className="text-4xl mb-2">👋</div>
+      <div className="sum-storybook-guest min-h-screen flex flex-col items-center justify-center gap-4 px-5">
+        <PicoFamiliar mood="guide" className="sum-guest-pico" />
         <p className="text-base font-bold" style={{ color: NAVY }}>Sign in to see your quests.</p>
-        <Link href="/"
+        <Link href="/summons"
           className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
           style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
-          Go home ✨
+          Create a Quest ✦
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen">
+    <div className="sum-storybook-discover relative min-h-screen">
       <header className="relative z-20 flex items-center justify-between px-5 py-4">
         <Link href="/" className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
           Summoner.world
         </Link>
-        <Link href="/"
+        <Link href="/summons"
           className="text-xs font-bold px-3 py-1.5 active:scale-95 transition-transform"
           style={{ color: PEACH_TEXT, background: CREAM, border: `1px solid #FFE0CC`, borderRadius: "9999px" }}>
           + New quest
@@ -172,7 +173,7 @@ export default function MarketsPage() {
           </div>
         )}
 
-        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My quests 🎲</h1>
+        <h1 className="text-2xl font-extrabold mb-5" style={{ color: NAVY }}>My Quests</h1>
 
         {loading ? (
           <div className="text-center py-16">
@@ -182,9 +183,9 @@ export default function MarketsPage() {
           </div>
         ) : markets.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-5xl mb-3">🙈</div>
+            <PicoFamiliar mood="waiting" className="sum-empty-pico"/>
             <p className="text-base font-semibold mb-4" style={{ color: NAVY_DIM }}>No quests yet.</p>
-            <Link href="/"
+            <Link href="/summons"
               className="inline-block px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"
               style={{ color: PEACH_TEXT, background: PEACH, borderRadius: "9999px", boxShadow: `0 4px 14px 0 ${ORANGE_GLOW}` }}>
               Summon your first quest ✨

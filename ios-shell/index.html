@@ -1,115 +1,75 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Summon World</title>
-    <style>
-      :root {
-        color-scheme: light;
-        background: #eef9ff;
-        color: #17324d;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      html,
-      body {
-        min-height: 100%;
-        margin: 0;
-      }
-
-      body {
-        display: grid;
-        place-items: center;
-        padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
-          max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-        background:
-          radial-gradient(circle at 18% 12%, rgba(255, 218, 76, 0.72), transparent 25%),
-          radial-gradient(circle at 82% 18%, rgba(112, 219, 255, 0.7), transparent 27%),
-          linear-gradient(180deg, #f9fdff 0%, #dff5ff 52%, #f6ffe9 100%);
-      }
-
-      main {
-        width: min(320px, 100%);
-        text-align: center;
-      }
-
-      .familiar {
-        position: relative;
-        width: 104px;
-        height: 104px;
-        margin: 0 auto 22px;
-        border: 5px solid #17324d;
-        border-radius: 48% 52% 46% 54%;
-        background: linear-gradient(145deg, #ffe45f, #ffbd45);
-        box-shadow: 0 14px 0 rgba(23, 50, 77, 0.13), 0 24px 44px rgba(45, 126, 171, 0.18);
-        transform: rotate(-3deg);
-      }
-
-      .familiar::before,
-      .familiar::after {
-        content: "";
-        position: absolute;
-        top: 35px;
-        width: 12px;
-        height: 16px;
-        border-radius: 50%;
-        background: #17324d;
-      }
-
-      .familiar::before {
-        left: 25px;
-      }
-
-      .familiar::after {
-        right: 25px;
-      }
-
-      .spark {
-        position: absolute;
-        right: -13px;
-        top: -12px;
-        width: 33px;
-        height: 33px;
-        border: 4px solid #17324d;
-        border-radius: 50%;
-        background: #70dbff;
-      }
-
-      .smile {
-        position: absolute;
-        left: 38px;
-        top: 58px;
-        width: 23px;
-        height: 12px;
-        border: 4px solid #17324d;
-        border-top: 0;
-        border-radius: 0 0 18px 18px;
-      }
-
-      h1 {
-        margin: 0 0 12px;
-        font-size: 30px;
-        line-height: 1.05;
-        letter-spacing: -0.04em;
-      }
-
-      p {
-        margin: 0;
-        color: #506b82;
-        font-size: 15px;
-        line-height: 1.5;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <div class="familiar" aria-hidden="true">
-        <span class="spark"></span>
-        <span class="smile"></span>
-      </div>
-      <h1>Summon World</h1>
-      <p>Your Familiar is opening the Quest portal. Check your connection if this screen stays visible.</p>
-    </main>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#fff8f2" />
+  <title>Summon World — Pico's Portal</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #2c4439; background: #fff9f5; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; }
+    body { display:grid;place-items:center; min-height:100svh;
+      padding:max(40px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right))
+              max(40px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
+      background:
+        radial-gradient(ellipse 80% 34% at 79% 13%, #e7d6f5a0, transparent),
+        radial-gradient(ellipse 77% 29% at 12% 40%, #ffe1d6a0, transparent),
+        linear-gradient(180deg,#fff9f5,#f0f8ef 72%,#fffaf4);
+    }
+    main { position:relative;width:min(365px,100%);text-align:center;padding:31px 22px 36px;
+      border:1px solid #ece1e0;border-radius:36px;background:#fffdfaed;
+      box-shadow:0 25px 70px #7c7d8b22, inset 0 1px white;
+    }
+    .symbol {font-size:10px;letter-spacing:.23em;font-weight:800;color:#7a947e;}
+    .portal { position:relative;width:230px;height:245px;margin:20px auto 13px;
+      display:grid;place-items:center;
+      background:radial-gradient(ellipse at 50% 47%,#eefbea,transparent 72%);
+    }
+    .portal::before {content:"";position:absolute;inset:2px 23px 5px;border:15px solid #f4e3df;
+      border-left-color:#d7d1f4;border-right-color:#cee9dc;border-bottom-color:#c6e3d8;
+      box-shadow:inset 0 7px 12px #dbcce444, 0 15px 30px #8b8ea633; border-radius:50% 50% 40% 40%;
+      background:linear-gradient(#e6ecfb,#fff3e5 58%,#d7eedc);
+    }
+    .portal::after {content:"";position:absolute;bottom:3px;width:93%;height:29px;
+      border-radius:50%;background:#b2ddc2;box-shadow:0 11px 0 #91bea9,0 18px 18px #80a99f44;}
+    .pico {position:relative;z-index:2;width:168px;height:168px;filter:drop-shadow(0 13px 9px #a48c9570);}
+    h1 {font-size:31px;line-height:1.18;letter-spacing:-.04em;margin:0 0 12px;font-weight:750;}
+    p {color:#65776c;font-size:14px;line-height:1.7;margin:0 auto 19px;max-width:260px;}
+    .retry {display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:12px 24px;
+      background:linear-gradient(135deg,#315e52,#467d66);border-radius:999px;color:#fff;
+      text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 10px 20px #315e5233;}
+    .fine {margin-top:16px;color:#7f8d85;font-size:11px;line-height:1.5;}
+    .spark {position:absolute;color:#e5c38c;font-size:26px;}
+    .spark.one {top:62px;left:19px;} .spark.two {top:79px;right:14px;}
+    @media (prefers-reduced-motion:no-preference) { .pico {animation:float 3s ease-in-out infinite;} @keyframes float { 0%,100% {transform:translateY(0)} 50% {transform:translateY(-6px)} } }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="symbol">SUM · SUMMONER.WORLD</span>
+    <div class="portal" role="img" aria-label="Pico waiting at a pastel summoning portal">
+      <span class="spark one" aria-hidden="true">✧</span>
+      <span class="spark two" aria-hidden="true">✦</span>
+      <svg class="pico" viewBox="0 0 104 104" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M27 40C4 31 2 13 11 8c12-7 26 13 29 26Z" fill="#bfe7c2" stroke="#8bb196" stroke-width="2.5"/>
+        <path d="M77 40c23-9 25-27 16-32-12-7-26 13-29 26Z" fill="#bfe7c2" stroke="#8bb196" stroke-width="2.5"/>
+        <path d="M52 29C35 23 34 10 39 8c15 4 18 15 13 21Z" fill="#a5d5ae"/>
+        <path d="M54 29c1-17 11-22 22-20-3 13-10 18-22 20Z" fill="#8dc8a8"/>
+        <path d="M52 28c18-4 32 7 38 22 4 11 0 20-5 27 2 10-8 16-18 16-5 6-17 8-23 2-13 3-21-4-23-12-10-5-13-18-7-30 6-16 19-26 38-25Z" fill="#fff8ee" stroke="#b7a79b" stroke-width="2.2"/>
+        <ellipse cx="39" cy="51" rx="7" ry="9" fill="#2b3644"/><ellipse cx="65" cy="51" rx="7" ry="9" fill="#2b3644"/>
+        <ellipse cx="37" cy="47" rx="2.6" ry="3.3" fill="white"/><ellipse cx="63" cy="47" rx="2.6" ry="3.3" fill="white"/>
+        <ellipse cx="26" cy="65" rx="9" ry="5" fill="#ffc6cf"/><ellipse cx="78" cy="65" rx="9" ry="5" fill="#ffc6cf"/>
+        <path d="M49 64q3-3 6 0M47 68q5 5 10 0" stroke="#a47571" stroke-width="2.3" stroke-linecap="round"/>
+        <ellipse cx="34" cy="86" rx="9" ry="6" fill="#fff9f3" stroke="#d1bfb2"/><ellipse cx="70" cy="86" rx="9" ry="6" fill="#fff9f3" stroke="#d1bfb2"/>
+        <circle cx="56" cy="19" r="5" fill="#ffd1d8"/><circle cx="63" cy="24" r="5" fill="#ffd1d8"/>
+        <circle cx="59" cy="31" r="5" fill="#ffd2d7"/><circle cx="51" cy="31" r="5" fill="#ffd2d7"/><circle cx="48" cy="24" r="5" fill="#ffd2d7"/><circle cx="56" cy="26" r="4" fill="#f2d48c"/>
+      </svg>
+    </div>
+    <h1>Pico is opening<br />your world.</h1>
+    <p>Your little Familiar is looking for the portal. If this screen stays here, please check your connection.</p>
+    <a class="retry" href="https://summoner.world/enter">Try the portal again →</a>
+    <div class="fine">Your Quests and credits are unchanged.</div>
+  </main>
+</body>
 </html>
