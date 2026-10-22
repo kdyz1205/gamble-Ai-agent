@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import RealmCanvas from "@/components/experience/RealmCanvas";
@@ -8,6 +8,8 @@ import { questSeeds } from "./quest-seeds";
 
 export default function SummoningPortal() {
   const [selected,setSelected] = useState(0);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const quest = questSeeds[selected];
   return (
     <section className="sum-gate" data-testid="sum-spatial-gate" data-realm={quest.id} aria-label="Explore the SUM summoning world">
@@ -32,12 +34,13 @@ export default function SummoningPortal() {
           <h2>A world of possibilities.<br/><em>One real moment at a time.</em></h2>
         </div>
         <div className="sum-gate__controls">
-          <div className="sum-gate__tabs" role="group" aria-label="Choose a quest realm">
+          <div className="sum-gate__tabs" role="group" aria-label="Choose a quest realm" aria-busy={!ready}>
             {questSeeds.map((item,index)=> (
               <button
                 key={item.id}
                 type="button"
                 aria-pressed={selected===index}
+                disabled={!ready}
                 onClick={()=>setSelected(index)}
               >
                 <WorldGlyph kind={item.kind}/><span>{item.label}</span>

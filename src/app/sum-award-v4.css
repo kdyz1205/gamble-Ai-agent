@@ -497,3 +497,176 @@
 .sum-realm-canvas__fallback-ring{box-shadow:inset 18px 1px 20px #6f8cb733,inset -13px -5px 18px #fafffb,0 0 0 2px #f2fffb,13px 23px 23px #41695923}
 .sum-realm-canvas__fallback-plinth{background:linear-gradient(135deg,#d3e6d9,#94b9a5 68%,#83ad9d);box-shadow:0 14px 0 #a3c8b6,0 18px 1px #6e9d8a,0 31px 26px #36644935}
 .sum-realm-canvas__fallback-core{background:radial-gradient(ellipse at 35% 32%,#fcfff5db,#c2dfdbba 54%,#a3b9e3a8 76%,transparent 100%);box-shadow:inset 0 0 20px #b6e7d57a}
+
+
+/*
+ * 2026-10-22 visual refinement: make the threshold feel like a physical place,
+ * keep its actions legible, and protect the smallest mobile viewports.
+ * Scoped to the homepage and reusable gate, without altering quest contracts.
+ */
+.sum-award-home .sw-header {
+  box-shadow: 0 6px 24px rgba(33, 70, 52, .045);
+}
+
+.sum-award-home .sum-award-hero::before {
+  pointer-events: none;
+}
+
+.sw-app .sum-award-cta {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(115deg, #123c33 4%, #1b5143 68%, #326958 100%);
+  box-shadow: 0 11px 28px rgba(25, 71, 53, .19), inset 0 1px 0 rgba(255,255,255,.14);
+}
+
+.sw-app .sum-award-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -70%;
+  width: 55%;
+  transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.13), transparent);
+  pointer-events: none;
+  transition: left .65s cubic-bezier(.22,1,.36,1);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sw-app .sum-award-cta:hover::after { left: 125%; }
+}
+
+.sum-gate__scene {
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse 46% 57% at 50% 44%, rgba(246,255,248,.80), transparent 82%),
+    radial-gradient(ellipse 58% 31% at 49% 78%, rgba(153,200,177,.30), transparent 88%),
+    radial-gradient(ellipse 32% 40% at 75% 42%, rgba(198,196,230,.23), transparent 100%);
+}
+
+.sum-realm-canvas__fallback-ring {
+  box-shadow:
+    inset 12px 4px 24px rgba(102,126,168,.18),
+    inset -12px -9px 16px rgba(254,255,249,.95),
+    0 0 0 2px rgba(241,255,248,.8),
+    11px 22px 27px rgba(64,105,81,.24),
+    0 0 38px rgba(161,208,186,.26);
+}
+
+.sum-realm-canvas__fallback-ring::after {
+  content: "";
+  position: absolute;
+  inset: 11% 18% 13%;
+  border-radius: 50%;
+  border-left: 2px solid rgba(255,255,255,.56);
+  border-top: 1px solid rgba(245,255,253,.44);
+  pointer-events: none;
+}
+
+.sum-realm-canvas__fallback-plinth {
+  border-color: rgba(97,155,125,.35);
+  background:
+    radial-gradient(ellipse 76% 80% at 44% 7%, rgba(240,255,243,.82), transparent 68%),
+    linear-gradient(165deg, #bdd9c5 6%, #90baa4 70%, #7ea998);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.7),
+    0 12px 0 rgba(132,186,153,.68),
+    0 16px 1px rgba(91,150,112,.36),
+    0 32px 28px rgba(54,100,74,.30);
+}
+
+.sum-realm-canvas__fallback-plinth::before {
+  content: "";
+  position: absolute;
+  inset: 6% 8% 14%;
+  border: 1px solid rgba(250,255,249,.48);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.sum-gate__bottom {
+  border-color: #c5dacb;
+  background: linear-gradient(140deg, rgba(255,255,251,.98), rgba(241,249,240,.94));
+  box-shadow: 0 21px 46px rgba(43,89,63,.15), inset 0 1px 0 #fff;
+}
+
+.sum-gate__tabs button {
+  position: relative;
+  font-size: 11px;
+  font-weight: 780;
+  transition: background .2s ease, color .2s ease, border-color .2s ease;
+}
+.sum-gate__tabs button[aria-pressed="true"] {
+  color: #205b45;
+  border-color: #a4c8b0;
+  background: linear-gradient(145deg, #e5f2e8, #d3e9dc);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+}
+.sum-gate__tabs button:disabled {
+  cursor: progress;
+  opacity: .72;
+}
+.sum-gate__tabs button:focus-visible {
+  outline: 3px solid #5e9e80;
+  outline-offset: 2px;
+}
+
+.sum-gate__choice {
+  border-color: #b5d0be;
+  background: linear-gradient(135deg, #e3f1e7 0%, #eef7ec 100%);
+  transition: background .22s ease, transform .22s ease, border-color .22s ease;
+}
+.sum-gate__choice:hover {
+  border-color: #78a78b;
+  background: #d9ecdd;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sum-gate__choice:hover { transform: translateY(-2px); }
+  .sum-award-home .sw-realm:hover { transform: translateY(-4px); }
+}
+.sum-award-home .sw-realm {
+  transition: transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s ease;
+}
+.sum-award-home .sw-realm:focus-visible {
+  outline: 3px solid #467c67;
+  outline-offset: 5px;
+}
+.sum-award-home .sw-realm:hover {
+  box-shadow: 0 21px 46px rgba(43,89,63,.15);
+}
+
+@media (max-width: 699px) {
+  /* Negative right offset on the 70%-width hero glow caused 5px page overflow. */
+  .sw-app .sum-award-hero::before {
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    height: min(680px, 90vh);
+  }
+  .sw-app .sum-award-hero .sw-eyebrow { font-size: 10px; }
+  .sum-gate__meta,
+  .sum-gate__chapter,
+  .sum-gate__foot { font-size: 10px; line-height: 1.6; }
+  .sum-gate__meta-right { font-size: 9px; }
+  .sum-gate__bottom { border-radius: 17px; }
+  .sum-gate__tabs button { min-height: 48px; font-size: 11px; }
+  .sum-gate__choice-copy small { font-size: 9px; }
+  .sum-gate__choice-copy strong { font-size: 12px; }
+  .sum-gate__foot { margin-top: 13px !important; }
+  .sum-award-home .sw-realm__action { min-height: 44px; }
+}
+@media (max-width: 359px) {
+  .sum-gate__meta { padding-inline: 2px; }
+  .sum-gate__meta-right { letter-spacing: .7px; }
+  .sum-gate__tabs button { font-size: 10px; }
+  .sum-gate__scene { border-radius: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sum-gate__choice, .sum-gate__tabs button,
+  .sum-award-home .sw-realm, .sw-app .sum-award-cta::after {
+    transition: none !important;
+  }
+}
+
+/* Keep the desktop/tablet ambient glow within the viewport as well. */
+@media (min-width: 700px) {
+  .sw-app .sum-award-hero::before { right: 0; }
+}
