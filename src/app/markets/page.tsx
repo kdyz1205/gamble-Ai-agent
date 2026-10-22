@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import Image from "next/image";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
@@ -87,7 +88,7 @@ export default function MarketsPage() {
   if (!user) {
     return (
       <div className="sum-storybook-guest min-h-screen flex flex-col items-center justify-center gap-4 px-5">
-        <PicoFamiliar mood="guide" className="sum-guest-pico" />
+        <Image src="/storybook-premium/hero2.webp" width={220} height={190} className="sum-guest-premium-portrait" alt="Pico inviting you into the Quest world"/>
         <p className="text-base font-bold" style={{ color: NAVY }}>Sign in to see your quests.</p>
         <Link href="/summons"
           className="px-5 py-2.5 text-sm font-bold active:scale-95 transition-transform"

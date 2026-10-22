@@ -150,7 +150,12 @@ async function main() {
       const expected = fs.readFileSync(path.join(ROOT, "ios-shell/index.html"));
       const actual = fs.readFileSync(path.join(ROOT, "ios/App/App/public/index.html"));
       assert(expected.equals(actual), "Capacitor iOS public shell must match the updated local fallback");
-      return { bytes: actual.length, matching: true };
+      const artFile = path.join(ROOT, "ios-shell/pico-offline.webp");
+      const artNative = path.join(ROOT, "ios/App/App/public/pico-offline.webp");
+      assert(fs.readFileSync(artFile).equals(fs.readFileSync(artNative)), "Pixel Pico splash illustration must be bundled offline");
+      const artMeta = await sharp(artNative).metadata();
+      assert(artMeta.width >= 400 && artMeta.height >= 300, "Offline art resolution too small");
+      return { bytes: actual.length, matching: true, picoArt: artMeta.width + "x" + artMeta.height };
     });
   } finally {
     await browser.close();

@@ -916,3 +916,22 @@ body.sum-storybook-body .sw-app .sum-live-nexus__art::after {
 @media (prefers-reduced-motion: reduce) {
   .sum-premium-shortcut, .sum-premium-shortcut__art img { transition: none!important; }
 }
+
+/* Pixel-art portraits replace the remaining flat logged-out account mascots. */
+.sum-storybook-guest .sum-guest-premium-portrait {
+  display: block;
+  width: min(220px, 63vw);
+  height: 200px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 46% 46% 37% 37%;
+  border: 1px solid rgba(255,255,251,.9);
+  box-shadow: 0 18px 35px rgba(133,108,142,.17), inset 0 2px #fff;
+  filter: saturate(1.07);
+}
+.sum-kawaii-home .sw-realm__storybook .sum-realm__spark {
+  display: none !important;
+}
+@media (max-width: 359px) {
+  .sum-storybook-guest .sum-guest-premium-portrait { width: 180px; height: 160px; }
+}
