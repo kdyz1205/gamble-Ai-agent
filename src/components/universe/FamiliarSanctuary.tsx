@@ -2,6 +2,7 @@
 
 import {useState} from "react";
 import Link from "next/link";
+import Image from "next/image";
 import PicoFamiliar, {type PicoMood} from "@/components/familiar/PicoFamiliar";
 import {Arrow,Eyebrow} from "./WorldUI";
 
@@ -27,6 +28,7 @@ export default function FamiliarSanctuary() {
     <section className="sw-page sum-v4-page sum-v4-familiar" data-testid="familiar-sanctuary">
       <div className="sw-sanctuary">
         <div className="sw-familiar-display sum-v4-familiar__display" data-familiar-role={role.label}>
+          <Image src="/storybook-premium/hero2.webp" alt="Pico joyfully leaping out of a luminous fantasy portal" fill sizes="(max-width:699px) 100vw, 46vw" className="sum-sanctuary-premium-image" priority={false}/>
           <span className="sw-familiar-display__star" aria-hidden="true">✧</span>
           <span className="sum-v4-familiar__orbital" aria-hidden="true"/>
           <PicoFamiliar mood={role.mood}/>

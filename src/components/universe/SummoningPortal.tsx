@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import RealmCanvas from "@/components/experience/RealmCanvas";
 import { Arrow, WorldGlyph, SummonSigil } from "./WorldUI";
@@ -20,6 +21,7 @@ export default function SummoningPortal() {
       </div>
       <div className="sum-gate__scene">
         <div className="sum-gate__halo" aria-hidden="true"/>
+        <Image src="/storybook-premium/hero1.webp" alt="Pico in a flower-filled golden portal above a magical floating island" className="sum-gate__premium-image" fill priority sizes="(max-width: 959px) 100vw, 760px" data-testid="sum-premium-hero-art"/>
         <StorybookPortalArt/>
         <RealmCanvas realm={quest.id} className="sum-gate__canvas"/>
         <div className="sum-gate__character">

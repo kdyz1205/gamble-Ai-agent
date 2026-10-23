@@ -52,13 +52,20 @@ async function main() {
     ["public/apple-touch-icon.png", 180],
     ["ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png", 1024],
   ];
+  // Use the actual premium Pico illustration where available. Fall back to
+  // the vector silhouette only when the original asset is absent.
+  const premium = path.join(root, "public", "storybook-premium", "pico2.webp");
+  const artSource = fs.existsSync(premium)
+    ? await sharp(premium).extract({left: 85, top: 42, width: 340, height: 340})
+        .resize(1024, 1024, { fit: "cover" }).png().toBuffer()
+    : Buffer.from(svg);
   for (const [relative, size] of outputs) {
     const dest = path.join(root, relative);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    await sharp(Buffer.from(svg)).resize(size, size).flatten({ background: "#fff7f2" }).png().toFile(dest);
-    const { width, height } = await sharp(dest).metadata();
-    if (width !== size || height !== size) throw new Error("Wrong icon size: " + relative);
-    console.log("GENERATED", relative, width, height);
+    await sharp(artSource).resize(size, size).flatten({ background: "#fff7f2" }).removeAlpha().png().toFile(dest);
+    const { width, height, hasAlpha } = await sharp(dest).metadata();
+    if (width !== size || height !== size || hasAlpha) throw new Error("Invalid icon: " + relative);
+    console.log("GENERATED", relative, width, height, fs.existsSync(premium) ? "premium-pixel-art" : "vector-fallback");
   }
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

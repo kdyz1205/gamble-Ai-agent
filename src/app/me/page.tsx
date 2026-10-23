@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import Image from "next/image";
+
 import * as api from "@/lib/api-client";
 import type { ChallengeData } from "@/lib/api-client";
 
@@ -48,7 +49,7 @@ export default function MePage() {
   if (!user) {
     return (
       <div className="sum-storybook-guest min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <PicoFamiliar mood="guide" className="sum-guest-pico"/>
+        <Image src="/storybook-premium/pico2.webp" width={220} height={190} className="sum-guest-premium-portrait" alt="Pico, your friendly Quest companion"/>
         <h1 className="text-2xl font-bold" style={{ color: NAVY }}>A little world of your own.</h1>
         <p className="text-sm" style={{ color: NAVY_DIM }}>Sign in to see your Quests, your shared stories, and your account.</p>
         <Link href="/summons" className="sum-guest-cta">Start with a Quest →</Link>

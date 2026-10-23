@@ -67,6 +67,10 @@ async function main() {
                 dockSelected: dock ? [...dock.querySelectorAll("a[aria-current=page]")].map(a => a.getAttribute("href")) : [],
                 title: document.title,
                 h1: header?.innerText,
+                premiumImages: [...document.querySelectorAll("img")]
+                  .filter(img => img.getAttribute("src")?.includes("storybook-premium"))
+                  .map(img => ({src:img.getAttribute("src"),loaded:img.complete && img.naturalWidth>0,width:img.naturalWidth,height:img.naturalHeight})),
+                premiumHeroVisible: Boolean(document.querySelector('[data-testid="sum-premium-hero-art"]')?.getBoundingClientRect().width),
               };
             });
             assert(data.overflow <= 1, "horizontal overflow " + data.overflow + "px");
@@ -74,6 +78,21 @@ async function main() {
             assert.equal(data.dockVisible, width < 960, "responsive app dock visibility");
             assert.equal(data.dockLabels.length, 5, "app nav needs five destinations");
             assert(errors.length === 0, "uncaught JavaScript errors: " + errors.join("; "));
+            if (route === "/enter" || route === "/rituals") {
+              const required = route === "/enter" ? 5 : 1;
+              const images = page.locator('img[src*="storybook-premium"]');
+              assert((await images.count()) >= required, "Premium assets must exist in real page DOM");
+              // Native browser lazy-loading defers below-fold artwork. Scroll each
+              // image into view before declaring a missing network asset.
+              for (let i = 0; i < await images.count(); i++) {
+                const art = images.nth(i);
+                await art.scrollIntoViewIfNeeded({timeout:12000});
+                await art.evaluate(img => img.decode(), {timeout:15000});
+              }
+              await page.evaluate(() => window.scrollTo(0,0));
+              const afterImages = await images.evaluateAll(els => els.map(img => ({loaded:img.complete && img.naturalWidth>0, src:img.getAttribute("src")})));
+              assert(afterImages.filter(img=>img.loaded).length >= required, "Actual reference pixel artwork must load, not the SVG fallback");
+            }
             if (["/enter", "/summons", "/me", "/rituals"].includes(route)) {
               assert(data.h1?.length, "expected visible semantic page heading");
             }
@@ -131,7 +150,12 @@ async function main() {
       const expected = fs.readFileSync(path.join(ROOT, "ios-shell/index.html"));
       const actual = fs.readFileSync(path.join(ROOT, "ios/App/App/public/index.html"));
       assert(expected.equals(actual), "Capacitor iOS public shell must match the updated local fallback");
-      return { bytes: actual.length, matching: true };
+      const artFile = path.join(ROOT, "ios-shell/pico-offline.webp");
+      const artNative = path.join(ROOT, "ios/App/App/public/pico-offline.webp");
+      assert(fs.readFileSync(artFile).equals(fs.readFileSync(artNative)), "Pixel Pico splash illustration must be bundled offline");
+      const artMeta = await sharp(artNative).metadata();
+      assert(artMeta.width >= 400 && artMeta.height >= 300, "Offline art resolution too small");
+      return { bytes: actual.length, matching: true, picoArt: artMeta.width + "x" + artMeta.height };
     });
   } finally {
     await browser.close();

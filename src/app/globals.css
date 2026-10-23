@@ -204,7 +204,11 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
+  /* Keep horizontal overscroll contained, but let wheel/touch scroll chain to
+     the document. overflow-x:hidden creates a separate body scroll container;
+     overscroll-behavior-y:none traps the wheel at its top boundary. */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
   touch-action: manipulation;
 }
 
