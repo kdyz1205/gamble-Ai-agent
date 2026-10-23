@@ -7,10 +7,10 @@ const sharp = require("sharp");
 const {SCREENS} = require("./build-ios-visual-gallery.cjs");
 
 const out = fs.mkdtempSync(path.join(os.tmpdir(), "sum-ios-gallery-contract-"));
-function execute() {
+function execute(overrides={}) {
   return spawnSync(process.execPath, [path.join(__dirname,"build-ios-visual-gallery.cjs")], {
     cwd:path.resolve(__dirname,".."),
-    env:{...process.env, SUM_IOS_OUTPUT:out, GITHUB_SHA:"f".repeat(40)},
+    env:{...process.env, SUM_IOS_OUTPUT:out, GITHUB_SHA:"f".repeat(40), GITHUB_EVENT_NAME:"", GITHUB_EVENT_PATH:"", ...overrides},
     encoding:"utf8", timeout:60000,
   });
 }
@@ -30,6 +30,8 @@ async function main() {
     assert.match(result.stdout,/IOS_20_REFERENCE_GALLERY_PASS 20 panels/);
     const manifest=JSON.parse(fs.readFileSync(path.join(out,"SUM_iOS_20_Screen_Manifest.json"),"utf8"));
     assert.equal(manifest.panels.length,20);
+    assert.equal(manifest.commit,"f".repeat(40));
+    assert.equal(manifest.testCheckoutSha,"f".repeat(40));
     assert.equal(manifest.panels[4].route,"/app/today");
     assert.equal(manifest.panels[7].route,"/app/today");
     assert.equal(manifest.panels[19].type,"actual-icon-asset");
@@ -39,12 +41,25 @@ async function main() {
     assert.equal((html.match(/<article class="card">/g)||[]).length,20);
     assert.ok(fs.statSync(path.join(out,"SUM_iOS_20_Actual_Reference_Panels.jpg")).size>20_000);
 
+    const eventPath=path.join(out,"github-event.json");
+    fs.writeFileSync(eventPath,JSON.stringify({pull_request:{head:{sha:"a".repeat(40)}}}));
+    result=execute({GITHUB_EVENT_NAME:"pull_request",GITHUB_EVENT_PATH:eventPath});
+    assert.equal(result.status,0,result.stderr||result.stdout);
+    const prManifest=JSON.parse(fs.readFileSync(path.join(out,"SUM_iOS_20_Screen_Manifest.json"),"utf8"));
+    assert.equal(prManifest.commit,"a".repeat(40),"PR source must not be confused with tested merge");
+    assert.equal(prManifest.testCheckoutSha,"f".repeat(40));
+
+    fs.writeFileSync(eventPath,JSON.stringify({pull_request:{head:{sha:"untrusted"}}}));
+    result=execute({GITHUB_EVENT_NAME:"pull_request",GITHUB_EVENT_PATH:eventPath});
+    assert.notEqual(result.status,0,"unverifiable PR source must fail closed");
+    assert.match(result.stderr,/PR source head SHA is missing or invalid/);
+
     input.results[0].passed=false;
     fs.writeFileSync(path.join(out,"results.json"),JSON.stringify(input));
     result=execute();
     assert.notEqual(result.status,0,"failed browser acceptance must reject");
     assert.match(result.stderr,/full, passing browser acceptance/);
-    console.log("IOS_VISUAL_GALLERY_TESTS_PASS 3/3: missing, real assets, failed check");
+    console.log("IOS_VISUAL_GALLERY_TESTS_PASS 5/5: missing, actual assets, source attribution, invalid PR, failed check");
   } finally {
     fs.rmSync(out,{recursive:true,force:true});
   }

@@ -15,7 +15,19 @@ const sharp = require("sharp");
 const ROOT = path.resolve(__dirname, "..");
 const OUTPUT = path.resolve(process.env.SUM_IOS_OUTPUT || path.join(ROOT, "output", "ios-full-app"));
 const ICON = path.join(ROOT, "ios", "App", "App", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-512@2x.png");
-const COMMIT = process.env.GITHUB_SHA || "local-unknown";
+// pull_request jobs build GitHub's temporary merge checkout. Keep that SHA
+// separate from the PR source head so evidence never misattributes a version.
+const TEST_CHECKOUT_SHA = process.env.GITHUB_SHA || "local-unknown";
+function resolveSourceCommit() {
+  if (process.env.GITHUB_EVENT_NAME !== "pull_request") return TEST_CHECKOUT_SHA;
+  if (!process.env.GITHUB_EVENT_PATH) throw new Error("PR event source is missing");
+  const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
+  const head = event?.pull_request?.head?.sha;
+  if (!/^[0-9a-f]{40}$/.test(String(head || "")))
+    throw new Error("PR source head SHA is missing or invalid");
+  return head;
+}
+const COMMIT = resolveSourceCommit();
 const SCREENS = [
   ["01", "Splash", "splash-390.png", "screen"],
   ["02", "Onboarding 1", "onboarding-1.png", "screen"],
@@ -142,13 +154,13 @@ async function main() {
     'h2{font-size:15px;margin:0 0 9px}.card p{font-size:11px}</style></head><body>',
     '<h1>SUM iOS — real screens and assets</h1>',
     '<p>'+escHtml(disclaimer)+'</p>',
-    '<p>Commit: <code>'+escHtml(COMMIT)+'</code> · Acceptance checks: '+
+    '<p>PR source: <code>'+escHtml(COMMIT)+'</code> · Tested checkout: <code>'+escHtml(TEST_CHECKOUT_SHA)+'</code> · Acceptance: '+
       results.results.length+'/'+results.results.length+' passing</p>',
     '<div class="grid">'+cards.join("")+'</div></body></html>'
   ].join("");
   fs.writeFileSync(path.join(OUTPUT,"SUM_iOS_20_Screen_Gallery.html"),html,"utf8");
   fs.writeFileSync(path.join(OUTPUT,"SUM_iOS_20_Screen_Manifest.json"),
-    JSON.stringify({commit:COMMIT,capturedAt:results.runAt,source:results.base,
+    JSON.stringify({commit:COMMIT,testCheckoutSha:TEST_CHECKOUT_SHA,capturedAt:results.runAt,source:results.base,
       acceptanceChecks:results.results.length,disclaimer,panels:records},null,2));
   console.log("IOS_20_REFERENCE_GALLERY_PASS",records.length,"panels",
     "out="+path.join(OUTPUT,"SUM_iOS_20_Actual_Reference_Panels.jpg"));
