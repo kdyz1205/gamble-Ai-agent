@@ -14,13 +14,13 @@ const output = path.join(source, "ios-clean");
 const crops = [
   ["hero2.webp", "pico-portal.webp", 40, 112, 405, 365],
   ["pico2.webp", "pico-companion.webp", 25, 58, 392, 337],
-  ["hero1.webp", "dream-portal.webp", 125, 70, 328, 426],
+  ["hero1.webp", "dream-portal.webp", 140, 70, 270, 345],
   ["hero3.webp", "forest-familiar.webp", 135, 28, 370, 443],
   ["pico3.webp", "sleeping-familiar.webp", 25, 16, 375, 285],
   ["realm1.webp", "move-world.webp", 70, 23, 235, 170],
   ["realm2.webp", "create-world.webp", 71, 24, 231, 170],
-  ["realm3.webp", "grow-world.webp", 70, 23, 235, 170],
-  ["wide1.webp", "community-world.webp", 345, 0, 430, 265],
+  ["realm3.webp", "grow-world.webp", 82, 23, 223, 170],
+  ["wide1.webp", "community-world.webp", 405, 0, 395, 265],
 ];
 
 async function main() {

@@ -11,13 +11,13 @@ const sharp = require("sharp");
 const expected = {
   mascot: ["pico-companion.webp", 392, 337],
   mascotHappy: ["pico-portal.webp", 405, 365],
-  portal: ["dream-portal.webp", 328, 426],
+  portal: ["dream-portal.webp", 270, 345],
   move: ["move-world.webp", 235, 170],
   create: ["create-world.webp", 231, 170],
-  grow: ["grow-world.webp", 235, 170],
+  grow: ["grow-world.webp", 223, 170],
   sky: ["sleeping-familiar.webp", 375, 285],
   adventure: ["forest-familiar.webp", 370, 443],
-  landscape: ["community-world.webp", 430, 265],
+  landscape: ["community-world.webp", 395, 265],
 };
 
 async function main() {
