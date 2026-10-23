@@ -1,0 +1,578 @@
+{
+  "capturedAt": "2026-10-23T17:11:22.931Z",
+  "gitCommit": "23d5d4259db9ba657f7fc010b9ff78db0e205b90",
+  "source": "http://127.0.0.1:3092",
+  "method": "Actual browser capture, not generated mockup",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "deviceScaleFactor": 2
+  },
+  "disclosure": "iPhone-sized Chrome mobile emulation; native iOS simulator, TestFlight and App Store packaging NOT tested",
+  "note": "7/9/10/11 have intentionally missing IDs and show real fail-closed states. 8 is a local test-only device check-in. Guest views are unauthenticated.",
+  "screens": [
+    {
+      "num": "01",
+      "title": "Splash",
+      "route": "/app/splash",
+      "status": 200,
+      "screenshot": "01-Splash.png",
+      "fullPage": "full-01-Splash.png",
+      "metrics": {
+        "route": "/app/splash",
+        "documentHeight": 1041,
+        "overflow": 0,
+        "appHeight": 946,
+        "tabCount": 0,
+        "heading": "Summoner.world",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "splash"
+    },
+    {
+      "num": "02",
+      "title": "Onboarding 1",
+      "route": "/app/onboarding",
+      "status": 200,
+      "screenshot": "02-Onboarding-1.png",
+      "fullPage": "full-02-Onboarding-1.png",
+      "metrics": {
+        "route": "/app/onboarding",
+        "documentHeight": 1040,
+        "overflow": 0,
+        "appHeight": 945,
+        "tabCount": 0,
+        "heading": "A Kinder, Braver You",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "onboard"
+    },
+    {
+      "num": "03",
+      "title": "Onboarding 2",
+      "route": "/app/onboarding",
+      "status": 200,
+      "screenshot": "03-Onboarding-2.png",
+      "fullPage": "full-03-Onboarding-2.png",
+      "metrics": {
+        "route": "/app/onboarding",
+        "documentHeight": 1040,
+        "overflow": 0,
+        "appHeight": 945,
+        "tabCount": 0,
+        "heading": "Move · Create · Grow",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero1.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [
+        "In-memory step 2 of 3"
+      ],
+      "kind": "onboard"
+    },
+    {
+      "num": "04",
+      "title": "Onboarding 3",
+      "route": "/app/onboarding",
+      "status": 200,
+      "screenshot": "04-Onboarding-3.png",
+      "fullPage": "full-04-Onboarding-3.png",
+      "metrics": {
+        "route": "/app/onboarding",
+        "documentHeight": 1011,
+        "overflow": 0,
+        "appHeight": 916,
+        "tabCount": 0,
+        "heading": "You Can Do It",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [
+        "In-memory step 3 of 3"
+      ],
+      "kind": "onboard"
+    },
+    {
+      "num": "05",
+      "title": "Home",
+      "route": "/app/today",
+      "status": 200,
+      "screenshot": "05-Home.png",
+      "fullPage": "full-05-Home.png",
+      "metrics": {
+        "route": "/app/today",
+        "documentHeight": 1607,
+        "overflow": 0,
+        "appHeight": 1512,
+        "tabCount": 1,
+        "heading": "Hi, Summoner! ✦",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm1.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "06",
+      "title": "Quest Setup",
+      "route": "/app/create",
+      "status": 200,
+      "screenshot": "06-Quest-Setup.png",
+      "fullPage": "full-06-Quest-Setup.png",
+      "metrics": {
+        "route": "/app/create",
+        "documentHeight": 1516,
+        "overflow": 0,
+        "appHeight": 1421,
+        "tabCount": 1,
+        "heading": "Every adventurestarts with an idea.",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "07",
+      "title": "Quest Created",
+      "route": "/app/quest-created",
+      "status": 200,
+      "screenshot": "07-Quest-Created.png",
+      "fullPage": "full-07-Quest-Created.png",
+      "metrics": {
+        "route": "/app/quest-created",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "missing-id"
+    },
+    {
+      "num": "08",
+      "title": "Today — Daily Check-in",
+      "route": "/app/today",
+      "status": 200,
+      "screenshot": "08-Today-Daily-Check-in.png",
+      "fullPage": "full-08-Today-Daily-Check-in.png",
+      "metrics": {
+        "route": "/app/today",
+        "documentHeight": 1701,
+        "overflow": 0,
+        "appHeight": 1606,
+        "tabCount": 1,
+        "heading": "Hi, Summoner! ✦",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm1.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [
+        "Only local test-device check-in; not a real Quest, credit or user activity"
+      ],
+      "kind": "local-checkin"
+    },
+    {
+      "num": "09",
+      "title": "Quest Detail",
+      "route": "/app/quest",
+      "status": 200,
+      "screenshot": "09-Quest-Detail.png",
+      "fullPage": "full-09-Quest-Detail.png",
+      "metrics": {
+        "route": "/app/quest",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "missing-id"
+    },
+    {
+      "num": "10",
+      "title": "Add Evidence",
+      "route": "/app/evidence-add",
+      "status": 200,
+      "screenshot": "10-Add-Evidence.png",
+      "fullPage": "full-10-Add-Evidence.png",
+      "metrics": {
+        "route": "/app/evidence-add",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "missing-id"
+    },
+    {
+      "num": "11",
+      "title": "Quest Complete",
+      "route": "/app/quest-complete",
+      "status": 200,
+      "screenshot": "11-Quest-Complete.png",
+      "fullPage": "full-11-Quest-Complete.png",
+      "metrics": {
+        "route": "/app/quest-complete",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "missing-id"
+    },
+    {
+      "num": "12",
+      "title": "Discover",
+      "route": "/app/discover",
+      "status": 200,
+      "screenshot": "12-Discover.png",
+      "fullPage": "full-12-Discover.png",
+      "metrics": {
+        "route": "/app/discover",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": "Your nextlittle big step.",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "13",
+      "title": "My Picos",
+      "route": "/app/picos",
+      "status": 200,
+      "screenshot": "13-My-Picos.png",
+      "fullPage": "full-13-My-Picos.png",
+      "metrics": {
+        "route": "/app/picos",
+        "documentHeight": 1240,
+        "overflow": 0,
+        "appHeight": 1145,
+        "tabCount": 1,
+        "heading": "Pico",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero1.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "14",
+      "title": "Profile",
+      "route": "/app/profile",
+      "status": 200,
+      "screenshot": "14-Profile.png",
+      "fullPage": "full-14-Profile.png",
+      "metrics": {
+        "route": "/app/profile",
+        "documentHeight": 1351,
+        "overflow": 0,
+        "appHeight": 1256,
+        "tabCount": 1,
+        "heading": "Summoner",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "15",
+      "title": "Achievements",
+      "route": "/app/achievements",
+      "status": 200,
+      "screenshot": "15-Achievements.png",
+      "fullPage": "full-15-Achievements.png",
+      "metrics": {
+        "route": "/app/achievements",
+        "documentHeight": 1403,
+        "overflow": 0,
+        "appHeight": 1308,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm1.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fpico2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "16",
+      "title": "Evidence Gallery",
+      "route": "/app/evidence",
+      "status": 200,
+      "screenshot": "16-Evidence-Gallery.png",
+      "fullPage": "full-16-Evidence-Gallery.png",
+      "metrics": {
+        "route": "/app/evidence",
+        "documentHeight": 1193,
+        "overflow": 0,
+        "appHeight": 1098,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm1.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm2.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Frealm3.webp&w=3840&q=75"
+          },
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero3.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "17",
+      "title": "Stats",
+      "route": "/app/stats",
+      "status": 200,
+      "screenshot": "17-Stats.png",
+      "fullPage": "full-17-Stats.png",
+      "metrics": {
+        "route": "/app/stats",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fhero2.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "18",
+      "title": "Community",
+      "route": "/app/community",
+      "status": 200,
+      "screenshot": "18-Community.png",
+      "fullPage": "full-18-Community.png",
+      "metrics": {
+        "route": "/app/community",
+        "documentHeight": 939,
+        "overflow": 0,
+        "appHeight": 844,
+        "tabCount": 1,
+        "heading": "Little things,together.",
+        "artwork": [
+          {
+            "loaded": true,
+            "path": "/_next/image?url=%2Fstorybook-premium%2Fwide1.webp&w=3840&q=75"
+          }
+        ]
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "19",
+      "title": "Settings",
+      "route": "/app/settings",
+      "status": 200,
+      "screenshot": "19-Settings.png",
+      "fullPage": "full-19-Settings.png",
+      "metrics": {
+        "route": "/app/settings",
+        "documentHeight": 1006,
+        "overflow": 0,
+        "appHeight": 911,
+        "tabCount": 1,
+        "heading": null,
+        "artwork": []
+      },
+      "notes": [],
+      "kind": "page"
+    },
+    {
+      "num": "20",
+      "title": "App Icon",
+      "screenshot": "20-App-Icon.png",
+      "kind": "native-asset"
+    }
+  ]
+}

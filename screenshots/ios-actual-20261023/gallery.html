@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SUM — Actual iOS-sized App Screens</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#393152;background:#f7f2fc}
+*{box-sizing:border-box} body{margin:0}header{background:linear-gradient(120deg,#f9edff,#e9f9f5);padding:34px max(16px,5vw);border-bottom:1px solid #decfea}
+h1{margin:0 0 10px;font-size:clamp(24px,4vw,42px)}p{line-height:1.6;color:#6b617b;font-size:14px;max-width:880px}
+strong{color:#4f3f7c}.grid{max-width:1550px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:22px;margin:30px auto;padding:0 20px 50px}
+.card{background:#fff;border:1px solid #e7dff4;border-radius:24px;padding:12px;box-shadow:0 8px 26px #78649016}
+.card h2{font-size:15px;margin:4px 5px 11px;line-height:1.5}.card a{display:block}.card img{width:100%;height:auto;max-height:620px;object-fit:contain;background:#f9f7fb;border-radius:14px}.caption{margin:10px 7px;font-size:12px;color:#7f7390}
+a{color:#6554ba;text-underline-offset:2px}
+</style></head>
+<body><header>
+<h1>SUM — the app as actually rendered</h1>
+<p>20 exact files from the running React app at iPhone-like <strong>390 × 844</strong> viewport, 2× pixel density. These are <strong>Chrome mobile emulation screenshots</strong>, not Xcode simulator or TestFlight screenshots. No concepts or generated substitute images. Click any image to open full resolution.</p>
+<p>Screen 08 contains one test-only on-device check-in. Quest Created/Detail/Evidence/Complete without a real ID intentionally display honest empty states. Guest screens are not logged into a production account.</p>
+</header>
+<main class="grid" id="screens"></main>
+<script>
+const screens=[
+["01","Splash"],["02","Onboarding 1"],["03","Onboarding 2"],["04","Onboarding 3"],
+["05","Home"],["06","Quest Setup"],["07","Quest Created"],["08","Today — Daily Check-in"],
+["09","Quest Detail"],["10","Add Evidence"],["11","Quest Complete"],["12","Discover"],
+["13","My Picos"],["14","Profile"],["15","Achievements"],["16","Evidence Gallery"],
+["17","Stats"],["18","Community"],["19","Settings"],["20","App Icon"]
+];
+function file(num,name){return num+"-"+name.replace(/[^\w-]+/g,"-")+".png"}
+const el=document.querySelector("#screens");
+for(const [num,name] of screens){
+ const img=num==="20"?"20-App-Icon.png":file(num,name);
+ const full=num==="20"?img:"full-"+file(num,name);
+ const card=document.createElement("article");card.className="card";
+ const h=document.createElement("h2");h.textContent=num+" · "+name;
+ const link=document.createElement("a");link.href=full;link.target="_blank";
+ const picture=document.createElement("img");picture.src=img;picture.alt="Actual "+name+" app screenshot";
+ picture.loading="lazy";link.appendChild(picture);
+ const caption=document.createElement("p");caption.className="caption";
+ caption.textContent=num==="20"?"Original PWA icon asset":"Open full-page screenshot";
+ card.append(h,link,caption);el.appendChild(card);
+}
+</script></body></html>
