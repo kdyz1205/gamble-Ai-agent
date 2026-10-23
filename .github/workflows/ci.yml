@@ -44,6 +44,8 @@ jobs:
 
       - run: npx tsc --noEmit
 
+      - run: node scripts/test-ios-clean-art.cjs
+
       - run: npm run test:production:unit
 
       - run: npm run test:production:integration
@@ -62,6 +64,7 @@ jobs:
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
           npm run test:production:http
+          SUM_IOS_URL=http://localhost:3000 SUM_IOS_QUICK=1 node scripts/qa-ios-full-app.cjs
           npx playwright test tests/e2e-gambles/composer-conversation.spec.ts tests/e2e-gambles/quest-cancellation.spec.ts tests/e2e-gambles/quest-browser-lifecycle.spec.ts tests/e2e-gambles/positive-stake-journey.spec.ts tests/e2e-gambles/evidence-ui-contract.spec.ts tests/e2e-gambles/review-browser-lifecycle.spec.ts --workers=1
 
       - uses: actions/upload-artifact@v4
@@ -70,6 +73,7 @@ jobs:
           name: browser-flow-evidence
           path: |
             playwright-report
+            output/ios-full-app
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
           if-no-files-found: ignore

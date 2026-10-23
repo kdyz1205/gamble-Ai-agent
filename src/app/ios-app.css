@@ -381,6 +381,21 @@
 .ios-daily-rituals .ios-footer-note{text-align:left;padding:5px 0 0;font-size:9px;line-height:1.65;}
 @media(prefers-reduced-motion:reduce){.ios-ritual-progress__bar span{transition:none!important;}}
 
+/* Honest, non-interactive Quest placeholders while the live API is resolving. */
+.ios-loading-list { display: grid; gap: 10px; padding: 5px 0; }
+.ios-loading-list__label { margin: 0 0 2px; color: #89809b; font-size: 12px; font-weight: 720; }
+.ios-loading-card {
+  display: flex; align-items: center; gap: 13px; min-height: 83px; padding: 11px;
+  border: 1px solid #e8e1f2; border-radius: 19px; background: #fffefd;
+}
+.ios-loading-card__thumbnail {
+  display: block; flex: 0 0 62px; width: 62px; height: 60px; border-radius: 13px;
+  background: linear-gradient(140deg,#f1e9ff,#e8f6f8);
+}
+.ios-loading-card__lines { display: grid; gap: 9px; flex: 1; min-width: 0; }
+.ios-loading-card__lines span { display: block; width: 73%; height: 12px; border-radius: 8px; background: #f0eaf8; }
+.ios-loading-card__lines span:last-child { width: 46%; height: 10px; background: #f6f1f9; }
+
 /* Javascript-backed actions become usable only after React has attached handlers.
    Native links retain normal behavior even during a slow first hydration. */
 .ios-app[data-hydrated=false] :is(button,input,textarea,select) {

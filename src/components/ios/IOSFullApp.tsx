@@ -32,7 +32,7 @@ function OnboardingScreen() {
   const chapter=chapters[step];
   return <IosFrame withNav={false} tone="ios-onboarding">
     <div className="ios-onboard-art">
-      <IosArt src={chapter.image} alt={"Pico in a magical world: "+chapter.title} priority/>
+      <IosArt src={chapter.image} alt={step === 1 ? "A friendly Familiar by a glowing garden portal" : "Pico, your Quest companion"} priority/>
       <span>SUMMONER.WORLD</span>
     </div>
     <div className="ios-onboard-copy">

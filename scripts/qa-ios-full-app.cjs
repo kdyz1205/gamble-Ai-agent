@@ -39,7 +39,11 @@ async function meta(page){
   });
 }
 (async()=>{
-const browser=await chromium.launch({headless:true,executablePath:"C:/Program Files/Google/Chrome/Application/chrome.exe",args:["--disable-extensions","--disable-gpu"]});
+const browser=await chromium.launch({
+  headless:true,
+  ...(process.platform==="win32" ? {executablePath:process.env.SUM_IOS_CHROME||"C:/Program Files/Google/Chrome/Application/chrome.exe"} : {}),
+  args:["--disable-extensions","--disable-gpu"]
+});
 try {
 for(const width of widths){
   const small=width<=430;
@@ -57,6 +61,11 @@ for(const width of widths){
         await page.locator('[data-testid="ios-full-app"]').waitFor({state:"visible",timeout:25000});
         await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
         await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
+        // Screenshots must show the settled public API state, not a transient
+        // loading placeholder. This is read-only and fails if it never resolves.
+        if(view==="discover"||view==="community"){
+          await page.waitForFunction(()=>!document.querySelector(".ios-loading-list"),null,{timeout:20000});
+        }
         await page.evaluate(async()=>{const imgs=Array.from(document.images).filter(img=>img.getBoundingClientRect().top<innerHeight+130);await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));});
         const m=await meta(page);
         assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px");
