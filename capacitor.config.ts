@@ -11,7 +11,8 @@ const config: CapacitorConfig = {
     limitsNavigationsToAppBoundDomains: true,
   },
   server: {
-    url: "https://summoner.world",
+    // Once the /app route is released, launch the actual product rather than /enter.
+    url: process.env.SUM_IOS_APP_URL || "https://summoner.world/app",
     cleartext: false,
     iosScheme: "summonworld",
   },

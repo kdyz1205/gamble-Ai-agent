@@ -8,6 +8,7 @@ import "./summoner-world.css";
 import "./sum-universe.css";
 import "./sum-award-v4.css";
 import "./sum-storybook.css";
+import "./ios-app.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",

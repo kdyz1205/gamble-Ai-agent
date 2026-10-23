@@ -1,0 +1,395 @@
+/* SUM complete iOS application surface — separate from the marketing landing page.
+   Every screenshot section below corresponds to a navigable React route and real data. */
+:root {
+  --ios-text: #292746;
+  --ios-muted: #78768f;
+  --ios-primary: #6465ee;
+  --ios-soft: #f5f2ff;
+  --ios-mint: #d7f6ef;
+  --ios-peach: #ffe4da;
+  --ios-lavender: #e9dfff;
+}
+.ios-app, .ios-app * { box-sizing: border-box; }
+.ios-app {
+  --ios-surface: #fffdfd;
+  --ios-ink: #292746;
+  --ios-secondary: #77758e;
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 486px);
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding-bottom: calc(102px + env(safe-area-inset-bottom));
+  font-family: "Plus Jakarta Sans", "Nunito", system-ui, sans-serif;
+  color: var(--ios-ink);
+  background:
+    radial-gradient(ellipse 77% 29% at 15% 14%, #ffeafa8a, transparent),
+    radial-gradient(ellipse 84% 28% at 95% 13%, #dfeaffae, transparent),
+    linear-gradient(#fffdfd, #fff7fb 61%, #fffefa);
+  box-shadow: 0 0 0 1px #e7e0fa, 0 15px 70px #5d507e18;
+}
+.ios-app a { text-decoration: none; color: inherit; }
+.ios-app button, .ios-app input, .ios-app select, .ios-app textarea { font: inherit; }
+.ios-app button { cursor: pointer; }
+.ios-app button:disabled { cursor: not-allowed; opacity: .54; }
+.ios-app :where(button,a,input,textarea,select):focus-visible { outline: 3px solid #5644cc; outline-offset: 3px; }
+.ios-app h1,.ios-app h2,.ios-app p,.ios-app h3 { margin: 0; }
+.ios-main { width: 100%; min-width: 0; padding: 23px 22px 28px; }
+.ios-app .ios-main > * + * { margin-top: 22px; }
+.ios-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 75px;
+  padding: calc(13px + env(safe-area-inset-top)) 22px 13px;
+  background: #fffaf9ec;
+  border-bottom: 1px solid #ece5f5;
+  backdrop-filter: blur(20px) saturate(1.3);
+}
+.ios-header__brand { font-size: 23px; font-weight: 850; letter-spacing: -.1em; color: #3d366c; }
+.ios-header__brand span { color: #bfa0e9; font-size: 17px; }
+.ios-header__title { flex: 1; display: grid; gap: 1px; text-align: center; }
+.ios-header__title small,.ios-overline { font-size: 9px; font-weight: 850; color: #9790ad; letter-spacing: .13em; }
+.ios-header__title strong { font-size: 16px; font-weight: 790; color: #393553; }
+.ios-header__avatar,.ios-back {
+  display: grid;
+  place-items: center;
+  flex: 0 0 37px;
+  height: 37px;
+  border: 1px solid #e8d7f2;
+  background: #f4e8ff;
+  border-radius: 50%;
+  color: #6e5ba3;
+}
+.ios-back { background: #fff; }
+.ios-tabbar {
+  position: fixed;
+  z-index: 99;
+  width: min(456px, calc(100% - 18px));
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(5,minmax(0,1fr));
+  gap: 3px;
+  padding: 8px 6px 9px;
+  border: 1px solid #e7ddf4;
+  border-radius: 23px;
+  background: #fffcffed;
+  box-shadow: 0 9px 28px #6054a529;
+  backdrop-filter: blur(22px);
+}
+.ios-tab { min-width: 0; min-height: 51px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-radius: 16px; font-size: 10px; font-weight: 690; color: #9c96ad!important; }
+.ios-tab__icon { display: grid; place-items: center; width: 29px; height: 26px; }
+.ios-tab--active { color: #675be6!important; background: #f0eaff; }
+.ios-tab--create .ios-tab__icon {
+  height: 35px;width: 35px;margin-top: -12px;margin-bottom: -1px;
+  border-radius: 50%; color: white; background: linear-gradient(135deg,#8586ff,#6164ed);
+  box-shadow: 0 5px 12px #675aea44;
+}
+.ios-art { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ios-action,.ios-primary,.ios-secondary-button {
+  display: flex; justify-content: center; align-items: center; gap: 13px;
+  width: 100%; min-height: 48px; padding: 11px 17px;
+  border: 0; border-radius: 999px;
+  font-size: 12px; font-weight: 780;
+  color: white!important; background: linear-gradient(110deg,#807af4,#5c5fea);
+  box-shadow: 0 9px 22px #6966d636;
+  text-align: center;
+}
+.ios-action--secondary,.ios-secondary-button {
+  border: 1px solid #e4dcf6; color: #6561bd!important;
+  background: #f1ebff; box-shadow: none;
+}
+.ios-action svg { margin-left: 4px; }
+.ios-message {
+  padding: 13px 15px;
+  border: 1px solid #ece3f6;
+  border-radius: 16px;
+  background: #fffeffbd;
+  color: #77728c;
+  font-size: 12px; line-height: 1.7;
+}
+.ios-message--error { color: #a73461; background: #fff0f5; border-color: #f8bfd4; }
+.ios-center { text-align: center; }
+.ios-page-title { font-family:"Fraunces",Georgia,serif; font-size: 31px; color: #39325e; line-height: 1.18; }
+.ios-centered-description { color: #79718f; text-align: center; font-size: 13px; line-height: 1.8; }
+.ios-footer-note,.ios-helper { font-size: 10px; line-height: 1.7; text-align: center; color: #9690a4; padding: 6px 11px; }
+
+/* Home / Today */
+.ios-welcome { display: grid; grid-template-columns: minmax(0,1fr) 121px; align-items: center; gap: 0; min-height: 155px; padding: 18px 13px 12px 22px; border-radius: 29px;
+  background: radial-gradient(circle at 92% 10%, #e8dfff,transparent 52%),linear-gradient(125deg,#e0f3ff,#fef0fd);
+  overflow: hidden;
+}
+.ios-welcome h1 { margin: 12px 0 9px; font-family: "Fraunces",Georgia,serif; color: #353065; font-size: 24px; line-height: 1.15; }
+.ios-welcome h1 span { color: #f4c588; }
+.ios-welcome p:not(.ios-overline){font-size:11px;line-height:1.65;color:#68668b;}
+.ios-welcome__pico {height:132px;object-fit:cover;object-position:center;border-radius:44%;box-shadow:0 5px 19px #9990cd18;}
+.ios-habits { display: grid; gap: 9px; }
+.ios-habit { display: grid; grid-template-columns: 59px 1fr auto; grid-template-rows: 1fr 1fr; align-items: center; min-height: 81px; padding: 10px 14px; border-radius: 18px; border: 1px solid #ffe0de; background: #fff2ec; gap: 0 12px; }
+.ios-habit--create {background: #f5eaff;border-color:#efd5fa;}
+.ios-habit--grow {background:#e8faf8;border-color:#caeff0;}
+.ios-habit__image {grid-row:1/3;width:59px;height:58px;border-radius:14px;overflow:hidden;}
+.ios-habit strong {align-self:end;font-size:14px;color:#414064;font-weight:810;}
+.ios-habit small {align-self:start;margin-top:3px;font-size:10px;color:#858195;}
+.ios-habit >svg {grid-row:1/3;color:#8172a0;}
+.ios-section {display: grid;gap:14px;}
+.ios-section__heading {display:flex;align-items:end;justify-content:space-between;gap:15px; margin: 4px 0 10px;}
+.ios-section__heading small {font-size:9px;font-weight:830;letter-spacing:.1em;color:#a49ab2;}
+.ios-section__heading h2 {font-family:"Fraunces",Georgia,serif;color:#343154;font-size:24px;margin:4px 0 0;}
+.ios-section__heading a,.ios-text-action {display:inline-flex;align-items:center;gap:5px;flex-shrink:0;color:#6860d4;font-size:10px;font-weight:770;min-height:31px;background:none;border:0;}
+.ios-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+.ios-metrics > div {display:grid;gap:5px;padding:13px 9px;background:#f1efff;border:1px solid #e7e2ff;border-radius:14px;text-align:center;}
+.ios-metrics > div:nth-child(2){background:#fff0f8;border-color:#ffe2ef;}
+.ios-metrics > div:nth-child(3){background:#eafbfa;border-color:#d5f4f3;}
+.ios-metrics strong {font-size:20px;font-weight:860;color:#6258bb;}
+.ios-metrics span {font-size:9px;font-weight:700;color:#8c879e;}
+.ios-metrics--large > div {padding:19px 8px;}
+.ios-metrics--large strong {font-size:27px;}
+.ios-list {display:grid;gap:10px;}
+.ios-quest-card {display:grid;grid-template-columns:68px minmax(0,1fr) 15px;gap:11px;align-items:center;min-height:91px;padding:9px;border:1px solid #ece6f6;border-radius:19px;background:#fffefe;box-shadow:0 7px 21px #8271bd11;}
+.ios-quest-card__cover {width:68px;height:70px;border-radius:13px;overflow:hidden;}
+.ios-quest-card__body {display:grid;gap:4px;}
+.ios-quest-card strong {color:#3e3b63;font-size:12px;font-weight:800;line-height:1.35;}
+.ios-quest-card small {font-size:10px;color:#85809b;line-height:1.45;}
+.ios-quest-card >svg {color:#a19ab9;}
+.ios-pico-note {display:grid;grid-template-columns:78px minmax(0,1fr);gap:11px;align-items:center;padding:9px;border:1px solid #eadcf6;border-radius:20px;background:linear-gradient(120deg,#f6ecff,#fdf4f7);}
+.ios-pico-note .ios-art {width:75px;height:79px;border-radius:17px;}
+.ios-pico-note p {color:#746f8b;font-size:11px;line-height:1.55;}
+.ios-pico-note strong{display:block;color:#655aa7;margin-bottom:5px;}
+
+/* Discovery / Community */
+.ios-discover-hero {display:grid;grid-template-columns:1fr 135px;gap:0;align-items:center;min-height:169px;padding:17px 14px 16px 21px;border-radius:28px;background:linear-gradient(115deg,#f9eaff,#e8f5ff);}
+.ios-discover-hero h1,.ios-community-cover h1 {margin:11px 0 7px;color:#3e316a;font-family:"Fraunces",Georgia,serif;font-size:27px;line-height:1.1;}
+.ios-discover-hero p,.ios-community-cover p {font-size:11px;line-height:1.55;color:#817595;}
+.ios-discover-hero__art {height:134px;border-radius:32px;object-fit:cover;}
+.ios-search {display:flex;gap:10px;align-items:center;border:1px solid #e4e0ee;border-radius:16px;min-height:49px;padding:9px 13px;background:#fff;}
+.ios-search>svg {color:#988da7;}
+.ios-search input{outline:0;background:transparent;border:0;flex:1;min-width:0;color:#484362;font-size:13px;}
+.ios-filters {display:flex;gap:7px;align-items:center;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin;}
+.ios-chip {display:inline-flex;justify-content:center;align-items:center;min-width:60px;min-height:33px;padding:7px 12px;border-radius:999px;border:1px solid #e8e2f3;background:#fff;color:#90889f;font-size:10px;font-weight:750;white-space:nowrap;}
+.ios-chip.is-selected {border-color:#655de0;color:white;background:#6963e6;}
+.ios-chip[aria-pressed=true] {color:white;}
+.ios-community-cover {position:relative;min-height:205px;overflow:hidden;border-radius:24px;}
+.ios-community-cover > .ios-art {position:absolute;inset:0;width:100%;height:100%;}
+.ios-community-cover::after {content:"";position:absolute;inset:0;background:linear-gradient(0deg,#302958cc,transparent 80%);}
+.ios-community-cover > div {position:absolute;z-index:2;bottom:17px;left:20px;right:17px;}
+.ios-community-cover h1 {font-size:28px;color:white;text-shadow:0 3px 11px #3c2b4b88;}
+.ios-community-cover p {color:#fff8ff;font-weight:600;}
+.ios-feed {display:grid;gap:13px;}
+.ios-feed-card {display:grid;gap:12px;padding:16px;border:1px solid #e8def2;border-radius:20px;background:#fffefef0;}
+.ios-feed-card__author {display:flex;gap:11px;align-items:center;}
+.ios-feed-card__avatar {display:grid;place-items:center;width:37px;height:37px;border-radius:50%;background:#ebdefd;color:#6955b6;}
+.ios-feed-card__author span:last-child {display:grid;gap:3px;}
+.ios-feed-card__author strong,.ios-feed-card__quest strong {color:#4c406b;font-size:12px;}
+.ios-feed-card__author small,.ios-feed-card >small,.ios-feed-card__quest small {color:#978eaa;font-size:10px;}
+.ios-feed-card >p {line-height:1.65;color:#68627b;font-size:12px;}
+.ios-feed-card__quest {display:grid;grid-template-columns:68px 1fr 15px;gap:10px;align-items:center;border-radius:14px;background:#f3effb;padding:9px;}
+.ios-feed-card__quest .ios-art {height:65px;border-radius:10px;}
+.ios-feed-card__quest span {display:grid;gap:4px;}
+
+/* Pico and guest */
+.ios-pico-hero {position:relative;display:grid;justify-items:center;gap:7px;padding:10px 10px 23px;text-align:center;}
+.ios-pico-hero__glow {width:min(310px,100%);aspect-ratio:1.1;overflow:hidden;border-radius:47% 47% 40% 40%;box-shadow:0 18px 35px #ba9add27;background:radial-gradient(circle,#f9ebff,#e4eaff);}
+.ios-pico-hero h1 {font-family:"Fraunces",Georgia,serif;font-size:42px;font-weight:700;color:#4b4289;}
+.ios-pico-hero p {color:#81799a;font-size:12px;}
+.ios-pico-moods {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+.ios-pico-mood {display:grid;gap:6px;justify-items:center;padding:10px 7px;border-radius:15px;border:1px solid #e5ddf3;background:#fff;color:#807497;font-size:10px;font-weight:780;}
+.ios-pico-mood.is-selected {border-color:#aba1fa;background:#f1eaff;color:#6454a5;}
+.ios-pico-mood .ios-art {height:79px;border-radius:11px;}
+.ios-pico-explanation {padding:12px;color:#77708d;font-size:12px;line-height:1.7;}
+.ios-empty {display:grid;justify-items:center;gap:12px;text-align:center;padding:25px 15px;background:#fffdfef0;border:1px solid #eee7f6;border-radius:22px;}
+.ios-empty__art {width:148px;height:136px;border-radius:23px;}
+.ios-empty h2 {font-family:"Fraunces",Georgia,serif;color:#48406c;font-size:21px;}
+.ios-empty p {color:#847b93;font-size:12px;line-height:1.7;max-width:300px;}
+.ios-empty .ios-action {max-width:275px;}
+.ios-auth-invitation {display:grid;justify-items:center;gap:10px;text-align:center;padding:19px 15px;border:1px solid #efdfef;border-radius:20px;background:linear-gradient(125deg,#f4edff,#fff5f8);}
+.ios-auth-invitation__pico {width:128px;height:120px;border-radius:20px;}
+.ios-auth-invitation h2 {font-size:20px;font-family:"Fraunces",Georgia,serif;color:#48406c;}
+.ios-auth-invitation p {max-width:300px;color:#847a95;font-size:11px;line-height:1.6;}
+
+/* Profile, achievements, evidence, statistics */
+.ios-profile-head {display:grid;justify-items:center;gap:10px;text-align:center;padding:10px 5px 18px;}
+.ios-profile-head__portrait {display:block;width:140px;height:130px;border:6px solid white;border-radius:38px;overflow:hidden;box-shadow:0 12px 26px #9882c42c;}
+.ios-profile-head h1 {font-family:"Fraunces",Georgia,serif;font-size:29px;color:#40366d;}
+.ios-profile-head p {color:#9690a1;font-size:11px;}
+.ios-metrics--profile {width:100%;margin-top:8px;}
+.ios-menu {display:grid;gap:1px;padding:7px;border:1px solid #e9e1f1;border-radius:20px;background:#fff;}
+.ios-menu__row {display:grid;grid-template-columns:32px 1fr 16px;align-items:center;gap:12px;padding:10px 8px;min-height:50px;border-bottom:1px solid #f3eef8;}
+.ios-menu__row:last-child {border:0;}
+.ios-menu__row>svg {color:#a09bb4;}
+.ios-menu__row strong {color:#534c6e;font-size:12px;font-weight:720;}
+.ios-menu__icon {display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#f1ebfc;color:#766ad1;}
+.ios-badge-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.ios-badge {display:grid;justify-items:center;align-content:start;gap:8px;min-height:214px;padding:16px 10px;background:#fff;border:1px solid #ece3f0;border-radius:22px;text-align:center;}
+.ios-badge__art {position:relative;width:115px;height:110px;border-radius:25px;overflow:hidden;}
+.ios-badge__art .ios-art {filter:grayscale(.5);opacity:.55;}
+.ios-badge__art span {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:51px;height:51px;color:#b5a7cf;background:#faf5ffec;border:3px solid #e5dbf3;border-radius:50%;}
+.ios-badge.is-earned .ios-badge__art .ios-art {filter:none;opacity:1;}
+.ios-badge.is-earned .ios-badge__art span{color:#f5bf52;background:#fff5d5f2;border-color:#ebc475;}
+.ios-badge h2 {color:#51456c;font-size:13px;}
+.ios-badge p,.ios-badge small {color:#93889f;font-size:10px;line-height:1.5;}
+.ios-badge small {color:#6863be;}
+.ios-gallery {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.ios-proof {display:grid;gap:7px;padding:10px;background:#fff;border:1px solid #e9e2f2;border-radius:17px;}
+.ios-proof__visual {position:relative;height:131px;overflow:hidden;border-radius:12px;}
+.ios-proof__visual .ios-art,.ios-proof__visual img {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.ios-proof__visual>span {position:absolute;bottom:8px;right:8px;display:grid;place-items:center;width:29px;height:29px;border-radius:50%;color:#fff;background:#7165e6cc;}
+.ios-proof h2 {color:#534c6f;font-size:11px;line-height:1.4;}
+.ios-proof p {color:#9b93a5;font-size:10px;line-height:1.4;}
+.ios-proof a {color:#6860d6;font-size:10px;font-weight:750;}
+.ios-chart-card {display:grid;gap:12px;padding:19px;border:1px solid #e9ddf6;border-radius:22px;background:#fff;}
+.ios-chart-card h2 {font-family:"Fraunces",Georgia,serif;color:#4b4175;font-size:23px;}
+.ios-chart-card p {font-size:11px;color:#918aa1;}
+.ios-chart {display:grid;grid-template-columns:repeat(7,1fr);align-items:end;gap:7px;height:170px;padding-top:17px;}
+.ios-chart__day {height:100%;display:flex;flex-direction:column;align-items:center;justify-content:end;gap:9px;}
+.ios-chart__bar {display:block;width:25px;min-height:8px;background:linear-gradient(#9f7ff9,#6b67ef);border-radius:7px 7px 3px 3px;box-shadow:0 3px 9px #8173c822;}
+.ios-chart__day small {color:#93869e;font-size:9px;}
+
+/* Core quest workflow */
+.ios-create-hero {display:grid;grid-template-columns:106px 1fr;align-items:center;gap:15px;padding:10px;background:linear-gradient(110deg,#f6eaff,#e9f5ff);border-radius:24px;}
+.ios-create-hero .ios-art{height:128px;border-radius:19px;}
+.ios-create-hero h1{font-family:"Fraunces",Georgia,serif;color:#4b4178;font-size:23px;line-height:1.18;}
+.ios-create-hero p{font-size:10px;color:#847a98;line-height:1.65;margin-top:7px;}
+.ios-composer {min-width:0;border:1px solid #e7ddf0;border-radius:22px;padding:12px;background:#fffdfc;}
+.ios-composer .quest-composer {height:auto;min-height:0;border:0!important;box-shadow:none!important;background:transparent!important;padding:10px!important;max-width:100%;overflow:visible;}
+.ios-composer .quest-composer__prompt {border-radius:14px;background:#faf7ff;border:1px solid #eae1fa;padding:12px;}
+.ios-composer textarea {font-size:16px!important;}
+.ios-composer button {min-height:42px;}
+.ios-quest-hero {height:200px;border-radius:22px;overflow:hidden;position:relative;}
+.ios-quest-hero .ios-art {height:100%;}
+.ios-status {display:inline-flex;padding:6px 10px;border-radius:999px;border:1px solid #d9e7e4;background:#eafaf4;color:#388a71;font-size:10px;font-weight:800;text-transform:capitalize;}
+.ios-status--disputed,.ios-status--cancelled {background:#fff0f6;color:#be5e85;border-color:#ffd8e7;}
+.ios-quest-hero .ios-status {position:absolute;right:12px;top:12px;box-shadow:0 5px 11px #5c456036;}
+.ios-quest-description {display:grid;gap:10px;}
+.ios-quest-description h1 {font-family:"Fraunces",Georgia,serif;font-size:28px;color:#383253;line-height:1.2;}
+.ios-quest-description p:not(.ios-overline) {font-size:12px;line-height:1.65;color:#7d7790;}
+.ios-quest-stats {display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.ios-quest-stats>div {display:grid;justify-items:center;gap:7px;padding:13px 4px;border-radius:15px;background:#f1ecff;color:#645cc4;}
+.ios-quest-stats>div:nth-child(2){background:#fff0f5;color:#c36f98;}
+.ios-quest-stats>div:nth-child(3){background:#e9f8f8;color:#5ca7ad;}
+.ios-quest-stats strong {font-size:13px;line-height:1.3;text-align:center;}
+.ios-quest-stats span {font-size:9px;}
+.ios-quest-detail-card {display:grid;gap:11px;padding:18px;border:1px solid #e7dcf2;border-radius:19px;background:#fff;}
+.ios-quest-detail-card h2 {font-size:17px;color:#51436f;}
+.ios-quest-detail-card>div {display:flex;justify-content:space-between;align-items:center;gap:13px;border-top:1px solid #f0e9f5;padding-top:10px;}
+.ios-quest-detail-card>div>span:first-child {font-size:11px;color:#8f829a;}
+.ios-quest-detail-card>div>strong {font-size:11px;text-align:right;color:#534d70;}
+.ios-quest-detail-card>p {font-size:11px;color:#817a93;line-height:1.8;}
+.ios-actions {display:grid;gap:10px;}
+.ios-refresh {margin:15px auto 0;}
+.ios-proof-hero {height:187px;border-radius:22px;overflow:hidden;position:relative;}
+.ios-proof-hero .ios-art {height:100%;}
+.ios-proof-hero .ios-overline {position:absolute;bottom:10px;left:12px;padding:8px 10px;border-radius:10px;background:#fff9fbdc;color:#514c86;}
+.ios-proof-form {display:grid;gap:12px;padding:20px;border:1px solid #eae0f4;border-radius:21px;background:white;}
+.ios-proof-form h2 {font-size:18px;color:#534875;}
+.ios-proof-form p {font-size:11px;color:#8c819d;line-height:1.7;}
+.ios-proof-form label {font-size:12px;font-weight:780;color:#5c5283;}
+.ios-proof-form textarea {min-height:145px;padding:14px;border:1px solid #e5ddf2;border-radius:15px;outline:none;resize:vertical;background:#fbf9ff;color:#524970;font-size:16px;}
+.ios-proof-media {display:grid;justify-items:center;gap:10px;padding:20px;border:1px dashed #cab9eb;border-radius:18px;background:#f7f2ff;text-align:center;color:#7872b9;}
+.ios-proof-media strong {font-size:13px;color:#544994;}
+.ios-result-screen .ios-main {padding-top:52px;}
+.ios-complete-hero {width:245px;height:247px;margin:0 auto 15px;overflow:hidden;border-radius:50%;background:radial-gradient(circle,#fff2ff,#e4e7ff);}
+.ios-complete-hero .ios-art{height:100%;}
+.ios-result-screen .ios-action {max-width:300px;margin:14px auto;}
+
+/* Settings / onboarding */
+.ios-settings-group {display:grid;gap:9px;padding:15px;border-radius:19px;border:1px solid #ece4f4;background:#fff;}
+.ios-settings-group h2 {color:#514978;font-size:14px;margin:0 0 3px;}
+.ios-setting {display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:45px;border-bottom:1px solid #f4eef9;}
+.ios-setting:last-child {border:0;}
+.ios-setting span {display:inline-flex;align-items:center;gap:9px;font-size:12px;font-weight:720;color:#69627b;}
+.ios-setting>svg {color:#aaa3b7;}
+.ios-setting select {min-height:35px;max-width:115px;border:0;border-radius:8px;background:#f4effd;color:#605bad;font-size:11px;padding:7px;}
+.ios-setting input {width:19px;height:19px;accent-color:#6f65eb;}
+.ios-setting small {color:#9d95a7;font-size:10px;}
+.ios-signout {display:block;width:100%;min-height:46px;border:1px solid #ffe0e6;border-radius:14px;background:#fff5f7;color:#cf5d79;}
+.ios-onboarding {padding-bottom:10px;background:linear-gradient(#181e63,#8663bc 57%,#fff5ff 76%);}
+.ios-onboard-art {height:min(62svh,590px);position:relative;overflow:hidden;background:linear-gradient(#202476,#c097e8);}
+.ios-onboard-art>.ios-art {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.ios-onboard-art::after {content:"";position:absolute;inset:0;background:linear-gradient(180deg,#171b7d8c,transparent 37%,#ffffff19 73%,#fff5ff 100%);}
+.ios-onboard-art>span {position:absolute;z-index:2;top:calc(31px + env(safe-area-inset-top));left:0;right:0;color:#fff9f7;text-align:center;font-size:12px;font-weight:800;letter-spacing:.15em;text-shadow:0 2px 13px #291b6f88;}
+.ios-onboard-copy {position:relative;display:grid;justify-items:center;text-align:center;gap:15px;min-height:310px;margin-top:-30px;padding:24px 31px;border-radius:32px 32px 0 0;background:#fff7fd;box-shadow:0 -20px 24px #b5a2cc13;}
+.ios-onboard-copy>small {color:#9d89b9;font-size:9px;letter-spacing:.13em;font-weight:830;}
+.ios-onboard-copy h1 {font-family:"Fraunces",Georgia,serif;color:#2c275c;font-size:34px;line-height:1.1;}
+.ios-onboard-copy p {color:#8b829d;font-size:12px;line-height:1.75;}
+.ios-onboard-dots {display:flex;gap:6px;align-items:center;}
+.ios-onboard-dots span{height:6px;width:6px;border-radius:999px;background:#dcd1f1;}
+.ios-onboard-dots span.is-active {width:21px;background:#7164df;}
+.ios-onboard-copy .ios-text-action {margin-top:0;}
+.ios-splash {min-height:100dvh;padding-bottom:38px;color:white;text-align:center;background:radial-gradient(circle at 48% 40%,#706dcc,#1b246b 74%,#0d174a);}
+.ios-splash .ios-main {min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;gap:15px;padding:60px 32px;}
+.ios-splash__stars {color:#fff1ae;font-size:30px;letter-spacing:1em;}
+.ios-splash h1 {font-family:"Fraunces",Georgia,serif;font-size:40px;color:#fff6ff;}
+.ios-splash p {color:#e8e2ff;font-size:14px;}
+.ios-splash .ios-art {width:100%;height:43svh;border-radius:55px;box-shadow:0 22px 70px #100c4544;}
+.ios-splash__note {font-size:12px;letter-spacing:.1em;}
+.ios-app--night {--ios-ink:#f9f5ff;background:linear-gradient(#262549,#34305c 60%,#292548);}
+.ios-app--night .ios-main > :where(.ios-settings-group,.ios-quest-card,.ios-menu) {background:#393459;color:#f9f5ff;border-color:#635b86;}
+.ios-app--night .ios-settings-group h2,.ios-app--night .ios-setting span {color:#f8f4ff;}
+.ios-app--night .ios-header {background:#2d294de8;border-color:#575077;}
+.ios-app--night .ios-header__title strong {color:#fff;}
+@media (max-width: 349px) {
+  .ios-main{padding-left:13px;padding-right:13px;}
+  .ios-header{padding-inline:12px;}
+  .ios-welcome{grid-template-columns:1fr 90px;}
+  .ios-welcome__pico{height:103px;}
+  .ios-tabbar{width:calc(100% - 10px);padding-inline:4px;}
+  .ios-tab{font-size:9px;}
+  .ios-quest-card{grid-template-columns:57px 1fr 12px;}
+  .ios-quest-card__cover{width:57px;height:57px;}
+}
+@media (min-width: 800px) {
+  .ios-app {margin-block:24px;min-height:calc(100dvh - 48px);border-radius:34px;overflow:clip;}
+  .ios-header {border-radius:34px 34px 0 0;}
+  .ios-tabbar{bottom:22px;}
+}
+ .ios-app[data-reduce-motion=true] *, .ios-app[data-reduce-motion=true] *::before, .ios-app[data-reduce-motion=true] *::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; }
+@media (prefers-reduced-motion: reduce) {
+  .ios-app *, .ios-app *::before, .ios-app *::after {animation:none!important;scroll-behavior:auto!important;transition:none!important;}
+}
+
+/* On-device daily rituals are genuinely editable, persistent and clearly not certified Quest proof. */
+.ios-daily-rituals {display:grid;gap:11px;padding:15px;border:1px solid #e8def5;border-radius:22px;background:#fffdfef2;box-shadow:0 7px 22px #8d73a614;}
+.ios-daily-rituals .ios-section__heading{margin:0 0 2px;}
+.ios-ritual-progress {display:grid;gap:9px;padding:13px;background:#f4edff;border-radius:16px;border:1px solid #e7dafb;}
+.ios-ritual-progress>div:first-child{display:flex;align-items:center;gap:9px;}
+.ios-ritual-progress strong{font-size:21px;color:#6660c7;font-weight:820;}
+.ios-ritual-progress span,.ios-ritual-progress small{font-size:10px;color:#7e76a3;font-weight:730;}
+.ios-ritual-progress__bar{height:8px;background:#e4d9fa;border-radius:999px;overflow:hidden;}
+.ios-ritual-progress__bar span{display:block;height:100%;background:linear-gradient(90deg,#a17cff,#6168ee);transition:width .2s ease;}
+.ios-ritual-list{display:grid;gap:8px;}
+.ios-ritual{display:grid;grid-template-columns:38px 1fr 27px;align-items:center;gap:9px;min-height:62px;padding:8px;background:#fff;border:1px solid #eee5f6;border-radius:14px;}
+.ios-ritual.is-done{background:#effbf5;border-color:#d4efde;}
+.ios-ritual__toggle{display:grid;place-items:center;width:35px;height:35px;border:2px solid #d7c9f5;border-radius:50%;background:#f7f2ff;color:#665ae6;}
+.ios-ritual.is-done .ios-ritual__toggle{border-color:#70caaa;background:#a6e7cd;color:#256b56;}
+.ios-ritual__empty{width:12px;height:12px;border:1px solid #c6b9e4;border-radius:50%;}
+.ios-ritual>span{display:grid;gap:5px;min-width:0;}
+.ios-ritual>span strong{font-size:12px;color:#584e78;overflow-wrap:anywhere;}
+.ios-ritual>span small{font-size:9px;color:#9288a6;}
+.ios-ritual__remove{width:27px;height:30px;background:none;border:0;color:#b0a8bf;font-size:21px;}
+.ios-ritual-add{display:grid;gap:10px;padding:12px;border-radius:15px;background:#f9f5ff;}
+.ios-ritual-add label{font-size:12px;font-weight:800;color:#605782;}
+.ios-ritual-add input{min-height:44px;border:1px solid #e3d8f4;background:white;border-radius:10px;padding:10px 12px;font-size:16px;min-width:0;}
+.ios-ritual-examples{display:flex;flex-wrap:wrap;align-items:center;gap:5px;}
+.ios-ritual-examples small{font-size:10px;color:#8c83a3;}
+.ios-ritual-examples button{min-height:31px;padding:6px 8px;border:1px solid #e3d5f4;border-radius:15px;background:white;color:#685fb7;font-size:9px;font-weight:680;}
+.ios-daily-rituals .ios-footer-note{text-align:left;padding:5px 0 0;font-size:9px;line-height:1.65;}
+@media(prefers-reduced-motion:reduce){.ios-ritual-progress__bar span{transition:none!important;}}
+
+/* Javascript-backed actions become usable only after React has attached handlers.
+   Native links retain normal behavior even during a slow first hydration. */
+.ios-app[data-hydrated=false] :is(button,input,textarea,select) {
+  pointer-events: none;
+  opacity: .72;
+}
+.ios-app[data-hydrated=false] .ios-tabbar {
+  pointer-events: none;
+}
+.ios-app[data-hydrated=true] :is(button,input,textarea,select) {
+  pointer-events: auto;
+}
