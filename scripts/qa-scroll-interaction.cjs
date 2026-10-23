@@ -59,6 +59,12 @@ async function test(page, route, width) {
   const up = await snapshot(page);
   assert(up.top + 50 < down.top, "wheel up was swallowed");
 
+  // The composer legitimately uses End inside a focused textarea to move
+  // its caret; blur form controls before testing document-level navigation.
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
+  });
   await page.keyboard.press("End");
   await page.waitForTimeout(400);
   const end = await snapshot(page);
