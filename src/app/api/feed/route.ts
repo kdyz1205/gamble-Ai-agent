@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { blockedPeerIds, blockedFeedExclusions } from "@/lib/user-blocks";
+import type { Prisma } from "@/generated/prisma/client";
 
 /**
  * GET /api/feed — Get live activity feed
@@ -11,8 +14,13 @@ export async function GET(req: NextRequest) {
   const offset = Math.max(Number.parseInt(url.searchParams.get("offset") || "0") || 0, 0);
   const type   = url.searchParams.get("type"); // filter by event type
 
-  const where = { OR: [{ challengeId: null }, { challenge: { is: { isPublic: true, visibility: "public" } } }],
-    ...(type ? { type } : {}) };
+  const viewer = await getAuthUser();
+  const peers = viewer ? await blockedPeerIds(viewer.userId) : [];
+  const where: Prisma.ActivityEventWhereInput = {
+    OR: [{ challengeId: null }, { challenge: { is: { isPublic: true, visibility: "public" } } }],
+    ...(type ? { type } : {}),
+    ...blockedFeedExclusions(peers),
+  };
 
   const [events, total] = await Promise.all([
     prisma.activityEvent.findMany({
@@ -28,5 +36,5 @@ export async function GET(req: NextRequest) {
     prisma.activityEvent.count({ where }),
   ]);
 
-  return Response.json({ events, total, limit, offset });
+  return Response.json({ events, total, limit, offset }, { headers: { "Cache-Control": "private, no-store" } });
 }

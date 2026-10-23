@@ -5,6 +5,9 @@ import {
   sortChallengesByDiscovery,
 } from "@/lib/challenge-discovery";
 import { ChallengeStatus } from "@/lib/enums";
+import { getAuthUser } from "@/lib/auth";
+import { blockedPeerIds, publicChallengePeerExclusions } from "@/lib/user-blocks";
+import type { Prisma } from "@/generated/prisma/client";
 
 /**
  * GET /api/challenges/discover — 3-level waterfall discovery.
@@ -41,11 +44,18 @@ export async function GET(req: NextRequest) {
     Math.abs(lat) <= 90 &&
     Math.abs(lng) <= 180;
 
+  const viewer = await getAuthUser();
+  const peerIds = viewer ? await blockedPeerIds(viewer.userId) : [];
+  const publicWhere: Prisma.ChallengeWhereInput = {
+    status: ChallengeStatus.open, isPublic: true, visibility: "public",
+    ...publicChallengePeerExclusions(peerIds),
+  };
+
   // ── Level 1: precise geo sort ─────────────────────────────────────────────
   if (hasGeo) {
     // Fetch a larger pool so we can sort by distance then trim.
     const pool = await prisma.challenge.findMany({
-      where: { status: ChallengeStatus.open, isPublic: true, visibility: "public" },
+      where: publicWhere,
       include: {
         ...CHALLENGE_SELECT,
         // Include creator geo fields for distance calc only — stripped below.
