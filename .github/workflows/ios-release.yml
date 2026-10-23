@@ -35,6 +35,7 @@ jobs:
         run: npm ci
       - name: Verify native bundle before signing
         run: |
+          node scripts/test-ios-xcodeproj-integrity.cjs
           test -f ios-shell/index.html
           test -f ios-shell/pico-offline.webp
           test -f ios/App/App.xcodeproj/project.pbxproj
@@ -96,9 +97,18 @@ jobs:
           curl --fail --silent --show-error --location \
             --max-time 20 -o /dev/null 'https://summoner.world/app/today'
           echo 'PRODUCTION_APP_ROUTE_VERIFIED'
+      - name: Select App Store supported Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          matching=(/Applications/Xcode_26*.app)
+          test -d "${matching[0]}" || { echo 'Xcode 26 is required for App Store uploads'; exit 1; }
+          sudo xcode-select --switch "${matching[0]}/Contents/Developer"
+          xcodebuild -version | grep 'Xcode 26'
       - name: Install and sync native App
         run: |
           npm ci
+          node scripts/test-ios-xcodeproj-integrity.cjs
           npm run ios:sync
           npm run ios:doctor
       - name: Install App Store Connect API key
