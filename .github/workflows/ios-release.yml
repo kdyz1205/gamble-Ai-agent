@@ -243,7 +243,17 @@ jobs:
           app="ios/build/simulator-derived/Build/Products/Debug-iphonesimulator/App.app"
           test -d "$app"
           xcrun simctl boot "$sim"
-          xcrun simctl bootstatus "$sim" -b
+          # Do not let a stalled macOS CoreSimulator hide a failure for 45 minutes.
+          python3 - "$sim" <<'PY'
+          import subprocess,sys
+          cmd=["xcrun","simctl","bootstatus",sys.argv[1],"-b"]
+          try:
+              subprocess.run(cmd,check=True,timeout=240)
+          except subprocess.TimeoutExpired:
+              print("IOS_SIMULATOR_BOOT_TIMEOUT_AFTER_240_SECONDS",file=sys.stderr)
+              sys.exit(124)
+          PY
+          xcrun simctl list devices available > ios/build/simulator-evidence/simulators.txt
           xcrun simctl install "$sim" "$app"
           bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           test "$bundle" = "com.summonworld.app"
