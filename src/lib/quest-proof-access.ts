@@ -1,4 +1,4 @@
-import { getAuthUser } from "./auth";
+import { getAuthUser, type AuthUser } from "./auth";
 import prisma from "./db";
 import { isBlockedQuestViewer } from "./user-blocks";
 
@@ -6,8 +6,8 @@ import { isBlockedQuestViewer } from "./user-blocks";
 export async function canReadQuestProof(quest: {
   isPublic: boolean; visibility: string; creatorId: string;
   participants: Array<{ userId: string; status: string }>;
-}): Promise<boolean> {
-  const user = await getAuthUser();
+}, verifiedViewer?: AuthUser | null): Promise<boolean> {
+  const user = verifiedViewer === undefined ? await getAuthUser() : verifiedViewer;
   if (user && await isBlockedQuestViewer(user.userId, quest)) return false;
   if (quest.isPublic && quest.visibility === "public") return true;
   if (!user) return false;

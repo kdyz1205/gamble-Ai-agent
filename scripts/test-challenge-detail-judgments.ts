@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { NextRequest } from "next/server";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import prisma from "../src/lib/db";
-import { GET } from "../src/app/api/challenges/[id]/route";
+import { loadChallengeDetail } from "../src/lib/quest-detail-handler";
 import ResultReceiptCard from "../src/components/ResultReceiptCard";
 
 async function main() {
@@ -37,7 +36,7 @@ async function main() {
       status: "processing", resolution: "override", resolvedWinnerId: players[1].id,
       reason: "Explicit interrupted-review display fixture.", expiresAt: new Date(Date.now() + 86_400_000),
     } });
-    const read = async (id = challengeId!) => GET(new NextRequest(`http://localhost/api/challenges/${id}`), { params: Promise.resolve({ id }) });
+    const read = async (id = challengeId!) => loadChallengeDetail(id, null);
     const first = await read(); assert.equal(first.status, 200);
     const initial = (await first.json()).challenge.judgments;
     assert.deepEqual(initial.map((row: { id: string }) => row.id), [original.id]);
