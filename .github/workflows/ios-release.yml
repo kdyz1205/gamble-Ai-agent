@@ -139,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ios/build/private_keys
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "ios/build/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "ios/build/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
           chmod 600 "ios/build/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
       - name: Build signed archive
         shell: bash
