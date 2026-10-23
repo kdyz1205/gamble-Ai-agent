@@ -38,16 +38,18 @@ export function IosIcon({ name, size = 22 }: { name: IconName; size?: number }) 
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" {...common}>{icons[name]}</svg>;
 }
 
+// Cropped from the project's original 3D storybook artwork. Source marketing
+// plates contain editorial text outside these app-safe framings.
 export const visuals = {
-  mascot: "/storybook-premium/pico2.webp",
-  mascotHappy: "/storybook-premium/hero2.webp",
-  portal: "/storybook-premium/hero1.webp",
-  move: "/storybook-premium/realm1.webp",
-  create: "/storybook-premium/realm2.webp",
-  grow: "/storybook-premium/realm3.webp",
-  sky: "/storybook-premium/pico3.webp",
-  adventure: "/storybook-premium/hero3.webp",
-  landscape: "/storybook-premium/wide1.webp",
+  mascot: "/storybook-premium/ios-clean/pico-companion.webp",
+  mascotHappy: "/storybook-premium/ios-clean/pico-portal.webp",
+  portal: "/storybook-premium/ios-clean/dream-portal.webp",
+  move: "/storybook-premium/ios-clean/move-world.webp",
+  create: "/storybook-premium/ios-clean/create-world.webp",
+  grow: "/storybook-premium/ios-clean/grow-world.webp",
+  sky: "/storybook-premium/ios-clean/sleeping-familiar.webp",
+  adventure: "/storybook-premium/ios-clean/forest-familiar.webp",
+  landscape: "/storybook-premium/ios-clean/community-world.webp",
 } as const;
 
 export function IosArt({ src, alt = "", className = "", priority = false }: {

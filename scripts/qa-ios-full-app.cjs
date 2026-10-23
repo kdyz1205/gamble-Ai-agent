@@ -26,8 +26,16 @@ async function meta(page){
   return page.evaluate(()=>{
     const doc=document.documentElement,body=document.body;
     const nav=document.querySelector('[data-testid="ios-tabbar"]');
-    return { width:innerWidth,
-      overflow:Math.max(doc.scrollWidth,body.scrollWidth)-innerWidth,
+    const overflow=Math.max(doc.scrollWidth,body.scrollWidth)-innerWidth;
+    const overflowingElements=overflow>1?Array.from(body.querySelectorAll("*"))
+      .map(el=>({el,r:el.getBoundingClientRect()}))
+      .filter(({r})=>r.width>0&&r.right>innerWidth+1&&r.left>=0)
+      .slice(0,8).map(({el,r})=>({
+        tag:el.tagName.toLowerCase(),
+        className:typeof el.className==="string"?el.className.slice(0,80):"",
+        left:Math.round(r.left),right:Math.round(r.right)
+      })):[];
+    return { width:innerWidth, overflow, overflowingElements,
       bottomNavs:document.querySelectorAll('[data-testid="ios-tabbar"]').length,
       otherNavs:document.querySelectorAll('[data-testid="sum-app-dock"]').length,
       labels:nav?Array.from(nav.querySelectorAll("a")).map(a=>a.getAttribute("aria-label")):[],
@@ -38,8 +46,19 @@ async function meta(page){
     };
   });
 }
+const onboardArtFiles=["pico-portal.webp","dream-portal.webp","pico-companion.webp"];
+async function waitForOnboardArtwork(page,step){
+  await page.waitForFunction(filename=>{
+    const art=document.querySelector(".ios-onboard-art img");
+    return !!art && art.currentSrc.includes(filename) && art.complete && art.naturalWidth>0;
+  },onboardArtFiles[step],{timeout:20000});
+}
 (async()=>{
-const browser=await chromium.launch({headless:true,executablePath:"C:/Program Files/Google/Chrome/Application/chrome.exe",args:["--disable-extensions","--disable-gpu"]});
+const browser=await chromium.launch({
+  headless:true,
+  ...(process.platform==="win32" ? {executablePath:process.env.SUM_IOS_CHROME||"C:/Program Files/Google/Chrome/Application/chrome.exe"} : {}),
+  args:["--disable-extensions","--disable-gpu"]
+});
 try {
 for(const width of widths){
   const small=width<=430;
@@ -57,15 +76,29 @@ for(const width of widths){
         await page.locator('[data-testid="ios-full-app"]').waitFor({state:"visible",timeout:25000});
         await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
         await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
+        // Screenshots must show the settled public API state, not a transient
+        // loading placeholder. This is read-only and fails if it never resolves.
+        if(view==="discover"||view==="community"){
+          await page.waitForFunction(()=>!document.querySelector(".ios-loading-list"),null,{timeout:20000});
+        }
         await page.evaluate(async()=>{const imgs=Array.from(document.images).filter(img=>img.getBoundingClientRect().top<innerHeight+130);await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));});
         const m=await meta(page);
-        assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px");
+        assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px; "+JSON.stringify(m.overflowingElements));
         const intro=view==="splash"||view==="onboarding";
         assert.equal(m.bottomNavs,intro?0:1,"exactly one appropriate bottom dock");
         assert.equal(m.otherNavs,0,"global marketing nav must not duplicate the app nav");
         if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Picos","Profile"]);
         assert.deepEqual(runtimeErrors,[],"uncaught browser errors");
         assert.equal(m.errors,0,"render failure");
+        if(view==="onboarding"&&width===390){
+          for(const selector of [".ios-onboard-copy .ios-primary",".ios-onboard-copy .ios-text-action"]){
+            const box=await page.locator(selector).evaluate(el=>({
+              bottom:Math.round(el.getBoundingClientRect().bottom),height:window.innerHeight
+            }));
+            assert(box.bottom<=box.height-8,
+              "Onboarding action "+selector+" not visible without scroll: "+JSON.stringify(box));
+          }
+        }
         if(width===390){
           await page.screenshot({path:path.join(out,view+"-390.png"),animations:"disabled",
             fullPage:["today","create","achievements","settings","community","discover"].includes(view),timeout:25000});
@@ -75,6 +108,36 @@ for(const width of widths){
     });
   }
   if(width===390){
+    await test("Compact iPhone shows every onboarding action without scrolling",async()=>{
+      const compact=await browser.newContext({
+        viewport:{width:375,height:667},deviceScaleFactor:1,
+        reducedMotion:"reduce",isMobile:true,hasTouch:true
+      });
+      try {
+        const shortPage=await compact.newPage();
+        await shortPage.goto(base+"/app/onboarding",{waitUntil:"domcontentloaded",timeout:60000});
+        await shortPage.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+        const measurements=[];
+        for(let i=0;i<3;i++){
+          await waitForOnboardArtwork(shortPage,i);
+          const button=shortPage.getByRole("button",{name:i===2?"Get Started":"Next"});
+          await button.waitFor({state:"visible",timeout:15000});
+          const bounds=await button.evaluate(el=>{
+            const r=el.getBoundingClientRect();
+            return {bottom:Math.round(r.bottom),viewport:window.innerHeight,
+              label:el.textContent.trim()};
+          });
+          assert(bounds.bottom<=bounds.viewport-8,
+            "Step "+(i+1)+" primary button below the fold: "+JSON.stringify(bounds));
+          measurements.push(bounds);
+          await shortPage.screenshot({path:path.join(out,"onboarding-short-"+(i+1)+".png"),
+            animations:"disabled"});
+          await button.click();
+        }
+        await shortPage.waitForURL(/\/app\/today/,{timeout:45000});
+        return measurements;
+      } finally {await compact.close();}
+    });
     await test("First install onboarding advances three real pages",async()=>{
       await page.goto(base+"/app",{waitUntil:"domcontentloaded"});
       await page.waitForURL(/\/app\/onboarding/,{timeout:45000});
@@ -82,6 +145,7 @@ for(const width of widths){
       await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       const headings=[];
       for(let i=0;i<3;i++){
+        await waitForOnboardArtwork(page,i);
         headings.push(await page.locator("h1").first().innerText());
         await page.screenshot({path:path.join(out,"onboarding-"+(i+1)+".png"),animations:"disabled"});
         await page.getByRole("button",{name:i===2?"Get Started":"Next"}).click();

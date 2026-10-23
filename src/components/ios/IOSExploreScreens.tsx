@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
 import {useOpenQuests,usePublicActivity} from "./IOSAppData";
+import IOSLoadingCards from "./IOSLoadingCards";
 
 const categories=[
   { id:"all", label:"All" },{id:"move",label:"Move"},{id:"create",label:"Create"},{id:"grow",label:"Grow"},
@@ -36,7 +37,7 @@ export function DiscoverScreen() {
     </label>
     <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}</button>)}</div>
     <div className="ios-section__heading"><div><small>REAL OPEN CHALLENGES</small><h2>Explore together</h2></div><button className="ios-text-action" type="button" onClick={refresh}>Refresh</button></div>
-    {loading ? <p className="ios-message" role="status">Finding public Quests…</p> :
+    {loading ? <IOSLoadingCards label="Finding public Quests…" /> :
       error ? <p className="ios-message ios-message--error" role="alert">{error}</p> :
       visible.length===0 ? <IosEmpty image={visuals.move} heading="A new Quest could start with you."
         description={search?"No matching public Quests. Try another search.":"No public open Quests right now. Be the one who starts something."}
@@ -54,7 +55,7 @@ export function CommunityScreen() {
       <div><h1>Little things,<br/>together.</h1><p>A public record of moments from the SUM community.</p></div>
     </section>
     <div className="ios-section__heading"><div><small>PUBLIC ACTIVITY</small><h2>For you</h2></div><button type="button" className="ios-text-action" onClick={refresh}>Refresh</button></div>
-    {loading?<p className="ios-message" role="status">Loading public community activity…</p>:
+    {loading?<IOSLoadingCards label="Loading public community activity…" rows={2}/>:
     error?<p className="ios-message ios-message--error" role="alert">{error}</p>:
     events.length===0?<IosEmpty image={visuals.create} heading="Your community starts small." description="No public activity has been recorded yet. Completed Quests and public updates will appear here when available." action="Explore Quests" href="/app/discover"/>:
     <div className="ios-feed">{events.map(ev=><article className="ios-feed-card" key={ev.id}>
@@ -76,7 +77,7 @@ export function CommunityScreen() {
 
 const picoStates=[
   {id:"guide",label:"Guide",image:visuals.mascot,copy:"Tell Pico the idea you want to bring to life."},
-  {id:"clarify",label:"Clarify",image:visuals.portal,copy:"Pico can help make a Quest clear enough for everyone to agree."},
+  {id:"clarify",label:"Clarify",image:visuals.mascotHappy,copy:"Pico can help make a Quest clear enough for everyone to agree."},
   {id:"review",label:"Review",image:visuals.mascotHappy,copy:"Proof must follow the actual accepted rules."}
 ] as const;
 
