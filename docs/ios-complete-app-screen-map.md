@@ -39,6 +39,14 @@ This is a **whole-app navigation, UI and existing-API integration** effort, not 
 - Existing `codex/ai-cost-and-lifecycle-reliability` backend branch still has divergent UI contracts. Integrate those deliberately, **do not force-merge/overwrite**.
 - On Windows, Xcode signing, TestFlight WKWebView and App Store Connect upload have not been performed. Native app must be verified from a macOS Apple build after the production `/app` route exists.
 
+## Reproducible actual-screen gallery (October 23, 2026)
+- CI runs `scripts/qa-ios-full-app.cjs` against the built server at a 390px mobile viewport and validates both 390px and desktop pages. It verifies three distinct onboarding illustrations and on-screen primary actions at 375x667.
+- After all browser checks pass, `scripts/build-ios-visual-gallery.cjs` creates `output/ios-full-app/SUM_iOS_20_Actual_Reference_Panels.jpg`, `SUM_iOS_20_Screen_Gallery.html`, and a SHA256 manifest. These are included in the `browser-flow-evidence` GitHub Actions artifact for the exact commit.
+- Panel 08 Today is deliberately a second reference to the **same implemented route** as 05 Home (`/app/today`). Panels 07/09/10/11 show truthful "no Quest ID" states in read-only CI, not fabricated successful creation/proof/settlement. Guest-only pages display their real sign-in/empty states.
+- Panel 20 is the actual native Xcode `AppIcon-512@2x.png` asset, **not a rendered in-app screen**. The `iOS Native Verification and Export` workflow separately archives the unsigned iOS app and boots/installs/launches it in an actual iPhone Simulator; it resolves the current PR's Ready preview rather than using a stale hardcoded URL.
+- To reproduce the gallery locally after captured screenshots are present: `node scripts/build-ios-visual-gallery.cjs`. To verify fail-closed fixture and manifest behavior: `node scripts/test-ios-visual-gallery.cjs`.
+- All screenshots are actual running UI evidence. They do not establish that a signed TestFlight build, App Store approval, user authentication on a physical iPhone, or a fully settled real-money flow has been verified.
+
 ## Acceptance
 - `node scripts/qa-ios-full-app.cjs`: all route screens HTTP 200, semantic content, app-specific five-tab navigation, no duplicate landing nav, no sideways overflow, no uncaught errors, dynamic onboarding state, real composer, persisted local preferences, fail-closed result and wheel scrolling.
 - `npm run lint`, `tsc --noEmit`, `npm run test:production:unit`, `npm run test:production:integration`, `next build` via isolated CI.
