@@ -1,115 +1,13 @@
-import PicoFamiliar from "@/components/familiar/PicoFamiliar";
-import RitualButton from "@/components/scene/RitualButton";
+import Link from "next/link";
 import SceneShell from "@/components/scene/SceneShell";
+import QuestArtifact from "@/components/experience/QuestArtifact";
+import { Arrow, FamiliarNote, PageIntro, QuestJourney, WorldGlyph } from "@/components/universe/WorldUI";
 
-const participants = [
-  { name: "Mira", role: "Quest creator", proof: "3 items", tone: "peach" as const },
-  { name: "Ren", role: "Challenger", proof: "2 items", tone: "mint" as const },
-] as const;
-
-const proofEvents = [
-  ["Quest accepted", "Both players"],
-  ["Mira submitted", "Continuous video"],
-  ["Ren submitted", "Match record"],
-  ["Familiar review", "Opens when ready"],
-] as const;
-
+const checklist = [["Keep the whole attempt in view.", "Start before the action. Finish after the outcome. Missing moments can leave the result uncertain."], ["Keep each Summoner identifiable.", "Show who took part and which person each record belongs to."], ["Follow the pact you both accepted.", "The actual quest defines its proof requirements and submission deadline."]];
 export default function DuelDemoPage() {
-  return (
-    <SceneShell activePath="/duel/demo" particleCount={24} tone="contract">
-      <section className="mx-auto w-full max-w-[1280px] px-3 py-5 sm:px-5 lg:px-7 lg:py-7">
-        <header className="mx-auto max-w-3xl text-center">
-          <span className="sum-sticker-badge px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em]">Proof portal</span>
-          <h1 className="mt-3 text-3xl font-extrabold leading-none text-[color:var(--sum-ink)] sm:text-4xl">Bring the quest proof together.</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">
-            Each Summoner uploads their own record. Pico keeps the files attributed, ordered, and ready for a fair result.
-          </p>
-        </header>
-
-        <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-[minmax(220px,0.7fr)_minmax(440px,1.35fr)_minmax(220px,0.7fr)]">
-          <ParticipantProofCard {...participants[0]} align="left" />
-          <ProofPortalStage />
-          <ParticipantProofCard {...participants[1]} align="right" />
-        </div>
-
-        <EvidenceTimeline />
-      </section>
-    </SceneShell>
-  );
-}
-
-function ParticipantProofCard({ align, name, proof, role, tone }: { align: "left" | "right"; name: string; proof: string; role: string; tone: "peach" | "mint" }) {
-  return (
-    <aside className="sum-world-panel flex flex-col items-center justify-center p-5 text-center" data-testid={`duel-proof-panel-${align}`}>
-      <span className="rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--sum-ink)]" style={{ background: tone === "peach" ? "var(--sum-peach)" : "var(--sum-mint)" }}>{role}</span>
-      <PicoFamiliar className="mt-4 h-28 w-28" mood={tone === "peach" ? "guide" : "referee"} />
-      <h2 className="mt-2 text-xl font-extrabold text-[color:var(--sum-ink)]">{name}</h2>
-      <p className="mt-1 text-xs font-semibold text-[color:var(--sum-muted)]">{proof} submitted</p>
-      <div className="mt-4 flex gap-1.5" aria-label={`${proof} submitted`}>
-        {Array.from({ length: 3 }).map((_, index) => (
-          <span className="h-3 w-3 rounded-full" key={index} style={{ background: index < Number(proof[0]) ? "var(--sum-mint)" : "rgba(96,117,138,0.18)" }} />
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function ProofPortalStage() {
-  return (
-    <section className="sum-world-panel relative isolate min-h-[430px] overflow-hidden p-5 sm:p-6" data-testid="proof-altar-stage">
-      <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-[color:var(--sum-sun)] opacity-30 blur-3xl" aria-hidden />
-      <div className="absolute -bottom-10 -left-10 h-36 w-36 rounded-full bg-[color:var(--sum-mint)] opacity-30 blur-3xl" aria-hidden />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Shared proof bundle</p>
-          <h2 className="mt-2 text-2xl font-extrabold text-[color:var(--sum-ink)]">First to 3 badminton rallies</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[color:var(--sum-muted)]">No scoreboard required · one continuous clip recommended</p>
-        </div>
-        <PicoFamiliar className="h-20 w-20 shrink-0" mood="referee" />
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        {[
-          ["Video", "Mira · 01:42"],
-          ["Player ID", "Blue / white shirts"],
-          ["Match note", "First to 3 rallies"],
-          ["Deadline", "Today · 8:00 PM"],
-        ].map(([label, value], index) => (
-          <article className="rounded-[18px] border border-[color:var(--sum-border)] bg-white/76 p-3" key={label}>
-            <span className="grid h-8 w-8 place-items-center rounded-full text-xs font-extrabold text-[color:var(--sum-ink)]" style={{ background: index % 2 ? "var(--sum-mint)" : "var(--sum-peach)" }}>{index + 1}</span>
-            <p className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--sum-muted)]">{label}</p>
-            <p className="mt-1 text-sm font-extrabold text-[color:var(--sum-ink)]">{value}</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-[20px] border border-[rgba(143,230,193,0.54)] bg-[rgba(143,230,193,0.18)] p-4 text-center">
-        <p className="text-xs font-semibold leading-5 text-[color:var(--sum-muted)]">Pico will return rally winners only. The app derives the running score and routes unclear moments to review.</p>
-        <RitualButton className="mt-3 min-h-12 w-full px-8 text-sm sm:w-auto" data-testid="present-evidence-button" type="button">Submit proof</RitualButton>
-      </div>
-    </section>
-  );
-}
-
-function EvidenceTimeline() {
-  return (
-    <section className="sum-world-panel mt-4 p-4 sm:p-5" data-testid="evidence-timeline">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#2a9f84]">Proof timeline</p>
-          <h2 className="mt-1 text-xl font-extrabold text-[color:var(--sum-ink)]">Every record stays attributed</h2>
-        </div>
-        <p className="text-xs font-semibold text-[color:var(--sum-muted)]">Familiar review opens after required proof arrives.</p>
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {proofEvents.map(([label, detail], index) => (
-          <article className="rounded-[18px] border border-[color:var(--sum-border)] bg-white/72 p-3" key={label}>
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-[color:var(--sum-mint)] text-xs font-extrabold text-[color:var(--sum-ink)]">{index + 1}</span>
-            <h3 className="mt-2 text-sm font-extrabold text-[color:var(--sum-ink)]">{label}</h3>
-            <p className="mt-1 text-[11px] font-semibold text-[color:var(--sum-muted)]">{detail}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+  return <SceneShell activePath="/duel/demo"><section className="sw-page sum-v4-page sum-v4-chapter-proof"><PageIntro number="03" location="THE PROOF ARCHIVE" title="Reality leaves" accent="evidence." example>Bring a real-world moment back to your quest. Evidence stays linked to the person who submitted it, so both sides of the story remain visible.</PageIntro><QuestJourney current={2} />
+    <div className="sw-proof-grid"><div><section className="sw-proof-viewer" aria-label="Illustrated proof example"><div className="sw-proof-viewer__bar"><span>QUEST 001 / THREE RALLIES</span><span className="sw-example-label">Illustration only</span></div><div className="sw-proof-viewer__scene"><svg viewBox="0 0 680 365" fill="none" aria-label="Illustration of two players on a court, not an uploaded video" role="img"><defs><linearGradient id="archive-floor" x1="150" y1="20" x2="530" y2="345" gradientUnits="userSpaceOnUse"><stop stopColor="#3e6d5a"/><stop offset="1" stopColor="#264b47"/></linearGradient></defs><rect width="680" height="365" fill="#244d45"/><path d="M120 55h438l75 252H44L120 55Z" fill="url(#archive-floor)" stroke="#adcbb1" strokeWidth="1.5"/><path d="M143 55 82 307M535 55l61 252M340 55v252M101 117h476M65 241h548" stroke="#bed9ba" opacity=".6"/><path d="M79 177h524" stroke="#e0d893" strokeWidth="2"/><path d="M79 177v-10m524 10v-10" stroke="#e0d893" strokeWidth="4"/><path d="M79 177v26m524-26v26" stroke="#729581"/><g stroke="#86ae9c" opacity=".4"><path d="M19 120h38M38 101v38M623 272h38m-19-19v38"/><circle cx="340" cy="181" r="121" strokeDasharray="3 9"/></g><ellipse cx="265" cy="266" rx="30" ry="9" fill="#193d35" opacity=".65"/><ellipse cx="401" cy="118" rx="26" ry="7" fill="#193d35" opacity=".65"/><circle cx="265" cy="241" r="24" fill="#e6c4ae" stroke="#f3f4e2" strokeWidth="2"/><circle cx="401" cy="99" r="20" fill="#c3d7e9" stroke="#eef3ed" strokeWidth="2"/><text x="265" y="247" fill="#234b3d" textAnchor="middle" fontSize="16" fontFamily="sans-serif">M</text><text x="401" y="105" fill="#234b3d" textAnchor="middle" fontSize="15" fontFamily="sans-serif">R</text><path d="M284 221c29-100 68-107 97-112" fill="none" stroke="#eff5e9" strokeDasharray="5 9" strokeLinecap="round" strokeWidth="2"/><circle cx="336" cy="147" r="5" fill="#f4ebc1"/><circle cx="336" cy="147" r="15" stroke="#d6e0ba" opacity=".5"/><text x="29" y="341" fill="#c5d9cc" fontSize="8" letterSpacing="2" fontFamily="sans-serif">ILLUSTRATED MEMORY / NO FOOTAGE ATTACHED</text><path d="M17 15h25m-25 0v25m621-25h25v25M17 325v25h25m596 0h25v-25" stroke="#6b9281"/></svg><span className="sw-proof-viewer__overlay">PROOF LENS / EXAMPLE</span></div><div className="sw-proof-viewer__bottom"><strong>The moment, kept in context.</strong><small>Both players · The full attempt · Agreed rules</small></div></section><section className="sw-evidence-list"><div className="sw-evidence-list__title"><h2>Traces of the quest.</h2><span>SAMPLE RECORD TYPES</span></div>{[["Continuous recording", "A participant’s unedited view of the attempt"], ["Supporting record", "Additional context, attributed to its source"], ["Review note", "Unclear moments remain visible, not filled in"]].map(([title,description]) => <div className="sw-evidence-row" key={title}><WorldGlyph kind="proof"/><div><strong>{title}</strong><p>{description}</p></div><span>EXAMPLE</span></div>)}</section></div>
+      <aside className="sw-proof-aside"><QuestArtifact stage="proof" sample compact id="EXAMPLE-001" title="Three rallies. One shared adventure." participants="Mira / Ren — illustrative players" proof="Continuous video example" deadline="Example 24-hour window" statusText="ILLUSTRATIVE DEMO" /><FamiliarNote mood="referee" title="Let’s look at what the proof actually shows.">If a moment is unclear, it stays unclear. A Familiar should explain the uncertainty, not invent an answer.</FamiliarNote><section className="sw-proof-checklist"><span className="sw-small-label">BEFORE YOU OFFER PROOF</span><h2>Give your Familiar<br />the whole picture.</h2><ol>{checklist.map(([title,description],index)=><li key={title}><span>0{index+1}</span><div><strong>{title}</strong><p>{description}</p></div></li>)}</ol></section><div className="sw-review-note"><h3>Unclear does not mean decided.</h3><p>A live quest may need additional evidence or human review before an outcome can be settled.</p></div><Link className="sw-button" href="/summons">Start a real quest <Arrow /></Link></aside>
+    </div>
+  </section></SceneShell>;
 }

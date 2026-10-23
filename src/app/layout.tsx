@@ -2,12 +2,17 @@ import type { Metadata, Viewport } from "next";
 import Providers from "@/components/Providers";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import EntryPolicyLinks from "@/components/legal/EntryPolicyLinks";
+import QuestAppNav from "@/components/QuestAppNav";
 import "./globals.css";
 import "./summoner-world.css";
+import "./sum-universe.css";
+import "./sum-award-v4.css";
+import "./sum-storybook.css";
+import "./ios-app.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
-  title: "Summon World",
+  title: "SUM — Make Reality Summonable",
   description:
     "Summon quests, invite challengers, submit proof, and let AI familiars referee the result.",
   manifest: "/manifest.webmanifest",
@@ -28,10 +33,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
-  themeColor: "#C8EFFF",
+  themeColor: "#FFF8F2",
   colorScheme: "light",
 };
 
@@ -64,18 +67,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@300;400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;1,9..144,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
           rel="stylesheet"
         />
       </head>
       <body
-        className="min-h-screen antialiased"
+        className="min-h-screen antialiased sum-storybook-body"
         style={{
           background: "var(--sum-sky)",
           color: "var(--sum-ink)",
         }}
       >
-        <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
+        <Providers><ErrorBoundary>{children}</ErrorBoundary><QuestAppNav /></Providers>
         <EntryPolicyLinks />
       </body>
     </html>

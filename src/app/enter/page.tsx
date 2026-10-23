@@ -1,71 +1,122 @@
-import GatewayDoorHold from "@/components/gateway/GatewayDoorHold";
-import QuestGlyph from "@/components/world/QuestGlyph";
-import QuestWorldScene from "@/components/world/QuestWorldScene";
+import Link from "next/link";
+import Image from "next/image";
+import SceneTopBar from "@/components/scene/SceneTopBar";
+import SummoningPortal from "@/components/universe/SummoningPortal";
+import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import { Arrow, Eyebrow, QuestJourney, SummonSigil, WorldFooter, WorldGlyph } from "@/components/universe/WorldUI";
+import { questSeeds } from "@/components/universe/quest-seeds";
 
-const promises = [
-  { icon: "friends" as const, title: "Challenge friends", body: "Private by default" },
-  { icon: "proof" as const, title: "Show what happened", body: "Video, photo, or check-in" },
-  { icon: "receipt" as const, title: "Get a clear result", body: "Explainable, reviewable" },
-] as const;
 
 export default function EnterPage() {
   return (
-    <main className="ios-entry-shell summoner-gateway px-4 sm:px-6 lg:px-8">
-      <header className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-[calc(1rem+env(safe-area-inset-top))]">
-        <span className="summoner-wordmark text-lg sm:text-xl">
-          <span className="summoner-wordmark__crest" aria-hidden>
-            <QuestGlyph className="h-5 w-5" kind="spark" />
-          </span>
-          Summoner<span className="ml-[-0.65rem] text-[#e85f4e]">.world</span>
-        </span>
-        <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 text-[11px] font-extrabold text-[color:var(--sum-muted)] shadow-[0_6px_0_rgba(23,53,75,0.06)] backdrop-blur sm:inline-flex">
-          <span className="h-2 w-2 rounded-full bg-[color:var(--sum-mint)] shadow-[0_0_0_4px_rgba(112,214,165,0.18)]" />
-          Built for challenges between friends
-        </span>
-      </header>
-
-      <section className="relative z-10 mx-auto grid min-h-[calc(100dvh-88px)] w-full max-w-[1440px] items-center gap-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(480px,1.1fr)] lg:gap-12 lg:pb-16">
-        <div className="gateway-copy order-1">
-          <span className="sum-sticker-badge px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.18em]">
-            <QuestGlyph className="h-4 w-4" kind="spark" />
-            Your world of real challenges
-          </span>
-          <h1 className="mt-7">
-            Say it.
-            <em>Make it a quest.</em>
-          </h1>
-          <p className="mt-6 max-w-xl text-pretty text-base font-bold leading-7 text-[color:var(--sum-muted)] sm:text-lg">
-            Challenge a friend in one sentence. Pico turns it into fair rules, checks the proof, and gives both of you a result receipt.
-          </p>
-
-          <div className="mt-7">
-            <GatewayDoorHold />
+    <div className="sw-app sw-home sum-award-home sum-kawaii-home" data-design-version="sum-world-v3" data-art-direction="storybook-world">
+      <a className="sw-skip-link" href="#world-introduction">Skip to main content</a>
+      <SceneTopBar activePath="/enter"/>
+      <main id="world-introduction" tabIndex={-1}>
+        <section className="sw-hero sw-container sum-award-hero" aria-labelledby="world-title">
+          <div className="sw-hero__copy sum-award-hero__copy">
+            <Eyebrow>AN EXTRAORDINARY WAY TO BE HUMAN</Eyebrow>
+            <h1 id="world-title">Make reality<br/><em>summonable.</em></h1>
+            <p className="sw-hero__lead">
+              A little spark can become a real adventure. Create a Quest, invite your people, share your proof, and let Pico help you make the moment count.
+            </p>
+            <div className="sw-hero__actions">
+              <Link className="sw-button sum-award-cta" href="/summons" data-testid="world-summon-cta">
+                <SummonSigil/> Summon a Quest <Arrow/>
+              </Link>
+              <Link className="sw-text-link" href="/rituals">Meet Pico, your Familiar <Arrow/></Link>
+            </div>
+            <div className="sum-kawaii-hero__whisper" aria-hidden="true"><span>✦</span> Small ideas. Brighter tomorrows.</div>
+            <div className="sum-award-hero__meta">
+              <div className="sum-award-hero__line" aria-hidden="true"><span>01</span><i/><span>06</span></div>
+              <div className="sum-award-hero__meaning"><PicoFamiliar mood="guide"/><p><strong>You are the Summoner.</strong><span>Your imagination becomes the beginning.</span></p></div>
+            </div>
           </div>
-
-          <div className="gateway-promise mt-5" aria-label="How Summoner.world works">
-            {promises.map((item) => (
-              <article key={item.title}>
-                <span><QuestGlyph className="h-4 w-4" kind={item.icon} /></span>
-                <span className="min-w-0">
-                  <strong className="block truncate">{item.title}</strong>
-                  <small className="mt-0.5 block truncate text-[9px] text-[color:var(--sum-muted)]">{item.body}</small>
-                </span>
-              </article>
+          <SummoningPortal/>
+        </section>
+        <nav className="sum-premium-shortcuts sw-container" aria-label="Explore the SUM world">
+          {[
+            { href: "/summons", image: "/storybook-premium/realm2.webp", label: "Summon Ideas", text: "Turn a spark into a real plan." },
+            { href: "/rituals", image: "/storybook-premium/hero2.webp", label: "Meet Pico", text: "A little companion at your side." },
+            { href: "/markets", image: "/storybook-premium/realm1.webp", label: "Explore Quests", text: "Find an adventure worth sharing." },
+            { href: "/judgment/demo", image: "/storybook-premium/pico3.webp", label: "Keep the Story", text: "Remember the moments that matter." },
+          ].map(item => (
+            <Link href={item.href} key={item.href} className="sum-premium-shortcut">
+              <span className="sum-premium-shortcut__art" aria-hidden="true">
+                <Image src={item.image} width={90} height={90} sizes="90px" alt="" />
+              </span>
+              <span className="sum-premium-shortcut__copy">
+                <strong>{item.label}</strong>
+                <small>{item.text}</small>
+              </span>
+              <Arrow/>
+            </Link>
+          ))}
+        </nav>
+        <section className="sum-premium-story sw-container" aria-labelledby="sum-premium-story-heading">
+          <div className="sum-premium-story__art">
+            <Image src="/storybook-premium/pico2.webp" fill sizes="(max-width: 959px) 100vw, 52vw" alt="Pico looking out across a glowing flower-filled fantasy world"/>
+            <span className="sum-premium-story__caption">A little magic for the moments that matter.</span>
+          </div>
+          <div className="sum-premium-story__copy">
+            <Eyebrow>A WORLD YOU CAN HELP CREATE</Eyebrow>
+            <h2 id="sum-premium-story-heading">Quests for a<br/><em>brighter tomorrow.</em></h2>
+            <p>Bring your imagination into the real world. A Quest starts as an idea, becomes something both people agree to, and ends with proof and a story you can look back on.</p>
+            <Link className="sw-text-link" href="/summons">Start your own story <Arrow/></Link>
+            <p className="sum-premium-story__note">Every example is illustrative. Real results are determined from accepted rules and evidence.</p>
+          </div>
+        </section>
+        <section className="sw-path-section sw-container sum-award-path" id="how-it-works" aria-labelledby="path-title">
+          <div className="sw-section-heading">
+            <div><Eyebrow>ONE IDEA / MANY FORMS</Eyebrow><h2 id="path-title">The world changes<br/><em>when you act.</em></h2></div>
+            <p>Not a simulated victory. Not another feed.<br/>A clear path from intention to a real outcome.</p>
+          </div>
+          <QuestJourney current={-1}/>
+        </section>
+        <section className="sw-realms-section sw-container sum-award-realms" aria-labelledby="realms-title">
+          <div className="sw-section-heading">
+            <div><Eyebrow>YOUR POSSIBILITIES ARE NOT ONE CATEGORY</Eyebrow><h2 id="realms-title">A new realm begins<br/>with your idea.</h2></div>
+            <Link className="sw-text-link" href="/summons">Create something of your own <Arrow/></Link>
+          </div>
+          <div className="sw-realms">
+            {questSeeds.map((quest,index) => (
+              <Link className={"sw-realm sw-realm--"+quest.id} href={"/summons?seed="+quest.id} key={quest.id}>
+                <div className="sw-realm__header"><span className="sw-small-label">0{index+1} / {quest.realm}</span><WorldGlyph kind={quest.kind}/></div>
+                <div className="sw-realm__storybook" aria-hidden="true"><Image src={quest.id === "move" ? "/storybook-premium/realm1.webp" : quest.id === "craft" ? "/storybook-premium/realm2.webp" : "/storybook-premium/realm3.webp"} width={620} height={400} className="sum-storybook-realm-img" alt="" sizes="(max-width:699px) 100vw, (max-width:959px) 50vw, 33vw"/><span className="sum-realm__spark"><WorldGlyph kind={quest.kind}/></span></div>
+                <h3>{quest.name}</h3><p>{quest.hint}</p>
+                <span className="sw-realm__action">Enter this realm <Arrow/></span>
+              </Link>
             ))}
           </div>
-        </div>
-
-        <div className="order-2">
-          <QuestWorldScene />
-          <div className="mx-auto -mt-4 flex w-[88%] items-center justify-between gap-3 rounded-[1.35rem] border-2 border-white/80 bg-[rgba(255,253,244,0.88)] px-4 py-3 shadow-[0_8px_0_rgba(23,53,75,0.09),0_16px_28px_rgba(23,53,75,0.12)] backdrop-blur">
-            <div className="min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#3a9b77]">Today&apos;s starter quest</p>
-              <p className="mt-1 truncate text-sm font-black text-[color:var(--sum-ink)]">First to win 3 badminton rallies</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-[rgba(112,214,165,0.2)] px-3 py-1.5 text-[10px] font-black text-[#157b58]">No scoreboard needed</span>
+          <p className="sw-example-footnote">Creative starting points, not live participants, real geolocation or verified challenges.</p>
+        </section>
+        <section className="sw-companion-section sw-container sum-award-familiar" aria-labelledby="companion-title">
+          <div className="sw-companion-section__visual">
+            <div className="sw-companion-orbit" aria-hidden="true"/>
+            <div className="sum-kawaii-companion-landscape" aria-hidden="true"><Image src="/storybook-premium/pico3.webp" alt="" fill sizes="(max-width:699px) 100vw, 44vw" className="sum-storybook-companion-img"/></div>
+            <PicoFamiliar className="sw-companion-section__pico" mood="listening"/>
+            <span className="sw-companion-section__tag"><span>FAMILIAR / 001</span><b>PICO</b><small>A little clarity, by your side.</small></span>
           </div>
-        </div>
-      </section>
-    </main>
+          <div className="sw-companion-section__copy">
+            <Eyebrow>NOT JUST A CHARACTER / A COMPANION</Eyebrow>
+            <h2 id="companion-title">An idea is yours.<br/><span>The journey is shared.</span></h2>
+            <p>From the first words to the final evidence, Pico helps clarify the rules, surface unanswered questions, and explain what happened.</p>
+            <div className="sw-companion-functions">
+              <span><WorldGlyph kind="spark"/>Shape the idea</span>
+              <span><WorldGlyph kind="proof"/>Review the proof</span>
+              <span><WorldGlyph kind="chronicle"/>Explain the result</span>
+            </div>
+            <Link className="sw-text-link" href="/rituals">Meet your AI Familiar <Arrow/></Link>
+            <p className="sw-fairness-note">Pico never accepts a pact on your behalf or invents an outcome.</p>
+          </div>
+        </section>
+        <section className="sw-world-invitation sw-container sum-award-endcap">
+          <SummonSigil/>
+          <div><Eyebrow>YOUR WORLD IS WAITING</Eyebrow><h2>What will you bring to life?</h2><p>A friend, an idea, a shared finish line. It starts here.</p></div>
+          <Link className="sw-button sw-button--light" href="/summons">Open the Nexus <Arrow/></Link>
+        </section>
+      </main>
+      <WorldFooter/>
+    </div>
   );
 }
