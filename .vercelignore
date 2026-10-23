@@ -7,6 +7,6 @@ tests/e2e-gambles/.playwright/
 gambles-recordings/
 Workflow_Pictures/
 output/
-ios/
-ios-shell/
+/ios/
+/ios-shell/
 *.log

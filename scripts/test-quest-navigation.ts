@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import SceneMobileNav from "../src/components/scene/SceneMobileNav";
 import SceneShell from "../src/components/scene/SceneShell";
@@ -20,7 +20,7 @@ console.log("PASS actual navigation renders five real routes with exact query-sp
 const bareAppDock = renderToStaticMarkup(createElement(QuestAppNav));
 assert(bareAppDock.includes('aria-label="App navigation"'), "app dock must handle a missing Next pathname during server rendering");
 console.log("PASS mobile app dock tolerates unavailable router context without throwing");
-const composerShell = renderToStaticMarkup(createElement(SceneShell, {activePath:"/summons",children:"Quest creation content"}));
+const composerShell = renderToStaticMarkup(createElement(SceneShell, {activePath:"/summons"} as ComponentProps<typeof SceneShell>, "Quest creation content"));
 assert(composerShell.includes('data-testid="scene-transition-shell"'),"composer must keep readable animated content shell");
 assert(composerShell.includes("Quest creation content"),"animated shell must render the real form children");
 console.log("PASS reliable composer retains scene-transition shell with readable children");
