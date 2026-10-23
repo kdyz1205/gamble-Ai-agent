@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "../src/generated/prisma/client";
 import prisma from "../src/lib/db";
 import { acceptChallengeAtomic } from "../src/lib/challenge-acceptance";
-import { blockedPeerIds, blockedFeedExclusions, publicChallengePeerExclusions } from "../src/lib/user-blocks";
+import { blockedPeerIds, blockedFeedExclusions, publicChallengePeerExclusions, isBlockedQuestViewer } from "../src/lib/user-blocks";
 
 async function main() {
   const db = new URL(process.env.DATABASE_URL ?? "postgresql://missing");
@@ -39,6 +39,11 @@ async function main() {
     const peers=await blockedPeerIds(a.id);
     assert.deepEqual(peers,[b.id]);
     assert.deepEqual(await blockedPeerIds(b.id),[a.id],"block affects both parties");
+    const detailedQuest=await prisma.challenge.findUniqueOrThrow({
+      where:{id:bQuest.id},include:{participants:{select:{userId:true}}},
+    });
+    assert.equal(await isBlockedQuestViewer(a.id,detailedQuest),true,"direct public link must be hidden");
+    assert.equal(await isBlockedQuestViewer(b.id,detailedQuest),false,"original creator retains historical access");
     const events=await prisma.activityEvent.findMany({where:{...whereBase,...blockedFeedExclusions(peers)}});
     assert(!events.some(e=>e.userId===b.id || e.challengeId===bQuest.id),"blocked content hidden server-side");
     assert(events.some(e=>e.userId===c.id),"unblocked public event preserved");
@@ -55,6 +60,7 @@ async function main() {
     assert.equal(await prisma.participant.count({where:{challengeId:bQuest.id}}),1);
     await prisma.userBlock.delete({where:{blockerId_blockedId:{blockerId:a.id,blockedId:b.id}}});
     assert.deepEqual(await blockedPeerIds(a.id),[]);
+    assert.equal(await isBlockedQuestViewer(a.id,detailedQuest),false,"unblocking restores public detail");
     const accepted=await acceptChallengeAtomic(bQuest.id,a.id);
     assert(accepted.ok && accepted.creditsDebited===7,"unblock restores explicit consent path");
     assert.equal((await prisma.user.findUniqueOrThrow({where:{id:a.id}})).credits,before.credits-7);

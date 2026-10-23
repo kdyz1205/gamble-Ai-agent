@@ -29,3 +29,14 @@ export function publicChallengePeerExclusions(peerIds: readonly string[]): Prism
     participants: { none: { userId: { in: ids } } },
   };
 }
+
+/** Existing parties retain historical records, but outsiders cannot use direct links
+ * to bypass reciprocal blocking of the creator or any participant. */
+export async function isBlockedQuestViewer(
+  viewerId: string,
+  quest: { creatorId: string; participants: Array<{userId: string}> },
+): Promise<boolean> {
+  if (viewerId === quest.creatorId || quest.participants.some(p => p.userId === viewerId)) return false;
+  const peers = await blockedPeerIds(viewerId);
+  return peers.includes(quest.creatorId) || quest.participants.some(p => peers.includes(p.userId));
+}

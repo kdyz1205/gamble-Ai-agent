@@ -50,6 +50,8 @@ test("authenticated block actually hides public Quests and forbids stakes until 
     expect(repeat.status()).toBe(200);
     const managed=await parse(await a.ctx.get("/api/users/blocks"));
     expect(managed.blockedUsers.filter((u:{id:string})=>u.id===b.user.id)).toHaveLength(1);
+    expect((await a.ctx.get(`/api/challenges/${bQuest}`)).status()).toBe(404);
+    expect((await a.ctx.get(`/api/challenges/${bQuest}/evidence`)).status()).toBe(403);
     const listing=await parse(await a.ctx.get("/api/challenges?status=open&limit=50"));
     expect(listing.challenges.some((q:{id:string})=>q.id===bQuest)).toBe(false);
     const discovery=await parse(await a.ctx.get("/api/challenges/discover?limit=50"));
@@ -62,6 +64,7 @@ test("authenticated block actually hides public Quests and forbids stakes until 
     const deleted=await a.ctx.delete("/api/users/blocks",{data:{targetUserId:b.user.id}});
     expect(deleted.status()).toBe(200);
     expect((await parse(await a.ctx.get("/api/users/blocks"))).blockedUsers).toHaveLength(0);
+    expect((await a.ctx.get(`/api/challenges/${bQuest}`)).status()).toBe(200);
     const joined=await a.ctx.post(`/api/challenges/${bQuest}/accept`);
     expect(joined.status(),await joined.text()).toBe(200);
     console.log("E2E_BLOCKING_PASS",JSON.stringify({

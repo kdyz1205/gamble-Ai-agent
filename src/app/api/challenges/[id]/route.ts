@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { cancelChallengeAtomic } from "@/lib/challenge-cancellation";
 import { canReadQuestProof } from "@/lib/quest-proof-access";
+import { isBlockedQuestViewer } from "@/lib/user-blocks";
 
 /**
  * GET /api/challenges/[id] — Get a single challenge with full details
@@ -53,6 +54,12 @@ export async function GET(
   });
 
   if (!challenge) {
+    return Response.json({ error: "Challenge not found" }, { status: 404 });
+  }
+  // A direct Quest URL must not bypass the block applied to feed/discovery.
+  // Existing players retain their own historical record for credit reconciliation.
+  const viewer = await getAuthUser();
+  if (viewer && await isBlockedQuestViewer(viewer.userId, challenge)) {
     return Response.json({ error: "Challenge not found" }, { status: 404 });
   }
   if (!await canReadQuestProof(challenge)) {
