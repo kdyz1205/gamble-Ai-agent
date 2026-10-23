@@ -46,6 +46,13 @@ async function meta(page){
     };
   });
 }
+const onboardArtFiles=["pico-portal.webp","dream-portal.webp","pico-companion.webp"];
+async function waitForOnboardArtwork(page,step){
+  await page.waitForFunction(filename=>{
+    const art=document.querySelector(".ios-onboard-art img");
+    return !!art && art.currentSrc.includes(filename) && art.complete && art.naturalWidth>0;
+  },onboardArtFiles[step],{timeout:20000});
+}
 (async()=>{
 const browser=await chromium.launch({
   headless:true,
@@ -112,6 +119,7 @@ for(const width of widths){
         await shortPage.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
         const measurements=[];
         for(let i=0;i<3;i++){
+          await waitForOnboardArtwork(shortPage,i);
           const button=shortPage.getByRole("button",{name:i===2?"Get Started":"Next"});
           await button.waitFor({state:"visible",timeout:15000});
           const bounds=await button.evaluate(el=>{
@@ -137,6 +145,7 @@ for(const width of widths){
       await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       const headings=[];
       for(let i=0;i<3;i++){
+        await waitForOnboardArtwork(page,i);
         headings.push(await page.locator("h1").first().innerText());
         await page.screenshot({path:path.join(out,"onboarding-"+(i+1)+".png"),animations:"disabled"});
         await page.getByRole("button",{name:i===2?"Get Started":"Next"}).click();
