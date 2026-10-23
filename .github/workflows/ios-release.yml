@@ -177,3 +177,87 @@ jobs:
           path: ios/build/AppStore/*.ipa
           retention-days: 7
           if-no-files-found: error
+
+  simulator-smoke:
+    name: Boot real iPhone Simulator and capture SUM App
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      SUM_IOS_TARGET: preview
+      SUM_IOS_APP_URL: https://stubborn-git-integrate-summoner-ios-f-3efa54-kdyz1205s-projects.vercel.app/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install and validate hosted App source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node scripts/ios-verify-target.cjs
+          curl --fail --silent --show-error --location --max-time 20 -o /dev/null "${SUM_IOS_APP_URL}/today"
+          node scripts/test-ios-xcodeproj-integrity.cjs
+      - name: Select a real, available iPhone Simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/ios-devices.json"
+          python3 - <<'PY'
+          import json,os,sys
+          data=json.load(open(os.environ["RUNNER_TEMP"]+"/ios-devices.json",encoding="utf-8"))
+          ios=[(runtime,device) for runtime,devices in data["devices"].items()
+               if "iOS" in runtime for device in devices
+               if device.get("isAvailable",False) and "iPhone" in device["name"]]
+          if not ios:
+              print("NO_AVAILABLE_IPHONE_SIMULATOR",file=sys.stderr)
+              sys.exit(1)
+          runtime,device=ios[-1]
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as out:
+              out.write("IOS_SIMULATOR_UDID="+device["udid"]+"\n")
+          print("SELECTED_SIMULATOR",runtime,device["name"],device["udid"])
+          PY
+      - name: Build actual native iOS Simulator executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview_host=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $preview_host" ios/App/App/Info.plist
+          npm run ios:sync
+          node -e 'const c=require("./ios/App/App/capacitor.config.json");if(c.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
+          mkdir -p ios/build/simulator-evidence
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build/simulator-derived \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build \
+            > ios/build/simulator-evidence/xcodebuild.log 2>&1 || {
+              tail -n 120 ios/build/simulator-evidence/xcodebuild.log
+              exit 1
+            }
+      - name: Boot, install, launch and screenshot iPhone Simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sim="$IOS_SIMULATOR_UDID"
+          app="ios/build/simulator-derived/Build/Products/Debug-iphonesimulator/App.app"
+          test -d "$app"
+          xcrun simctl boot "$sim"
+          xcrun simctl bootstatus "$sim" -b
+          xcrun simctl install "$sim" "$app"
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          test "$bundle" = "com.summonworld.app"
+          xcrun simctl launch "$sim" "$bundle" | tee ios/build/simulator-evidence/launch.log
+          sleep 15
+          xcrun simctl io "$sim" screenshot ios/build/simulator-evidence/iphone-app.png
+          sips -g pixelWidth -g pixelHeight ios/build/simulator-evidence/iphone-app.png
+          test -s ios/build/simulator-evidence/iphone-app.png
+          echo "IOS_SIMULATOR_NATIVE_LAUNCH_AND_SCREENSHOT_VERIFIED"
+      - name: Keep the actual simulator evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SummonWorld-iPhone-Simulator-Smoke
+          path: ios/build/simulator-evidence/
+          retention-days: 7
+          if-no-files-found: warn
