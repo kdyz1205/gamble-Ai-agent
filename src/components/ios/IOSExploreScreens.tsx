@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
 import {useOpenQuests,usePublicActivity} from "./IOSAppData";
 
@@ -48,12 +49,37 @@ export function DiscoverScreen() {
 
 export function CommunityScreen() {
   const {events,loading,error,refresh}=usePublicActivity();
+  const {data:session,status}=useSession();
+  const [confirmBlock,setConfirmBlock]=useState<string|null>(null);
+  const [pendingBlock,setPendingBlock]=useState<string|null>(null);
+  const [blockError,setBlockError]=useState("");
+  const [blockSuccess,setBlockSuccess]=useState("");
+  async function blockUser(id:string) {
+    if(pendingBlock || confirmBlock!==id)return;
+    setPendingBlock(id);setBlockError("");setBlockSuccess("");
+    try{
+      const response=await fetch("/api/support/report",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          kind:"block_user",target:id,
+          reason:"I do not want to see this user's public activity or participate in their Quests.",
+        }),
+      });
+      const result=await response.json() as {error?:string;blocked?:boolean};
+      if(!response.ok || !result.blocked)throw Error(result.error||"Unable to block this account");
+      setBlockSuccess("User blocked. Their public activity and open Quests are hidden from your account.");
+      setConfirmBlock(null);refresh();
+    }catch(error){setBlockError(error instanceof Error?error.message:"Unable to block user");}
+    finally{setPendingBlock(null);}
+  }
   return <IosFrame title="Community" eyebrow="REAL PEOPLE · REAL PROGRESS" back="/app/discover">
     <section className="ios-community-cover">
       <IosArt src={visuals.landscape} alt="Dreamy floating land filled with small adventures"/>
       <div><h1>Little things,<br/>together.</h1><p>A public record of moments from the SUM community.</p></div>
     </section>
     <div className="ios-section__heading"><div><small>PUBLIC ACTIVITY</small><h2>For you</h2></div><button type="button" className="ios-text-action" onClick={refresh}>Refresh</button></div>
+    {blockError&&<p role="alert" className="ios-message ios-message--error">{blockError}</p>}
+    {blockSuccess&&<p role="status" className="ios-message">{blockSuccess}</p>}
     {loading?<p className="ios-message" role="status">Loading public community activity…</p>:
     error?<p className="ios-message ios-message--error" role="alert">{error}</p>:
     events.length===0?<IosEmpty image={visuals.create} heading="Your community starts small." description="No public activity has been recorded yet. Completed Quests and public updates will appear here when available." action="Explore Quests" href="/app/discover"/>:
@@ -68,6 +94,16 @@ export function CommunityScreen() {
         <IosIcon name="arrow" size={18}/>
       </Link>}
       <small>Public activity · {ev.type}</small>
+      {status==="authenticated" && ev.user?.id && ev.user.id!==session?.user?.id &&
+        <div className="ios-community-moderation">
+          {confirmBlock===ev.user.id?<>
+            <p>Block @{ev.user.username}? This hides their public activity and prevents joining their Quests.</p>
+            <button type="button" disabled={!!pendingBlock} onClick={()=>void blockUser(ev.user!.id)}>
+              {pendingBlock===ev.user.id?"Blocking…":"Confirm block"}
+            </button>
+            <button type="button" disabled={!!pendingBlock} onClick={()=>setConfirmBlock(null)}>Cancel</button>
+          </>:<button type="button" onClick={()=>setConfirmBlock(ev.user!.id)}>Block @{ev.user.username}</button>}
+        </div>}
     </article>)}</div>}
     <IosAction href="/app/create">Start a Quest with others</IosAction>
     <p className="ios-footer-note">Likes, comments and custom posts are not supported by the current service. This feed only shows recorded public activity.</p>
