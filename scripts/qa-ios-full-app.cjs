@@ -83,6 +83,15 @@ for(const width of widths){
         if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Picos","Profile"]);
         assert.deepEqual(runtimeErrors,[],"uncaught browser errors");
         assert.equal(m.errors,0,"render failure");
+        if(view==="onboarding"&&width===390){
+          for(const selector of [".ios-onboard-copy .ios-primary",".ios-onboard-copy .ios-text-action"]){
+            const box=await page.locator(selector).evaluate(el=>({
+              bottom:Math.round(el.getBoundingClientRect().bottom),height:window.innerHeight
+            }));
+            assert(box.bottom<=box.height-8,
+              "Onboarding action "+selector+" not visible without scroll: "+JSON.stringify(box));
+          }
+        }
         if(width===390){
           await page.screenshot({path:path.join(out,view+"-390.png"),animations:"disabled",
             fullPage:["today","create","achievements","settings","community","discover"].includes(view),timeout:25000});
