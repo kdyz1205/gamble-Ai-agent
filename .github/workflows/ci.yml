@@ -46,6 +46,8 @@ jobs:
 
       - run: node scripts/test-ios-clean-art.cjs
 
+      - run: node scripts/test-ios-pr-preview.cjs
+
       - run: npm run test:production:unit
 
       - run: npm run test:production:integration

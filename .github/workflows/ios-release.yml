@@ -32,6 +32,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  statuses: read
 
 jobs:
   unsigned-ios-archive:
@@ -180,17 +182,23 @@ jobs:
 
   simulator-smoke:
     name: Boot real iPhone Simulator and capture SUM App
+    if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 45
     env:
       SUM_IOS_TARGET: preview
-      SUM_IOS_APP_URL: https://stubborn-git-integrate-summoner-ios-f-3efa54-kdyz1205s-projects.vercel.app/app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
+      - name: Resolve the actual PR head Vercel preview (no stale fallback)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/test-ios-pr-preview.cjs
+          node scripts/ios-resolve-pr-preview.cjs
       - name: Install and validate hosted App source
         shell: bash
         run: |

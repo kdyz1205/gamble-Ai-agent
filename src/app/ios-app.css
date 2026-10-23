@@ -188,7 +188,12 @@
 .ios-feed-card__author strong,.ios-feed-card__quest strong {color:#4c406b;font-size:12px;}
 .ios-feed-card__author small,.ios-feed-card >small,.ios-feed-card__quest small {color:#978eaa;font-size:10px;}
 .ios-feed-card >p {line-height:1.65;color:#68627b;font-size:12px;}
-.ios-feed-card__quest {display:grid;grid-template-columns:68px 1fr 15px;gap:10px;align-items:center;border-radius:14px;background:#f3effb;padding:9px;}
+.ios-feed-card__quest {display:grid;grid-template-columns:68px minmax(0,1fr) 15px;gap:10px;align-items:center;border-radius:14px;background:#f3effb;padding:9px;}
+/* Public activity contains real, uncontrolled usernames, titles and message
+   strings. Make their grid/flex children shrink rather than widening the app. */
+.ios-feed, .ios-feed-card, .ios-feed-card__author, .ios-feed-card__author span:last-child,
+.ios-feed-card__quest, .ios-feed-card__quest span { min-width: 0; }
+.ios-feed-card :is(p, strong, small, span) { overflow-wrap: anywhere; }
 .ios-feed-card__quest .ios-art {height:65px;border-radius:10px;}
 .ios-feed-card__quest span {display:grid;gap:4px;}
 
@@ -321,6 +326,23 @@
 .ios-onboard-dots span{height:6px;width:6px;border-radius:999px;background:#dcd1f1;}
 .ios-onboard-dots span.is-active {width:21px;background:#7164df;}
 .ios-onboard-copy .ios-text-action {margin-top:0;}
+/* The generic app spacing must not insert a blank strip between the opening
+   illustration and the rounded intro sheet. */
+.ios-onboarding .ios-main > .ios-onboard-copy { margin-top: -20px; }
+/* On compact native iPhones (e.g. 375x667) the main action must remain inside
+   the initial viewport, not require an undiscoverable scroll past the artwork. */
+@media (max-width: 600px) and (max-height: 800px) {
+  .ios-onboarding .ios-main { padding: 12px 16px 18px; }
+  .ios-onboard-art { height: min(42svh, 310px); }
+  .ios-onboard-copy {
+    gap: 9px; min-height: 0;
+    padding: 19px 19px 16px;
+    border-radius: 27px 27px 0 0;
+  }
+  .ios-onboard-copy h1 { font-size: clamp(27px, 7.5vw, 33px); }
+  .ios-onboard-copy p { font-size: 11px; line-height: 1.5; }
+  .ios-onboard-art > span { top: calc(15px + env(safe-area-inset-top)); }
+}
 .ios-splash {min-height:100dvh;padding-bottom:38px;color:white;text-align:center;background:radial-gradient(circle at 48% 40%,#706dcc,#1b246b 74%,#0d174a);}
 .ios-splash .ios-main {min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;gap:15px;padding:60px 32px;}
 .ios-splash__stars {color:#fff1ae;font-size:30px;letter-spacing:1em;}
