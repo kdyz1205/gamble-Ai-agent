@@ -34,7 +34,7 @@ function NavIcon({ kind }: { kind: IconKind }) {
 }
 
 export default function QuestAppNav({ scene = false }: { scene?: boolean }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   // The native-style app provides its own complete five-tab navigation.
   if (pathname === "/app" || pathname.startsWith("/app/")) return null;
   const sceneRoute = ["/summons", "/contracts/bind", "/duel/demo", "/rituals", "/judgment/demo"].includes(pathname);

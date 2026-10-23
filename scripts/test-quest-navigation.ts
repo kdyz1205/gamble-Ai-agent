@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import SceneMobileNav from "../src/components/scene/SceneMobileNav";
+import QuestAppNav from "../src/components/QuestAppNav";
 import { sceneRoutes } from "../src/lib/scene/scene-routes";
 import { matchesQuestView, questNextStep, questView } from "../src/components/quests/quest-list-model";
 import type { ChallengeData } from "../src/lib/api-client";
@@ -15,6 +16,9 @@ for (const active of ["/quests", "/quests?view=proof", "/quests?view=results"]) 
   assert.equal((html.match(/<a /g) ?? []).length, 5);
 }
 console.log("PASS actual navigation renders five real routes with exact query-specific active selection");
+const bareAppDock = renderToStaticMarkup(createElement(QuestAppNav));
+assert(bareAppDock.includes('aria-label="App navigation"'), "app dock must handle a missing Next pathname during server rendering");
+console.log("PASS mobile app dock tolerates unavailable router context without throwing");
 
 const states = ["draft", "open", "live", "judging", "disputed", "pending_settlement", "settled", "cancelled", "unknown"];
 const quests = states.map(status => ({ status } as ChallengeData));
