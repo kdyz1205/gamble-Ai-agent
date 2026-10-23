@@ -16,6 +16,19 @@ on:
       - "package-lock.json"
       - ".github/workflows/ios-release.yml"
   workflow_dispatch:
+    inputs:
+      app_target:
+        description: 'Signed beta points at an authorized Vercel preview or the production /app'
+        required: true
+        type: choice
+        default: preview
+        options:
+          - preview
+          - production
+      preview_url:
+        description: 'Full HTTPS Vercel preview URL ending in /app, only for preview beta'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -72,6 +85,8 @@ jobs:
     timeout-minutes: 45
     if: github.event_name == 'workflow_dispatch'
     env:
+      SUM_IOS_TARGET: ${{ inputs.app_target }}
+      SUM_IOS_APP_URL: ${{ inputs.app_target == 'preview' && inputs.preview_url || 'https://summoner.world/app' }}
       APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -90,13 +105,13 @@ jobs:
           test -n "$APP_STORE_CONNECT_KEY_ID" || { echo 'Missing App Store Connect key ID'; exit 1; }
           test -n "$APP_STORE_CONNECT_ISSUER_ID" || { echo 'Missing App Store Connect issuer ID'; exit 1; }
           test -n "$APPLE_TEAM_ID" || { echo 'Missing Apple Developer team ID'; exit 1; }
-      - name: Gate signed export on a working production App route
+      - name: Gate signed export on a working authorized App route
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --max-time 20 -o /dev/null 'https://summoner.world/app/today'
-          echo 'PRODUCTION_APP_ROUTE_VERIFIED'
+          node scripts/ios-verify-target.cjs
+          curl --fail --silent --show-error --location --max-time 20 -o /dev/null "${SUM_IOS_APP_URL%/}/today"
+          echo 'IOS_APP_TARGET_HTTP_VERIFIED'
       - name: Select App Store supported Xcode 26
         shell: bash
         run: |
@@ -106,10 +121,18 @@ jobs:
           sudo xcode-select --switch "${matching[0]}/Contents/Developer"
           xcodebuild -version | grep 'Xcode 26'
       - name: Install and sync native App
+        shell: bash
         run: |
+          set -euo pipefail
           npm ci
           node scripts/test-ios-xcodeproj-integrity.cjs
+          if [[ "$SUM_IOS_TARGET" == 'preview' ]]; then
+            PREVIEW_HOST=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
+            /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $PREVIEW_HOST" ios/App/App/Info.plist
+          fi
           npm run ios:sync
+          node -e 'const x=require("./ios/App/App/capacitor.config.json");if(x.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
+          npm run ios:doctor
           npm run ios:doctor
       - name: Install App Store Connect API key
         shell: bash
