@@ -72,7 +72,17 @@ async function main() {
     assert.doesNotMatch(protection.replace(/--[^\n]*/g, ""), /\bDROP\s+(TABLE|COLUMN)\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     await command(databases[0], ["migrate", "deploy"], freshConfig);
     const fresh = await connect(databases[0]);
-    assert.equal((await fresh.query(`SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows[0].n, 4);
+    const migrationFolders = (await readdir(allMigrations, { withFileTypes: true }))
+      .filter(entry => entry.isDirectory()).map(entry => entry.name);
+    assert(migrationFolders.includes(ADDITIVE) && migrationFolders.includes(PROTECT));
+    assert.equal(
+      (await fresh.query(`SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows[0].n,
+      migrationFolders.length, "every checked-in migration must be applied exactly once"
+    );
+    assert.equal(
+      (await fresh.query(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='public' AND table_name='UserBlock'`)).rows[0].n,
+      1, "fresh installations must have the durable user block table"
+    );
     await command(databases[0], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     await command(databases[0], ["migrate", "diff", "--from-migrations", "prisma/migrations", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS fresh migrate deploy and independent shadow replay exactly match canonical columns, types, defaults, indexes and constraints");

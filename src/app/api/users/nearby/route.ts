@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
+import { blockedPeerIds } from "@/lib/user-blocks";
 
 /**
  * GET /api/users/nearby — Get nearby users
@@ -28,9 +29,10 @@ export async function GET(req: NextRequest) {
   const latRange = radiusMiles / 69;
   const lngRange = radiusMiles / (69 * Math.cos((lat * Math.PI) / 180) || 69);
 
+  const blocked = await blockedPeerIds(user.userId);
   const users = await prisma.user.findMany({
     where: {
-      id: { not: user.userId },
+      id: { not: user.userId, notIn: blocked },
       latitude: { not: null, gte: lat - latRange, lte: lat + latRange },
       longitude: { not: null, gte: lng - lngRange, lte: lng + lngRange },
     },
@@ -72,5 +74,5 @@ export async function GET(req: NextRequest) {
 
   withDistance.sort((a: { distance: number }, b: { distance: number }) => a.distance - b.distance);
 
-  return Response.json({ users: withDistance });
+  return Response.json({ users: withDistance }, { headers: { "Cache-Control": "private, no-store" } });
 }

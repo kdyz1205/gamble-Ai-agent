@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
+import { blockedPeerIds, publicChallengePeerExclusions } from "@/lib/user-blocks";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { createChallengeForUser, ChallengeCreationInputError, ChallengeCreationCreditsError } from "@/lib/challenge-creation";
 
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { isPublic: true, visibility: "public" };
   if (status) where.status = status;
+  if (user && !mine) Object.assign(where, publicChallengePeerExclusions(await blockedPeerIds(user.userId)));
   if (type)   where.type = type;
   if (mine && user) {
     delete where.isPublic;
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
     prisma.challenge.findMany({
       where,
       include: {
-        creator: { select: { id: true, username: true, image: true, credits: true } },
+        creator: { select: { id: true, username: true, image: true } },
         participants: {
           include: { user: { select: { id: true, username: true, image: true } } },
         },
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
     prisma.challenge.count({ where }),
   ]);
 
-  return Response.json({ challenges, total, limit, offset });
+  return Response.json({ challenges, total, limit, offset }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: NextRequest) {

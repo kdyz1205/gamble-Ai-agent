@@ -36,7 +36,7 @@ export default function SupportReportForm() {
       }
 
       setStatus("sent");
-      setMessage(data.reportId ? `Report received: ${data.reportId}` : "Report received");
+      setMessage(kind === "block_user" ? "User blocked. Their public activity and Quest discovery are hidden for your account." : data.reportId ? `Report received: ${data.reportId}` : "Report received");
       setTarget("");
       setReason("");
       setContact("");
@@ -69,13 +69,13 @@ export default function SupportReportForm() {
       </label>
 
       <label className="block space-y-2 text-sm font-semibold" style={{ color: sceneTokens.color.text }}>
-        Quest, profile, or proof link
+        {kind === "block_user" ? "Exact username or user ID to block" : "Quest, profile, or proof link"}
         <input
           className={fieldClass}
           style={fieldStyle}
           value={target}
           onChange={(event) => setTarget(event.target.value)}
-          placeholder="https://summoner.world/join/..."
+          placeholder={kind === "block_user" ? "@username" : "https://summoner.world/join/..."}
         />
       </label>
 

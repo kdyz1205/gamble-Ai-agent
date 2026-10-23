@@ -20,7 +20,7 @@ export default function SupportPage() {
           {
             title: "Block a user",
             body: [
-              "Block a user requests can be sent through the in-app form or to support@summoner.world with the username or profile link. We can restrict matching, discovery, or direct participation while the in-app control is being expanded.",
+              "Signed-in users can block another account immediately by exact username or user ID. Blocks hide public feed and discovery activity in both directions and prevent new Quest acceptance before any credits are debited. You can undo a block under App Settings; past Quest, evidence and credit records remain intact.",
             ],
           },
           {

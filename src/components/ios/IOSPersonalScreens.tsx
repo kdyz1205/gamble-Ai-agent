@@ -8,6 +8,7 @@ import AuthModal from "@/components/AuthModal";
 import { IosAction, IosArt, IosFrame, IosIcon, IosQuestCard, visuals } from "./IOSAppUI";
 import {useOwnQuests,useCreditBalance,useEvidenceGallery} from "./IOSAppData";
 import IOSDailyRituals, {useDeviceRituals} from "./IOSDailyRituals";
+import IOSBlockedUsersPanel from "./IOSBlockedUsersPanel";
 
 export function AuthInvitation({ title = "Your story begins here.", detail = "Sign in to save your Quests, evidence and actual progress." }: {
   title?:string;detail?:string;
@@ -214,6 +215,7 @@ export function SettingsScreen() {
     <section className="ios-settings-group"><h2>Account & Privacy</h2>
       {([["Your profile","/app/profile","user"],["Privacy policy","/privacy","shield"],["Terms of service","/terms","shield"],["Help & Support","/support","heart"]] as const).map(([text,href,icon])=><Link className="ios-setting ios-setting--link" key={href} href={href}><span><IosIcon name={icon}/> {text}</span><IosIcon name="arrow" size={16}/></Link>)}
     </section>
+    <IOSBlockedUsersPanel/>
     <section className="ios-settings-group"><h2>Notifications</h2>
       <div className="ios-setting"><span><IosIcon name="bell"/> Push notifications</span><small>Not configured</small></div>
       <p className="ios-helper">Native push delivery is not yet connected. No alerts are promised.</p>

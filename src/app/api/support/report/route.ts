@@ -45,6 +45,47 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions).catch(() => null);
   const actorUserId = session?.user && "id" in session.user ? String(session.user.id) : undefined;
 
+  if (kind === "block_user") {
+    // A report is not itself a block: the authenticated account must get an
+    // enforced, durable block before the API acknowledges success.
+    if (!actorUserId) return Response.json({ error: "Sign in to block a user" }, { status: 401 });
+    let identifier = target.replace(/^@/, "");
+    if (target.startsWith("https://")) {
+      try {
+        const url = new URL(target);
+        if (!["summoner.world", "www.summoner.world"].includes(url.hostname)) {
+          return Response.json({ error: "Use a Summoner profile link or exact username" }, { status: 400 });
+        }
+        identifier = decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) ?? "");
+      } catch {
+        return Response.json({ error: "Invalid profile link" }, { status: 400 });
+      }
+    }
+    if (!/^[a-zA-Z0-9_.-]{1,80}$/.test(identifier)) {
+      return Response.json({ error: "Provide an exact username, user ID, or Summoner profile link" }, { status: 400 });
+    }
+    const found = await prisma.user.findFirst({
+      where: { OR: [{ id: identifier }, { username: identifier }] },
+      select: { id: true },
+    });
+    if (!found) return Response.json({ error: "User not found" }, { status: 404 });
+    if (found.id === actorUserId) return Response.json({ error: "Cannot block your own account" }, { status: 400 });
+    const auditLog = await prisma.$transaction(async (tx) => {
+      await tx.userBlock.upsert({
+        where: { blockerId_blockedId: { blockerId: actorUserId, blockedId: found.id } },
+        create: { blockerId: actorUserId, blockedId: found.id },
+        update: {},
+      });
+      return tx.auditLog.create({ data: {
+        action: actionByKind[kind], actorUserId, targetUserId: found.id,
+        payload: JSON.stringify({ kind, reason, target: identifier, contact }),
+      } });
+    });
+    return Response.json({ ok: true, blocked: true, reportId: auditLog.id }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+
   const auditLog = await prisma.auditLog.create({
     data: {
       action: actionByKind[kind],

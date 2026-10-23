@@ -25,6 +25,15 @@ export async function acceptChallengeAtomic(challengeId: string, userId: string)
     const challenge = await tx.challenge.findUnique({ where: { id: challengeId }, include: acceptanceInclude });
     if (!challenge) return { ok: false, status: 404, error: "Challenge not found" };
     if (challenge.creatorId === userId) return { ok: false, status: 400, error: "You cannot accept your own challenge" };
+    // Reject an existing block in either direction before accepting a seat or debiting credits.
+    const blockedPair = await tx.userBlock.findFirst({
+      where: { OR: [
+        { blockerId: userId, blockedId: challenge.creatorId },
+        { blockerId: challenge.creatorId, blockedId: userId },
+      ] },
+      select: { blockerId: true },
+    });
+    if (blockedPair) return { ok: false, status: 403, error: "This Quest is not available" };
     const existing = challenge.participants.find((participant) => participant.userId === userId);
     if (existing?.role === "opponent" && ["accepted", "completed"].includes(existing.status)) {
       return { ok: true, challenge, participantId: existing.id, reused: true, transitionedToLive: false, creditsDebited: 0 };
