@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import AuthModal from "@/components/AuthModal";
 import { IosAction, IosArt, IosFrame, IosIcon, IosQuestCard, visuals } from "./IOSAppUI";
 import {useOwnQuests,useCreditBalance,useEvidenceGallery} from "./IOSAppData";
+import IOSDailyRituals, {useDeviceRituals} from "./IOSDailyRituals";
 
 export function AuthInvitation({ title = "Your story begins here.", detail = "Sign in to save your Quests, evidence and actual progress." }: {
   title?:string;detail?:string;
@@ -52,6 +53,7 @@ export function TodayScreen() {
         <span className="ios-habit__image"><IosArt src={visuals.grow}/></span><strong>Grow</strong><small>Small steps, big change</small><IosIcon name="arrow" size={18}/>
       </Link>
     </div>
+    <IOSDailyRituals/>
     <section className="ios-section">
       <div className="ios-section__heading"><div><small>YOUR ACTUAL PROGRESS</small><h2>Today&apos;s Quests</h2></div><Link href="/app/stats">View stats <IosIcon name="arrow" size={15}/></Link></div>
       {!signedIn ? <AuthInvitation title="A world of your own." detail="Log in to see Quests and save real outcomes."/>
@@ -109,25 +111,26 @@ const badges=[
   {name:"Proof Collector",icon:"camera" as const,art:visuals.create,check:(_n:number,_s:number,e:number)=>e>0,detail:"Submit evidence"},
   {name:"Explorer",icon:"discover" as const,art:visuals.grow,check:(n:number,_s:number,_e:number)=>n>=5,detail:"Participate in five Quests"},
   {name:"Bright Future",icon:"spark" as const,art:visuals.sky,check:(_n:number,s:number,_e:number)=>s>=5,detail:"Settle five Quests"},
-  {name:"Seven-Day Streak",icon:"calendar" as const,art:visuals.mascot,check:()=>false,detail:"Daily streak tracking not available yet"},
+  {name:"Seven-Day Streak",icon:"calendar" as const,art:visuals.mascot,check:()=>false,detail:"Seven consecutive on-device check-in days"},
 ] as const;
 
 export function AchievementsScreen() {
   const {quests,loading,error,signedIn}=useOwnQuests();
+  const {streak}=useDeviceRituals();
   const countSettled=quests.filter(q=>q.status==="settled").length;
   const evidence=quests.reduce((sum,q)=>sum+(q._count?.evidence||0),0);
   return <IosFrame title="Achievements" eyebrow="MILESTONES" back="/app/profile">
     <div className="ios-filters ios-filters--static"><span className="ios-chip is-selected">All</span><span className="ios-chip">Quest history</span></div>
-    {!signedIn ? <AuthInvitation detail="Your real badges appear when your Quest history is available."/> :
-    <><EmptyOrError loading={loading} error={error} message="Milestones are calculated from your Quests."/>
-      <div className="ios-badge-grid">{badges.map(b=>{
-        const achieved=!loading && b.check(quests.length,countSettled,evidence);
+    {!signedIn && <AuthInvitation detail="Preview the milestones below; they only unlock from your own real Quest data."/>}
+    {signedIn && <EmptyOrError loading={loading} error={error} message="Milestones are calculated from your Quests."/>}
+    <div className="ios-badge-grid">{badges.map(b=>{
+        const achieved=b.name==="Seven-Day Streak" ? streak>=7 : signedIn && !loading && b.check(quests.length,countSettled,evidence);
         return <article key={b.name} className={"ios-badge" + (achieved?" is-earned":"")}>
           <div className="ios-badge__art"><IosArt src={b.art}/><span><IosIcon name={b.icon}/></span></div>
           <h2>{b.name}</h2><p>{b.detail}</p>
-          <small>{achieved?"Earned from your Quest data":"Not earned"}</small>
+          <small>{achieved?"Earned from your record":signedIn?"Not earned":"Locked · sign in"}</small>
         </article>;
-      })}</div></>}
+      })}</div>
   </IosFrame>;
 }
 
@@ -137,7 +140,7 @@ export function EvidenceScreen() {
   const selected=evidence.filter(x=>filter==="all"||x.type===filter||(filter==="photo"&&x.type==="image"));
   return <IosFrame title="My Evidence" eyebrow="YOUR PRIVATE PROOF GALLERY" back="/app/profile">
     <div className="ios-filters">{(["all","photo","video","text"] as const).map(kind=><button key={kind} type="button" className={"ios-chip"+(filter===kind?" is-selected":"")} onClick={()=>setFilter(kind)}>{kind==="all"?"All":kind[0].toUpperCase()+kind.slice(1)}</button>)}</div>
-    {!signedIn?<AuthInvitation title="Every proof has a story." detail="Sign in to see proof you are authorized to access."/>:
+    {!signedIn?<><AuthInvitation title="Every proof has a story." detail="Sign in to see your own authorized proof. These pictures below are examples, not submitted evidence."/><div className="ios-gallery ios-gallery--examples">{[{image:visuals.move,label:"Move"},{image:visuals.create,label:"Create"},{image:visuals.grow,label:"Grow"},{image:visuals.adventure,label:"Adventure"}].map(entry=><div className="ios-proof" key={entry.label}><div className="ios-proof__visual"><IosArt src={entry.image}/></div><h2>{entry.label}</h2><p>Illustration · no user proof</p></div>)}</div></>:
     <><EmptyOrError loading={loading} error={error} message={evidence.length===0?"No evidence yet. Open a live Quest to add your first proof.":""}/>
       <div className="ios-gallery">{selected.map(item=><article className="ios-proof" key={item.id}>
         <div className="ios-proof__visual">
@@ -156,6 +159,7 @@ export function EvidenceScreen() {
 
 export function StatsScreen() {
   const {quests,loading,error,signedIn}=useOwnQuests();
+  const {rituals,done,streak}=useDeviceRituals();
   const labels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const week=Array.from({length:7},(_,i)=>{
     const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(6-i));
@@ -174,6 +178,7 @@ export function StatsScreen() {
         <div><strong>{loading?"–":open}</strong><span>Active</span></div>
       </div>
       <EmptyOrError loading={loading} error={error} message="Your activity chart shows actual Quest creation dates."/>
+      <section className="ios-ritual-progress"><div><strong>{done}/{rituals.length}</strong><span>Daily check-ins today · on device</span></div><small>{streak} consecutive active day{streak===1?"":"s"} · local only</small></section>
       <section className="ios-chart-card">
         <h2>Your week</h2><p>Quests created per day · last 7 days</p>
         <div className="ios-chart" role="img" aria-label={"Quest creation this week: "+week.map(d=>d.label+" "+d.count).join(", ")}>

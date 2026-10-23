@@ -352,3 +352,44 @@
 @media (prefers-reduced-motion: reduce) {
   .ios-app *, .ios-app *::before, .ios-app *::after {animation:none!important;scroll-behavior:auto!important;transition:none!important;}
 }
+
+/* On-device daily rituals are genuinely editable, persistent and clearly not certified Quest proof. */
+.ios-daily-rituals {display:grid;gap:11px;padding:15px;border:1px solid #e8def5;border-radius:22px;background:#fffdfef2;box-shadow:0 7px 22px #8d73a614;}
+.ios-daily-rituals .ios-section__heading{margin:0 0 2px;}
+.ios-ritual-progress {display:grid;gap:9px;padding:13px;background:#f4edff;border-radius:16px;border:1px solid #e7dafb;}
+.ios-ritual-progress>div:first-child{display:flex;align-items:center;gap:9px;}
+.ios-ritual-progress strong{font-size:21px;color:#6660c7;font-weight:820;}
+.ios-ritual-progress span,.ios-ritual-progress small{font-size:10px;color:#7e76a3;font-weight:730;}
+.ios-ritual-progress__bar{height:8px;background:#e4d9fa;border-radius:999px;overflow:hidden;}
+.ios-ritual-progress__bar span{display:block;height:100%;background:linear-gradient(90deg,#a17cff,#6168ee);transition:width .2s ease;}
+.ios-ritual-list{display:grid;gap:8px;}
+.ios-ritual{display:grid;grid-template-columns:38px 1fr 27px;align-items:center;gap:9px;min-height:62px;padding:8px;background:#fff;border:1px solid #eee5f6;border-radius:14px;}
+.ios-ritual.is-done{background:#effbf5;border-color:#d4efde;}
+.ios-ritual__toggle{display:grid;place-items:center;width:35px;height:35px;border:2px solid #d7c9f5;border-radius:50%;background:#f7f2ff;color:#665ae6;}
+.ios-ritual.is-done .ios-ritual__toggle{border-color:#70caaa;background:#a6e7cd;color:#256b56;}
+.ios-ritual__empty{width:12px;height:12px;border:1px solid #c6b9e4;border-radius:50%;}
+.ios-ritual>span{display:grid;gap:5px;min-width:0;}
+.ios-ritual>span strong{font-size:12px;color:#584e78;overflow-wrap:anywhere;}
+.ios-ritual>span small{font-size:9px;color:#9288a6;}
+.ios-ritual__remove{width:27px;height:30px;background:none;border:0;color:#b0a8bf;font-size:21px;}
+.ios-ritual-add{display:grid;gap:10px;padding:12px;border-radius:15px;background:#f9f5ff;}
+.ios-ritual-add label{font-size:12px;font-weight:800;color:#605782;}
+.ios-ritual-add input{min-height:44px;border:1px solid #e3d8f4;background:white;border-radius:10px;padding:10px 12px;font-size:16px;min-width:0;}
+.ios-ritual-examples{display:flex;flex-wrap:wrap;align-items:center;gap:5px;}
+.ios-ritual-examples small{font-size:10px;color:#8c83a3;}
+.ios-ritual-examples button{min-height:31px;padding:6px 8px;border:1px solid #e3d5f4;border-radius:15px;background:white;color:#685fb7;font-size:9px;font-weight:680;}
+.ios-daily-rituals .ios-footer-note{text-align:left;padding:5px 0 0;font-size:9px;line-height:1.65;}
+@media(prefers-reduced-motion:reduce){.ios-ritual-progress__bar span{transition:none!important;}}
+
+/* Javascript-backed actions become usable only after React has attached handlers.
+   Native links retain normal behavior even during a slow first hydration. */
+.ios-app[data-hydrated=false] :is(button,input,textarea,select) {
+  pointer-events: none;
+  opacity: .72;
+}
+.ios-app[data-hydrated=false] .ios-tabbar {
+  pointer-events: none;
+}
+.ios-app[data-hydrated=true] :is(button,input,textarea,select) {
+  pointer-events: auto;
+}

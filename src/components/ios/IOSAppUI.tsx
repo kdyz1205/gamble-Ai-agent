@@ -96,7 +96,9 @@ export function IosFrame({ title, eyebrow, back, children, hero, withNav = true,
 }) {
   const [night,setNight]=useState(false);
   const [reduceMotion,setReduceMotion]=useState(false);
+  const [hydrated,setHydrated]=useState(false);
   useEffect(()=>{
+    setHydrated(true);
     const update=()=>{
       try {
         setNight(localStorage.getItem("sum-ios-appearance")==="night");
@@ -107,7 +109,7 @@ export function IosFrame({ title, eyebrow, back, children, hero, withNav = true,
     window.addEventListener("sum-ios-preferences-changed",update);
     return ()=>window.removeEventListener("sum-ios-preferences-changed",update);
   },[]);
-  return <div className={"ios-app " + tone + (night?" ios-app--night":"")} data-reduce-motion={reduceMotion} data-testid="ios-full-app">
+  return <div className={"ios-app " + tone + (night?" ios-app--night":"")} data-hydrated={hydrated} data-reduce-motion={reduceMotion} data-testid="ios-full-app">
     {title && <header className="ios-header">
       {back ? <Link className="ios-back" aria-label="Back" href={back}><IosIcon name="back" size={19}/></Link>
         : <span className="ios-header__brand">SUM <span>✦</span></span>}

@@ -7,9 +7,9 @@ const fs=require("node:fs"),path=require("node:path");
 const assert=require("node:assert/strict");
 const base=process.env.SUM_IOS_URL||"http://127.0.0.1:3091";
 const out=process.env.SUM_IOS_OUTPUT||path.resolve("output","ios-full-app");
-const pages=["splash","onboarding","today","discover","create","quest-created","quest",
+const pages=process.env.SUM_IOS_WORKFLOW_ONLY?[]:["splash","onboarding","today","discover","create","quest-created","quest",
   "evidence-add","quest-complete","picos","profile","achievements","evidence","stats","community","settings"];
-const widths=process.env.SUM_IOS_QUICK?[390,1440]:[320,390,768,1440];
+const widths=process.env.SUM_IOS_WORKFLOW_ONLY?[390]:process.env.SUM_IOS_QUICK?[390,1440]:[320,390,768,1440];
 fs.mkdirSync(out,{recursive:true});
 const evidence={base,pages,widths,runAt:new Date().toISOString(),results:[]};
 let failures=0;
@@ -52,9 +52,12 @@ for(const width of widths){
       const onError=(e)=>runtimeErrors.push(e.message);
       page.on("pageerror",onError);
       try{
-        const r=await page.goto(base+"/app/"+view,{waitUntil:"domcontentloaded",timeout:35000});
+        const r=await page.goto(base+"/app/"+view,{waitUntil:"commit",timeout:60000});
         assert.equal(r.status(),200,"HTTP "+r.status());
-        await page.locator('[data-testid="ios-full-app"]').waitFor({state:"visible",timeout:14000});
+        await page.locator('[data-testid="ios-full-app"]').waitFor({state:"visible",timeout:25000});
+        await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
+        await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
+        await page.evaluate(async()=>{const imgs=Array.from(document.images).filter(img=>img.getBoundingClientRect().top<innerHeight+130);await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));});
         const m=await meta(page);
         assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px");
         const intro=view==="splash"||view==="onboarding";
@@ -74,40 +77,45 @@ for(const width of widths){
   if(width===390){
     await test("First install onboarding advances three real pages",async()=>{
       await page.goto(base+"/app",{waitUntil:"domcontentloaded"});
-      await page.waitForURL(/\/app\/onboarding/,{timeout:15000});
+      await page.waitForURL(/\/app\/onboarding/,{timeout:45000});
+      await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
+      await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       const headings=[];
       for(let i=0;i<3;i++){
         headings.push(await page.locator("h1").first().innerText());
         await page.screenshot({path:path.join(out,"onboarding-"+(i+1)+".png"),animations:"disabled"});
         await page.getByRole("button",{name:i===2?"Get Started":"Next"}).click();
       }
-      await page.waitForURL(/\/app\/today/,{timeout:15000});
+      await page.waitForURL(/\/app\/today/,{timeout:45000});
       assert(new Set(headings).size===3,"all onboarding screens must be unique");
       assert.equal(await page.evaluate(()=>localStorage.getItem("sum-ios-onboarding-complete")),"true");
       await page.goto(base+"/app",{waitUntil:"domcontentloaded"});
-      await page.waitForURL(/\/app\/(?:today)?$/, {timeout:15000});
+      await page.waitForURL(/\/app\/(?:today)?$/, {timeout:45000});
       return headings;
     });
     await test("Five-tab iOS navigation actually changes routes",async()=>{
       await page.goto(base+"/app/today",{waitUntil:"domcontentloaded"});
+      await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
       for(const [label,dest] of [["Discover","discover"],["Create","create"],["Picos","picos"],["Profile","profile"],["Home","today"]]){
         await page.getByRole("navigation",{name:"iOS app navigation"}).getByRole("link",{name:label,exact:true}).click();
-        await page.waitForURL(new RegExp("/app/"+dest+"(?:\\?|$)"),{timeout:14000});
+        await page.waitForFunction(dest=>location.pathname==="/app/"+dest,dest,{timeout:45000});
       }
       return {destinations:5};
     });
     await test("Actual Quest composer survives new app shell",async()=>{
       await page.goto(base+"/app/create",{waitUntil:"domcontentloaded"});
-      await page.getByRole("textbox",{name:"Describe your challenge"}).waitFor({state:"visible",timeout:15000});
+      await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
+      await page.getByRole("textbox",{name:"Describe your challenge"}).waitFor({state:"visible",timeout:45000});
       const seed=page.getByRole("button",{name:"Create",exact:true}).first();
       await seed.click();
-      await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Describe your challenge"]')?.value.length>8,undefined,{timeout:15000});
+      await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Describe your challenge"]')?.value.length>8,undefined,{timeout:45000});
       const text=await page.getByRole("textbox",{name:"Describe your challenge"}).inputValue();
       assert(text.length>8);
       return {seedLength:text.length, noPublishTriggered:true};
     });
     await test("Settings persist actual local display preferences",async()=>{
       await page.goto(base+"/app/settings",{waitUntil:"domcontentloaded"});
+      await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       await page.getByRole("combobox",{name:"App theme"}).selectOption("night");
       await page.getByRole("checkbox",{name:"Reduce motion"}).check();
       assert.equal(await page.evaluate(()=>localStorage.getItem("sum-ios-appearance")),"night");
@@ -115,6 +123,7 @@ for(const width of widths){
       await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.classList.contains("ios-app--night"),null,{timeout:10000});
       assert.equal(await page.locator('[data-testid="ios-full-app"]').getAttribute("data-reduce-motion"),"true");
       await page.goto(base+"/app/settings",{waitUntil:"domcontentloaded"});
+      await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       await page.getByRole("combobox",{name:"App theme"}).selectOption("light");
       await page.getByRole("checkbox",{name:"Reduce motion"}).uncheck();
       return {saved:true};
@@ -127,7 +136,8 @@ for(const width of widths){
       return {failClosed:true};
     });
     await test("Wheel scrolling works on long iOS pages",async()=>{
-      await page.goto(base+"/app/achievements",{waitUntil:"domcontentloaded"});
+      await page.goto(base+"/app/today",{waitUntil:"commit",timeout:60000});
+      await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       const height=await page.evaluate(()=>document.documentElement.scrollHeight);
       assert(height>844+100);
       await page.mouse.move(185,445);

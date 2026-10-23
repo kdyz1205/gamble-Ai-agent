@@ -16,22 +16,23 @@ This is a **whole-app navigation, UI and existing-API integration** effort, not 
 | 5. Home | `/app/today` | Real user's active Quest dashboard and Move/Create/Grow entry links |
 | 6. Quest Setup | `/app/create` | Embeds **existing guarded PactComposer**, with real AI draft and publish flow, rather than a disconnected dummy form |
 | 7. Quest Created | `/app/quest-created?id=REAL_ID` | Loads actual persisted Quest; fail-closed without an ID |
-| 8. Today | `/app/today` | Real open/live/settled Quest counts; no invented daily logs |
+| 8. Today | `/app/today` | Real Quest counts plus an on-device daily ritual creator/checklist with reversible, persisted check-ins; distinct from verified Quest proof |
 | 9. Quest Detail | `/app/quest?id=REAL_ID` | Actual persisted rules, status, deadlines, players and guarded invitation |
 | 10. Add Evidence | `/app/evidence-add?id=REAL_ID` | Written proof for text/self-report policy uses actual submission API; media policies link the already protected upload flow `/challenge/REAL_ID/versus` |
 | 11. Quest Complete | `/app/quest-complete?id=REAL_ID` | Only a backend `settled` Quest receives a finished receipt; pending/disputed/unknown cannot appear complete |
 | 12. Discover | `/app/discover` | Real open public Quests from `/api/challenges`, local search/filter, real join links |
 | 13. Picos | `/app/picos` | Three interactive Pico roles (Guide, Clarify, Review), actual Quest composer link; no fake unlock inventory |
 | 14. Profile | `/app/profile` | Authenticated user and actual Quest/credit counts; real account links |
-| 15. Achievements | `/app/achievements` | Derives displayed milestone badges from actual Quest/evidence counts; 7-day streak remains locked until tracking exists |
+| 15. Achievements | `/app/achievements` | Real Quest and private evidence milestones; 7-day streak derives only from actual on-device check-ins |
 | 16. Evidence Gallery | `/app/evidence` | Private approved proof via detail API, real media/description where returned, no public leaked URLs |
-| 17. Stats | `/app/stats` | Week chart and metrics computed from real creation/settlement records |
+| 17. Stats | `/app/stats` | Week chart and Quest metrics from real records plus a separately identified on-device daily check-in count and streak |
 | 18. Community | `/app/community` | Public read-only `/api/feed` timeline, with actual Quest links |
 | 19. Settings | `/app/settings` | Device-local theme and reduce-motion preferences, working privacy/terms/support links, sign-out |
 | 20. App Icons | `ios/App/App/Assets.xcassets` + web icons | Actual 3D Pico artwork, sized for iOS/PWA |
 
 ## Truthfulness and blockers
-- Not implemented on the server: standalone streak tracking, push notifications, persistent social comments/likes, arbitrary user-created posts, collectable Pico inventory. UI must say so, never render fake counts/users or nonfunctional interactive controls.
+- On-device daily rituals and streak counting now work without fabricated history, but do **not** sync between devices, consume/award credits or constitute Quest proof. Cloud-backed daily tracking is not implemented.
+- Not implemented on the server: push notifications, persistent social comments/likes, arbitrary user-created posts, collectable Pico inventory. UI must say so, never render fake counts/users or nonfunctional interactive controls.
 - Private proof is read only through the already authorization-checked challenge detail, never public feed. Submitted proof is restricted by status, deadline, player identity and evidence policy.
 - Credit balances only come from `/api/tokens`; an absent or unauthorized balance shows unknown, never a fabricated 0.
 - Published Quest links come from real backend state. Neither `quest-created` nor `quest-complete` manufactures a receipt without an existing ID.

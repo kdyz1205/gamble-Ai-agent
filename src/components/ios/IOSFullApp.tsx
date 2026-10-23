@@ -25,6 +25,8 @@ function OnboardingScreen() {
   const [step,setStep]=useState(0);
   const finish=()=>{
     try{localStorage.setItem("sum-ios-onboarding-complete","true");}catch{}
+    // Match the server first-launch route without depending on hydration at /app.
+    document.cookie="sum-ios-onboarding-complete=true; Path=/; Max-Age=31536000; SameSite=Lax";
     router.push("/app/today");
   };
   const chapter=chapters[step];
