@@ -32,9 +32,10 @@ type AiCapabilities={
 };
 type QuizView={
   id:string;title:string;topic:string;bankVersion:string;
-  status:"open"|"live"|"completed";
+  status:"open"|"live"|"completed"|"cancelled";
   challengeStatus:string;stakeCredits:0;stakesEnabled:false;
   creatorUsername:string;opponentUsername:string|null;
+  isCreator:boolean;
   playerUserId:string;accepted:boolean;canJoin:boolean;
   expiresAt:string|null;answerCommitment:string;questions:PublicQuestion[]|null;
   ownSubmitted:boolean;opponentSubmitted:boolean;result:QuizResult|null;
@@ -235,6 +236,11 @@ export default function QuizDuelScreen({id}:{id?:string}){
                 onClick={()=>void share()} data-testid="quiz-share-invite">
                 {copied?"Invitation shared or copied":"Share invitation link"}
               </button>
+              {quiz.isCreator&&<button type="button" className="ios-secondary-button"
+                data-testid="quiz-cancel-invite" disabled={working}
+                onClick={()=>void postAction("/cancel")}>
+                Cancel unaccepted invitation · 0 credit refund needed
+              </button>}
               {quiz.canJoin?<button className="ios-primary" type="button"
                 data-testid="quiz-accept-invite" disabled={working}
                 onClick={()=>void postAction("/accept")}>
@@ -242,6 +248,12 @@ export default function QuizDuelScreen({id}:{id?:string}){
               </button>:
               <p className="ios-quiz-hint">Waiting for the invited player to accept.</p>}
             </>}
+            {quiz.status==="cancelled"&&<div role="status"
+              data-testid="quiz-cancelled">
+              This free Quiz invitation was canceled before the other player joined.
+              No credits were reserved or transferred.
+              <IosAction href="/app/quiz" secondary>Create a new Quiz</IosAction>
+            </div>}
             {quiz.status==="live"&&<>
               <h3>2. Answer the same three questions</h3>
               <p role="status" className="ios-quiz-timer">
