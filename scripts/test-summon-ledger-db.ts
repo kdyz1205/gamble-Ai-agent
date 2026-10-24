@@ -13,9 +13,12 @@ import {ensureUniversalPico,accountSummonLedger,starterGrantKey,
 async function main(){
   const database=process.env.DATABASE_URL;
   if(!database)throw Error("DATABASE_URL required");
-  const host=new URL(database).hostname;
-  if(!["localhost","127.0.0.1"].includes(host))
-    throw Error("SUMMON_LEDGER_TESTS require isolated local PostgreSQL");
+  const target=new URL(database);
+  // Require the dedicated verification database, not merely a local host:
+  // a developer may otherwise run fixtures against a normal local app DB.
+  if(!["localhost","127.0.0.1"].includes(target.hostname)||
+     target.pathname!=="/summoner_verification")
+    throw Error("SUMMON_LEDGER_TESTS require isolated local summoner_verification PostgreSQL");
   process.env.SUMMON_PERSISTENCE_ENABLED="true";
   const id=randomUUID().replaceAll("-","");
   const users:string[]=[];
