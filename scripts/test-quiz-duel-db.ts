@@ -145,6 +145,15 @@ async function main(){
     "Exact higher score is the recorded winner");
   eq((afterBob.result as {creditsTransferred:number}).creditsTransferred,0,
     "No fund transfer or prize from Quiz result");
+  const scoreEntries=(afterBob.result as {
+    scores:Array<{userId:string;answers:number[]|null}>;
+  }).scores;
+  eq(scoreEntries.find(s=>s.userId===alice.id)?.answers,correct,
+    "Final packet reveals exact winner answer indices for independent recount");
+  eq(scoreEntries.find(s=>s.userId===bob.id)?.answers,wrong,
+    "Final packet reveals loser answer indices only after both submit");
+  ok(/^[a-f0-9]{64}$/.test(afterBob.resolutionHash||""),
+    "Final view exposes server-committed outcome SHA-256");
   eq((afterBob.result as {answerCommitment:string}).answerCommitment,
     live.answerCommitment,"Final revealed answer key must match original commitment");
   await rej(()=>submitQuizAnswers(first.challengeId,alice.id,wrong),409,
