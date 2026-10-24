@@ -141,6 +141,22 @@ async function main(){
     "Exactly two immutable answer receipts");
   eq(await prisma.judgment.count({where:{challengeId:first.challengeId}}),1,
     "One final objective verdict, never duplicate");
+  const originalFinal=await prisma.quizDuel.findUniqueOrThrow({
+    where:{challengeId:first.challengeId},select:{resultJson:true},
+  });
+  if(!originalFinal.resultJson)throw new Error("Final Quiz result fixture missing");
+  const forged=JSON.parse(originalFinal.resultJson) as Record<string,unknown>;
+  forged.winnerId=bob.id;
+  await prisma.quizDuel.update({where:{challengeId:first.challengeId},
+    data:{resultJson:JSON.stringify(forged)}});
+  await assert.rejects(()=>getQuizDuelView(first.challengeId,alice.id),
+    /Final Quiz receipt digest failed verification/,
+    "Tampered final receipt must not display a false winner");
+  checks++;
+  await prisma.quizDuel.update({where:{challengeId:first.challengeId},
+    data:{resultJson:originalFinal.resultJson}});
+  eq((await getQuizDuelView(first.challengeId,alice.id)).status,"completed",
+    "Restoring original recorded receipt restores verified read access");
   const ch=await prisma.challenge.findUniqueOrThrow({where:{id:first.challengeId}});
   eq(ch.status,"settled","Actual linked Challenge settled through explicit server state machine");
   eq(ch.stake,0,"Linked Challenge always had zero escrow");
