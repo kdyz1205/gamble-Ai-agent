@@ -1,13 +1,28 @@
 "use client";
 
-import {useRef,useState} from "react";
-import {IosArt,IosAction,visuals} from "./IOSAppUI";
+import {useRef,useState,type CSSProperties} from "react";
+import {IosAction} from "./IOSAppUI";
+import {CREATURE_ATLAS,creatureVisualFor,creatureStageForMastery,stageNameFor}
+  from "@/lib/summons/creature-visual-bible";
 import {
   PROFESSIONS,RARITY_ODDS,INITIAL_PITY_STATE,advancePityState,
   professionById,previewFusion,previewSummon,previewEffectiveOdds,
   previewVerifiedBattleXp,previewTicketMilestones,previewMasteryFromXp,
   type ProfessionId,type SummonConcept,type PityState,
 } from "@/lib/summons/profession-system";
+
+type Chapter="career"|"summon"|"fusion"|"progress";
+const CHAPTERS=[
+  {id:"career",label:"Career Atlas"},
+  {id:"summon",label:"Summon Preview"},
+  {id:"fusion",label:"Fusion Lab"},
+  {id:"progress",label:"XP Guide"},
+] as const;
+function crestStyle(id:ProfessionId):CSSProperties{
+  const colors=creatureVisualFor(id).colors;
+  return {"--atlas-0":colors[0],"--atlas-1":colors[1],
+    "--atlas-2":colors[2]} as CSSProperties;
+}
 
 /**
  * Playable rules preview only: real species ownership, profession XP and
@@ -19,12 +34,16 @@ export default function ProfessionSummonStudio(){
   const [occupation,setOccupation]=useState("badminton");
   const [secondary,setSecondary]=useState<ProfessionId>("software");
   const [mastery,setMastery]=useState(1);
+  const [activeChapter,setActiveChapter]=useState<Chapter>("career");
   const [draw,setDraw]=useState<SummonConcept|null>(null);
   const [draws,setDraws]=useState(0);
   const [pity,setPity]=useState<PityState>({...INITIAL_PITY_STATE});
   const pityRef=useRef<PityState>({...INITIAL_PITY_STATE});
   const nextOdds=previewEffectiveOdds(pity);
   const first=professionById(primary);
+  const firstVisual=creatureVisualFor(primary);
+  const otherVisual=creatureVisualFor(secondary);
+  const stage=creatureStageForMastery(mastery);
   const occupationName=first.specialties.find(s=>s.id===occupation)?.name ?? first.specialties[0].name;
   const other=professionById(secondary);
   const example=previewSummon({professionId:primary,occupationId:occupation,
@@ -77,11 +96,35 @@ export default function ProfessionSummonStudio(){
       challenges can shape which creatures you may summon. These are 12 starting
       branches, not a limit on the professions the game can support.
     </p>
+    <div className="ios-summon-chapters" role="tablist" aria-label="Summon design chapters">
+      {CHAPTERS.map(chapter=><button key={chapter.id} type="button"
+        role="tab" id={"summon-tab-"+chapter.id}
+        aria-controls={"summon-panel-"+chapter.id}
+        aria-selected={activeChapter===chapter.id}
+        className={"ios-summon-chapter"+(activeChapter===chapter.id?" is-selected":"")}
+        onClick={()=>setActiveChapter(chapter.id)}>{chapter.label}</button>)}
+    </div>
 
-    <div className="ios-summon-lab">
+    {activeChapter==="career"&&<div className="ios-summon-lab" role="tabpanel"
+      id="summon-panel-career" aria-labelledby="summon-tab-career">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">01 · CHOOSE A PROFESSION</span>
         <h3>Career affinity</h3>
+      </div>
+      <p className="ios-summon-hint">Twelve distinct species silhouettes, not twelve recolored Picos.
+        Select a family to explore its creature lineage and three career specialties.
+        These are art blueprints, not creatures in your account.</p>
+      <div className="ios-creature-atlas" role="group" aria-label="Twelve concept creature families">
+        {CREATURE_ATLAS.map(entry=><button type="button" key={entry.id}
+          data-testid={"creature-family-"+entry.id}
+          aria-pressed={primary===entry.id}
+          className={"ios-creature-atlas-card"+(primary===entry.id?" is-selected":"")}
+          onClick={()=>changePrimary(entry.id)}>
+          <span className={"ios-creature-crest ios-creature-crest--"+entry.id}
+            style={crestStyle(entry.id)} aria-hidden="true"/>
+          <strong>{entry.species}</strong>
+          <small>{entry.name}</small>
+        </button>)}
       </div>
       <label className="ios-summon-input">Profession family
         <select aria-label="Profession family" value={primary}
@@ -97,15 +140,21 @@ export default function ProfessionSummonStudio(){
         </select>
       </label>
       <div className="ios-summon-species">
-        <div className="ios-summon-species__art">
-          <IosArt src={visuals[first.art]} alt={"Existing illustration used as concept mood art for "+first.species}/>
+        <div className="ios-summon-species__art ios-creature-portrait">
+          <span className={"ios-creature-crest ios-creature-crest--"+primary}
+            style={crestStyle(primary)} aria-hidden="true"/>
         </div>
-        <div><span className="ios-overline">POSSIBLE SPECIES · CONCEPT</span>
+        <div><span className="ios-overline">UNIQUE SPECIES BLUEPRINT · ART PENDING</span>
           <h3>{first.species}</h3>
-          <p>{first.example}</p>
+          <p>{firstVisual.silhouette}</p>
           <small>Affinity: {first.trait} · Specialization: {occupationName}</small>
         </div>
       </div>
+      <p className="ios-summon-hint"><strong>Art signature:</strong> {firstVisual.signature}
+        {" · "}<strong>Material:</strong> {firstVisual.material}</p>
+      <p className="ios-summon-hint"><strong>Occupation motif:</strong> {
+        firstVisual.occupationMotifs[first.specialties.findIndex(s=>s.id===occupation)]}
+        {" · "}<strong>Motion:</strong> {firstVisual.movement}</p>
       <label className="ios-summon-input ios-summon-slider">
         <span>Hypothetical profession mastery · Lv {mastery}</span>
         <input aria-label="Preview profession mastery level" type="range" min={1}
@@ -115,9 +164,20 @@ export default function ProfessionSummonStudio(){
         <small>{mastery===1?"New explorer":mastery<3?"Learning your craft":
           mastery<5?"Evolved forms possible":"Ascended forms possible"} · sample only, not earned</small>
       </label>
-    </div>
+      <div className="ios-evolution-strip" aria-label="Three-stage species evolution preview">
+        {([1,3,5] as const).map((level,index)=><div key={level}
+          className={"ios-evolution-stage"+(stage===(index===0?"base":index===1?"evolved":"ascended")?" is-current":"")}>
+          <span>LV {level}</span>
+          <strong>{firstVisual.stageNames[index]}</strong>
+          <small>{index===0?"Hatchling form":index===1?"Evolved form":"Ascended form"}</small>
+        </div>)}
+      </div>
+      <p className="ios-summon-hint">These are proposed cosmetic forms. No level, skill, ticket
+        or creature is awarded by this preview.</p>
+    </div>}
 
-    <div className="ios-summon-lab">
+    {activeChapter==="summon"&&<div className="ios-summon-lab" role="tabpanel"
+      id="summon-panel-summon" aria-labelledby="summon-tab-summon">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">02 · A CHANCE TO SUMMON</span>
         <h3>Random rarity, visible odds</h3>
@@ -159,9 +219,10 @@ export default function ProfessionSummonStudio(){
         disabled={draws===0}>Reset sample-only counters</button>
       <p className="ios-summon-hint">Counters reset on page reload or by this button.
         Nothing persists to your account and no Summon is granted.</p>
-    </div>
+    </div>}
 
-    <div className="ios-summon-lab">
+    {activeChapter==="fusion"&&<div className="ios-summon-lab" role="tabpanel"
+      id="summon-panel-fusion" aria-labelledby="summon-tab-fusion">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">03 · COMBINE TWO LINEAGES</span>
         <h3>Fusion Lab</h3>
@@ -174,11 +235,13 @@ export default function ProfessionSummonStudio(){
         </select>
       </label>
       <div className="ios-fusion-parents">
-        <div><IosArt src={visuals[first.art]} alt="First occupation concept illustration"/>
-          <small>{first.species}</small></div>
+        <div><span className={"ios-creature-crest ios-creature-crest--"+primary}
+          style={crestStyle(primary)} aria-hidden="true"/>
+          <small>{first.species} · {firstVisual.personality}</small></div>
         <span aria-hidden="true">+</span>
-        <div><IosArt src={visuals[other.art]} alt="Second occupation concept illustration"/>
-          <small>{other.species}</small></div>
+        <div><span className={"ios-creature-crest ios-creature-crest--"+secondary}
+          style={crestStyle(secondary)} aria-hidden="true"/>
+          <small>{other.species} · {otherVisual.personality}</small></div>
       </div>
       <div className="ios-fusion-recipe" aria-live="polite">
         <span className="ios-overline">CROSS-CAREER BLUEPRINT · NOT OWNED</span>
@@ -187,10 +250,12 @@ export default function ProfessionSummonStudio(){
       </div>
       <p className="ios-summon-hint">Fusion can inherit traits from both professions.
         It cannot be executed until ownership, consent and a server-side atomic
-        recipe system exist. The artwork here is a mood reference, not a finished unique species.</p>
-    </div>
+        recipe system exist. The crests are symbolic design marks, not finished
+        3D creature portraits or owned inventory.</p>
+    </div>}
 
-    <div className="ios-summon-lab">
+    {activeChapter==="progress"&&<div className="ios-summon-lab" role="tabpanel"
+      id="summon-panel-progress" aria-labelledby="summon-tab-progress">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">04 · REAL BATTLES → FUTURE GROWTH</span>
         <h3>Win, learn, repeat</h3>
@@ -207,6 +272,6 @@ export default function ProfessionSummonStudio(){
         and profession mastery Lv {previewMasteryFromXp(250)}.
         This example never grants XP, tickets or creatures. Any server-recorded XP is displayed separately above and does not include unbackfilled history.</p>
       <IosAction href={"/app/create?seed="+first.seed}>Start a real {first.name} Quest</IosAction>
-    </div>
+    </div>}
   </section>;
 }
