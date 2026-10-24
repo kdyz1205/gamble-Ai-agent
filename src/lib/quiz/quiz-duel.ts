@@ -165,7 +165,7 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
       select:{id:true,title:true,creatorId:true,status:true,stake:true,
         creator:{select:{username:true}},
         participants:{select:{userId:true,status:true,role:true,
-          user:{select:{username:true}}}}},
+          user:{select:{username:true}}}},
       }},
       attempts:{select:{userId:true,score:true,submittedAt:true}},
     },
