@@ -41,10 +41,13 @@ export default function Creature3DPrototypeViewer({src,label}:{
         renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
         renderer.outputColorSpace=THREE.SRGBColorSpace;
         const scene=new THREE.Scene();
-        scene.add(new THREE.HemisphereLight(0xffffff,0xb0b3c9,2.2));
-        const sun=new THREE.DirectionalLight(0xfffaf0,2.1);
+        scene.add(new THREE.HemisphereLight(0xffffff,0xd9ecff,2.1));
+        const sun=new THREE.DirectionalLight(0xfffaf0,2.0);
         sun.position.set(-2,5,6);
         scene.add(sun);
+        const fill=new THREE.DirectionalLight(0xffffff,1.1);
+        fill.position.set(3,3,5);
+        scene.add(fill);
         const camera=new THREE.PerspectiveCamera(43,1,0.1,50);
         camera.position.set(4,3.2,5);
         const controls=new OrbitControls(camera,canvas);
@@ -103,6 +106,17 @@ export default function Creature3DPrototypeViewer({src,label}:{
         const loader=new GLTFLoader();
         loader.load(src,gltf=>{
           if(stopped){discard(gltf.scene);return;}
+          // The source GLBs contain vertex colors but no authored PBR
+          // material. glTF's default metallic surface appears almost black
+          // with no environment map; use nonmetallic matte preview material.
+          gltf.scene.traverse(object=>{
+            const mesh=object as import("three").Mesh;
+            if(mesh.isMesh){
+              mesh.material=new THREE.MeshStandardMaterial({
+                vertexColors:true,metalness:0,roughness:0.72,
+              });
+            }
+          });
           // Original editable blockouts are explicitly Z-up.
           const axisRoot=new THREE.Group();
           gltf.scene.rotation.x=-Math.PI/2;
