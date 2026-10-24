@@ -183,6 +183,17 @@ for(const width of widths){
       await roster.getByRole("button",{name:/Pico/}).click();
       assert.equal(await page.locator(".ios-familiar-detail .ios-action").getAttribute("href"),
         "/app/create");
+      // A full-page screenshot may otherwise capture blank lazy images below
+      // the fold. Require the real current art bytes before accepting evidence.
+      const imagesReady=await page.evaluate(async()=>{
+        const images=Array.from(document.querySelectorAll(
+          ".ios-pico-hero img, .ios-familiar-card img, .ios-pico-mood img"));
+        for(const img of images)img.loading="eager";
+        await Promise.all(images.map(img=>img.decode().catch(()=>null)));
+        return {count:images.length,allLoaded:images.every(img=>img.naturalWidth>0)};
+      });
+      assert(imagesReady.count>=8&&imagesReady.allLoaded,
+        "Familiar artwork must be decoded, not blank placeholders: "+JSON.stringify(imagesReady));
       await page.screenshot({path:path.join(out,"familiars-roster-390.png"),
         animations:"disabled",fullPage:true});
       return {companions:4,guestLevel:"not fabricated",source:"actual rendered UI"};
