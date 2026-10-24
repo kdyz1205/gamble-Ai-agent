@@ -190,6 +190,11 @@ for(const width of widths){
       assert((await page.locator(".ios-pico-hero").innerText()).includes("Pico, your first Summon"));
       const rank=await page.getByRole("region",{name:"Your Quest Milestone Level"}).innerText();
       assert(rank.includes("Sign in to see milestones"),"no fabricated guest level");
+      const recorded=await page.getByRole("region",{name:"Recorded Profession XP"}).innerText();
+      assert(recorded.includes("Sign in to check server-verified Quest XP"),
+        "Guest never receives another account's XP");
+      assert(recorded.includes("not lifetime XP"),
+        "XP panel must disclose incomplete historical coverage");
       const primary=page.getByRole("combobox",{name:"Profession family"});
       const second=page.getByRole("combobox",{name:"Fusion second profession"});
       assert.equal(await primary.locator("option").count(),12);
