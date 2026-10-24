@@ -5,8 +5,10 @@ import prisma from "../src/lib/db";
 import {provisionSignupUser} from "../src/lib/auth-provisioning";
 import {COSTS} from "../src/lib/credits";
 import {ensureUniversalPico,accountSummonLedger,starterGrantKey,
-  reconcileVerifiedQuestProfessionXp}
+  reconcileVerifiedQuestProfessionXp,XP_LEDGER_VERSION}
   from "../src/lib/summons/server-ledger";
+import {reconcileFreeCareerTickets,ticketGrantKey,TICKET_GRANT_RULE_VERSION}
+  from "../src/lib/summons/free-ticket-ledger";
 
 // Integration test intentionally requires a *local* isolated PostgreSQL.
 // It will never write to live Vercel/Neon/production and cleans up all fixtures.
@@ -34,6 +36,10 @@ async function main(){
   const ok=(n:boolean,message:string)=>{assert.ok(n,message);checks++};
   const rej=async(f:()=>Promise<unknown>,_message:string)=>{
     await assert.rejects(f);checks++;
+  };
+  const ticketRej=async(f:()=>Promise<unknown>,message:string)=>{
+    await assert.rejects(f,{name:"SummonTicketSourceError"},message);
+    checks++;
   };
   try{
     const user=await createUser("alpha");
@@ -172,6 +178,95 @@ async function main(){
       "The losing account sees its own verified receipts only");
     eq((await accountSummonLedger(outsider.id))?.xp,null,
       "No receipt is UNKNOWN, not zero XP");
+    process.env.SUMMON_TICKETS_ENABLED="true";
+    const freeFirst=await Promise.all(Array.from({length:10},
+      ()=>reconcileFreeCareerTickets({ownerId:user.id,professionId:"software"})));
+    eq(new Set(freeFirst.map(x=>x.grantIds[0])).size,1,
+      "10 concurrent free-ticket reconciles yield one receipt");
+    eq(freeFirst[0].earnedMilestones,1,"100 win XP yields one career ticket");
+    eq(freeFirst[0].verifiedXp,100,"Ticket XP is sourced from win event only");
+    eq(freeFirst[0].available,1,"First ticket available only once");
+    const firstTicket=await prisma.summonTicket.findFirstOrThrow({
+      where:{ownerId:user.id,professionId:"software"},
+    });
+    eq(firstTicket.grantKey,ticketGrantKey(user.id,"software",1),
+      "Ticket grant uses stable per-player/per-career key");
+    eq(firstTicket.sourceVersion,TICKET_GRANT_RULE_VERSION,
+      "Milestone receipts retain original rule version");
+    eq((await reconcileFreeCareerTickets({ownerId:friend.id,
+      professionId:"software"})).earnedMilestones,0,
+      "A documented loss at 80 XP does not yet mint a free ticket");
+    eq((await reconcileFreeCareerTickets({ownerId:outsider.id,
+      professionId:"software"})).earnedMilestones,0,
+      "Nonparticipant earns no profession ticket");
+
+    const more=await createQuest("additional-coding");
+    await reconcileVerifiedQuestProfessionXp({challengeId:more.id,userId:user.id});
+    eq((await reconcileFreeCareerTickets({ownerId:user.id,
+      professionId:"software"})).earnedMilestones,1,
+      "200 verified XP remains one ticket");
+    const third=await createQuest("third-coding");
+    await reconcileVerifiedQuestProfessionXp({challengeId:third.id,userId:user.id});
+    const two=await Promise.all(Array.from({length:10},
+      ()=>reconcileFreeCareerTickets({ownerId:user.id,professionId:"software"})));
+    eq(new Set(two.map(x=>x.grantIds.join(":"))).size,1,
+      "Concurrent threshold crossing grants exactly two stable IDs");
+    eq(two[0].verifiedXp,300,"Three wins earn 300 verified career XP");
+    eq(two[0].earnedMilestones,2,"300 XP reaches second 250 threshold");
+    eq(two[0].available,2,"Second ticket issued without duplicating first");
+    eq(await prisma.summonTicket.count({where:{ownerId:user.id,
+      professionId:"software"}}),2,"Exactly two persisted career tickets");
+
+    const fitness=await createQuest("exercise",{type:"Fitness"});
+    await reconcileVerifiedQuestProfessionXp({challengeId:fitness.id,userId:user.id});
+    const athletic=await reconcileFreeCareerTickets({
+      ownerId:user.id,professionId:"athletics",
+    });
+    eq(athletic.verifiedXp,100,"Other career has its own recorded XP");
+    eq(athletic.earnedMilestones,1,"Separate career can earn its first free ticket");
+    eq(await prisma.summonTicket.count({where:{ownerId:friend.id}}),0,
+      "No cross-player ticket leak");
+    await prisma.summonTicket.update({where:{id:firstTicket.id},
+      data:{status:"spent",spentByGrant:"fixture-spend-"+id,spentAt:new Date()}});
+    const spent=await reconcileFreeCareerTickets({
+      ownerId:user.id,professionId:"software",
+    });
+    eq([spent.available,spent.spent],[1,1],
+      "Previously spent ticket is not restored by reconciliation");
+    eq(await prisma.summonTicket.count({where:{
+      ownerId:user.id,professionId:"software",
+    }}),2,"Spent ticket is not duplicated or reminted");
+
+    await prisma.challenge.update({where:{id:third.id},data:{status:"disputed"}});
+    await ticketRej(()=>reconcileFreeCareerTickets({
+      ownerId:user.id,professionId:"software",
+    }),"Disputed source Quest blocks further ticket issuance");
+    eq(await prisma.summonTicket.count({where:{ownerId:user.id,
+      professionId:"software"}}),2,"Dispute does not generate replacement tickets");
+    await prisma.challenge.update({where:{id:third.id},data:{status:"settled"}});
+
+    const forgedQuest=await createQuest("forged-source");
+    const forgedKey="quest-xp:"+XP_LEDGER_VERSION+":"+
+      forgedQuest.id+":"+user.id+":software";
+    await prisma.professionXpEvent.create({data:{
+      ownerId:user.id,challengeId:forgedQuest.id,
+      eventKey:forgedKey,professionId:"software",awardType:"verified_quest",
+      amount:100,ruleVersion:XP_LEDGER_VERSION,sourceReceipt:"forged-final-receipt",
+    }});
+    await ticketRej(()=>reconcileFreeCareerTickets({
+      ownerId:user.id,professionId:"software",
+    }),"Forged final-receipt XP cannot mint free tickets");
+    await prisma.professionXpEvent.delete({where:{eventKey:forgedKey}});
+    const correctionKey="correction-fixture:"+id;
+    await prisma.professionXpEvent.create({data:{
+      ownerId:user.id,challengeId:winning.id,
+      eventKey:correctionKey,professionId:"software",awardType:"correction",
+      amount:-100,ruleVersion:XP_LEDGER_VERSION,sourceReceipt:unique[0].sourceReceipt,
+    }});
+    await ticketRej(()=>reconcileFreeCareerTickets({
+      ownerId:user.id,professionId:"software",
+    }),"Corrected XP history requires reconciliation; no silent grants");
+    await prisma.professionXpEvent.delete({where:{eventKey:correctionKey}});
     eq(await prisma.professionXpEvent.count({where:{challengeId:winning.id}}),2,
       "No duplicate event for same Quest/player/career");
     eq(await prisma.professionXpEvent.count({where:{ownerId:outsider.id}}),0,
@@ -260,14 +355,23 @@ async function main(){
       "Awarding XP never mutates the participant's credit ledger");
 
     process.env.SUMMON_PERSISTENCE_ENABLED="false";
+    await ticketRej(()=>reconcileFreeCareerTickets({ownerId:user.id,
+      professionId:"software"}),"Persistence flag OFF rejects ticket issuance");
+    process.env.SUMMON_PERSISTENCE_ENABLED="true";
+    process.env.SUMMON_TICKETS_ENABLED="false";
+    await ticketRej(()=>reconcileFreeCareerTickets({ownerId:user.id,
+      professionId:"software"}),"Ticket flag OFF independently rejects issuance");
+    process.env.SUMMON_PERSISTENCE_ENABLED="false";
     await rej(()=>ensureUniversalPico(user.id),"Flag off prevents grants");
     await rej(()=>reconcileVerifiedQuestProfessionXp({
       challengeId:winning.id,userId:user.id,
     }),"Flag off prevents XP reconciliation");
     eq(await accountSummonLedger(user.id),null,"Disabled query never reaches inventory tables");
     process.env.SUMMON_PERSISTENCE_ENABLED="true";
+    process.env.SUMMON_TICKETS_ENABLED="false";
     console.log("SUMMON_DATABASE_LEDGER_TESTS_PASS",checks,"checks");
   }finally{
+    process.env.SUMMON_TICKETS_ENABLED="false";
     process.env.SUMMON_PERSISTENCE_ENABLED="false";
     // Restrictive FK protects history; remove test records in dependent order.
     const challenges=await prisma.challenge.findMany({
