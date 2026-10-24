@@ -43,7 +43,8 @@ async function runCron() {
   // Run the independent free Quiz expiration resolver only after its additive
   // migration has been deployed. The flag defaults OFF in production. Quiz
   // never enters the generic AI-judgment or credit-fee path below.
-  const expiredQuizzes=process.env.VERIFIED_QUIZ_CRON_ENABLED==="true"
+  const expiredQuizzes=process.env.VERIFIED_QUIZ_ENABLED==="true"&&
+    process.env.VERIFIED_QUIZ_CRON_ENABLED==="true"
     ?await sweepExpiredQuizDuels(15):null;
 
   // (2) Live → judging for any deadline that has passed.
