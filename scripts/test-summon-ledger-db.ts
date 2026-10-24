@@ -159,14 +159,23 @@ async function main(){
     const bad=await prisma.professionXpEvent.create({data:{
       ownerId:outsider.id,challengeId:winning.id,
       eventKey:"invalid-profession-"+id,professionId:"not-a-profession",
-      awardType:"verified_quest",amount:7,ruleVersion:"verified-quest-skill-v1",
-      sourceReceipt:null,
+      awardType:"verified_quest",amount:80,ruleVersion:"verified-quest-skill-v1",
+      sourceReceipt:unique[0].sourceReceipt,
     }});
     await rej(()=>accountSummonLedger(outsider.id),
       "Unknown profession receipts must fail closed, not inflate a score");
     await prisma.professionXpEvent.delete({where:{id:bad.id}});
+    const forged=await prisma.professionXpEvent.create({data:{
+      ownerId:outsider.id,challengeId:winning.id,
+      eventKey:"unaudited-"+id,professionId:"software",
+      awardType:"verified_quest",amount:7,ruleVersion:"verified-quest-skill-v1",
+      sourceReceipt:null,
+    }});
+    await rej(()=>accountSummonLedger(outsider.id),
+      "Rows without a final judgment receipt or valid fixed XP fail closed");
+    await prisma.professionXpEvent.delete({where:{id:forged.id}});
     eq((await accountSummonLedger(outsider.id))?.xp,null,
-      "Removing invalid fixture restores UNKNOWN without inventing zero");
+      "Removing invalid fixtures restores UNKNOWN without inventing zero");
     await rej(()=>reconcileVerifiedQuestProfessionXp({
       challengeId:winning.id,userId:outsider.id,
     }),"Third parties cannot be credited");
