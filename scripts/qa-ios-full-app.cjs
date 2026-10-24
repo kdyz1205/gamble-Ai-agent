@@ -184,6 +184,39 @@ for(const width of widths){
       assert(guestLabel.includes("Sign in to activate"),"Pico prompt must be guest-aware");
       return {catalog:12,specialties:36,guestStatus:401,noEntitlementLeak:true};
     });
+    await test("Voice Quiz entry and anonymous rejection are genuine",async()=>{
+      await page.goto(base+"/app/quiz",{waitUntil:"domcontentloaded"});
+      await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+      // NextAuth resolves asynchronously after React hydration. Wait for
+      // the actual guest-only auth branch instead of reading its first frame.
+      await page.getByRole("heading",{name:"Sign in to play a real Quiz"})
+        .waitFor({state:"visible",timeout:20000});
+      const body=await page.locator("main").innerText();
+      assert(body.includes("Challenge a friend to a Quiz"),
+        "The dedicated Quiz page must really exist");
+      assert(body.includes("Free challenge"),
+        "Pilot must not advertise monetary bets");
+      assert(body.includes("Sign in to play a real Quiz"),
+        "Quiz creation/answering must require a real account");
+      assert.equal(await page.getByTestId("quiz-create-form").count(),0,
+        "Guest cannot get a fake working challenge creation form");
+      const runtime=await page.request.get(base+"/api/ai/runtime");
+      assert.equal(runtime.status(),401,"Provider account status is private");
+      const create=await page.request.post(base+"/api/quiz",{
+        data:{topic:"science",requestKey:"guest-forged-request-id",stakeCredits:0},
+      });
+      assert.equal(create.status(),401,"Anonymous Quiz must not create a Challenge");
+      const join=await page.request.post(base+"/api/quiz/not-a-valid-quiz/accept");
+      assert.equal(join.status(),401,"Anonymous participant cannot accept invitations");
+      const answer=await page.request.post(base+"/api/quiz/not-a-valid-quiz/answer",{
+        data:{answers:[0,0,0]},
+      });
+      assert.equal(answer.status(),401,"Anonymous Quiz answers cannot be recorded");
+      await page.screenshot({path:path.join(out,"quiz-voice-guest-390.png"),
+        animations:"disabled",fullPage:true});
+      return {guestApiStatuses:[runtime.status(),create.status(),join.status(),answer.status()],
+        monetaryStake:"blocked",actualQuizPage:true};
+    });
     await test("Profession creature atlas, focused chapters and honest ownership",async()=>{
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});

@@ -23,6 +23,7 @@ export function CreateScreen({seed}: {seed?:string}) {
       <div><h1>Every adventure<br/>starts with an idea.</h1>
       <p>Tell Pico what you want to do. You review the rules and decide whether to publish.</p></div>
     </section>
+    <IosAction href="/app/quiz" secondary>Start a voice Quiz with a friend</IosAction>
     <div className="ios-filters" aria-label="Starting categories">
       {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
         className={"ios-chip"+(chosen===q.id?" is-selected":"")}

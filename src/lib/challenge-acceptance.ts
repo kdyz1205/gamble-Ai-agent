@@ -5,6 +5,7 @@ import { assertChallengeTransition } from "./challenge-state-machine";
 import { completeOraclePrompt } from "./llm-router";
 import { DEFAULT_LLM_PROVIDER_ID, getProviderById } from "./llm-providers";
 import { withAiContext } from "./ai-governance";
+import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
 
 const acceptanceInclude = {
   creator: { select: { id: true, username: true, image: true } },
@@ -24,6 +25,11 @@ export async function acceptChallengeAtomic(challengeId: string, userId: string)
     await tx.$queryRaw`SELECT id FROM "Challenge" WHERE id = ${challengeId} FOR UPDATE`;
     const challenge = await tx.challenge.findUnique({ where: { id: challengeId }, include: acceptanceInclude });
     if (!challenge) return { ok: false, status: 404, error: "Challenge not found" };
+    // The generic paid-stake seat path must never mutate QuizDuel without
+    // synchronizing its sealed question/response clock. Zero stake alone
+    // does NOT make that alternate mutation safe.
+    if (challenge.arbiter === QUIZ_RULE_VERSION)
+      return {ok:false,status:409,error:"Use the dedicated Quiz invitation to accept this match"};
     if (challenge.creatorId === userId) return { ok: false, status: 400, error: "You cannot accept your own challenge" };
     const existing = challenge.participants.find((participant) => participant.userId === userId);
     if (existing?.role === "opponent" && ["accepted", "completed"].includes(existing.status)) {

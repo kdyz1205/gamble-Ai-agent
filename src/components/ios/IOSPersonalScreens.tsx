@@ -53,6 +53,13 @@ export function TodayScreen() {
         <span className="ios-habit__image"><IosArt src={visuals.grow}/></span><strong>Grow</strong><small>Small steps, big change</small><IosIcon name="arrow" size={18}/>
       </Link>
     </div>
+    <section className="ios-quiz-home-entry">
+      <div><p className="ios-overline">FRIEND VS FRIEND · ZERO-STAKE</p>
+        <h2>Speak a Quiz into existence</h2>
+        <p>Challenge a friend, answer the same questions and verify the score.</p>
+      </div>
+      <IosAction href="/app/quiz">Start a voice Quiz</IosAction>
+    </section>
     <IOSDailyRituals/>
     <section className="ios-section">
       <div className="ios-section__heading"><div><small>YOUR ACTUAL PROGRESS</small><h2>Today&apos;s Quests</h2></div><Link href="/app/stats">View stats <IosIcon name="arrow" size={15}/></Link></div>

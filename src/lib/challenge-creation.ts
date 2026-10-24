@@ -1,6 +1,7 @@
 import { parseProofDeadline } from "./proof-deadline";
 import prisma from "./db";
 import { AuditActions } from "./audit-log";
+import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
 
 export class ChallengeCreationInputError extends Error {}
 export class ChallengeCreationCreditsError extends Error {
@@ -16,6 +17,10 @@ function creationInput(raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ChallengeCreationInputError("A challenge object is required");
   const body = raw as Record<string, unknown>;
   if (typeof body.title !== "string" || !body.title.trim()) throw new ChallengeCreationInputError("title must be a non-empty string");
+  // Quiz-specific graded challenges must be created exclusively through the
+  // server-sealed Quiz route, not via arbitrary client-supplied challenge data.
+  if (body.arbiter === QUIZ_RULE_VERSION)
+    throw new ChallengeCreationInputError("Verified Quiz rules are reserved for the dedicated free Quiz creation flow");
   const stake = body.stake === undefined ? 0 : body.stake;
   if (typeof stake !== "number" || !Number.isSafeInteger(stake) || stake < 0 || stake > 2_147_483_647) {
     throw new ChallengeCreationInputError("stake must be a non-negative integer no greater than 2147483647");
