@@ -165,6 +165,7 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
     where:{challengeId},
     include:{challenge:{
       select:{id:true,title:true,creatorId:true,status:true,stake:true,
+        arbiter:true,resolutionHash:true,deadline:true,
         creator:{select:{username:true}},
         participants:{select:{userId:true,status:true,role:true,
           user:{select:{username:true}}}},
@@ -173,7 +174,13 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
     },
   });
   if(!duel)fail(404,"Quiz not found");
-  if(duel.challenge.stake!==0)fail(409,"The Quiz credit contract is invalid");
+  if(duel.challenge.stake!==0||duel.challenge.arbiter!==QUIZ_RULE_VERSION)
+    fail(409,"The Quiz answer and credit contract is inconsistent");
+  const validPairs={
+    open:"open",live:"live",completed:"settled",cancelled:"cancelled",
+  } as const;
+  if(duel.challenge.status!==validPairs[duel.status as keyof typeof validPairs])
+    throw new Error("Quiz and Quest lifecycle require reconciliation");
   const participant=duel.challenge.participants.find(p=>p.userId===userId);
   const invited=duel.invitedUserId===userId;
   if(!participant && duel.invitedUserId&&!invited)
@@ -182,9 +189,24 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
     fail(403,"Only accepted competitors can see this Quiz");
   const joined=Boolean(participant&&["accepted","completed"].includes(participant.status));
   const canJoin=duel.status==="open"&&!joined&&
-    (!duel.invitedUserId||invited);
+    (!duel.invitedUserId||invited)&&
+    (!duel.challenge.deadline||duel.challenge.deadline.getTime()>Date.now());
   const result=duel.status==="completed"?parseFinal(duel.resultJson):null;
   const ids=safeJsonIds(duel.questionIds);
+  if(duel.bankVersion!==QUIZ_RULE_VERSION||
+     answerCommitment(ids)!==duel.answerCommitment)
+    throw new Error("Quiz bank or original answer commitment is inconsistent");
+  if(duel.status==="completed"){
+    if(!result||result.version!=="quiz-resolution-v1"||
+       result.challengeId!==challengeId||result.bankVersion!==duel.bankVersion||
+       result.answerCommitment!==duel.answerCommitment||
+       result.winnerId!==duel.winnerId||
+       result.creditsTransferred!==0||result.escrowCredits!==0||
+       duel.challenge.resolutionHash!==hash(stringify(result)))
+      throw new Error("Final Quiz receipt digest failed verification");
+  }else if(duel.resultJson!==null||duel.winnerId!==null){
+    throw new Error("Unfinished Quiz contains a premature verdict");
+  }
   return {
     id:duel.challengeId,
     title:duel.challenge.title,topic:duel.topic,bankVersion:duel.bankVersion,
