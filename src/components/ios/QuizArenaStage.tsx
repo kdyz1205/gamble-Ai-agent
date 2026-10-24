@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type {CSSProperties} from "react";
 import {visuals} from "./IOSAppUI";
+import QuizArenaParticles from "./QuizArenaParticles";
 
 type Phase="preview"|"open"|"live"|"completed"|"cancelled";
 type Outcome="won"|"lost"|"tie"|"timeout"|null;
@@ -47,6 +48,7 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
     aria-label="Pico Quiz arena"
     data-testid="ios-quiz-arena" data-phase={phase}>
     <div className="ios-quiz-arena__sky" aria-hidden="true"/>
+    <QuizArenaParticles phase={phase}/>
     <div className="ios-quiz-arena__sparks" aria-hidden="true">
       {SPARKS.map((spark,index)=><span key={index}
         style={{
@@ -73,6 +75,8 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
           <small>SUMMONER ONE</small>
           <strong>{creator||"Your Pico"}</strong>
         </span>
+        {phase==="completed"&&winnerSide==="creator"&&
+          <span className="ios-quiz-arena__winner-mark">WINNER</span>}
       </div>
       <div className="ios-quiz-arena__versus" aria-hidden="true">
         <span>VS</span>
@@ -90,9 +94,12 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
           <small>SUMMONER TWO</small>
           <strong>{opponent||"Friend pending"}</strong>
         </span>
+        {phase==="completed"&&winnerSide==="opponent"&&
+          <span className="ios-quiz-arena__winner-mark">WINNER</span>}
       </div>
     </div>
     <div className="ios-quiz-arena__ground" aria-hidden="true"/>
+    {resolved&&<div className="ios-quiz-arena__impact" aria-hidden="true"/>}
     <p className="ios-quiz-arena__status" role="status">{statusText(phase,outcome)}</p>
   </section>;
 }

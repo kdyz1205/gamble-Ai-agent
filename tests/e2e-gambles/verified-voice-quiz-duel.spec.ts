@@ -115,6 +115,7 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(a.getByTestId("quiz-duel-room")).toBeVisible();
     await expect(a.getByTestId("quiz-share-invite")).toBeVisible();
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","open");
+    await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-vfx","static");
     expect(await a.locator(".ios-quiz-arena__sky").evaluate(el=>
       getComputedStyle(el).animationName)).toBe("none");
     await expect(a.getByText("Free challenge · 0 credits at stake")).toBeVisible();
@@ -171,6 +172,7 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(a.getByTestId("quiz-final-verdict")).toContainText("You won on correct answers");
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","completed");
     await expect(a.getByTestId("ios-quiz-arena")).toContainText("Verified victory");
+    await expect(a.getByTestId("ios-quiz-arena").getByText("WINNER",{exact:true})).toBeVisible();
     await a.screenshot({path:testInfo.outputPath("verified-quiz-result.png"),fullPage:true});
 
     const final=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
@@ -241,5 +243,43 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
       await db.query('DELETE FROM "User" WHERE id=ANY($1::text[])',[userIds]).catch(()=>{});
     }
     await db.end();
+  }
+});
+
+
+test("cinematic particle canvas pauses when offscreen or motion is reduced",async({browser})=>{
+  const context=await browser.newContext({
+    viewport:{width:390,height:360},reducedMotion:"no-preference",
+  });
+  try{
+    const page=await context.newPage();
+    await page.goto(BASE+"/app/quiz");
+    const arena=page.getByTestId("ios-quiz-arena");
+    await expect(arena).toBeVisible({timeout:30_000});
+    await expect(page.getByTestId("ios-quiz-arena-vfx")).toHaveCount(1);
+    // The scene begins below this short mobile viewport.
+    await expect(arena).toHaveAttribute("data-vfx","static",{timeout:15_000});
+    await arena.scrollIntoViewIfNeeded();
+    await expect(arena).toHaveAttribute("data-vfx","canvas",{timeout:15_000});
+    await expect(arena).toHaveAttribute("data-vfx-quality",/^(balanced|adaptive)$/);
+
+    await page.emulateMedia({reducedMotion:"reduce"});
+    await expect(arena).toHaveAttribute("data-vfx","static");
+    await page.emulateMedia({reducedMotion:"no-preference"});
+    await expect(arena).toHaveAttribute("data-vfx","canvas");
+    await page.evaluate(()=>{
+      localStorage.setItem("sum-ios-reduced-motion","true");
+      window.dispatchEvent(new Event("sum-ios-preferences-changed"));
+    });
+    await expect(arena).toHaveAttribute("data-vfx","static");
+    await page.evaluate(()=>{
+      localStorage.setItem("sum-ios-reduced-motion","false");
+      window.dispatchEvent(new Event("sum-ios-preferences-changed"));
+    });
+    await expect(arena).toHaveAttribute("data-vfx","canvas");
+    await page.evaluate(()=>window.scrollTo(0,0));
+    await expect(arena).toHaveAttribute("data-vfx","static");
+  }finally{
+    await context.close();
   }
 });
