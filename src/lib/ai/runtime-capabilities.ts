@@ -4,6 +4,7 @@
  */
 import {DEFAULT_LLM_PROVIDER_ID,getProviderById} from "@/lib/llm-providers";
 import {QUIZ_RULE_VERSION} from "@/lib/quiz/quiz-bank";
+import {quizPilotEnabled} from "@/lib/quiz/availability";
 
 export function aiRuntimeCapabilities(){
   const preferred=process.env.ORACLE_DEFAULT_PROVIDER?.trim();
@@ -26,6 +27,11 @@ export function aiRuntimeCapabilities(){
       configured:voiceKey,
       transport:voiceKey?"server-api":"client-preview-manual-review",
       textReviewRequired:true,
+    },
+    quiz:{
+      enabled:quizPilotEnabled(),
+      requiresVerifiedMigration:true,
+      stakeCreditsAllowed:0,
     },
     quizGrading:{
       providerId:"deterministic",
