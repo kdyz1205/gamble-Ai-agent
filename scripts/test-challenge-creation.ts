@@ -70,6 +70,11 @@ async function main() {
     assert.equal(ledger[0].amount, -5);
     assert.equal(ledger[0].balanceAfter, 15);
     assert.equal(await prisma.auditLog.count({ where: { challengeId: challenge.id, action: "challenge.created", actorUserId: success.row.id } }), 1);
+    const recordedPlan = await prisma.auditLog.findFirstOrThrow({ where: { challengeId: challenge.id, action: "challenge.judgeability_assessed", actorUserId: success.row.id } });
+    const plan = JSON.parse(recordedPlan.payload ?? "{}") as { version: string; status: string; autoSettlementAllowed: boolean };
+    assert.equal(plan.version, "judgeability.v1");
+    assert.equal(plan.status, "manual_only");
+    assert.equal(plan.autoSettlementAllowed, false);
     assert.equal(await prisma.activityEvent.count({ where: { challengeId: challenge.id, type: "challenge_created" } }), 1);
     pass("creation commits challenge, creator, linked escrow ledger, audit and activity together");
 

@@ -28,6 +28,7 @@ assert(proofInputError("text", { url: "https://proof.example/a.png" }));
 assert.equal(proofInputError("text", { description: "I completed my agreed check-in." }), null);
 console.log("PASS mismatched/missing media, malformed links and empty written proof rejected before upload");
 assert.equal(recordingMimeType(type => type === "video/mp4"), "video/mp4");
+assert.equal(recordingMimeType(() => true), "video/mp4;codecs=avc1");
 assert.equal(recordingMimeType(type => type === "video/webm;codecs=vp8"), "video/webm;codecs=vp8");
 assert.equal(recordingMimeType(() => false), undefined);
 assert.equal(recordingExtension("video/mp4;codecs=avc1"), "mp4");

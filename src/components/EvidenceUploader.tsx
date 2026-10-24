@@ -113,7 +113,13 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const startCamera = async (withAudio: boolean) => {
     setError("");
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
+      // Prefer 720p / 24fps for short proof clips rather than unbounded camera defaults.
+      // All computationally expensive vision inference stays cloud-side.
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 },
+          height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } },
+        audio: withAudio,
+      });
       setStream(s);
       setMode("record");
     } catch (e) {
@@ -133,7 +139,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     try {
       if (typeof MediaRecorder === "undefined") throw new Error("Video recording is unavailable. Upload a video file instead.");
       const mimeType = recordingMimeType(type => MediaRecorder.isTypeSupported(type));
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const recorder = new MediaRecorder(stream, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: 1_800_000,
+      });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
