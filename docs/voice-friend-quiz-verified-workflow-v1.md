@@ -1,5 +1,14 @@
 # Summoner.world — Voice → Friend Quiz → Verified Judgment (Pilot v1)
 
+**Activation and rollout:** Quiz API routes are default OFF. Only
+`VERIFIED_QUIZ_ENABLED=true` permits authenticated users to access
+the Quiz database; if absent or false, routes return a private no-store 503
+before querying any newly introduced table. The UI displays a clear disabled
+status instead of presenting a broken Create button. The GitHub CI job enables
+this flag only in its isolated `summoner_verification` PostgreSQL database
+after `prisma migrate deploy`; it is NOT enabled by merging this PR, by a
+successful Vercel build, or by a personal ChatGPT subscription.
+
 **Scope:** Actual persisted, two-person, ZERO-stake Quiz gameplay integrated
 with the existing Quest identity/state/audit system. This does not authorize
 financial, cash-equivalent, purchased-credit or blockchain wagering.
@@ -62,7 +71,8 @@ A stable client request key protects creation retries.
   expire unattended rooms, producing a **void/no-winner** result; do not
   silently award the no-show opponent's wager or claim an AI verified win.
 - The default existing Vercel cron runs daily. `VERIFIED_QUIZ_CRON_ENABLED`
-  must only be set after deploying the additive Quiz migration, and expiry
+  must only be set after deploying the additive Quiz migration **and** enabling
+  `VERIFIED_QUIZ_ENABLED=true`, and expiry
   sweep frequency is **not** promised to be exactly 15 minutes while that
   daily cron remains configured. The 15-minute submission cutoff itself is
   enforced on every POST independently of cron.
