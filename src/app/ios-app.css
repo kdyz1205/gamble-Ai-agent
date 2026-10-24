@@ -696,3 +696,69 @@
   .ios-creature-art--atlas{width:82px;height:82px;}
   .ios-creature-art--evolution{width:min(72px,100%);}
 }
+
+/* Career Atlas GLB viewer: opt-in, deliberately separate from earned rewards. */
+.ios-3d-entry {
+  display:grid;gap:10px;min-width:0;
+  padding:14px;border:1px solid #d6ccee;border-radius:18px;
+  background:linear-gradient(145deg,#f1f8ff,#fbf8ff);
+}
+.ios-3d-entry h3 {
+  color:#56457d;font-size:18px;line-height:1.25;
+  font-family:"Fraunces",Georgia,serif;margin:3px 0 4px;
+}
+.ios-3d-entry__toggle {
+  width:100%;border:1px solid #8e82c9;
+  background:#fefcff;color:#51468e;border-radius:14px;
+  min-height:44px;padding:8px 12px;font-size:13px;font-weight:800;
+  cursor:pointer;
+}
+.ios-3d-entry__toggle[aria-pressed="true"] {
+  background:#e9e3fb;border-color:#7a65c5;
+}
+.ios-3d-entry button:focus-visible,
+.ios-3d-prototype button:focus-visible {
+  outline:3px solid #7f6dec;outline-offset:3px;
+}
+.ios-3d-prototype {display:grid;gap:10px;min-width:0;}
+.ios-3d-prototype__stage {
+  height:290px;width:100%;min-width:0;overflow:hidden;position:relative;
+  border:1px solid #dbe4f0;border-radius:16px;
+  background:radial-gradient(circle at 50% 35%,#fff,#e8f4fe);
+}
+.ios-3d-prototype__stage canvas {
+  display:block;width:100%;height:100%;touch-action:none;
+  cursor:grab;
+}
+.ios-3d-prototype__stage canvas:active {cursor:grabbing;}
+.ios-3d-prototype__overlay {
+  position:absolute;inset:0;display:grid;place-content:center;
+  padding:20px;text-align:center;color:#645e7a;
+  font-size:13px;line-height:1.5;background:#f4f7ffed;
+}
+.ios-3d-prototype__actions {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+}
+.ios-3d-prototype__actions button {
+  min-height:43px;border:1px solid #d3c6ed;background:#fff;
+  border-radius:12px;color:#60558b;font-size:12px;
+  font-weight:700;cursor:pointer;min-width:0;padding:7px 3px;
+}
+.ios-3d-prototype__actions button:disabled {
+  opacity:.5;cursor:not-allowed;
+}
+.ios-app--night .ios-3d-entry {
+  background:linear-gradient(150deg,#29253c,#302a45);
+  border-color:#594975;
+}
+.ios-app--night .ios-3d-entry h3 {color:#f5eefe;}
+.ios-app--night .ios-3d-entry__toggle,
+.ios-app--night .ios-3d-prototype__actions button {
+  color:#f5edff;background:#4c4267;border-color:#76688f;
+}
+.ios-app[data-reduce-motion="true"] .ios-3d-prototype__stage {
+  scroll-behavior:auto;
+}
+@media (max-width:345px) {
+  .ios-3d-prototype__stage {height:240px;}
+}
