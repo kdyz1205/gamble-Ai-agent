@@ -2,7 +2,7 @@
 
 import {useRef,useState,type CSSProperties} from "react";
 import {IosAction} from "./IOSAppUI";
-import {CREATURE_ATLAS,creatureVisualFor,creatureStageForMastery,stageNameFor}
+import {CREATURE_ATLAS,creatureVisualFor,creatureStageForMastery}
   from "@/lib/summons/creature-visual-bible";
 import {
   PROFESSIONS,RARITY_ODDS,INITIAL_PITY_STATE,advancePityState,
