@@ -2,6 +2,7 @@
 -- No Credits, Judgment, existing Quest or User columns are rewritten.
 CREATE TABLE "QuizDuel" (
   "challengeId" TEXT NOT NULL,
+  "requestKey" TEXT NOT NULL,
   "topic" TEXT NOT NULL,
   "bankVersion" TEXT NOT NULL,
   "questionIds" TEXT NOT NULL,
@@ -31,6 +32,7 @@ CREATE TABLE "QuizAttempt" (
   CONSTRAINT "QuizAttempt_pkey" PRIMARY KEY ("id")
 );
 
+CREATE UNIQUE INDEX "QuizDuel_requestKey_key" ON "QuizDuel"("requestKey");
 CREATE INDEX "QuizDuel_status_expiresAt_idx" ON "QuizDuel"("status","expiresAt");
 CREATE UNIQUE INDEX "QuizAttempt_challengeId_userId_key" ON "QuizAttempt"("challengeId","userId");
 CREATE INDEX "QuizAttempt_userId_submittedAt_idx" ON "QuizAttempt"("userId","submittedAt");
