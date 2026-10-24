@@ -1,7 +1,10 @@
 "use client";
 
 import {useRef,useState,type CSSProperties} from "react";
+import Image from "next/image";
 import {IosAction} from "./IOSAppUI";
+import {creatureRenderFor} from "@/lib/summons/creature-render-manifest";
+import type {CreatureStage} from "@/lib/summons/creature-visual-bible";
 import {CREATURE_ATLAS,creatureVisualFor,creatureStageForMastery}
   from "@/lib/summons/creature-visual-bible";
 import {
@@ -22,6 +25,20 @@ function crestStyle(id:ProfessionId):CSSProperties{
   const colors=creatureVisualFor(id).colors;
   return {"--atlas-0":colors[0],"--atlas-1":colors[1],
     "--atlas-2":colors[2]} as CSSProperties;
+}
+
+function CreaturePortrait({id,stage,context}:{
+  id:ProfessionId;stage:CreatureStage;context:"atlas"|"hero"|"evolution"|"fusion";
+}) {
+  const art=creatureRenderFor(id,stage);
+  if(art) return <Image src={art.src}
+    data-testid={"creature-art-"+id+"-"+stage}
+    className={"ios-creature-art ios-creature-art--"+context}
+    width={art.width} height={art.height}
+    sizes={context==="hero"?"(max-width:430px) 28vw, 180px":"(max-width:430px) 25vw, 100px"}
+    alt={context==="atlas"?"":art.alt+" (illustration concept, not owned)"}/>;
+  return <span className={"ios-creature-crest ios-creature-crest--"+id}
+    style={crestStyle(id)} aria-hidden="true"/>;
 }
 
 /**
@@ -120,8 +137,7 @@ export default function ProfessionSummonStudio(){
           aria-pressed={primary===entry.id}
           className={"ios-creature-atlas-card"+(primary===entry.id?" is-selected":"")}
           onClick={()=>changePrimary(entry.id)}>
-          <span className={"ios-creature-crest ios-creature-crest--"+entry.id}
-            style={crestStyle(entry.id)} aria-hidden="true"/>
+          <CreaturePortrait id={entry.id} stage="base" context="atlas"/>
           <strong>{entry.species}</strong>
           <small>{entry.name}</small>
         </button>)}
@@ -141,10 +157,11 @@ export default function ProfessionSummonStudio(){
       </label>
       <div className="ios-summon-species">
         <div className="ios-summon-species__art ios-creature-portrait">
-          <span className={"ios-creature-crest ios-creature-crest--"+primary}
-            style={crestStyle(primary)} aria-hidden="true"/>
+          <CreaturePortrait id={primary} stage={stage} context="hero"/>
         </div>
-        <div><span className="ios-overline">UNIQUE SPECIES BLUEPRINT · ART PENDING</span>
+        <div><span className="ios-overline">{creatureRenderFor(primary,stage)
+          ?"ORIGINAL 3D-STYLE ILLUSTRATION · CONCEPT ONLY"
+          :"UNIQUE SPECIES BLUEPRINT · ART PENDING"}</span>
           <h3>{first.species}</h3>
           <p>{firstVisual.silhouette}</p>
           <small>Affinity: {first.trait} · Specialization: {occupationName}</small>
@@ -168,6 +185,9 @@ export default function ProfessionSummonStudio(){
         {([1,3,5] as const).map((level,index)=><div key={level}
           className={"ios-evolution-stage"+(stage===(index===0?"base":index===1?"evolved":"ascended")?" is-current":"")}>
           <span>LV {level}</span>
+          <CreaturePortrait id={primary}
+            stage={index===0?"base":index===1?"evolved":"ascended"}
+            context="evolution"/>
           <strong>{firstVisual.stageNames[index]}</strong>
           <small>{index===0?"Hatchling form":index===1?"Evolved form":"Ascended form"}</small>
         </div>)}
@@ -235,12 +255,10 @@ export default function ProfessionSummonStudio(){
         </select>
       </label>
       <div className="ios-fusion-parents">
-        <div><span className={"ios-creature-crest ios-creature-crest--"+primary}
-          style={crestStyle(primary)} aria-hidden="true"/>
+        <div><CreaturePortrait id={primary} stage={stage} context="fusion"/>
           <small>{first.species} · {firstVisual.personality}</small></div>
         <span aria-hidden="true">+</span>
-        <div><span className={"ios-creature-crest ios-creature-crest--"+secondary}
-          style={crestStyle(secondary)} aria-hidden="true"/>
+        <div><CreaturePortrait id={secondary} stage="base" context="fusion"/>
           <small>{other.species} · {otherVisual.personality}</small></div>
       </div>
       <div className="ios-fusion-recipe" aria-live="polite">
@@ -250,8 +268,9 @@ export default function ProfessionSummonStudio(){
       </div>
       <p className="ios-summon-hint">Fusion can inherit traits from both professions.
         It cannot be executed until ownership, consent and a server-side atomic
-        recipe system exist. The crests are symbolic design marks, not finished
-        3D creature portraits or owned inventory.</p>
+        recipe system exist. Only the first three career families have original
+        3D-style concept illustrations; the remaining symbols are blueprint
+        crests, not finished 3D models or owned inventory.</p>
     </div>}
 
     {activeChapter==="progress"&&<div className="ios-summon-lab" role="tabpanel"
