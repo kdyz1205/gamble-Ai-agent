@@ -184,60 +184,87 @@ for(const width of widths){
       assert(guestLabel.includes("Sign in to activate"),"Pico prompt must be guest-aware");
       return {catalog:12,specialties:36,guestStatus:401,noEntitlementLeak:true};
     });
-    await test("Profession Summon preview, XP truth and fusion navigation",async()=>{
+    await test("Profession creature atlas, focused chapters and honest ownership",async()=>{
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
       assert((await page.locator(".ios-pico-hero").innerText()).includes("Pico, your first Summon"));
       const rank=await page.getByRole("region",{name:"Your Quest Milestone Level"}).innerText();
       assert(rank.includes("Sign in to see milestones"),"no fabricated guest level");
       const recorded=await page.getByRole("region",{name:"Recorded Profession XP"}).innerText();
-      assert(recorded.includes("Sign in to check server-verified Quest XP"),
-        "Guest never receives another account's XP");
-      assert(recorded.includes("not lifetime XP"),
-        "XP panel must disclose incomplete historical coverage");
+      assert(recorded.includes("Sign in to check server-verified Quest XP"),"no guest XP leak");
+      assert(recorded.includes("not lifetime XP"),"historical XP is incomplete");
+      const atlas=page.getByRole("group",{name:"Twelve concept creature families"});
+      assert.equal(await atlas.getByRole("button").count(),12,"All 12 family species must be browseable");
+      const chapters=page.getByRole("tablist",{name:"Summon design chapters"});
+      assert.equal(await chapters.getByRole("tab").count(),4);
+      const select=async(name)=>chapters.getByRole("tab",{name,exact:true}).click();
       const primary=page.getByRole("combobox",{name:"Profession family"});
-      const second=page.getByRole("combobox",{name:"Fusion second profession"});
-      assert.equal(await primary.locator("option").count(),12);
-      const occupation=page.getByRole("combobox",{name:"Specific profession or skill"});
-      assert.equal(await occupation.locator("option").count(),3);
-      assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
-      assert((await page.getByLabel("Example base summon odds").innerText()).includes("0.4%"));
-      await primary.selectOption("software");
-      await occupation.selectOption("robotics");
+      await page.getByTestId("creature-family-software").click();
+      assert.equal(await primary.inputValue(),"software","Atlas selection drives career details");
+      assert.equal(await page.getByRole("combobox",{name:"Specific profession or skill"}).locator("option").count(),3);
+      await page.getByRole("combobox",{name:"Specific profession or skill"}).selectOption("robotics");
       const described=await page.locator(".ios-summon-species").innerText();
-      assert(described.includes("Circuitling")&&described.includes("Robotics"),"Occupation-specific creature lineage");
-      assert.equal(await page.locator(".ios-summon-lab .ios-action").getAttribute("href"),
-        "/app/create?seed=craft");
-      await second.selectOption("healthcare");
-      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Carebyte"));
+      assert(described.includes("Circuitling")&&described.includes("Robotics"),
+        "Career specialization must remain distinct from the species");
+      assert(described.includes("six-sided otter"),"Unique silhouette must be visible as design metadata");
       const mastery=page.getByRole("slider",{name:"Preview profession mastery level"});
       await mastery.focus();await mastery.press("End");
       assert.equal(await mastery.inputValue(),"5");
+      assert((await page.getByLabel("Three-stage species evolution preview").innerText()).includes("Neuralcrest"),
+        "Level five form name must belong to the selected family");
+      await page.screenshot({path:path.join(out,"familiars-atlas-390.png"),
+        animations:"disabled",fullPage:true});
+
+      await select("Summon Preview");
+      assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
+      assert((await page.getByLabel("Example base summon odds").innerText()).includes("0.4%"));
       const pity=page.getByTestId("ios-simulated-pity");
-      assert((await pity.innerText()).includes("0 sample draws"),"Pity is fresh on new page");
+      assert((await pity.innerText()).includes("0 sample draws"));
       await page.getByRole("button",{name:/Preview a random summon/}).click();
       const draw=await page.locator(".ios-summon-result").innerText();
-      assert(draw.includes("SIMULATION 1")&&draw.includes("NO ITEM AWARDED"),
-        "No fake or paid rewards");
-      assert((await pity.innerText()).includes("1 sample draw"),
-        "Client preview must advance displayed pity state");
+      assert(draw.includes("SIMULATION 1")&&draw.includes("NO ITEM AWARDED"));
+      assert((await pity.innerText()).includes("1 sample draw"));
       await page.getByRole("button",{name:"Reset sample-only counters"}).click();
-      assert((await pity.innerText()).includes("0 sample draws"),"Sample reset actually works");
-      assert(!(await page.getByRole("button",{name:"Reset sample-only counters"}).isEnabled()),
-        "Reset disabled while counters are fresh");
-      await page.getByRole("button",{name:/Preview a random summon/}).click();
-      await primary.selectOption("art");await second.selectOption("music");
-      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Prism Echo"));
-      const images=await page.evaluate(async()=>{
-        const imgs=Array.from(document.querySelectorAll(".ios-pico-hero img,.ios-summon-studio img"));
-        for(const img of imgs)img.loading="eager";
-        await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));
-        return {count:imgs.length,loaded:imgs.every(img=>img.naturalWidth>0)};
+      assert((await pity.innerText()).includes("0 sample draws"));
+      assert(!(await page.getByRole("button",{name:"Reset sample-only counters"}).isEnabled()));
+      await page.screenshot({path:path.join(out,"familiars-summon-preview-390.png"),
+        animations:"disabled",fullPage:true});
+
+      await select("Fusion Lab");
+      const second=page.getByRole("combobox",{name:"Fusion second profession"});
+      await second.selectOption("healthcare");
+      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Carebyte"),
+        "Selected career pair determines example fusion");
+      await page.screenshot({path:path.join(out,"familiars-fusion-390.png"),
+        animations:"disabled",fullPage:true});
+
+      await select("Career Atlas");
+      await page.getByTestId("creature-family-art").click();
+      await select("Fusion Lab");
+      await second.selectOption("music");
+      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Prism Echo"),
+        "Second fusion recipe remains reachable");
+      await select("XP Guide");
+      assert.equal(await page.locator(".ios-summon-lab .ios-action").getAttribute("href"),
+        "/app/create?seed=craft","Career action must be an actual Quest starting path");
+      const guide=await page.getByRole("tabpanel",{name:"XP Guide"}).innerText();
+      assert(guide.includes("example")||guide.includes("Example"),"XP is not represented as earned");
+      await page.screenshot({path:path.join(out,"familiars-xp-guide-390.png"),
+        animations:"disabled",fullPage:true});
+
+      await select("Career Atlas");
+      const imgs=await page.evaluate(async()=>{
+        const pictures=Array.from(document.querySelectorAll(".ios-pico-hero img"));
+        await Promise.all(pictures.map(img=>img.decode().catch(()=>null)));
+        return {count:pictures.length,loaded:pictures.every(img=>img.naturalWidth>0),
+          falseCreatures:document.querySelectorAll(".ios-summon-studio .ios-art").length};
       });
-      assert(images.count>=3&&images.loaded,"Real Summon preview art did not load "+JSON.stringify(images));
+      assert(imgs.count>=1&&imgs.loaded,"Actual Pico hero art must load "+JSON.stringify(imgs));
+      assert.equal(imgs.falseCreatures,0,"Do not reuse Pico illustration as other species art");
       await page.screenshot({path:path.join(out,"familiars-roster-390.png"),
         animations:"disabled",fullPage:true});
-      return {professionFamilies:12,initialOccupations:36,oddsTiers:5,ownership:"never fabricated"};
+      return {professionFamilies:12,skillMotifs:36,chapterCount:4,
+        sampleDraws:"preview-only",speciesPortraits:"pending unique 3D production"};
     });
     await test("320px Summon Lab has no horizontal overflow",async()=>{
       const compact=await browser.newContext({viewport:{width:320,height:780},
@@ -246,10 +273,16 @@ for(const width of widths){
         const mobile=await compact.newPage();
         await mobile.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
         await mobile.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
-        const overflow=await mobile.evaluate(()=>Math.max(document.documentElement.scrollWidth,
-          document.body.scrollWidth)-innerWidth);
-        assert(overflow<=1,"320px overflow "+overflow);
-        return {viewportWidth:320,overflow};
+        const tabs=mobile.getByRole("tablist",{name:"Summon design chapters"});
+        const widths=[];
+        for(const name of ["Career Atlas","Summon Preview","Fusion Lab","XP Guide"]){
+          await tabs.getByRole("tab",{name}).click();
+          const overflow=await mobile.evaluate(()=>Math.max(document.documentElement.scrollWidth,
+            document.body.scrollWidth)-innerWidth);
+          assert(overflow<=1,name+" 320px overflow "+overflow);
+          widths.push(overflow);
+        }
+        return {viewportWidth:320,overflowByChapter:widths};
       }finally{await compact.close();}
     });
     await test("Five-tab iOS navigation actually changes routes",async()=>{
