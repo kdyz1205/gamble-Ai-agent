@@ -238,6 +238,42 @@ for(const width of widths){
         assert.equal(await page.getByLabel("Three-stage species evolution preview").locator("img").count(),3);
       }
       await page.getByTestId("creature-family-software").click();
+      const modelReply=await page.request.get(
+        base+"/storybook-premium/summons/models/circuitling-ascended.glb");
+      assert.equal(modelReply.status(),200,"GLB file must be hosted");
+      const modelBytes=await modelReply.body();
+      assert.equal(modelBytes.subarray(0,4).toString("ascii"),"glTF");
+      assert.equal(modelBytes.readUInt32LE(8),modelBytes.length);
+      const toggle=page.getByTestId("toggle-creature-3d");
+      assert.equal(await toggle.count(),1,"3D model exists for chosen family");
+      assert.equal(await page.getByTestId("creature-3d-prototype").count(),0,
+        "Model viewer should start closed and unloaded");
+      await toggle.click();
+      const prototype=page.getByTestId("creature-3d-prototype");
+      await prototype.waitFor({state:"visible",timeout:20000});
+      await page.waitForFunction(()=>{
+        const rotate=document.querySelector('button[aria-label="Rotate creature left"]');
+        const status=document.querySelector('[data-testid="creature-3d-status"]');
+        return (rotate&&!rotate.disabled)||
+          status?.textContent?.includes("not available");
+      },null,{timeout:30000});
+      const enabled=await page.getByRole("button",{name:"Rotate creature left"}).isEnabled();
+      if(enabled){
+        await page.getByRole("button",{name:"Rotate creature left"}).click();
+        await page.getByRole("button",{name:"Rotate creature right"}).click();
+        await page.getByRole("button",{name:"Reset 3D view"}).click();
+      }else{
+        assert((await prototype.innerText()).includes("not available"),
+          "No WebGL must have an explicit graceful fallback");
+      }
+      await page.screenshot({path:path.join(out,"familiars-glb-preview-390.png"),
+        animations:"disabled",fullPage:true});
+      await toggle.click();
+      assert.equal(await page.getByTestId("creature-3d-prototype").count(),0,
+        "Close must release the viewer");
+      await page.getByTestId("creature-family-art").click();
+      assert.equal(await page.getByTestId("toggle-creature-3d").count(),0,
+        "Other, unmodeled careers cannot claim 3D availability");
 
       await select("Summon Preview");
       assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
