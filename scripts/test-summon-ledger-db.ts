@@ -54,6 +54,13 @@ async function main(){
     ok(friendPico.id!==instances[0].id,"Different account has distinct instance");
     const replay=await ensureUniversalPico(user.id);
     eq(replay.id,instances[0].id,"Repeat claim returns same object");
+    await prisma.summonInstance.update({where:{id:instances[0].id},
+      data:{form:"evolved"}});
+    const afterEvolution=await ensureUniversalPico(user.id);
+    eq(afterEvolution.id,instances[0].id,
+      "Retry preserves the existing Pico identity after cosmetic evolution");
+    eq(afterEvolution.form,"evolved",
+      "Retry must not reset a previously earned visual form");
     eq(await prisma.summonInstance.count({where:{originKind:"starter",ownerId:user.id}}),1,
       "No duplicated starter after retry");
     const ledger=await accountSummonLedger(user.id);
