@@ -197,7 +197,8 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
         participants:{select:{userId:true,status:true,role:true,
           user:{select:{username:true}}}},
       }},
-      attempts:{select:{userId:true,score:true,submittedAt:true}},
+      attempts:{select:{userId:true,score:true,submittedAt:true,
+        answerHash:true,answersJson:true}},
     },
   });
   if(!duel)fail(404,"Quiz not found");
@@ -229,8 +230,26 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
        result.answerCommitment!==duel.answerCommitment||
        result.winnerId!==duel.winnerId||
        result.creditsTransferred!==0||result.escrowCredits!==0||
+       !Array.isArray(result.scores)||
        duel.challenge.resolutionHash!==hash(stringify(result)))
       throw new Error("Final Quiz receipt digest failed verification");
+    // The public post-game receipt contains independently reproducible
+    // answer choice indexes; cross-check against the source rows to prevent
+    // publication of edited scores, choices or hashes.
+    for(const row of duel.attempts){
+      const entry=(result.scores as unknown[]).find(value=>{
+        const item=value as {userId?:unknown};
+        return item?.userId===row.userId;
+      }) as {score?:unknown;answerHash?:unknown;answers?:unknown}|undefined;
+      let answers:number[];
+      try{answers=assertQuizAnswers(JSON.parse(row.answersJson));}
+      catch{throw new Error("Stored Quiz answers failed verification");}
+      if(!entry||entry.score!==row.score||entry.answerHash!==row.answerHash||
+         stringify(entry.answers)!==stringify(answers)||
+         quizAnswerDigest(answers)!==row.answerHash||
+         scoreQuizAnswers(ids,answers)!==row.score)
+        throw new Error("Final Quiz answer row failed verification");
+    }
   }else if(duel.resultJson!==null||duel.winnerId!==null){
     throw new Error("Unfinished Quiz contains a premature verdict");
   }
@@ -239,6 +258,7 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
     title:duel.challenge.title,topic:duel.topic,bankVersion:duel.bankVersion,
     status:duel.status,challengeStatus:duel.challenge.status,
     stakeCredits:0,stakesEnabled:false,
+    resolutionHash:duel.status==="completed"?duel.challenge.resolutionHash:null,
     creatorUsername:duel.challenge.creator.username,
     isCreator:duel.challenge.creatorId===userId,
     playerUserId:userId,accepted:joined,canJoin,
@@ -320,14 +340,14 @@ function resultReceipt(duel:{
   // column is never trusted as authority for a winner, even within our DB.
   const scores=playerIds.slice().sort().map(userId=>{
     const row=attempts.find(a=>a.userId===userId);
-    if(!row)return {userId,score:null,answerHash:null};
+    if(!row)return {userId,score:null,answerHash:null,answers:null};
     let answers:number[];
     try{answers=assertQuizAnswers(JSON.parse(row.answersJson));}
     catch{throw new Error("Stored Quiz answers are invalid");}
     if(quizAnswerDigest(answers)!==row.answerHash||
        scoreQuizAnswers(ids,answers)!==row.score)
       throw new Error("Quiz response digest or recorded score failed verification");
-    return {userId,score:row.score,answerHash:row.answerHash};
+    return {userId,score:row.score,answerHash:row.answerHash,answers};
   });
   const fullyAnswered=scores.every(p=>typeof p.score==="number");
   let winnerId:string|null=null;
