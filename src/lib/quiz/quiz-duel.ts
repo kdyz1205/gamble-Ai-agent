@@ -260,13 +260,25 @@ export async function acceptQuizDuel(challengeIdRaw:unknown,userId:string){
 function resultReceipt(duel:{
   challengeId:string;questionIds:string;answerCommitment:string;
   topic:string;bankVersion:string;expiresAt:Date|null;
-},playerIds:readonly string[],attempts:readonly {userId:string;score:number;answerHash:string}[]){
+},playerIds:readonly string[],attempts:readonly {
+  userId:string;score:number;answerHash:string;answersJson:string;
+}[]){
   const ids=safeJsonIds(duel.questionIds);
-  if(answerCommitment(ids)!==duel.answerCommitment)
+  if(duel.bankVersion!==QUIZ_RULE_VERSION||
+     answerCommitment(ids)!==duel.answerCommitment)
     throw new Error("Quiz answers changed from the published commitment");
+  // Recalculate from immutable raw answers at finalization. The mutable score
+  // column is never trusted as authority for a winner, even within our DB.
   const scores=playerIds.slice().sort().map(userId=>{
     const row=attempts.find(a=>a.userId===userId);
-    return {userId,score:row?.score??null,answerHash:row?.answerHash??null};
+    if(!row)return {userId,score:null,answerHash:null};
+    let answers:number[];
+    try{answers=assertQuizAnswers(JSON.parse(row.answersJson));}
+    catch{throw new Error("Stored Quiz answers are invalid");}
+    if(quizAnswerDigest(answers)!==row.answerHash||
+       scoreQuizAnswers(ids,answers)!==row.score)
+      throw new Error("Quiz response digest or recorded score failed verification");
+    return {userId,score:row.score,answerHash:row.answerHash};
   });
   const fullyAnswered=scores.every(p=>typeof p.score==="number");
   let winnerId:string|null=null;
@@ -306,7 +318,7 @@ async function finalizeLocked(tx:Prisma.TransactionClient,duel:{
     fail(409,"Both accepted Quiz competitors are required");
   const attempts=await tx.quizAttempt.findMany({
     where:{challengeId:duel.challengeId},
-    select:{userId:true,score:true,answerHash:true},
+    select:{userId:true,score:true,answerHash:true,answersJson:true},
   });
   if(attempts.some(a=>!players.some(p=>p.userId===a.userId)))
     throw new Error("An outsider Quiz response was stored");
