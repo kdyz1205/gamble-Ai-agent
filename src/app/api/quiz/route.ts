@@ -1,11 +1,13 @@
 import {NextRequest} from "next/server";
 import {getAuthUser,unauthorized} from "@/lib/auth";
+import {quizPilotEnabled,quizPilotUnavailable} from "@/lib/quiz/availability";
 import {createQuizDuel,QuizDuelError} from "@/lib/quiz/quiz-duel";
 
 export const dynamic="force-dynamic";
 export async function POST(req:NextRequest){
   const user=await getAuthUser();
   if(!user)return unauthorized();
+  if(!quizPilotEnabled())return quizPilotUnavailable();
   let body:unknown;
   try{body=await req.json();}
   catch{return Response.json({error:"Invalid Quiz request JSON"},
