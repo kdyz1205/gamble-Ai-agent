@@ -91,6 +91,7 @@ export function PicosScreen() {
   const pico=useStarterPico();
   const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
   const recordedXp=pico.progression?.verifiedProfessionXp;
+  const tickets=pico.progression?.summonTickets;
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
     <section className="ios-pico-hero">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
@@ -144,6 +145,28 @@ export function PicosScreen() {
         </div>:
         <p>No XP receipts have been recorded for this account under the current rule. Historical progress is unknown.</p>}
       <small>These are server-recorded Quest XP receipts since the ledger rule began, not lifetime XP. Older Quests are not backfilled. No free ticket, random creature or fusion is awarded here.</small>
+    </section>
+
+    <section className="ios-milestone" aria-label="Audited Free Summon Tickets">
+      <span className="ios-overline">FREE CAREER SUMMONS - VERIFIED RECEIPTS</span>
+      <h2>Your free Summon tickets</h2>
+      {!pico.signedIn?<p>Sign in to check your server-recorded free tickets.</p>:
+        pico.loading?<p role="status">Checking ticket receipts...</p>:
+        pico.error?<p role="alert">Your ticket receipts are temporarily unavailable.</p>:
+        !pico.progression?.available?<p>Ticket records are not active. No balance can be verified.</p>:
+        tickets?<div>
+          <p><strong>{tickets.available} available</strong> - {tickets.spent} spent - {tickets.issued} issued.</p>
+          {tickets.byProfession.map(entry=><p key={entry.professionId}>
+            <strong>{PROFESSIONS.find(prof=>prof.id===entry.professionId)?.name??entry.professionId}</strong>
+            {" - "+entry.available+" available - "+entry.spent+" spent - "+entry.verifiedXp+" verified XP"}
+          </p>)}
+          {tickets.awaitingIssuance>0?<p role="status">
+            {tickets.awaitingIssuance} audited milestone{tickets.awaitingIssuance===1?"":"s"} awaiting internal issuance. Not spendable yet.
+          </p>:null}
+          {tickets.byProfession.length===0?<p>No backed ticket history exists under the current rule.</p>:null}
+        </div>:
+        <p>Free ticket balances are not enabled on this server. No ticket ownership is implied.</p>}
+      <small>Read-only current rule receipts, not lifetime rewards. No payment, random draw or item claim occurs here.</small>
     </section>
 
     <ProfessionSummonStudio/>

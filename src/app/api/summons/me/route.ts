@@ -3,6 +3,7 @@ import {authOptions} from "@/lib/auth-options";
 import {readStarterEntitlement,readSummonCatalog}
   from "@/lib/summons/starter-entitlement";
 import {accountSummonLedger} from "@/lib/summons/server-ledger";
+import {readFreeCareerTicketLedger} from "@/lib/summons/free-ticket-ledger";
 
 export const dynamic="force-dynamic";
 const noStore={"Cache-Control":"private, no-store"};
@@ -25,8 +26,10 @@ export async function GET(){
     });
   }
   let ledger;
+  let ticketLedger:Awaited<ReturnType<typeof readFreeCareerTicketLedger>>=null;
   try{
     ledger=await accountSummonLedger(userId);
+    ticketLedger=ledger?await readFreeCareerTicketLedger(userId):null;
   }catch{
     // Enabled without a deployed schema is a hard failure, not an empty bag.
     return Response.json({error:"Summon inventory service unavailable"},{
@@ -49,8 +52,10 @@ export async function GET(){
     progression:ledger?{
       available:true,
       verifiedProfessionXp:ledger.xp,
-      summonTickets:null,
-      reason:ledger.xp
+      summonTickets:ticketLedger,
+      reason:ticketLedger
+        ?"Only audited ticket receipts are shown; ticket spending and draws remain disabled"
+        :ledger.xp
         ?"Only recorded, verified Quest XP from this rule version is shown; full historical XP is UNKNOWN"
         :"No verified XP receipts exist under this rule version; historical XP remains UNKNOWN",
     }:{

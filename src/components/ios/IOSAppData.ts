@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import * as api from "@/lib/api-client";
+import {assertFreeTicketSummary,type AccountFreeTicketSummary} from "@/lib/summons/ticket-read-contract";
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "The connection could not be completed.";
@@ -162,7 +163,7 @@ export type RecordedProfessionXp = {
 };
 export type SummonProgression = {
   available:boolean;verifiedProfessionXp:RecordedProfessionXp|null;
-  summonTickets:null;reason:string;
+  summonTickets:AccountFreeTicketSummary|null;reason:string;
 };
 
 /** Reads authenticated, server-backed Pico/XP records; never creates XP. */
@@ -194,9 +195,10 @@ export function useStarterPico(enabled=true){
           throw Error("Invalid starter response");
         const progression=data.progression;
         if(!progression||typeof progression.available!=="boolean"||
-           progression.summonTickets!==null||
+           (progression.summonTickets!==null&&!progression.available)||
            (progression.verifiedProfessionXp!==null&&!progression.available))
           throw Error("Invalid account progression response");
+        assertFreeTicketSummary(progression.summonTickets);
         const xp=progression.verifiedProfessionXp;
         if(xp){
           if(xp.source!=="verified-quest-receipts"||
