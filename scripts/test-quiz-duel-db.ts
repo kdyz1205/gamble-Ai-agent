@@ -9,7 +9,7 @@ import {randomUUID} from "node:crypto";
 import prisma from "../src/lib/db";
 import {
   createQuizDuel,acceptQuizDuel,submitQuizAnswers,
-  getQuizDuelView,finalizeExpiredQuiz,QuizDuelError,
+  getQuizDuelView,finalizeExpiredQuiz,sweepExpiredQuizDuels,QuizDuelError,
 } from "../src/lib/quiz/quiz-duel";
 import {answerCommitment,revealQuizAnswers} from "../src/lib/quiz/quiz-bank";
 import {acceptChallengeAtomic} from "../src/lib/challenge-acceptance";
@@ -242,6 +242,40 @@ async function main(){
   await rej(()=>acceptQuizDuel(cancelled.challengeId,bob.id),409,
     "No one can join an already-cancelled Quiz");
 
+  const unattended=await createQuizDuel(alice.id,{topic:"math",requestKey:key()});
+  createdChallenges.push(unattended.challengeId);
+  await prisma.challenge.update({where:{id:unattended.challengeId},
+    data:{deadline:new Date(Date.now()-2500)}});
+  const staleLive=await createQuizDuel(alice.id,{topic:"science",requestKey:key()});
+  createdChallenges.push(staleLive.challengeId);
+  await acceptQuizDuel(staleLive.challengeId,bob.id);
+  const staleQuestions=(await getQuizDuelView(staleLive.challengeId,alice.id)).questions!;
+  const staleAnswers=revealQuizAnswers(staleQuestions.map(q=>q.id)).map(q=>q.answer);
+  await submitQuizAnswers(staleLive.challengeId,alice.id,staleAnswers);
+  const overdue=new Date(Date.now()-2500);
+  await prisma.quizDuel.update({where:{challengeId:staleLive.challengeId},
+    data:{expiresAt:overdue}});
+  await prisma.challenge.update({where:{id:staleLive.challengeId},
+    data:{deadline:overdue}});
+  const unrelated=await prisma.challenge.findMany({where:{
+    id:staleLive.challengeId,status:"live",deadline:{lte:new Date()},
+    OR:[{arbiter:null},{arbiter:{not:"quiz-curated-mcq-v1"}}],
+  }});
+  eq(unrelated.length,0,"Generic AI judgment cron cannot collect a due Quiz");
+  const sweep=await sweepExpiredQuizDuels();
+  ok(sweep.finalized>=1&&sweep.cancelled>=1&&sweep.failures.length===0,
+    "Background resolver finalizes live Quiz and expires unused invite");
+  eq((await getQuizDuelView(unattended.challengeId,alice.id)).status,
+    "cancelled","Expired unjoined invitation is cancelled, not silently chargeable");
+  const swept=await getQuizDuelView(staleLive.challengeId,alice.id);
+  eq(swept.status,"completed","Background resolves expired accepted challenge");
+  eq((swept.result as {outcome:string}).outcome,"void_timeout",
+    "Background expiry leaves no fabricated winner when opponent is absent");
+  eq(await prisma.judgment.count({where:{challengeId:staleLive.challengeId}}),
+    1,"Exactly one final result committed by the background resolver");
+  const again=await sweepExpiredQuizDuels();
+  eq(again.finalized,0,"Second sweep must not write a duplicate decision");
+
   eq(await prisma.creditTx.count({where:{userId:{in:createdUsers}}}),
     beforeLedger,"No credit debits or winnings anywhere in Quiz lifecycle");
   const afterCredits=await prisma.user.findMany({
@@ -250,8 +284,8 @@ async function main(){
     orderBy:{id:"asc"},
   });
   eq(afterCredits,beforeCredits,"Balances and player lifetime credit totals unchanged");
-  eq(await prisma.quizDuel.count({where:{challengeId:{in:createdChallenges}}}),6,
-    "Expected exactly six real test Quizzes including corruption and cancellation");
+  eq(await prisma.quizDuel.count({where:{challengeId:{in:createdChallenges}}}),8,
+    "Expected eight real Quizzes including tamper, cancellation and unattended expiry");
   console.log("VERIFIED_QUIZ_DUEL_DB_PASS",checks,"checks");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{
