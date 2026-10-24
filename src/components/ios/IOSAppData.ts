@@ -145,3 +145,42 @@ export function useEvidenceGallery(enabled = true) {
   },[enabled,mine.loading,mine.error,mine.signedIn,mine.quests]);
   return {...mine,evidence,loading:mine.loading||loading,error:error||mine.error};
 }
+
+export type StarterPicoEntitlement = {
+  speciesId:"pico";name:"Pico";initialForEveryAccount:true;
+  persistedInventory:false;tradable:false;supportsFusion:false;
+  awardedXp:null;awardedTickets:null;
+  basis:"authenticated-account-rule";note:string;
+};
+
+/** Reads an authenticated Pico rule, not an inventory/credit/XP grant. */
+export function useStarterPico(enabled=true){
+  const {status,data:session}=useSession();
+  const userId=session?.user?.id;
+  const [starter,setStarter]=useState<StarterPicoEntitlement|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    if(!enabled){setStarter(null);setLoading(false);setError("");return;}
+    if(status==="loading"){setLoading(true);return;}
+    if(status!=="authenticated"||!userId){
+      setStarter(null);setLoading(false);setError("");return;
+    }
+    let active=true;const controller=new AbortController();
+    setStarter(null);setLoading(true);setError("");
+    fetch("/api/summons/me",{credentials:"same-origin",cache:"no-store",signal:controller.signal})
+      .then(async response=>{
+        if(!response.ok)throw Error("Starter service returned "+response.status);
+        const data=await response.json() as {starter?:StarterPicoEntitlement};
+        if(!data.starter||data.starter.speciesId!=="pico"||
+           data.starter.persistedInventory!==false)
+          throw Error("Invalid starter response");
+        if(active){setStarter(data.starter);setLoading(false);}
+      }).catch(err=>{
+        if(active){setError(message(err));setLoading(false);}
+      });
+    return ()=>{active=false;controller.abort();};
+  },[enabled,status,userId]);
+  return {starter,loading:enabled&&(loading||status==="loading"),
+    error,signedIn:status==="authenticated"&&!!userId};
+}

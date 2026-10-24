@@ -157,6 +157,25 @@ for(const width of widths){
       await page.waitForURL(/\/app\/(?:today)?$/, {timeout:45000});
       return headings;
     });
+    await test("Public Summon catalog and authenticated-only Pico rule",async()=>{
+      const publicCatalog=await page.request.get(base+"/api/summons/catalog");
+      assert.equal(publicCatalog.status(),200);
+      const catalog=await publicCatalog.json();
+      assert.equal(catalog.starter.speciesId,"pico");
+      assert.equal(catalog.categories.length,12);
+      assert.equal(catalog.categories.reduce((n,entry)=>n+entry.specialties.length,0),36);
+      assert.equal(catalog.restrictions.cashPaidRandomDraws,false);
+      const guest=await page.request.get(base+"/api/summons/me");
+      assert.equal(guest.status(),401,"Guest may not receive account-bound starter entitlement");
+      assert((guest.headers()["cache-control"]||"").includes("no-store"));
+      const body=await guest.json();
+      assert(!("starter" in body),"No synthetic account response without login");
+      await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
+      await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+      const guestLabel=await page.locator(".ios-pico-entitlement").innerText();
+      assert(guestLabel.includes("Sign in to activate"),"Pico prompt must be guest-aware");
+      return {catalog:12,specialties:36,guestStatus:401,noEntitlementLeak:true};
+    });
     await test("Profession Summon preview, XP truth and fusion navigation",async()=>{
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
-import {useOpenQuests,useOwnQuests,usePublicActivity} from "./IOSAppData";
+import {useOpenQuests,useOwnQuests,usePublicActivity,useStarterPico} from "./IOSAppData";
 import {deriveQuestMilestoneRank} from "@/lib/ios-quest-rank";
 import IOSLoadingCards from "./IOSLoadingCards";
 import ProfessionSummonStudio from "./ProfessionSummonStudio";
@@ -87,12 +87,20 @@ export function PicosScreen() {
   const [role,setRole]=useState<(typeof picoStates)[number]["id"]>("guide");
   const active=picoStates.find(s=>s.id===role)||picoStates[0];
   const {quests,loading,error,signedIn}=useOwnQuests();
+  const pico=useStarterPico();
   const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
     <section className="ios-pico-hero">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
       <span className="ios-overline">YOUR STARTING GUIDE</span>
       <h1>Pico, your first Summon</h1><p>Every player begins with Pico. Your own profession paths grow from real adventures.</p>
+      <p className="ios-pico-entitlement" role="status">
+        {!pico.signedIn?"Sign in to activate your included starter Pico.":
+        pico.loading?"Checking your Pico starter rule…":
+        pico.error?"Starter status unavailable. Try again after reconnecting.":
+        pico.starter?"Pico is included for your account · permanent inventory coming later.":
+        "Pico starter status is not yet confirmed."}
+      </p>
     </section>
 
     <section className="ios-milestone" aria-label="Your Quest Milestone Level">
