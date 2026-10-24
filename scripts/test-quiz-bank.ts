@@ -44,7 +44,7 @@ eq(topicFromDescription("Chemistry facts please"),"science","Spoken science topi
 eq(topicFromDescription("Quiz someone about history"),"general","General fallback");
 for(const wrong of ["","unknown","trivia","cash"])
   bad(()=>assertQuizTopic(wrong),"Reject unsupported topic "+wrong);
-for(const wrong of [[],[0],[0,0,0],[-1,1,2],[0,4,1],["1",2,3],[NaN,0,1]])
+for(const wrong of [[],[0],[0,0,0,0],[-1,1,2],[0,4,1],["1",2,3],[NaN,0,1]])
   bad(()=>assertQuizAnswers(wrong),"Reject invalid answer sequence");
 bad(()=>assertQuestionIds(["gen-01","gen-01","gen-02"]),"No duplicated question IDs");
 bad(()=>assertQuestionIds(["gen-01","tech-01","sci-01"]),"No cross-topic bank");
