@@ -154,31 +154,64 @@ export type StarterPicoEntitlement = {
   basis:"authenticated-account-rule";note:string;
 };
 
-/** Reads an authenticated Pico rule, not an inventory/credit/XP grant. */
+export type RecordedProfessionXp = {
+  source:"verified-quest-receipts";ruleVersion:string;
+  coverage:"partial-since-ledger-activation";completeHistory:false;
+  totalRecordedXp:number;receiptCount:number;
+  byProfession:Array<{professionId:string;recordedXp:number;receiptCount:number}>;
+};
+export type SummonProgression = {
+  available:boolean;verifiedProfessionXp:RecordedProfessionXp|null;
+  summonTickets:null;reason:string;
+};
+
+/** Reads authenticated, server-backed Pico/XP records; never creates XP. */
 export function useStarterPico(enabled=true){
   const {status,data:session}=useSession();
   const userId=session?.user?.id;
   const [starter,setStarter]=useState<StarterPicoEntitlement|null>(null);
+  const [progression,setProgression]=useState<SummonProgression|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   useEffect(()=>{
-    if(!enabled){setStarter(null);setLoading(false);setError("");return;}
+    if(!enabled){setStarter(null);setProgression(null);setLoading(false);setError("");return;}
     if(status==="loading"){setLoading(true);return;}
     if(status!=="authenticated"||!userId){
-      setStarter(null);setLoading(false);setError("");return;
+      setStarter(null);setProgression(null);setLoading(false);setError("");return;
     }
     let active=true;const controller=new AbortController();
-    setStarter(null);setLoading(true);setError("");
+    setStarter(null);setProgression(null);setLoading(true);setError("");
     fetch("/api/summons/me",{credentials:"same-origin",cache:"no-store",signal:controller.signal})
       .then(async response=>{
         if(!response.ok)throw Error("Starter service returned "+response.status);
         const data=await response.json() as {
           starter?:StarterPicoEntitlement;
           inventory?:{available:boolean};
+          progression?:SummonProgression;
         };
         if(!data.starter||data.starter.speciesId!=="pico"||
            typeof data.starter.persistedInventory!=="boolean")
           throw Error("Invalid starter response");
+        const progression=data.progression;
+        if(!progression||typeof progression.available!=="boolean"||
+           progression.summonTickets!==null||
+           (progression.verifiedProfessionXp!==null&&!progression.available))
+          throw Error("Invalid account progression response");
+        const xp=progression.verifiedProfessionXp;
+        if(xp){
+          if(xp.source!=="verified-quest-receipts"||
+             xp.coverage!=="partial-since-ledger-activation"||
+             xp.completeHistory!==false||
+             !Number.isSafeInteger(xp.totalRecordedXp)||xp.totalRecordedXp<0||
+             !Number.isSafeInteger(xp.receiptCount)||xp.receiptCount<1||
+             !Array.isArray(xp.byProfession)||xp.byProfession.length===0||
+             xp.byProfession.reduce((n,p)=>n+p.recordedXp,0)!==xp.totalRecordedXp||
+             xp.byProfession.reduce((n,p)=>n+p.receiptCount,0)!==xp.receiptCount||
+             xp.byProfession.some(p=>!p.professionId||
+               !Number.isSafeInteger(p.recordedXp)||p.recordedXp<0||
+               !Number.isSafeInteger(p.receiptCount)||p.receiptCount<1))
+            throw Error("Invalid audited XP receipt totals");
+        }
         let starter=data.starter;
         if(data.inventory?.available&&!starter.persistedInventory){
           // The server advertises persistence only after its schema flag is
@@ -197,12 +230,12 @@ export function useStarterPico(enabled=true){
         }
         if(starter.persistedInventory&&!starter.inventoryId)
           throw Error("Starter persistence has no verified item");
-        if(active){setStarter(starter);setLoading(false);}
+        if(active){setStarter(starter);setProgression(progression);setLoading(false);}
       }).catch(err=>{
         if(active){setError(message(err));setLoading(false);}
       });
     return ()=>{active=false;controller.abort();};
   },[enabled,status,userId]);
-  return {starter,loading:enabled&&(loading||status==="loading"),
+  return {starter,progression,loading:enabled&&(loading||status==="loading"),
     error,signedIn:status==="authenticated"&&!!userId};
 }
