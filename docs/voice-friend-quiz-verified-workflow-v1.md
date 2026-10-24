@@ -56,9 +56,16 @@ A stable client request key protects creation retries.
   curated, deterministic answer key to compute scores.
 - No result or correct answer is revealed while only one player has submitted.
 - A second sealed submission produces a single rules-based judgment.
-- If deadline passes without both submissions, a player may explicitly
-  finalize a **void/no-winner** result; do not silently award the no-show
-  opponent's wager or claim an AI verified win.
+- If deadline passes without both submissions, an open authenticated
+  Quiz room automatically invokes the same locked finalize endpoint, with
+  a manual retry button if it fails. Otherwise a periodic server sweep can
+  expire unattended rooms, producing a **void/no-winner** result; do not
+  silently award the no-show opponent's wager or claim an AI verified win.
+- The default existing Vercel cron runs daily. `VERIFIED_QUIZ_CRON_ENABLED`
+  must only be set after deploying the additive Quiz migration, and expiry
+  sweep frequency is **not** promised to be exactly 15 minutes while that
+  daily cron remains configured. The 15-minute submission cutoff itself is
+  enforced on every POST independently of cron.
 - After finalization the correct answer indices are shown. The original
   commitment can be independently recomputed from the published bank version
   and fixed question order, along with the immutable per-player score receipt.
