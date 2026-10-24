@@ -36,7 +36,7 @@ export async function ensureUniversalPico(userId:string,tx?:Prisma.TransactionCl
   const item=await db.summonInstance.findUnique({where:{grantKey:key}});
   if(!item||item.ownerId!==userId||item.originKind!=="starter"||
      item.speciesId!==STARTER.speciesId||item.rarity!=="starter"||
-     item.form!=="base"||item.status!=="owned")
+     item.status!=="owned")
     throw new Error("Starter record conflicts with universal Pico rule");
   return item;
 }
