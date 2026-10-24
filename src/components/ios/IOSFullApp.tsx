@@ -2,6 +2,7 @@
 
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
+import QuizDuelScreen from "./QuizDuelScreen";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {TodayScreen,ProfileScreen,AchievementsScreen,EvidenceScreen,StatsScreen,SettingsScreen} from "./IOSPersonalScreens";
 import {DiscoverScreen,CommunityScreen,PicosScreen} from "./IOSExploreScreens";
@@ -9,7 +10,7 @@ import {CreateScreen,QuestDetailScreen,QuestCreatedScreen,QuestCompleteScreen,Ev
 
 export const mobilePages = [
   "splash","onboarding","today","discover","create","quest-created","quest",
-  "evidence-add","quest-complete","picos","profile","achievements",
+  "evidence-add","quest-complete","picos","quiz","profile","achievements",
   "evidence","stats","community","settings"
 ] as const;
 export type MobilePage = typeof mobilePages[number];
@@ -73,6 +74,7 @@ export default function IOSFullApp({view,questId,seed}:{
     case "evidence-add":return <EvidenceAddScreen id={questId}/>;
     case "quest-complete":return <QuestCompleteScreen id={questId}/>;
     case "picos":return <PicosScreen/>;
+    case "quiz":return <QuizDuelScreen id={questId}/>;
     case "profile":return <ProfileScreen/>;
     case "achievements":return <AchievementsScreen/>;
     case "evidence":return <EvidenceScreen/>;
