@@ -173,6 +173,12 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     ]));
     expect(final.result.creditsTransferred).toBe(0);
     expect(final.result.answerCommitment).toBe(aView.answerCommitment);
+    expect(final.result.scores.find((s:{userId:string})=>s.userId===creator.id).answers).toEqual(correct);
+    expect(final.result.scores.find((s:{userId:string})=>s.userId===friend.id).answers).toEqual(wrong);
+    expect(final.resolutionHash).toMatch(/^[a-f0-9]{64}$/);
+    await a.getByTestId("quiz-verified-answer-receipt").locator("summary").click();
+    await expect(a.getByTestId("quiz-verified-answer-receipt")).toContainText(
+      "Final Quiz resolution SHA-256");
     expect((await creatorCtx.request.post(BASE+"/api/quiz/"+id+"/answer",
       {data:{answers:wrong}})).status()).toBe(409);
     expect((await creatorCtx.request.post(BASE+"/api/quiz/"+id+"/answer",
