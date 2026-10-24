@@ -21,7 +21,7 @@ This is a **whole-app navigation, UI and existing-API integration** effort, not 
 | 10. Add Evidence | `/app/evidence-add?id=REAL_ID` | Written proof for text/self-report policy uses actual submission API; media policies link the already protected upload flow `/challenge/REAL_ID/versus` |
 | 11. Quest Complete | `/app/quest-complete?id=REAL_ID` | Only a backend `settled` Quest receives a finished receipt; pending/disputed/unknown cannot appear complete |
 | 12. Discover | `/app/discover` | Real open public Quests from `/api/challenges`, local search/filter, real join links |
-| 13. Picos | `/app/picos` | Three interactive Pico roles (Guide, Clarify, Review), actual Quest composer link; no fake unlock inventory |
+| 13. Familiars (formerly Picos) | `/app/picos` | Pico Guide/Clarify/Review; four distinct character concepts and read-only settled-Quest milestone levels, with no fake owned inventory or XP |
 | 14. Profile | `/app/profile` | Authenticated user and actual Quest/credit counts; real account links |
 | 15. Achievements | `/app/achievements` | Real Quest and private evidence milestones; 7-day streak derives only from actual on-device check-ins |
 | 16. Evidence Gallery | `/app/evidence` | Private approved proof via detail API, real media/description where returned, no public leaked URLs |

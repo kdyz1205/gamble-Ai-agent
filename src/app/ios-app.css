@@ -418,6 +418,67 @@
 .ios-loading-card__lines span { display: block; width: 73%; height: 12px; border-radius: 8px; background: #f0eaf8; }
 .ios-loading-card__lines span:last-child { width: 46%; height: 10px; background: #f6f1f9; }
 
+/* Verified Quest milestones and future Familiar world previews. These UI
+   surfaces intentionally do not imply server XP, ownership or paid rewards. */
+.ios-pico-hero__glow { width:min(220px,72vw); border-radius:48%; }
+.ios-pico-hero h1 { font-size:35px; }
+.ios-milestone {
+  display:grid; gap:10px; min-width:0; padding:19px;
+  border:1px solid #e1d7f4; border-radius:23px;
+  background:linear-gradient(125deg,#f2edff,#e8f7ff 58%,#fff0f8);
+}
+.ios-milestone h2 { color:#4a3f7b; font-size:21px; font-weight:790; }
+.ios-milestone p { color:#766d96; font-size:12px; line-height:1.65; }
+.ios-milestone small { color:#8b819a; font-size:10px; line-height:1.55; }
+.ios-milestone__heading { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.ios-milestone__heading>div { min-width:0; }
+.ios-milestone__seal {
+  display:grid; place-items:center; flex:0 0 50px; height:50px;
+  border-radius:18px; border:1px solid #ddd0fc; background:#fffafde0;
+  color:#6658c6; font-size:14px; font-weight:850;
+}
+.ios-milestone__track { height:10px; overflow:hidden; background:#dfd6f6; border-radius:999px; }
+.ios-milestone__track span {
+  display:block; height:100%; border-radius:inherit;
+  background:linear-gradient(90deg,#b47bec,#6267e8);
+  transition:width .2s ease;
+}
+.ios-familiar-roster {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; min-width:0;
+}
+.ios-familiar-card {
+  display:grid; grid-template-columns:66px minmax(0,1fr); align-items:center;
+  gap:9px; padding:10px; min-width:0; min-height:95px;
+  border:1px solid #e9e0f1; border-radius:19px;
+  background:#fffefe; text-align:left; color:#514679;
+}
+.ios-familiar-card.is-selected {
+  border-color:#8e7cf2; box-shadow:0 0 0 2px #ad91ec27;
+  background:#f6f1ff;
+}
+.ios-familiar-card__art {
+  display:block; width:65px; height:69px; border-radius:13px;
+  overflow:hidden; background:#f5ecff;
+}
+.ios-familiar-card__copy { display:grid; gap:5px; min-width:0; }
+.ios-familiar-card__copy strong { color:#43386b; font-size:14px; font-weight:830; }
+.ios-familiar-card__copy small { color:#8b7fa1; font-size:10px; overflow-wrap:anywhere; line-height:1.2; }
+.ios-familiar-detail {
+  display:grid; gap:12px; padding:17px; min-width:0;
+  border:1px solid #e9dff4; border-radius:20px;
+  background:linear-gradient(125deg,#f9f3ff,#fff8f7);
+}
+.ios-familiar-detail h3 { font-size:22px; color:#4c3d7c; margin:5px 0 7px; }
+.ios-familiar-detail p { font-size:12px; line-height:1.65; color:#7c728b; }
+.ios-familiar-availability { padding:10px 12px; border-radius:13px; background:#fffefa; }
+@media(max-width:370px){
+  .ios-familiar-card { grid-template-columns:53px minmax(0,1fr);padding:7px;gap:6px; }
+  .ios-familiar-card__art { width:53px; height:60px; }
+  .ios-familiar-card__copy strong { font-size:12px; }
+  .ios-familiar-card__copy small { font-size:9px; }
+}
+@media(prefers-reduced-motion:reduce){ .ios-milestone__track span { transition:none; } }
+
 /* Javascript-backed actions become usable only after React has attached handlers.
    Native links retain normal behavior even during a slow first hydration. */
 .ios-app[data-hydrated=false] :is(button,input,textarea,select) {

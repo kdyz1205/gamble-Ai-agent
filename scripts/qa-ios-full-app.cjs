@@ -87,7 +87,7 @@ for(const width of widths){
         const intro=view==="splash"||view==="onboarding";
         assert.equal(m.bottomNavs,intro?0:1,"exactly one appropriate bottom dock");
         assert.equal(m.otherNavs,0,"global marketing nav must not duplicate the app nav");
-        if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Picos","Profile"]);
+        if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Familiars","Profile"]);
         assert.deepEqual(runtimeErrors,[],"uncaught browser errors");
         assert.equal(m.errors,0,"render failure");
         if(view==="onboarding"&&width===390){
@@ -157,10 +157,40 @@ for(const width of widths){
       await page.waitForURL(/\/app\/(?:today)?$/, {timeout:45000});
       return headings;
     });
+    await test("Familiar roster explores four distinct paths without fake XP or ownership",async()=>{
+      await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
+      await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+      const roster=page.getByRole("group",{name:"Explore Familiar concepts"});
+      assert.equal(await roster.getByRole("button").count(),4,"four actual character choices");
+      for(const friend of ["Pico","Kiko","Nova","Moss"]){
+        assert(await roster.getByRole("button",{name:new RegExp(friend)}).count()===1,
+          "missing "+friend);
+      }
+      const questLevel=page.getByRole("region",{name:"Your Quest Milestone Level"});
+      const initial=await questLevel.innerText();
+      assert(initial.includes("Sign in to see milestones"),"guest must not receive fabricated levels");
+      assert(!initial.includes("Level 1 ·"),"no fake guest progress");
+      for(const [friend,seed] of [["Kiko","move"],["Nova","craft"],["Moss","grow"]]){
+        const entry=roster.getByRole("button",{name:new RegExp(friend)});
+        await entry.click();
+        assert.equal(await entry.getAttribute("aria-pressed"),"true");
+        const copy=await page.locator(".ios-familiar-detail").innerText();
+        assert(copy.includes(friend)&&copy.includes("Preview only"),
+          friend+" is incorrectly presented as owned");
+        const href=await page.locator(".ios-familiar-detail .ios-action").getAttribute("href");
+        assert(href.endsWith("seed="+seed),"wrong real Quest composer route for "+friend);
+      }
+      await roster.getByRole("button",{name:/Pico/}).click();
+      assert.equal(await page.locator(".ios-familiar-detail .ios-action").getAttribute("href"),
+        "/app/create");
+      await page.screenshot({path:path.join(out,"familiars-roster-390.png"),
+        animations:"disabled",fullPage:true});
+      return {companions:4,guestLevel:"not fabricated",source:"actual rendered UI"};
+    });
     await test("Five-tab iOS navigation actually changes routes",async()=>{
       await page.goto(base+"/app/today",{waitUntil:"domcontentloaded"});
       await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
-      for(const [label,dest] of [["Discover","discover"],["Create","create"],["Picos","picos"],["Profile","profile"],["Home","today"]]){
+      for(const [label,dest] of [["Discover","discover"],["Create","create"],["Familiars","picos"],["Profile","profile"],["Home","today"]]){
         await page.getByRole("navigation",{name:"iOS app navigation"}).getByRole("link",{name:label,exact:true}).click();
         await page.waitForFunction(dest=>location.pathname==="/app/"+dest,dest,{timeout:45000});
       }
