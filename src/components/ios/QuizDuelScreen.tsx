@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect,useRef,useState} from "react";
+import {useCallback,useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {useSession} from "next-auth/react";
 import {IosFrame,IosAction} from "./IOSAppUI";
@@ -79,6 +79,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
   const [error,setError]=useState("");
   const [copied,setCopied]=useState(false);
   const requestKey=useRef<string|null>(null);
+  const autoExpireAttempt=useRef<string|null>(null);
   const topicWasChosen=useRef(false);
 
   const updateDescription=(value:string)=>{
@@ -133,7 +134,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
       setError(e instanceof Error?e.message:"Quiz creation failed; you can retry safely");
     }finally{setWorking(false);}
   };
-  const postAction=async(path:string,body?:unknown)=>{
+  const postAction=useCallback(async(path:string,body?:unknown)=>{
     if(!id||working)return;
     setWorking(true);setError("");
     try{
@@ -144,7 +145,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
       setQuiz(result.quiz);
     }catch(e){setError(e instanceof Error?e.message:"Quiz action failed");}
     finally{setWorking(false);}
-  };
+  },[id,working]);
   const share=async()=>{
     if(!id)return;
     const url=window.location.origin+"/app/quiz?id="+encodeURIComponent(id);
@@ -156,6 +157,15 @@ export default function QuizDuelScreen({id}:{id?:string}){
   };
 
   const expired=Boolean(quiz?.expiresAt&&Date.parse(quiz.expiresAt)<=now);
+  // The authenticated client's own expired room can self-finalize through the
+  // same locked server route. Cron handles abandoned rooms when enabled.
+  useEffect(()=>{
+    if(status!=="authenticated"||!id||quiz?.id!==id||
+       quiz.status!=="live"||!quiz.accepted||
+       !expired||working||autoExpireAttempt.current===id)return;
+    autoExpireAttempt.current=id;
+    void postAction("/finalize");
+  },[status,id,quiz?.id,quiz?.status,quiz?.accepted,expired,working,postAction]);
   const remain=secondsRemaining(quiz?.expiresAt||null,now);
   const canSubmit=Boolean(quiz?.status==="live"&&quiz.accepted&&
     !quiz.ownSubmitted&&!expired&&choices.length===3&&
