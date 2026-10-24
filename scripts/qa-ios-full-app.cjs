@@ -195,6 +195,15 @@ for(const width of widths){
       assert(recorded.includes("not lifetime XP"),"historical XP is incomplete");
       const atlas=page.getByRole("group",{name:"Twelve concept creature families"});
       assert.equal(await atlas.getByRole("button").count(),12,"All 12 family species must be browseable");
+      const originals=page.locator(".ios-creature-atlas-card img.ios-creature-art");
+      assert.equal(await originals.count(),3,"Exactly the first three families have original artwork");
+      const decoded=await originals.evaluateAll(async imgs=>{
+        for(const img of imgs)img.loading="eager";
+        await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));
+        return imgs.map(img=>({src:img.getAttribute("src"),width:img.naturalWidth}));
+      });
+      assert(decoded.every(entry=>entry.width>=768),
+        "All three original career images must decode at full resolution: "+JSON.stringify(decoded));
       const chapters=page.getByRole("tablist",{name:"Summon design chapters"});
       assert.equal(await chapters.getByRole("tab").count(),4);
       const select=async(name)=>chapters.getByRole("tab",{name,exact:true}).click();
@@ -210,10 +219,25 @@ for(const width of widths){
       const mastery=page.getByRole("slider",{name:"Preview profession mastery level"});
       await mastery.focus();await mastery.press("End");
       assert.equal(await mastery.inputValue(),"5");
+      const hero=page.locator(".ios-summon-species img[data-testid='creature-art-software-ascended']");
+      assert.equal(await hero.count(),1,"Selecting level five must change the displayed software hero image");
+      assert((await hero.getAttribute("src")).includes("circuitling-ascended.webp"),
+        "The final level cannot silently reuse the base creature image");
+      const line=page.getByLabel("Three-stage species evolution preview");
+      assert.equal(await line.locator("img").count(),3,"All three software stage pictures must be visible");
       assert((await page.getByLabel("Three-stage species evolution preview").innerText()).includes("Neuralcrest"),
         "Level five form name must belong to the selected family");
       await page.screenshot({path:path.join(out,"familiars-atlas-390.png"),
         animations:"disabled",fullPage:true});
+      for(const [family,filename] of [["athletics","stridekin"],["nature","mossprite"]]){
+        await page.getByTestId("creature-family-"+family).click();
+        const image=page.locator(".ios-summon-species img[data-testid='creature-art-"+family+"-ascended']");
+        assert.equal(await image.count(),1,"Each fully illustrated family has its ascended form");
+        assert((await image.getAttribute("src")).includes(filename+"-ascended.webp"),
+          "Each family's unique ascended asset, not a reused Pico image");
+        assert.equal(await page.getByLabel("Three-stage species evolution preview").locator("img").count(),3);
+      }
+      await page.getByTestId("creature-family-software").click();
 
       await select("Summon Preview");
       assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
