@@ -20,7 +20,23 @@ Concurrent or repeated starter activation uses unique grantKey starter:pico-univ
 Existing accounts claim through authenticated POST /api/summons/starter/claim after GET says persistence is active.
 Guests cannot activate a starter, request another account's grant, or spend credits.
 Enabled-mode missing migration returns 503, not an invented empty inventory.
-Unbackfilled XP and tickets remain null/unknown, never misleading zero.
+Unbackfilled lifetime XP and tickets remain null/unknown, never misleading zero.
+
+## Read-only recorded XP (second gated phase)
+When persistence is enabled and the database migration exists, authenticated
+GET /api/summons/me returns progression.available=true and aggregates only
+ProfessionXpEvent rows belonging to the authenticated user and
+verified-quest-skill-v1. Rows are grouped by profession and summed, with an
+explicit event count and rule version. The response marks completeHistory=false
+and coverage=partial-since-ledger-activation: these totals do NOT describe full
+historical career proficiency. When no receipts exist, verifiedProfessionXp
+is null/UNKNOWN, not 0. Flag OFF returns available=false without querying
+any new tables, including XP. Unrecognized/corrupt profession aggregates
+fail closed rather than displaying a fabricated number.
+Summon tickets remain null/UNKNOWN; XP does not automatically grant tickets,
+draws, creatures, item transfers or fusion. No new XP-writing HTTP endpoint
+and no live Quest settlement hook are exposed. The browser-only preview
+remains independent and cannot increase authoritative XP.
 
 ## Internal XP reconciliation, intentionally NOT wired into live settlement
 Only supported fixed Quest categories Coding, Fitness, Cooking can map to profession families.

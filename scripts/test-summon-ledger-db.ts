@@ -54,6 +54,13 @@ async function main(){
     ok(friendPico.id!==instances[0].id,"Different account has distinct instance");
     const replay=await ensureUniversalPico(user.id);
     eq(replay.id,instances[0].id,"Repeat claim returns same object");
+    await prisma.summonInstance.update({where:{id:instances[0].id},
+      data:{form:"evolved"}});
+    const afterEvolution=await ensureUniversalPico(user.id);
+    eq(afterEvolution.id,instances[0].id,
+      "Retry preserves the existing Pico identity after cosmetic evolution");
+    eq(afterEvolution.form,"evolved",
+      "Retry must not reset a previously earned visual form");
     eq(await prisma.summonInstance.count({where:{originKind:"starter",ownerId:user.id}}),1,
       "No duplicated starter after retry");
     const ledger=await accountSummonLedger(user.id);
@@ -63,6 +70,19 @@ async function main(){
     eq(ledger?.tickets,null,"Unimplemented tickets remain unknown");
     eq((await accountSummonLedger(outsider.id))?.starter,null,
       "Other account cannot see somebody else's Pico");
+    const corruptedStarter=await prisma.summonInstance.create({data:{
+      ownerId:outsider.id,grantKey:starterGrantKey(outsider.id),
+      speciesId:"not-pico",originKind:"starter",
+      rarity:"starter",form:"base",status:"owned",
+    }});
+    await rej(()=>ensureUniversalPico(outsider.id),
+      "A conflicting unique starter row is not overwritten or accepted");
+    eq((await prisma.summonInstance.findUniqueOrThrow({
+      where:{id:corruptedStarter.id},
+    })).speciesId,"not-pico","Conflicting starter is unchanged for manual repair");
+    await prisma.summonInstance.delete({where:{id:corruptedStarter.id}});
+    eq((await accountSummonLedger(outsider.id))?.starter,null,
+      "Invalid starter fixture cleanup restores empty account");
     eq((await prisma.user.findUniqueOrThrow({where:{id:user.id}})).credits,19,
       "Pico grants do not change credit balance");
     eq(await prisma.creditTx.count({where:{userId:user.id}}),0,
@@ -134,10 +154,48 @@ async function main(){
       challengeId:winning.id,userId:friend.id,
     });
     eq(losing.amount,80,"Proof-accepted losing participant also progresses");
+    const afterAward=await accountSummonLedger(user.id);
+    eq(afterAward?.xp?.totalRecordedXp,100,
+      "Authenticated account sees only its actual credited XP");
+    eq(afterAward?.xp?.receiptCount,1,
+      "Nine concurrent award attempts are still one counted receipt");
+    eq(afterAward?.xp?.byProfession,[{
+      professionId:"software",recordedXp:100,receiptCount:1,
+    }],"Recorded profession totals derive from server rows");
+    eq(afterAward?.xp?.ruleVersion,"verified-quest-skill-v1",
+      "Readback names the exact XP rule");
+    eq(afterAward?.xp?.coverage,"partial-since-ledger-activation",
+      "Recorded XP never claims lifetime completeness");
+    eq(afterAward?.xp?.completeHistory,false,
+      "Historical Quests remain explicitly unbackfilled");
+    eq((await accountSummonLedger(friend.id))?.xp?.totalRecordedXp,80,
+      "The losing account sees its own verified receipts only");
+    eq((await accountSummonLedger(outsider.id))?.xp,null,
+      "No receipt is UNKNOWN, not zero XP");
     eq(await prisma.professionXpEvent.count({where:{challengeId:winning.id}}),2,
       "No duplicate event for same Quest/player/career");
     eq(await prisma.professionXpEvent.count({where:{ownerId:outsider.id}}),0,
       "Outsider gets no progress");
+    const bad=await prisma.professionXpEvent.create({data:{
+      ownerId:outsider.id,challengeId:winning.id,
+      eventKey:"invalid-profession-"+id,professionId:"not-a-profession",
+      awardType:"verified_quest",amount:80,ruleVersion:"verified-quest-skill-v1",
+      sourceReceipt:unique[0].sourceReceipt,
+    }});
+    await rej(()=>accountSummonLedger(outsider.id),
+      "Unknown profession receipts must fail closed, not inflate a score");
+    await prisma.professionXpEvent.delete({where:{id:bad.id}});
+    const forged=await prisma.professionXpEvent.create({data:{
+      ownerId:outsider.id,challengeId:winning.id,
+      eventKey:"unaudited-"+id,professionId:"software",
+      awardType:"verified_quest",amount:7,ruleVersion:"verified-quest-skill-v1",
+      sourceReceipt:null,
+    }});
+    await rej(()=>accountSummonLedger(outsider.id),
+      "Rows without a final judgment receipt or valid fixed XP fail closed");
+    await prisma.professionXpEvent.delete({where:{id:forged.id}});
+    eq((await accountSummonLedger(outsider.id))?.xp,null,
+      "Removing invalid fixtures restores UNKNOWN without inventing zero");
     await rej(()=>reconcileVerifiedQuestProfessionXp({
       challengeId:winning.id,userId:outsider.id,
     }),"Third parties cannot be credited");

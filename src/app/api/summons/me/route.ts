@@ -46,10 +46,18 @@ export async function GET(){
       extraSummons:null,
       reason:"Persistent Summon inventory is not enabled",
     },
-    progression:{
+    progression:ledger?{
+      available:true,
+      verifiedProfessionXp:ledger.xp,
+      summonTickets:null,
+      reason:ledger.xp
+        ?"Only recorded, verified Quest XP from this rule version is shown; full historical XP is UNKNOWN"
+        :"No verified XP receipts exist under this rule version; historical XP remains UNKNOWN",
+    }:{
+      available:false,
       verifiedProfessionXp:null,
       summonTickets:null,
-      reason:"An authoritative full profession XP/ticket rollout is not active",
+      reason:"Account progression ledger has not been activated; XP and tickets are UNKNOWN",
     },
   },{headers:noStore});
 }

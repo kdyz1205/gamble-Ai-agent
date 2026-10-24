@@ -205,7 +205,7 @@ export default function ProfessionSummonStudio(){
       <p className="ios-summon-hint">Example: 250 audited XP would correspond to
         {ticket.tickets} free summon milestones (next at {ticket.nextAtXp} XP)
         and profession mastery Lv {previewMasteryFromXp(250)}.
-        There is no XP or summon-ticket ledger connected yet.</p>
+        This example never grants XP, tickets or creatures. Any server-recorded XP is displayed separately above and does not include unbackfilled history.</p>
       <IosAction href={"/app/create?seed="+first.seed}>Start a real {first.name} Quest</IosAction>
     </div>
   </section>;
