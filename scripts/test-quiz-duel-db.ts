@@ -58,13 +58,17 @@ async function main(){
   await rej(()=>createQuizDuel(alice.id,{topic:"science",requestKey:"short"}),
     400,"Idempotent request key is mandatory");
   const requestKey=key();
-  const first=await createQuizDuel(alice.id,{
+  const initialRace=await Promise.all(Array.from({length:6},()=>createQuizDuel(alice.id,{
     topic:"technology",requestKey,opponentUsername:bob.username,
     description:"Voice: challenge my friend to a coding knowledge quiz",
     stakeCredits:0,
-  });
+  })));
+  const first=initialRace[0];
   createdChallenges.push(first.challengeId);
-  eq(first.reused,false,"Quiz creation returns new record");
+  eq(new Set(initialRace.map(x=>x.challengeId)).size,1,
+    "Six concurrent first create requests produce one and only one Quiz");
+  eq(initialRace.filter(x=>!x.reused).length,1,
+    "One transaction created the Quiz, all other initial requests reused it");
   const repeated=await Promise.all(Array.from({length:5},()=>createQuizDuel(alice.id,{
     topic:"technology",requestKey,opponentUsername:bob.username,
   })));
