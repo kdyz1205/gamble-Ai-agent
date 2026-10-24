@@ -191,6 +191,7 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
     status:duel.status,challengeStatus:duel.challenge.status,
     stakeCredits:0,stakesEnabled:false,
     creatorUsername:duel.challenge.creator.username,
+    isCreator:duel.challenge.creatorId===userId,
     playerUserId:userId,accepted:joined,canJoin,
     opponentUsername:duel.challenge.participants.find(p=>p.role==="opponent")?.user.username??null,
     invitedToOtherAccount:Boolean(duel.invitedUserId&&!invited&&!joined),
