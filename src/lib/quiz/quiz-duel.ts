@@ -96,6 +96,19 @@ export async function createQuizDuel(userId:string,raw:unknown){
   const commitment=answerCommitment(selected);
   try{
     return await prisma.$transaction(async tx=>{
+      // Serialize the very first attempts sharing a retry key. The pre-read
+      // outside this transaction is not enough when all requests race before
+      // the unique row exists.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.requestKey}, 7009))`;
+      const prior=await tx.quizDuel.findUnique({
+        where:{requestKey:input.requestKey},
+        include:{challenge:{select:{creatorId:true}}},
+      });
+      if(prior){
+        if(prior.challenge.creatorId!==userId||prior.topic!==input.topic)
+          fail(409,"Request key belongs to a different Quiz");
+        return {challengeId:prior.challengeId,reused:true};
+      }
       const creator=await tx.user.findUnique({where:{id:userId},
         select:{id:true,username:true}});
       if(!creator)fail(401,"Authentication required");
