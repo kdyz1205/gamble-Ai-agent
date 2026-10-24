@@ -44,9 +44,60 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     const friend=await register(friendCtx,"friend");
     const initialBalances=await balances();
     const a=await creatorCtx.newPage();
+    // Deterministic browser-media fixture tests the actual mic→multipart
+    // upload→editable transcript path without using a paid external voice API.
+    await a.addInitScript(()=>{
+      Object.defineProperty(navigator,"mediaDevices",{
+        configurable:true,value:{getUserMedia:async()=>({
+          getTracks:()=>[{stop:()=>{}}],
+        })},
+      });
+      class TestRecorder{
+        static isTypeSupported(_t:string){return true;}
+        mimeType:string;
+        state:"inactive"|"recording"="inactive";
+        ondataavailable:((event:{data:Blob})=>void)|null=null;
+        onstop:(()=>void)|null=null;
+        onerror:(()=>void)|null=null;
+        constructor(_stream:unknown,options?:{mimeType?:string}){
+          this.mimeType=options?.mimeType||"audio/mp4";
+        }
+        start(){this.state="recording";}
+        stop(){
+          this.state="inactive";
+          this.ondataavailable?.({data:new Blob(["test-audio"],{type:this.mimeType})});
+          this.onstop?.();
+        }
+      }
+      Object.defineProperty(window,"MediaRecorder",{configurable:true,value:TestRecorder});
+      Object.defineProperty(window,"SpeechRecognition",{configurable:true,value:undefined});
+      Object.defineProperty(window,"webkitSpeechRecognition",{configurable:true,value:undefined});
+    });
+    let transcriptCalls=0;
+    await a.route("**/api/transcribe",async route=>{
+      transcriptCalls++;
+      expect(route.request().method()).toBe("POST");
+      const bytes=route.request().postDataBuffer();
+      expect(bytes&&bytes.length>20).toBeTruthy();
+      expect(bytes!.toString("utf8")).toContain("filename=");
+      await route.fulfill({status:200,contentType:"application/json",
+        body:JSON.stringify({transcript:"Challenge my friend to a science Quiz",
+          language:"en",provider:"test-fixture",usedFallback:false}),
+      });
+    });
     await a.goto(BASE+"/app/quiz");
     await expect(a.getByTestId("quiz-create-form")).toBeVisible({timeout:30_000});
-    await expect(a.getByTestId("quiz-microphone")).toBeVisible();
+    const microphone=a.getByTestId("quiz-microphone");
+    await expect(microphone).toBeVisible();
+    await microphone.click();
+    await expect(microphone).toContainText("Stop recording");
+    await microphone.click();
+    await expect(a.getByTestId("quiz-voice-transcript"))
+      .toHaveValue("Challenge my friend to a science Quiz");
+    expect(transcriptCalls).toBe(1);
+    expect((await db.query(
+      'SELECT COUNT(*)::int AS n FROM "Challenge" WHERE "creatorId"=$1',[creator.id]
+    )).rows[0].n).toBe(0);
     await a.getByTestId("quiz-voice-transcript").fill(
       "I challenge a friend to three Software and AI questions.");
     await a.getByRole("combobox",{name:"Quiz topic"}).selectOption("technology");
