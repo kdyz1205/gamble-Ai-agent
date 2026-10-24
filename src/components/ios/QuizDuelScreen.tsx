@@ -27,6 +27,7 @@ type QuizResult={
 type AiCapabilities={
   text:{providerId:string;transport:string;configured:boolean};
   speech:{providerId:string;transport:string;configured:boolean};
+  quiz:{enabled:boolean};
   quizGrading:{providerId:string;model:string;externalAiCalls:number};
   subscriptionSharing:{availableInThisApp:boolean};
 };
@@ -72,6 +73,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
   const [opponent,setOpponent]=useState("");
   const [voiceNotice,setVoiceNotice]=useState("");
   const [runtime,setRuntime]=useState<AiCapabilities|null>(null);
+  const pilotEnabled=runtime?.quiz.enabled===true;
   const [quiz,setQuiz]=useState<QuizView|null>(null);
   const [choices,setChoices]=useState<number[]>([-1,-1,-1]);
   const [now,setNow]=useState(0);
@@ -102,7 +104,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
     return()=>{active=false;};
   },[status]);
   useEffect(()=>{
-    if(!id||status!=="authenticated")return;
+    if(!id||status!=="authenticated"||!pilotEnabled)return;
     let active=true;
     const update=async()=>{
       try{
@@ -115,10 +117,10 @@ export default function QuizDuelScreen({id}:{id?:string}){
     void update();
     const interval=setInterval(()=>{void update();},3000);
     return()=>{active=false;clearInterval(interval);};
-  },[id,status]);
+  },[id,status,pilotEnabled]);
 
   const create=async()=>{
-    if(working||status!=="authenticated")return;
+    if(working||status!=="authenticated"||!pilotEnabled)return;
     setWorking(true);setError("");
     if(!requestKey.current)requestKey.current=crypto.randomUUID();
     try{
@@ -136,7 +138,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
     }finally{setWorking(false);}
   };
   const postAction=useCallback(async(path:string,body?:unknown)=>{
-    if(!id||working)return;
+    if(!id||working||!pilotEnabled)return;
     setWorking(true);setError("");
     try{
       const result=await fetchJson<{quiz:QuizView}>(
@@ -146,7 +148,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
       setQuiz(result.quiz);
     }catch(e){setError(e instanceof Error?e.message:"Quiz action failed");}
     finally{setWorking(false);}
-  },[id,working]);
+  },[id,working,pilotEnabled]);
   const share=async()=>{
     if(!id)return;
     const url=window.location.origin+"/app/quiz?id="+encodeURIComponent(id);
@@ -161,14 +163,14 @@ export default function QuizDuelScreen({id}:{id?:string}){
   // The authenticated client's own expired room can self-finalize through the
   // same locked server route. Cron handles abandoned rooms when enabled.
   useEffect(()=>{
-    if(status!=="authenticated"||!id||quiz?.id!==id||
+    if(status!=="authenticated"||!pilotEnabled||!id||quiz?.id!==id||
        quiz.status!=="live"||!quiz.accepted||
        !expired||working||autoExpireAttempt.current===id)return;
     autoExpireAttempt.current=id;
     void postAction("/finalize");
-  },[status,id,quiz?.id,quiz?.status,quiz?.accepted,expired,working,postAction]);
+  },[status,pilotEnabled,id,quiz?.id,quiz?.status,quiz?.accepted,expired,working,postAction]);
   const remain=secondsRemaining(quiz?.expiresAt||null,now);
-  const canSubmit=Boolean(quiz?.status==="live"&&quiz.accepted&&
+  const canSubmit=Boolean(pilotEnabled&&quiz?.status==="live"&&quiz.accepted&&
     !quiz.ownSubmitted&&!expired&&choices.length===3&&
     choices.every(x=>Number.isInteger(x)&&x>=0&&x<=3)&&!working);
   const result=quiz?.result;
@@ -185,6 +187,12 @@ export default function QuizDuelScreen({id}:{id?:string}){
       status!=="authenticated"?<AuthInvitation
         title="Sign in to play a real Quiz"
         detail="Both people must sign in separately. No account is shared with the AI provider."/>:
+      !pilotEnabled?<section className="ios-quiz-card" aria-label="Quiz activation status"
+        data-testid="quiz-pilot-disabled" role="status">
+        <h2>{runtime?"Free Quiz pilot is not active here":"Checking secure Quiz configuration…"}</h2>
+        <p>Creating or joining Quizzes requires a separately migrated, explicitly
+          enabled test environment. No account, answer or credit will be changed.</p>
+      </section>:
       !id?<section className="ios-quiz-card" data-testid="quiz-create-form">
         <h2>1. Describe your Quiz</h2>
         <QuizVoiceInput value={description} disabled={working}
