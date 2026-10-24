@@ -6,7 +6,7 @@ import {revealQuizAnswers,answerCommitment}
   from "../../src/lib/quiz/quiz-bank";
 
 const BASE=process.env.TEST_BASE_URL||"http://localhost:3017";
-test.use({viewport:{width:390,height:844},reducedMotion:"reduce"});
+test.use({viewport:{width:390,height:844}});
 
 test("two authenticated friends create, accept, answer and verify a no-money voice-ready Quiz",
   async({browser},testInfo)=>{
@@ -16,8 +16,9 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     dbUrl.pathname!=="/summoner_verification",
     "Requires dedicated, isolated PostgreSQL");
   const db=new Pool({connectionString:process.env.DATABASE_URL});
-  const creatorCtx=await browser.newContext(),friendCtx=await browser.newContext(),
-    guestCtx=await browser.newContext();
+  const creatorCtx=await browser.newContext({reducedMotion:"reduce"}),
+    friendCtx=await browser.newContext({reducedMotion:"reduce"}),
+    guestCtx=await browser.newContext({reducedMotion:"reduce"});
   const userIds:string[]=[],challengeIds:string[]=[];
   const suffix=randomUUID().replaceAll("-","").slice(0,16);
   async function register(context:BrowserContext,label:string){
