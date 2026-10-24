@@ -157,46 +157,59 @@ for(const width of widths){
       await page.waitForURL(/\/app\/(?:today)?$/, {timeout:45000});
       return headings;
     });
-    await test("Familiar roster explores four distinct paths without fake XP or ownership",async()=>{
+    await test("Profession Summon preview, XP truth and fusion navigation",async()=>{
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
-      const roster=page.getByRole("group",{name:"Explore Familiar concepts"});
-      assert.equal(await roster.getByRole("button").count(),4,"four actual character choices");
-      for(const friend of ["Pico","Kiko","Nova","Moss"]){
-        assert(await roster.getByRole("button",{name:new RegExp(friend)}).count()===1,
-          "missing "+friend);
-      }
-      const questLevel=page.getByRole("region",{name:"Your Quest Milestone Level"});
-      const initial=await questLevel.innerText();
-      assert(initial.includes("Sign in to see milestones"),"guest must not receive fabricated levels");
-      assert(!initial.includes("Level 1 ·"),"no fake guest progress");
-      for(const [friend,seed] of [["Kiko","move"],["Nova","craft"],["Moss","grow"]]){
-        const entry=roster.getByRole("button",{name:new RegExp(friend)});
-        await entry.click();
-        assert.equal(await entry.getAttribute("aria-pressed"),"true");
-        const copy=await page.locator(".ios-familiar-detail").innerText();
-        assert(copy.includes(friend)&&copy.includes("Preview only"),
-          friend+" is incorrectly presented as owned");
-        const href=await page.locator(".ios-familiar-detail .ios-action").getAttribute("href");
-        assert(href.endsWith("seed="+seed),"wrong real Quest composer route for "+friend);
-      }
-      await roster.getByRole("button",{name:/Pico/}).click();
-      assert.equal(await page.locator(".ios-familiar-detail .ios-action").getAttribute("href"),
-        "/app/create");
-      // A full-page screenshot may otherwise capture blank lazy images below
-      // the fold. Require the real current art bytes before accepting evidence.
-      const imagesReady=await page.evaluate(async()=>{
-        const images=Array.from(document.querySelectorAll(
-          ".ios-pico-hero img, .ios-familiar-card img, .ios-pico-mood img"));
-        for(const img of images)img.loading="eager";
-        await Promise.all(images.map(img=>img.decode().catch(()=>null)));
-        return {count:images.length,allLoaded:images.every(img=>img.naturalWidth>0)};
+      assert((await page.locator(".ios-pico-hero").innerText()).includes("Pico, your first Summon"));
+      const rank=await page.getByRole("region",{name:"Your Quest Milestone Level"}).innerText();
+      assert(rank.includes("Sign in to see milestones"),"no fabricated guest level");
+      const primary=page.getByRole("combobox",{name:"Profession family"});
+      const second=page.getByRole("combobox",{name:"Fusion second profession"});
+      assert.equal(await primary.locator("option").count(),12);
+      const occupation=page.getByRole("combobox",{name:"Specific profession or skill"});
+      assert.equal(await occupation.locator("option").count(),3);
+      assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
+      assert((await page.getByLabel("Example base summon odds").innerText()).includes("0.4%"));
+      await primary.selectOption("software");
+      await occupation.selectOption("robotics");
+      const described=await page.locator(".ios-summon-species").innerText();
+      assert(described.includes("Circuitling")&&described.includes("Robotics"),"Occupation-specific creature lineage");
+      assert.equal(await page.locator(".ios-summon-lab .ios-action").getAttribute("href"),
+        "/app/create?seed=craft");
+      await second.selectOption("healthcare");
+      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Carebyte"));
+      const mastery=page.getByRole("slider",{name:"Preview profession mastery level"});
+      await mastery.focus();await mastery.press("End");
+      assert.equal(await mastery.inputValue(),"5");
+      await page.getByRole("button",{name:/Preview a random summon/}).click();
+      const draw=await page.locator(".ios-summon-result").innerText();
+      assert(draw.includes("SIMULATION 1")&&draw.includes("NO ITEM AWARDED"),
+        "No fake or paid rewards");
+      await primary.selectOption("art");await second.selectOption("music");
+      assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Prism Echo"));
+      const images=await page.evaluate(async()=>{
+        const imgs=Array.from(document.querySelectorAll(".ios-pico-hero img,.ios-summon-studio img"));
+        for(const img of imgs)img.loading="eager";
+        await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));
+        return {count:imgs.length,loaded:imgs.every(img=>img.naturalWidth>0)};
       });
-      assert(imagesReady.count>=8&&imagesReady.allLoaded,
-        "Familiar artwork must be decoded, not blank placeholders: "+JSON.stringify(imagesReady));
+      assert(images.count>=3&&images.loaded,"Real Summon preview art did not load "+JSON.stringify(images));
       await page.screenshot({path:path.join(out,"familiars-roster-390.png"),
         animations:"disabled",fullPage:true});
-      return {companions:4,guestLevel:"not fabricated",source:"actual rendered UI"};
+      return {professionFamilies:12,initialOccupations:36,oddsTiers:5,ownership:"never fabricated"};
+    });
+    await test("320px Summon Lab has no horizontal overflow",async()=>{
+      const compact=await browser.newContext({viewport:{width:320,height:780},
+        deviceScaleFactor:1,reducedMotion:"reduce",isMobile:true,hasTouch:true});
+      try {
+        const mobile=await compact.newPage();
+        await mobile.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
+        await mobile.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+        const overflow=await mobile.evaluate(()=>Math.max(document.documentElement.scrollWidth,
+          document.body.scrollWidth)-innerWidth);
+        assert(overflow<=1,"320px overflow "+overflow);
+        return {viewportWidth:320,overflow};
+      }finally{await compact.close();}
     });
     await test("Five-tab iOS navigation actually changes routes",async()=>{
       await page.goto(base+"/app/today",{waitUntil:"domcontentloaded"});

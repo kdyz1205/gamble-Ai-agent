@@ -6,6 +6,7 @@ import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from ".
 import {useOpenQuests,useOwnQuests,usePublicActivity} from "./IOSAppData";
 import {deriveQuestMilestoneRank} from "@/lib/ios-quest-rank";
 import IOSLoadingCards from "./IOSLoadingCards";
+import ProfessionSummonStudio from "./ProfessionSummonStudio";
 
 const categories=[
   { id:"all", label:"All" },{id:"move",label:"Move"},{id:"create",label:"Create"},{id:"grow",label:"Grow"},
@@ -82,35 +83,16 @@ const picoStates=[
   {id:"review",label:"Review",image:visuals.mascotHappy,copy:"Proof must follow the actual accepted rules."}
 ] as const;
 
-// New species are world previews, not owned Familiars or trained AI referees.
-// Preset artwork and existing Quest destinations keep this lightweight and real.
-const familiarWorlds=[
-  {id:"pico",name:"Pico",path:"All Quests",art:visuals.mascot,available:true,
-    copy:"Your first guide. Turn a small idea into a Quest with clear rules and real proof.",
-    href:"/app/create",cta:"Create with Pico"},
-  {id:"kiko",name:"Kiko",path:"Move",art:visuals.adventure,available:false,
-    copy:"A forest adventurer for moving, trying something new, and getting stronger.",
-    href:"/app/create?seed=move",cta:"Try a Move Quest"},
-  {id:"nova",name:"Nova",path:"Create",art:visuals.grow,available:false,
-    copy:"A little dreamer for art, music, making things and sharing what you create.",
-    href:"/app/create?seed=craft",cta:"Try a Create Quest"},
-  {id:"moss",name:"Moss",path:"Grow",art:visuals.portal,available:false,
-    copy:"A garden companion for learning, reflection and consistent small steps.",
-    href:"/app/create?seed=grow",cta:"Try a Grow Quest"},
-] as const;
-
 export function PicosScreen() {
   const [role,setRole]=useState<(typeof picoStates)[number]["id"]>("guide");
-  const [familiar,setFamiliar]=useState<(typeof familiarWorlds)[number]["id"]>("pico");
   const active=picoStates.find(s=>s.id===role)||picoStates[0];
-  const selected=familiarWorlds.find(s=>s.id===familiar)||familiarWorlds[0];
   const {quests,loading,error,signedIn}=useOwnQuests();
   const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
     <section className="ios-pico-hero">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
       <span className="ios-overline">YOUR STARTING GUIDE</span>
-      <h1>Pico & friends</h1><p>A little magic for the real steps you take.</p>
+      <h1>Pico, your first Summon</h1><p>Every player begins with Pico. Your own profession paths grow from real adventures.</p>
     </section>
 
     <section className="ios-milestone" aria-label="Your Quest Milestone Level">
@@ -134,24 +116,7 @@ export function PicosScreen() {
       <small>This is a read-only settled-Quest milestone, not an XP wallet, credit reward or Familiar Bond level.</small>
     </section>
 
-    <section className="ios-section" aria-label="Familiar world previews">
-      <div className="ios-section__heading"><div><small>MEET THE WORLD</small><h2>More than Pico</h2></div></div>
-      <div className="ios-familiar-roster" role="group" aria-label="Explore Familiar concepts">
-        {familiarWorlds.map(friend=><button key={friend.id} type="button"
-          aria-pressed={familiar===friend.id} onClick={()=>setFamiliar(friend.id)}
-          className={"ios-familiar-card"+(familiar===friend.id?" is-selected":"")}>
-          <span className="ios-familiar-card__art"><IosArt src={friend.art} alt={friend.name+" character artwork"}/></span>
-          <span className="ios-familiar-card__copy"><strong>{friend.name}</strong>
-            <small>{friend.path}</small><small>{friend.available?"Pico guide":"Concept preview"}</small></span>
-        </button>)}
-      </div>
-      <div className="ios-familiar-detail" aria-live="polite">
-        <div><span className="ios-overline">{selected.path.toUpperCase()} · {selected.available?"GUIDE":"FUTURE COMPANION"}</span>
-        <h3>{selected.name}</h3><p>{selected.copy}</p></div>
-        {!selected.available&&<p className="ios-familiar-availability">Preview only. Not collectible or owned yet. No game advantage.</p>}
-        <IosAction href={selected.href}>{selected.cta}</IosAction>
-      </div>
-    </section>
+    <ProfessionSummonStudio/>
 
     <section className="ios-section">
       <div className="ios-section__heading"><div><small>PICO IS HERE NOW</small><h2>How Pico helps</h2></div></div>
