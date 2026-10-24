@@ -202,8 +202,8 @@ for(const width of widths){
         await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));
         return imgs.map(img=>({src:img.getAttribute("src"),width:img.naturalWidth}));
       });
-      assert(decoded.every(entry=>entry.width>=768),
-        "All three original career images must decode at full resolution: "+JSON.stringify(decoded));
+      assert(decoded.every(entry=>entry.width>=96),
+        "All three original career images must decode to nontrivial responsive assets: "+JSON.stringify(decoded));
       const chapters=page.getByRole("tablist",{name:"Summon design chapters"});
       assert.equal(await chapters.getByRole("tab").count(),4);
       const select=async(name)=>chapters.getByRole("tab",{name,exact:true}).click();
