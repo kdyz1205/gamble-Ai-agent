@@ -12,6 +12,9 @@ import {
   getQuizDuelView,finalizeExpiredQuiz,QuizDuelError,
 } from "../src/lib/quiz/quiz-duel";
 import {answerCommitment,revealQuizAnswers} from "../src/lib/quiz/quiz-bank";
+import {acceptChallengeAtomic} from "../src/lib/challenge-acceptance";
+import {executeChallengeJudgment} from "../src/lib/challenge-judgment";
+import {cancelChallengeAtomic} from "../src/lib/challenge-cancellation";
 
 const u=new URL(process.env.DATABASE_URL||"postgresql://invalid");
 if(!["localhost","127.0.0.1"].includes(u.hostname)||
@@ -82,6 +85,14 @@ async function main(){
     "Outsider cannot accept a target-reserved invitation");
   await rej(()=>acceptQuizDuel(first.challengeId,alice.id),400,
     "Owner cannot self-join to collect winnings");
+  const genericSeat=await acceptChallengeAtomic(first.challengeId,bob.id);
+  eq(genericSeat.ok,false,"Generic Quest acceptance must not bypass Quiz invitation");
+  if(!genericSeat.ok)eq(genericSeat.status,409,
+    "Alternate acceptance endpoint must refuse Quiz");
+  const genericJudge=await executeChallengeJudgment(first.challengeId,1,{allowLive:true});
+  eq(genericJudge.ok,false,"Generic AI judge cannot grade or charge Quiz");
+  if(!genericJudge.ok&&"status" in genericJudge)
+    eq(genericJudge.status,409,"Generic AI judge refuses deterministic Quiz");
   await rej(()=>submitQuizAnswers(first.challengeId,alice.id,[0,0,0]),409,
     "Quiz cannot be answered before both players are accepted");
 
@@ -177,6 +188,44 @@ async function main(){
   await rej(()=>acceptQuizDuel(open.challengeId,bob.id),409,
     "Third competitor cannot steal already accepted quiz seat");
 
+  const corrupt=await createQuizDuel(alice.id,{topic:"science",requestKey:key()});
+  createdChallenges.push(corrupt.challengeId);
+  await acceptQuizDuel(corrupt.challengeId,bob.id);
+  const locked=await getQuizDuelView(corrupt.challengeId,alice.id);
+  const originalAnswers=revealQuizAnswers(locked.questions!.map(q=>q.id))
+    .map(x=>x.answer);
+  await submitQuizAnswers(corrupt.challengeId,alice.id,originalAnswers);
+  await prisma.quizAttempt.update({
+    where:{challengeId_userId:{challengeId:corrupt.challengeId,userId:alice.id}},
+    data:{score:2},
+  });
+  await assert.rejects(
+    ()=>submitQuizAnswers(corrupt.challengeId,bob.id,originalAnswers),
+    /response digest or recorded score failed verification/,
+    "Forged score aborts second answer and finalization atomically");
+  checks++;
+  eq(await prisma.quizAttempt.count({where:{challengeId:corrupt.challengeId}}),1,
+    "Failed corrupted score finalization rolled back second attempt");
+  eq(await prisma.judgment.count({where:{challengeId:corrupt.challengeId}}),0,
+    "No unverified winner was written");
+  await prisma.quizAttempt.update({
+    where:{challengeId_userId:{challengeId:corrupt.challengeId,userId:alice.id}},
+    data:{score:3},
+  });
+  eq((await submitQuizAnswers(corrupt.challengeId,bob.id,originalAnswers)).status,
+    "completed","Exact verified raw answer re-check recovers correctly");
+
+  const cancelled=await createQuizDuel(alice.id,{topic:"general",requestKey:key()});
+  createdChallenges.push(cancelled.challengeId);
+  const cancelOne=await cancelChallengeAtomic(cancelled.challengeId,alice.id);
+  eq(cancelOne.ok,true,"Free unopened Quiz may be cancelled atomically");
+  eq((await getQuizDuelView(cancelled.challengeId,alice.id)).status,"cancelled",
+    "Quiz and Challenge status must stay synchronized on cancellation");
+  const cancelReplay=await cancelChallengeAtomic(cancelled.challengeId,alice.id);
+  eq(cancelReplay.ok,true,"Cancellation retry is idempotent");
+  await rej(()=>acceptQuizDuel(cancelled.challengeId,bob.id),409,
+    "No one can join an already-cancelled Quiz");
+
   eq(await prisma.creditTx.count({where:{userId:{in:createdUsers}}}),
     beforeLedger,"No credit debits or winnings anywhere in Quiz lifecycle");
   const afterCredits=await prisma.user.findMany({
@@ -185,8 +234,8 @@ async function main(){
     orderBy:{id:"asc"},
   });
   eq(afterCredits,beforeCredits,"Balances and player lifetime credit totals unchanged");
-  eq(await prisma.quizDuel.count({where:{challengeId:{in:createdChallenges}}}),4,
-    "Expected exact four real database Quiz sessions");
+  eq(await prisma.quizDuel.count({where:{challengeId:{in:createdChallenges}}}),6,
+    "Expected exactly six real test Quizzes including corruption and cancellation");
   console.log("VERIFIED_QUIZ_DUEL_DB_PASS",checks,"checks");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{
