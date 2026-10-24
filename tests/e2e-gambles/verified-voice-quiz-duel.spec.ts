@@ -193,6 +193,27 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     expect(rows.rows[0].resolutionHash).toMatch(/^[a-f0-9]{64}$/);
     expect((await db.query('SELECT count(*)::int AS n FROM "QuizAttempt" WHERE "challengeId"=$1',[id])).rows[0].n).toBe(2);
     expect((await db.query('SELECT count(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1',[id])).rows[0].n).toBe(0);
+
+    // Creator can revoke a second, still-unaccepted invitation without
+    // exposing stale "open" state or writing a credit refund.
+    const pending=await creatorCtx.request.post(BASE+"/api/quiz",{
+      data:{topic:"sports",requestKey:randomUUID(),stakeCredits:0},
+    });
+    expect(pending.status(),await pending.text()).toBe(201);
+    const pendingId=(await pending.json()).challengeId as string;
+    challengeIds.push(pendingId);
+    await a.goto(BASE+"/app/quiz?id="+pendingId);
+    await expect(a.getByTestId("quiz-cancel-invite")).toBeVisible({timeout:15000});
+    const cancelling=a.waitForResponse(r=>r.url().endsWith(
+      "/api/quiz/"+pendingId+"/cancel")&&r.request().method()==="POST");
+    await a.getByTestId("quiz-cancel-invite").click();
+    expect((await cancelling).status()).toBe(200);
+    await expect(a.getByTestId("quiz-cancelled")).toBeVisible();
+    const failedJoin=await friendCtx.request.post(
+      BASE+"/api/quiz/"+pendingId+"/accept");
+    expect(failedJoin.status()).toBe(409);
+    expect((await db.query('SELECT count(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1',
+      [pendingId])).rows[0].n).toBe(0);
     expect(await balances()).toEqual(initialBalances);
     console.log(JSON.stringify({challengeId:id,creator:creator.id,friend:friend.id,
       objectiveScores:[3,0],winnerId:creator.id,creditsTransferred:0,verdictCount:1}));
