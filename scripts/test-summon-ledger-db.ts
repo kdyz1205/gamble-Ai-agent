@@ -245,8 +245,11 @@ async function main(){
     eq([spent.available,spent.spent],[1,1],
       "Previously spent ticket is not restored by reconciliation");
     const spentRead=await readFreeCareerTicketLedger(user.id);
-    eq([spentRead?.issued,spentRead?.available,spentRead?.spent],[2,1,1],
-      "Readback preserves spent receipts");
+    eq([spentRead?.issued,spentRead?.available,spentRead?.spent],[3,2,1],
+      "Account readback includes software and athletics without resurrecting spent tickets");
+    const softwareRead=spentRead?.byProfession.find(row=>row.professionId==="software");
+    eq([softwareRead?.issued,softwareRead?.available,softwareRead?.spent],[2,1,1],
+      "Software career preserves its exact spent receipt separately");
     eq(await prisma.summonTicket.count({where:{
       ownerId:user.id,professionId:"software",
     }}),2,"Spent ticket is not duplicated or reminted");
