@@ -93,6 +93,7 @@ model User {
   summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
   professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
   summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
+  quizAttempts          QuizAttempt[]
 }
 
 // ═══════════════════════════════════════
@@ -193,6 +194,7 @@ model Challenge {
   verdictResponses VerdictResponse[]
   reviewCase       ReviewCase?
   professionXpEvents ProfessionXpEvent[]
+  quizDuel         QuizDuel?
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
   // by createdAt DESC; the "my markets" tab filters on creatorId; the judge
@@ -445,4 +447,45 @@ model SummonTicket {
   owner User @relation("SummonTicketOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, status])
+}
+
+// ═══════════════════════════════════════
+// DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)
+// ═══════════════════════════════════════
+model QuizDuel {
+  challengeId      String   @id
+  topic            String
+  bankVersion      String
+  questionIds      String   // JSON string of canonical IDs, never answer keys
+  answerCommitment String   // Published hash; reveal when adjudication commits
+  invitedUserId    String?  // Exact validated user invitation (optional share link)
+  status           String   @default("open") // open | live | completed
+  startedAt        DateTime?
+  expiresAt        DateTime?
+  finalizedAt      DateTime?
+  winnerId         String?
+  resultJson       String?  // Final immutable objective score receipt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  attempts  QuizAttempt[]
+
+  @@index([status, expiresAt])
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  answersJson String   // Private until both finish
+  answerHash  String
+  score       Int
+  submittedAt DateTime @default(now())
+
+  quizDuel QuizDuel @relation(fields: [challengeId], references: [challengeId], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId, submittedAt])
 }
