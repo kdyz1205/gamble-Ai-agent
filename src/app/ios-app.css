@@ -813,6 +813,190 @@
   .ios-quiz-hero h1{font-size:26px;}
 }
 
+/* Retina-friendly composited arena: cosmetic only; game state remains on the server. */
+.ios-quiz-arena {
+  position:relative; isolation:isolate; display:grid; gap:0; min-width:0;
+  min-height:316px; overflow:hidden; border-radius:25px;
+  border:1px solid #7aa1d9;
+  margin:2px 0 14px;
+  color:#f5faff;
+  background:
+    radial-gradient(ellipse at 48% 85%, #3b5989 0%, transparent 55%),
+    radial-gradient(ellipse at 22% 25%, #285d91 0%, transparent 42%),
+    radial-gradient(ellipse at 82% 22%, #503c8e 0%, transparent 44%),
+    linear-gradient(166deg,#0c1735 0%,#172752 54%,#131735 100%);
+  box-shadow:0 19px 40px #14294a22, inset 0 0 0 1px #d8f5ff19;
+  contain:layout paint;
+}
+.ios-quiz-arena__sky {
+  pointer-events:none; position:absolute; inset:-35% -10% 8%;
+  background:conic-gradient(from 30deg at 50% 80%,
+    transparent 0deg,#91d9ff13 38deg,transparent 65deg,
+    #cab5ff19 115deg,transparent 149deg,#8ef2ff15 218deg,
+    transparent 260deg,#a8b5ff19 310deg,transparent 360deg);
+  transform-origin:50% 72%;
+  animation:ios-arena-sky 24s linear infinite;
+}
+.ios-quiz-arena::before {
+  content:"";pointer-events:none;position:absolute;
+  width:70%;height:65%;left:15%;top:17%;
+  border-radius:50%;
+  background:radial-gradient(ellipse,#bbe6ff25 0%,#acbcff08 50%,transparent 74%);
+  transform:scale(1.18,.82);
+}
+.ios-quiz-arena::after {
+  content:"";pointer-events:none;position:absolute;
+  inset:1px;border-radius:24px;
+  box-shadow:inset 0 0 45px #09142e7a,inset 0 2px 1px #ffffff40;
+}
+.ios-quiz-arena__top {
+  position:relative;z-index:4;display:flex;justify-content:space-between;
+  align-items:center;gap:8px;padding:15px 16px 0;min-width:0;
+}
+.ios-quiz-arena__eyebrow {font-size:10px;font-weight:900;letter-spacing:.18em;color:#e4f7ff;}
+.ios-quiz-arena__eyebrow span {color:#95eeff;}
+.ios-quiz-arena__free {
+  border:1px solid #c1f8ed64;border-radius:999px;
+  color:#d7fff3;background:#1e60645e;font-size:9px;font-weight:850;
+  padding:6px 9px;white-space:nowrap;letter-spacing:.06em;
+}
+.ios-quiz-arena__fighters {
+  position:relative;z-index:2;display:grid;
+  grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr);
+  align-items:center;min-height:230px;padding:0 13px;
+}
+.ios-quiz-arena__fighter {
+  position:relative;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:0;min-width:0;align-self:stretch;
+}
+.ios-quiz-arena__pico {
+  position:relative;z-index:3;object-fit:cover;display:block;
+  width:min(100%,162px);height:auto;max-height:160px;
+  aspect-ratio:1;pointer-events:none;user-select:none;
+  border-radius:50%;filter:drop-shadow(0 9px 10px #020f2880);
+  -webkit-mask-image:radial-gradient(circle,#000 52%,#000d 68%,transparent 76%);
+  mask-image:radial-gradient(circle,#000 52%,#000d 68%,transparent 76%);
+  animation:ios-arena-float 3.6s ease-in-out infinite;
+}
+.ios-quiz-arena__fighter--rival .ios-quiz-arena__pico {
+  transform:scaleX(-1);
+  animation:ios-arena-float-rival 4.1s ease-in-out -1.6s infinite;
+}
+.ios-quiz-arena__fighter--pending .ios-quiz-arena__pico {opacity:.58;filter:saturate(.55) drop-shadow(0 6px 8px #020f2880);}
+.ios-quiz-arena__aura {
+  position:absolute;z-index:1;top:14px;left:50%;width:118px;height:145px;
+  transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(ellipse,#b0f4ff82 0%,#51bbf64f 36%,transparent 70%);
+  box-shadow:0 0 35px #62beff30;
+  animation:ios-arena-aura 4.8s ease-in-out infinite;
+}
+.ios-quiz-arena__fighter--rival .ios-quiz-arena__aura {
+  background:radial-gradient(ellipse,#f9caff83 0%,#b18afa56 36%,transparent 70%);
+  box-shadow:0 0 35px #b28aff30;
+  animation-delay:-2s;
+}
+.ios-quiz-arena__platform {
+  position:absolute;z-index:0;bottom:54px;width:108%;height:38px;border-radius:50%;
+  background:radial-gradient(ellipse,#96d9ff81 0%,#577ee74f 38%,#7ec5ff26 57%,transparent 73%);
+  transform:perspective(140px) rotateX(55deg);
+}
+.ios-quiz-arena__fighter--rival .ios-quiz-arena__platform {
+  background:radial-gradient(ellipse,#efc7ff8c 0%,#a184ea53 38%,#b8a0ff2a 57%,transparent 73%);
+}
+.ios-quiz-arena__fighter-label {
+  position:relative;z-index:3;display:grid;justify-items:center;gap:3px;
+  text-align:center;width:100%;margin-top:-5px;
+  text-shadow:0 2px 6px #051227d9;
+}
+.ios-quiz-arena__fighter-label small {font-size:8px;letter-spacing:.16em;font-weight:850;color:#adf3ff;}
+.ios-quiz-arena__fighter--rival .ios-quiz-arena__fighter-label small {color:#eccfff;}
+.ios-quiz-arena__fighter-label strong {font-size:12px;font-weight:900;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ios-quiz-arena__versus {
+  align-self:center;justify-self:center;display:grid;place-content:center;
+  position:relative;z-index:3;margin-top:-20px;
+  width:45px;height:45px;border-radius:50%;
+  border:1px solid #d2f5ffab;background:linear-gradient(150deg,#ffffff25,#8abaff20);
+  box-shadow:0 0 22px #b2eaff43, inset 0 0 14px #faffff15;
+}
+.ios-quiz-arena__versus>span:first-child {
+  font-size:18px;line-height:1;color:#fff;font-weight:950;font-style:italic;
+  text-shadow:0 0 10px #9feeffb3;
+}
+.ios-quiz-arena__versus-flash {
+  position:absolute;inset:-7px;border:1px solid #a6efff70;border-radius:50%;
+  animation:ios-arena-ring 3.4s ease-out infinite;
+}
+.ios-quiz-arena__ground {
+  position:absolute;pointer-events:none;z-index:1;left:-12%;right:-12%;
+  height:130px;bottom:24px;
+  border:1px solid #a7d8ff30;border-radius:50%;
+  transform:perspective(300px) rotateX(74deg);
+  background:repeating-radial-gradient(ellipse at center,
+    transparent 0 27px,#b8dfff24 28px 29px,transparent 30px 51px);
+}
+.ios-quiz-arena__status {
+  position:relative;z-index:4;align-self:end;
+  margin:0 12px 12px;padding:9px 12px;text-align:center;
+  border:1px solid #b9d9ff45;background:#0e1e3fba;
+  border-radius:12px;color:#e4f6ff!important;
+  font-size:11px!important;font-weight:750;line-height:1.5!important;
+  letter-spacing:.01em;
+}
+.ios-quiz-arena__sparks {position:absolute;inset:0;z-index:2;pointer-events:none;}
+.ios-quiz-arena__sparks span {
+  position:absolute;left:var(--spark-x);top:var(--spark-y);
+  width:var(--spark-size);height:var(--spark-size);border-radius:50%;
+  background:#d8faff;box-shadow:0 0 6px 1px #a2edff94;
+  animation:ios-arena-spark var(--spark-duration) ease-in-out var(--spark-delay) infinite;
+}
+.ios-quiz-arena__sparks span:nth-child(3n) {background:#f7dcff;box-shadow:0 0 6px 1px #deaaff94;}
+.ios-quiz-arena--creator-win .ios-quiz-arena__fighter:first-child .ios-quiz-arena__aura,
+.ios-quiz-arena--opponent-win .ios-quiz-arena__fighter--rival .ios-quiz-arena__aura {
+  background:radial-gradient(ellipse,#fff5baaf,#f9d86d58 46%,transparent 75%);
+  box-shadow:0 0 30px #ffe38c77;
+}
+.ios-quiz-arena--creator-win .ios-quiz-arena__status,
+.ios-quiz-arena--opponent-win .ios-quiz-arena__status {
+  border-color:#f4df9a94;background:#5a492cad;color:#fff6c9!important;
+}
+@keyframes ios-arena-sky {to {transform:rotate(360deg);}}
+@keyframes ios-arena-spark {
+  0%,100% {opacity:.2;transform:translate3d(0,7px,0) scale(.65);}
+  50% {opacity:1;transform:translate3d(0,-9px,0) scale(1.2);}
+}
+@keyframes ios-arena-float {
+  0%,100% {transform:translate3d(0,2px,0);}
+  50% {transform:translate3d(0,-7px,0);}
+}
+@keyframes ios-arena-float-rival {
+  0%,100% {transform:translate3d(0,2px,0) scaleX(-1);}
+  50% {transform:translate3d(0,-7px,0) scaleX(-1);}
+}
+@keyframes ios-arena-aura {
+  0%,100% {opacity:.68;transform:translateX(-50%) scale(.96);}
+  50% {opacity:1;transform:translateX(-50%) scale(1.08);}
+}
+@keyframes ios-arena-ring {
+  0% {opacity:.85;transform:scale(.78);}
+  75%,100% {opacity:0;transform:scale(1.5);}
+}
+@media(max-width:345px){
+  .ios-quiz-arena {min-height:270px;}
+  .ios-quiz-arena__fighters {min-height:192px;padding:0 7px;}
+  .ios-quiz-arena__pico {max-height:126px;}
+  .ios-quiz-arena__aura {width:96px;height:120px;}
+  .ios-quiz-arena__top {padding:13px 10px 0;}
+  .ios-quiz-arena__eyebrow {font-size:8px;}
+  .ios-quiz-arena__free {font-size:8px;padding:5px 7px;}
+}
+.ios-app[data-reduce-motion="true"] .ios-quiz-arena *,
+.ios-app[data-reduce-motion="true"] .ios-quiz-arena *::before,
+.ios-app[data-reduce-motion="true"] .ios-quiz-arena *::after {animation:none!important;}
+@media(prefers-reduced-motion:reduce){
+  .ios-quiz-arena *, .ios-quiz-arena *::before, .ios-quiz-arena *::after {animation:none!important;}
+}
+
 /* Career Atlas GLB viewer: opt-in, deliberately separate from earned rewards. */
 .ios-3d-entry {
   display:grid;gap:10px;min-width:0;

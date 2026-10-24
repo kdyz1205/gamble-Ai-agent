@@ -114,6 +114,9 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(a).toHaveURL(new RegExp("/app/quiz\\?id="+id));
     await expect(a.getByTestId("quiz-duel-room")).toBeVisible();
     await expect(a.getByTestId("quiz-share-invite")).toBeVisible();
+    await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","open");
+    expect(await a.locator(".ios-quiz-arena__sky").evaluate(el=>
+      getComputedStyle(el).animationName)).toBe("none");
     await expect(a.getByText("Free challenge · 0 credits at stake")).toBeVisible();
     await a.screenshot({path:testInfo.outputPath("creator-invite.png"),fullPage:true});
 
@@ -127,8 +130,10 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await b.getByTestId("quiz-accept-invite").click();
     expect((await accepting).status()).toBe(200);
     await expect(b.locator(".ios-quiz-question")).toHaveCount(3,{timeout:15_000});
+    await expect(b.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","live");
     await a.reload();
     await expect(a.locator(".ios-quiz-question")).toHaveCount(3,{timeout:15_000});
+    await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","live");
     const aView=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     const bView=(await (await friendCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     expect(aView.status).toBe("live");
@@ -158,10 +163,14 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await b.getByTestId("quiz-submit-answers").click();
     expect((await answeredB).status()).toBe(200);
     await expect(b.getByTestId("quiz-final-verdict")).toBeVisible({timeout:15_000});
+    await expect(b.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","completed");
+    await expect(b.getByTestId("ios-quiz-arena")).not.toContainText("Verified victory");
     await expect(b.getByTestId("quiz-final-verdict")).toContainText("3 / 3 correct");
     await a.reload();
     await expect(a.getByTestId("quiz-final-verdict")).toBeVisible({timeout:15_000});
     await expect(a.getByTestId("quiz-final-verdict")).toContainText("You won on correct answers");
+    await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","completed");
+    await expect(a.getByTestId("ios-quiz-arena")).toContainText("Verified victory");
     await a.screenshot({path:testInfo.outputPath("verified-quiz-result.png"),fullPage:true});
 
     const final=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
@@ -209,6 +218,7 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await a.getByTestId("quiz-cancel-invite").click();
     expect((await cancelling).status()).toBe(200);
     await expect(a.getByTestId("quiz-cancelled")).toBeVisible();
+    await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","cancelled");
     const failedJoin=await friendCtx.request.post(
       BASE+"/api/quiz/"+pendingId+"/accept");
     expect(failedJoin.status()).toBe(409);
