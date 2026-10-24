@@ -22,7 +22,9 @@ import {
 export class QuizDuelError extends Error{
   constructor(public readonly statusCode:number,message:string){super(message);}
 }
-const fail=(status:number,message:string):never=>{throw new QuizDuelError(status,message);};
+function fail(status:number,message:string):never{
+  throw new QuizDuelError(status,message);
+}
 export const QUIZ_JOIN_WINDOW_MS=24*60*60*1000;
 export const QUIZ_PLAY_WINDOW_MS=15*60*1000;
 const safeId=(id:unknown)=>{
