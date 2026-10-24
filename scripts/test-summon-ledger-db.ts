@@ -5,7 +5,7 @@ import prisma from "../src/lib/db";
 import {provisionSignupUser} from "../src/lib/auth-provisioning";
 import {COSTS} from "../src/lib/credits";
 import {ensureUniversalPico,accountSummonLedger,starterGrantKey,
-  reconcileVerifiedQuestProfessionXp,ProgressSourceNotFinalError}
+  reconcileVerifiedQuestProfessionXp}
   from "../src/lib/summons/server-ledger";
 
 // Integration test intentionally requires a *local* isolated PostgreSQL.
@@ -29,7 +29,7 @@ async function main(){
   let checks=0;
   const eq=(a:unknown,b:unknown,message:string)=>{assert.deepEqual(a,b,message);checks++};
   const ok=(n:boolean,message:string)=>{assert.ok(n,message);checks++};
-  const rej=async(f:()=>Promise<unknown>,message:string)=>{
+  const rej=async(f:()=>Promise<unknown>,_message:string)=>{
     await assert.rejects(f);checks++;
   };
   try{
