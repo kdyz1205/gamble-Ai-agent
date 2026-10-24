@@ -1,5 +1,6 @@
 import prisma from "./db";
 import { AuditActions } from "./audit-log";
+import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
 import { isEvidenceUrlAllowed, isYouTubeUrl } from "./media/evidence-url";
 
 export class EvidenceSubmissionError extends Error {
@@ -33,6 +34,11 @@ export async function submitChallengeEvidence(
     await tx.$queryRaw`SELECT "id" FROM "Challenge" WHERE "id" = ${challengeId} FOR UPDATE`;
     const challenge = await tx.challenge.findUnique({ where: { id: challengeId }, include: { participants: true } });
     if (!challenge) throw new EvidenceSubmissionError("Challenge not found", 404);
+    // A Quiz's sealed answers are NEVER normal editable text/media proof.
+    // Otherwise the generic evidence route could move a Quiz into Judging
+    // without creating both objective answer receipts.
+    if (challenge.arbiter===QUIZ_RULE_VERSION)
+      throw new EvidenceSubmissionError("Use the dedicated Quiz answer form",409);
     const eligible = challenge.participants.filter((participant) => participant.status === "accepted"
       && (participant.role === "creator" || participant.role === "opponent"));
     if (!eligible.some((participant) => participant.userId === user.userId)) {
