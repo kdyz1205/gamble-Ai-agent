@@ -5,6 +5,7 @@ import { getAuthUser, getAiModel, unauthorized, noCredits, type TierId } from "@
 import { getCredits, TIER_MULTIPLIER } from "@/lib/credits";
 import { getOrCreateJudgeJob, runJudgeJob } from "@/lib/judge-async";
 import { isEvidenceUrlAllowed } from "@/lib/media/evidence-url";
+import {QUIZ_RULE_VERSION} from "@/lib/quiz/quiz-bank";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -44,7 +45,7 @@ export async function POST(
 
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    select: { creatorId: true, status: true, title: true, stake: true, evidenceType: true,
+    select: { creatorId: true, status: true, title: true, stake: true, evidenceType: true,arbiter:true,
       participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
       evidence: { select: { userId: true, type: true, url: true, description: true } } },
   });
@@ -53,6 +54,9 @@ export async function POST(
   if (challenge.creatorId !== user.userId) {
     return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
   }
+  if(challenge.arbiter===QUIZ_RULE_VERSION)
+    return Response.json({error:"Only the sealed Quiz answer-key service can grade this challenge"},
+      {status:409});
   if (challenge.status !== "judging") {
     return Response.json(
       {
