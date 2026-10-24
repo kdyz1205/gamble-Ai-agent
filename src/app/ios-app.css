@@ -605,6 +605,9 @@
   width:40%;height:48%;right:-13%;bottom:-10%;
   border-radius:15% 65% 35% 80%;transform:rotate(42deg);
 }
+.ios-creature-crest--athletics {border-radius:46% 54% 39% 61%;transform:rotate(-8deg);}
+.ios-creature-crest--athletics::before {width:23%;height:78%;top:-39%;left:12%;border-radius:75% 22%;transform:rotate(-22deg);}
+.ios-creature-crest--athletics::after {width:66%;height:22%;right:-37%;bottom:13%;border-radius:85% 25%;transform:rotate(-16deg);}
 .ios-creature-crest--software {border-radius:31% 36% 30% 35%;}
 .ios-creature-crest--software::before {border-radius:14%;width:23%;left:23%;transform:rotate(-40deg);}
 .ios-creature-crest--software::after {border-radius:14%;transform:rotate(10deg);}
