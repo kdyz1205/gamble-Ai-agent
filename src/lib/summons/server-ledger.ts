@@ -138,13 +138,18 @@ export async function reconcileVerifiedQuestProfessionXp(input:{
     const amount=outcome==="win"?100:80;
     const eventKey="quest-xp:"+XP_LEDGER_VERSION+":"+quest.id+":"+
       input.userId+":"+professionId;
-    const event=await tx.professionXpEvent.upsert({
-      where:{eventKey},update:{},
-      create:{ownerId:input.userId,challengeId:quest.id,eventKey,
+    // Prisma upsert with an empty update may use a read-then-insert path,
+    // which races under simultaneous reconciliation and raises P2002. PostgreSQL
+    // INSERT ON CONFLICT DO NOTHING (Prisma createMany/skipDuplicates) is atomic.
+    // Preserve the first immutable receipt and reject divergent replays below.
+    await tx.professionXpEvent.createMany({
+      data:[{ownerId:input.userId,challengeId:quest.id,eventKey,
         professionId,awardType:"verified_quest",amount,
-        ruleVersion:XP_LEDGER_VERSION,sourceReceipt:receipt.id},
+        ruleVersion:XP_LEDGER_VERSION,sourceReceipt:receipt.id}],
+      skipDuplicates:true,
     });
-    if(event.ownerId!==input.userId||event.professionId!==professionId||
+    const event=await tx.professionXpEvent.findUnique({where:{eventKey}});
+    if(!event||event.ownerId!==input.userId||event.professionId!==professionId||
        event.amount!==amount||event.sourceReceipt!==receipt.id)
       throw new ProgressSourceNotFinalError("Prior award conflicts; reconcile manually");
     return {eventId:event.id,professionId,amount,outcome,
