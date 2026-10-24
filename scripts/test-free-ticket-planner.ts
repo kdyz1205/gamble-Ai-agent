@@ -16,13 +16,14 @@ const fail=(fn:()=>unknown,label:string)=>{
   assert.throws(fn,{name:"SummonTicketSourceError"},label);checks++;
 };
 const user="fixture-account",job="software" as const;
-const receipt=(name:string,amount=100)=>({
+type FixtureEvent=Parameters<typeof computeEligibleCareerTickets>[2][number];
+const receipt=(name:string,amount=100):FixtureEvent=>({
   ownerId:user,professionId:job,challengeId:"quest-"+name,
   eventKey:"quest-xp:"+XP_LEDGER_VERSION+":quest-"+name+":"+user+":"+job,
   ruleVersion:XP_LEDGER_VERSION,awardType:"verified_quest",
   amount,sourceReceipt:"final-judgment-"+name,
 });
-const plan=(records:ReturnType<typeof receipt>[])=>computeEligibleCareerTickets(user,job,records);
+const plan=(records:FixtureEvent[])=>computeEligibleCareerTickets(user,job,records);
 eq(plan([]).earnedMilestones,0,"No verified XP has no free tickets");
 eq(plan([receipt("a")]).earnedMilestones,1,"100 verified profession XP earns first milestone");
 eq(plan([receipt("a")]).nextAtXp,250,"Next milestone threshold 250");

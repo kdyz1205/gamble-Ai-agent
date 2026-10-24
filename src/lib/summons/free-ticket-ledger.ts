@@ -144,9 +144,7 @@ export async function reconcileFreeCareerTickets(input:{
   validateCareer(input.ownerId,input.professionId);
   return prisma.$transaction(async tx=>{
     // Static parameterized SQL: shared lock for this user's specific skill.
-    await tx.$queryRawUnsafe(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1, 843217))",
-      input.ownerId+":"+input.professionId);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.ownerId+":"+input.professionId}, 843217))`;
     const events=await tx.professionXpEvent.findMany({
       where:{ownerId:input.ownerId,professionId:input.professionId},
       select:{
@@ -174,7 +172,7 @@ export async function reconcileFreeCareerTickets(input:{
       where:{ownerId:input.ownerId,professionId:input.professionId},
       select:{id:true,grantKey:true,status:true,sourceVersion:true,
         ownerId:true,professionId:true,spentByGrant:true},
-      orderBy:{createdAt:"asc"},
+      orderBy:[{createdAt:"asc"},{grantKey:"asc"}],
     });
     const expected=new Set(plan.grants.map(g=>g.grantKey));
     if(receipts.length!==expected.size||receipts.some(r=>
