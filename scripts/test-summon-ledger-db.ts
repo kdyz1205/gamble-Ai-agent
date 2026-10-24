@@ -63,6 +63,19 @@ async function main(){
     eq(ledger?.tickets,null,"Unimplemented tickets remain unknown");
     eq((await accountSummonLedger(outsider.id))?.starter,null,
       "Other account cannot see somebody else's Pico");
+    const corruptedStarter=await prisma.summonInstance.create({data:{
+      ownerId:outsider.id,grantKey:starterGrantKey(outsider.id),
+      speciesId:"not-pico",originKind:"starter",
+      rarity:"starter",form:"base",status:"owned",
+    }});
+    await rej(()=>ensureUniversalPico(outsider.id),
+      "A conflicting unique starter row is not overwritten or accepted");
+    eq((await prisma.summonInstance.findUniqueOrThrow({
+      where:{id:corruptedStarter.id},
+    })).speciesId,"not-pico","Conflicting starter is unchanged for manual repair");
+    await prisma.summonInstance.delete({where:{id:corruptedStarter.id}});
+    eq((await accountSummonLedger(outsider.id))?.starter,null,
+      "Invalid starter fixture cleanup restores empty account");
     eq((await prisma.user.findUniqueOrThrow({where:{id:user.id}})).credits,19,
       "Pico grants do not change credit balance");
     eq(await prisma.creditTx.count({where:{userId:user.id}}),0,
