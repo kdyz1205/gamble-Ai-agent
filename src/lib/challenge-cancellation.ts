@@ -1,6 +1,7 @@
 import prisma from "./db";
 import { assertChallengeTransition } from "./challenge-state-machine";
 import { ChallengeStatus } from "./enums";
+import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
 
 export type CancellationResult = {
   ok: true; deletedId: string; status: "cancelled"; retained: true; refundedStake: number; reused: boolean;
@@ -18,6 +19,32 @@ export async function cancelChallengeAtomic(challengeId: string, userId: string)
     if (!["draft", "open", "cancelled"].includes(quest.status)
       || quest.participants.some((p) => p.userId !== userId && p.role === "opponent" && ["accepted", "completed"].includes(p.status))) {
       return { ok: false, status: 409, error: "A quest with accepted players or an active outcome cannot be cancelled" };
+    }
+    // Quizzes are an isolated, always-free sub-state machine. Generic Quest
+    // cancellation may release a pending invitation, but it MUST atomically
+    // update both Challenge and QuizDuel; there must never be an open Quiz
+    // pointing to a cancelled Challenge or a stray credit transaction.
+    if (quest.arbiter===QUIZ_RULE_VERSION) {
+      if(quest.stake!==0||quest.escrowTxHash||quest.settleTxHash)
+        return {ok:false,status:409,error:"Free Quiz has unexpected financial state"};
+      const quiz=await tx.quizDuel.findUnique({where:{challengeId}});
+      if(!quiz)return {ok:false,status:409,error:"Quiz requires data reconciliation"};
+      if(quest.status==="cancelled"&&quiz.status==="cancelled")
+        return {ok:true,deletedId:challengeId,status:"cancelled",retained:true,
+          refundedStake:0,reused:true};
+      if(quest.status!=="open"||quiz.status!=="open")
+        return {ok:false,status:409,error:"Quiz has started or already has a final decision"};
+      if(await tx.creditTx.count({where:{challengeId}}))
+        return {ok:false,status:409,error:"Unexpected Quiz credit ledger rows; reconcile manually"};
+      assertChallengeTransition(ChallengeStatus.open,ChallengeStatus.cancelled);
+      await tx.challenge.update({where:{id:challengeId},data:{status:"cancelled"}});
+      await tx.quizDuel.update({where:{challengeId},data:{status:"cancelled"}});
+      await tx.auditLog.create({data:{
+        action:"quiz.cancelled",actorUserId:userId,challengeId,
+        payload:JSON.stringify({stake:0,status:"cancelled",retained:true}),
+      }});
+      return {ok:true,deletedId:challengeId,status:"cancelled",retained:true,
+        refundedStake:0,reused:false};
     }
     const reconciliation = (): CancellationResult => ({ ok: false, status: 409, error: "Stake history requires reconciliation before this quest can be cancelled" });
     if (quest.escrowTxHash || quest.settleTxHash) return reconciliation();

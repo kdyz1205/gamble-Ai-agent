@@ -1,6 +1,9 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 
-type PicoMood = "guide" | "referee" | "celebrate";
+/** The one canonical Pico character across web, iOS and every quest state. */
+export type PicoMood =
+  | "guide" | "listening" | "thinking" | "clarify"
+  | "referee" | "uncertain" | "celebrate" | "error" | "waiting" | "confirm";
 
 interface PicoFamiliarProps {
   className?: string;
@@ -8,46 +11,95 @@ interface PicoFamiliarProps {
   label?: string;
 }
 
-const moodDetails: Record<PicoMood, { blush: string; spark: string; mouth: string }> = {
-  guide: { blush: "#ffb9a5", spark: "#ffd86b", mouth: "M46 62 Q52 67 58 62" },
-  referee: { blush: "#8fe6c1", spark: "#88d7ff", mouth: "M47 64 Q52 61 57 64" },
-  celebrate: { blush: "#ffb978", spark: "#ffd86b", mouth: "M45 61 Q52 70 59 61" },
+const expressions: Record<PicoMood, { blush: string; star: string; eyes: "open" | "smile" | "pensive"; pose: string }> = {
+  guide: { blush: "#ffc5ca", star: "#ffe291", eyes: "open", pose: "guide" },
+  listening: { blush: "#ffc5c9", star: "#b8eff1", eyes: "open", pose: "attentive" },
+  thinking: { blush: "#f5c6cf", star: "#d4caff", eyes: "pensive", pose: "thinking" },
+  clarify: { blush: "#ffced1", star: "#ffe291", eyes: "open", pose: "thinking" },
+  referee: { blush: "#ffd1cf", star: "#b7e7de", eyes: "open", pose: "review" },
+  uncertain: { blush: "#f1c0ca", star: "#d4caff", eyes: "pensive", pose: "thinking" },
+  celebrate: { blush: "#ffc4c8", star: "#ffe291", eyes: "smile", pose: "celebrate" },
+  error: { blush: "#f4c7cf", star: "#e9c3db", eyes: "pensive", pose: "thinking" },
+  waiting: { blush: "#ffced1", star: "#f9df9a", eyes: "smile", pose: "guide" },
+  confirm: { blush: "#ffc6c8", star: "#c4ebbb", eyes: "smile", pose: "celebrate" },
 };
 
-export default function PicoFamiliar({
-  className = "",
-  mood = "guide",
-  label = "Pico, your AI Familiar",
-}: PicoFamiliarProps) {
-  const details = moodDetails[mood];
-
+export default function PicoFamiliar({ className = "", mood = "guide", label }: PicoFamiliarProps) {
+  const id = useId().replace(/:/g, "");
+  const face = expressions[mood];
   return (
     <span
-      aria-label={label}
-      className={`sum-familiar ${className}`}
-      data-mood={mood}
+      className={"sum-familiar " + className}
       role="img"
-      style={{ "--pico-spark": details.spark } as CSSProperties}
+      aria-label={label ?? "Pico, your AI Familiar — " + mood}
+      data-mood={mood}
+      data-pose={face.pose}
+      style={{ "--pico-spark": face.star } as CSSProperties}
     >
-      <svg aria-hidden="true" fill="none" viewBox="0 0 104 104" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22 34C9 22 13 9 30 17L38 31" fill="#8FE6C1" stroke="#153047" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-        <path d="M82 34C95 22 91 9 74 17L66 31" fill="#8FE6C1" stroke="#153047" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-        <path d="M51 21C52 11 59 7 68 10C64 20 59 24 51 21Z" fill="#BFF3C7" stroke="#153047" strokeLinejoin="round" strokeWidth="4" />
-        <path d="M52 21C47 12 38 11 32 16C38 24 45 26 52 21Z" fill="#FFD86B" stroke="#153047" strokeLinejoin="round" strokeWidth="4" />
-        <path d="M18 55C18 33 33 22 52 22C71 22 86 33 86 55C86 75 72 88 52 88C32 88 18 75 18 55Z" fill="#FFF9E8" stroke="#153047" strokeWidth="4" />
-        <path d="M24 52C25 37 36 28 51 27C39 34 34 45 34 59C34 71 39 79 46 85C31 82 23 70 24 52Z" fill="#DFF5FF" />
-        <ellipse cx="37" cy="58" fill={details.blush} opacity=".72" rx="7" ry="4" />
-        <ellipse cx="67" cy="58" fill={details.blush} opacity=".72" rx="7" ry="4" />
-        <path d="M34 49C37 46 41 46 44 49" stroke="#153047" strokeLinecap="round" strokeWidth="4" />
-        <path d="M60 49C63 46 67 46 70 49" stroke="#153047" strokeLinecap="round" strokeWidth="4" />
-        <path d={details.mouth} stroke="#153047" strokeLinecap="round" strokeWidth="3.5" />
-        <path d="M84 24L87 31L94 34L87 37L84 44L81 37L74 34L81 31L84 24Z" fill={details.spark} stroke="#153047" strokeLinejoin="round" strokeWidth="2.5" />
-        {mood === "referee" && (
-          <path d="M41 77H63L59 87H45L41 77Z" fill="#FFB978" stroke="#153047" strokeLinejoin="round" strokeWidth="3" />
-        )}
-        {mood === "celebrate" && (
-          <path d="M42 21L47 13L52 20L58 12L63 21" stroke="#FFB978" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-        )}
+      <svg viewBox="0 0 104 104" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id={id + "fur"} cx="0" cy="0" r="1" gradientTransform="translate(37 30) rotate(56) scale(71 69)" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#fffefa" /><stop offset=".58" stopColor="#fff5eb" /><stop offset="1" stopColor="#e3e5db" />
+          </radialGradient>
+          <linearGradient id={id + "leaf"} x1="10" y1="13" x2="33" y2="49" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#dff7c7"/><stop offset=".52" stopColor="#a3dcb8"/><stop offset="1" stopColor="#6aaa92"/>
+          </linearGradient>
+          <radialGradient id={id + "eye"} cx="0" cy="0" r="1" gradientTransform="translate(37 44) rotate(69) scale(19 16)" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#77666f"/><stop offset=".5" stopColor="#35333c"/><stop offset="1" stopColor="#1c2e3c"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="52" cy="97" rx="30" ry="4.5" fill="#496c65" opacity=".13"/>
+        <g className="pico-ears">
+          <path d="M27 42C5 38-2 20 9 9c12-8 29 12 31 26Z" fill={`url(#${id}leaf)`} stroke="#768d79" strokeWidth="2.5" strokeLinejoin="round"/>
+          <path d="M23 35C11 27 8 15 12 15c8 0 16 12 19 18Z" fill="#f1babe" opacity=".92"/>
+          <path d="M77 42c22-4 29-22 18-33-12-8-29 12-31 26Z" fill={`url(#${id}leaf)`} stroke="#768d79" strokeWidth="2.5" strokeLinejoin="round"/>
+          <path d="M81 35c12-8 15-20 11-20-8 0-16 12-19 18Z" fill="#f1babe" opacity=".92"/>
+          <path d="M50 29C38 21 38 10 40 7c12 2 19 10 15 21Z" fill="#b5deb5" stroke="#7c9f81" strokeWidth="2" />
+          <path d="M57 27c1-14 9-22 18-21-1 14-7 22-18 21Z" fill="#89c7a6" stroke="#6e9f85" strokeWidth="2"/>
+          <path d="M57 24c3-8 8-11 12-13" stroke="#e0f4df" strokeWidth="1.8" strokeLinecap="round"/>
+        </g>
+        <path
+          d="M52 28c17-3 32 6 38 21 4 10 1 20-5 27 2 9-8 17-18 17-5 7-17 8-23 2-12 4-22-2-23-12-9-4-12-18-7-29 5-16 19-27 38-26Z"
+          fill={`url(#${id}fur)`} stroke="#a29587" strokeWidth="2.15" strokeLinejoin="round"
+        />
+        <path d="M26 48C30 36 43 32 53 33" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" opacity=".85"/>
+        <path d="M80 48c5 13 1 24-7 29" stroke="#deded2" strokeWidth="3" strokeLinecap="round" opacity=".4"/>
+        <ellipse cx="27" cy="64" rx="10" ry="6" fill={face.blush} opacity=".8"/>
+        <ellipse cx="77" cy="64" rx="10" ry="6" fill={face.blush} opacity=".8"/>
+        <g className="pico-eyes">
+          {face.eyes === "smile" ? <>
+            <path d="M30 52q8-9 16 0M58 52q8-9 16 0" stroke="#36424a" strokeWidth="3.6" strokeLinecap="round"/>
+          </> : <>
+            <ellipse cx="39" cy="50.5" rx="7" ry={face.eyes === "pensive" ? 7.5 : 9} fill={`url(#${id}eye)`}/>
+            <ellipse cx="65" cy="50.5" rx="7" ry={face.eyes === "pensive" ? 7.5 : 9} fill={`url(#${id}eye)`}/>
+            <ellipse cx="36.9" cy="46.5" rx="2.5" ry="3.15" fill="white"/>
+            <ellipse cx="62.9" cy="46.5" rx="2.5" ry="3.15" fill="white"/>
+            <circle cx="41.6" cy="54.2" r="1.15" fill="#fff" opacity=".85"/>
+            <circle cx="67.6" cy="54.2" r="1.15" fill="#fff" opacity=".85"/>
+          </>}
+        </g>
+        <path d="M49 63q3-3 6 0q-3 3-6 0Z" fill="#b87c77"/>
+        {mood === "celebrate" || mood === "confirm"
+          ? <path d="M46 68q6 12 13 0" stroke="#ad7671" strokeWidth="2.2" strokeLinecap="round"/>
+          : <path d="M47 67q5 5 10 0" stroke="#ad7671" strokeWidth="2.2" strokeLinecap="round"/>}
+        <g className="pico-paws">
+          <ellipse cx="34" cy="85" rx="10" ry="6.7" fill="#fff7ee" stroke="#ccbaac" strokeWidth="1.6" transform="rotate(17 34 85)"/>
+          <ellipse cx="70" cy="85" rx="10" ry="6.7" fill="#fff7ee" stroke="#ccbaac" strokeWidth="1.6" transform="rotate(-17 70 85)"/>
+          <ellipse cx="34" cy="86" rx="3" ry="1.6" fill="#f3c9c6"/>
+          <ellipse cx="70" cy="86" rx="3" ry="1.6" fill="#f3c9c6"/>
+        </g>
+        <g className="pico-star">
+          <circle cx="56" cy="27" r="7.5" fill="#fff9ea" stroke="#e9c69f" strokeWidth="1.3"/>
+          <circle cx="56" cy="20" r="4.2" fill="#ffd0d4"/>
+          <circle cx="62.6" cy="25.1" r="4.2" fill="#fbc2cb"/>
+          <circle cx="60.1" cy="31.1" r="4.2" fill="#ffe2a8"/>
+          <circle cx="52" cy="31.1" r="4.2" fill="#ffcfdd"/>
+          <circle cx="49.4" cy="25.1" r="4.2" fill="#f6c3ca"/>
+          <circle cx="56" cy="26.2" r="3" fill="#f6ce73"/>
+          <path d="m81 18 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" fill={face.star} stroke="#c6a976" strokeWidth="1.1"/>
+        </g>
+        {mood === "referee" && <path d="M46 78h13l-2 5h-9Z" fill="#b8d6ca" stroke="#799e8f" strokeWidth="1.5"/>}
+        {(mood === "thinking" || mood === "clarify" || mood === "uncertain") && <circle cx="84" cy="37" r="2.3" fill="#d0bde9"/>}
       </svg>
     </span>
   );

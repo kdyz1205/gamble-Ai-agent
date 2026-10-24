@@ -11,6 +11,7 @@ import { currentAiCallCount, withAiContext } from "./ai-governance";
 import { withJudgmentExecutionLock } from "./judgment-execution-lock";
 import { isOnChainEnabled } from "./contracts";
 import { reconcileJudgmentFees, refundJudgmentFee, reserveJudgmentFee } from "./judgment-fees";
+import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
 
 export type JudgmentExecutionSuccess = {
   ok: true;
@@ -61,9 +62,13 @@ export async function executeChallengeJudgment(
   tierId: TierId,
   options?: ExecuteJudgmentOptions,
 ): Promise<JudgmentExecutionResult> {
-  if (!await prisma.challenge.findUnique({ where: { id: challengeId }, select: { id: true } })) {
-    return { ok: false, error: "Challenge not found", status: 404 };
-  }
+  const state = await prisma.challenge.findUnique({
+    where:{id:challengeId},select:{id:true,arbiter:true},
+  });
+  if (!state)return {ok:false,error:"Challenge not found",status:404};
+  // Never charge an AI provider or override a sealed deterministic Quiz receipt.
+  if (state.arbiter===QUIZ_RULE_VERSION)
+    return {ok:false,error:"This Quiz is graded only by its fixed answer key",status:409};
   const result = await withJudgmentExecutionLock(challengeId, (attemptId) => executeClaimedJudgment(challengeId, tierId, attemptId, options));
   return result ?? { ok: false, error: "Judgment is already processing", status: 409 };
 }

@@ -47,7 +47,7 @@ function newRequestId(prefix: string) {
   return `${prefix}_${random}`;
 }
 
-export default function PactComposer() {
+export default function PactComposer({ initialPrompt = "" }: { initialPrompt?: string } = {}) {
   const { data: session, status: sessionStatus } = useSession();
   const restoredAuthRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -58,7 +58,7 @@ export default function PactComposer() {
   const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt);
   const [stake, setStake] = useState("0");
   const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
   const [proofWindow, setProofWindow] = useState<string>("24 hours");
