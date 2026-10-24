@@ -25,13 +25,18 @@ export async function ensureUniversalPico(userId:string,tx?:Prisma.TransactionCl
     throw new Error("Summon inventory persistence is not enabled");
   const key=starterGrantKey(userId);
   const db=tx??prisma;
-  const item=await db.summonInstance.upsert({
-    where:{grantKey:key},update:{},
-    create:{ownerId:userId,speciesId:STARTER.speciesId,originKind:"starter",
-      grantKey:key,rarity:"starter",form:"base",status:"owned"},
+  // Empty-update Prisma upsert may race under concurrent requests and throw
+  // P2002 even though grantKey is unique. The database must arbitrate the
+  // insert; read back and validate immutable starter identity in every retry.
+  await db.summonInstance.createMany({
+    data:[{ownerId:userId,speciesId:STARTER.speciesId,originKind:"starter",
+      grantKey:key,rarity:"starter",form:"base",status:"owned"}],
+    skipDuplicates:true,
   });
-  if(item.ownerId!==userId||item.originKind!=="starter"||
-     item.speciesId!==STARTER.speciesId||item.status!=="owned")
+  const item=await db.summonInstance.findUnique({where:{grantKey:key}});
+  if(!item||item.ownerId!==userId||item.originKind!=="starter"||
+     item.speciesId!==STARTER.speciesId||item.rarity!=="starter"||
+     item.form!=="base"||item.status!=="owned")
     throw new Error("Starter record conflicts with universal Pico rule");
   return item;
 }
