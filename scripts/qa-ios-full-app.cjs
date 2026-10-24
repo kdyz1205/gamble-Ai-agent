@@ -187,6 +187,10 @@ for(const width of widths){
     await test("Voice Quiz entry and anonymous rejection are genuine",async()=>{
       await page.goto(base+"/app/quiz",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+      // NextAuth resolves asynchronously after React hydration. Wait for
+      // the actual guest-only auth branch instead of reading its first frame.
+      await page.getByRole("heading",{name:"Sign in to play a real Quiz"})
+        .waitFor({state:"visible",timeout:20000});
       const body=await page.locator("main").innerText();
       assert(body.includes("Challenge a friend to a Quiz"),
         "The dedicated Quiz page must really exist");
