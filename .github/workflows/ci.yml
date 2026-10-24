@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/summoner_verification?schema=public
       NEXTAUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
       NEXTAUTH_URL: http://localhost:3000
+      VERIFIED_QUIZ_ENABLED: "true" # CI-only isolated migrated PostgreSQL, never production
 
     steps:
       - uses: actions/checkout@v4
