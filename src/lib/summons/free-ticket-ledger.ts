@@ -6,6 +6,7 @@
 import prisma from "@/lib/db";
 import {PROFESSIONS,previewTicketMilestones,type ProfessionId} from "./profession-system";
 import {XP_LEDGER_VERSION,summonPersistenceEnabled} from "./server-ledger";
+import {assertFreeTicketSummary} from "./ticket-read-contract";
 
 export const TICKET_GRANT_RULE_VERSION="free-profession-milestones-v1";
 export const MAX_TICKET_SOURCE_EVENTS=2000;
@@ -192,4 +193,88 @@ export async function reconcileFreeCareerTickets(input:{
       coverage:plan.coverage,source:"audited-free-milestone-receipts" as const,
     };
   },{maxWait:20_000,timeout:30_000});
+}
+
+
+/**
+ * Read-only, authenticated account projection. Never mints, repairs, spends,
+ * or replays a ticket, even when an audited XP milestone is awaiting issuance.
+ * Every displayed receipt is tied back to CURRENT final Quest evidence.
+ */
+export async function readFreeCareerTicketLedger(ownerId:string){
+  if(!summonTicketsEnabled())return null;
+  if(typeof ownerId!=="string"||!ownerId.trim()||ownerId.length>256)
+    throw new SummonTicketSourceError("Invalid authenticated account");
+  return prisma.$transaction(async tx=>{
+    const events=await tx.professionXpEvent.findMany({
+      where:{ownerId},
+      select:{
+        ownerId:true,professionId:true,awardType:true,eventKey:true,
+        challengeId:true,sourceReceipt:true,ruleVersion:true,amount:true,
+        challenge:{select:{
+          creatorId:true,status:true,type:true,
+          participants:{select:{userId:true,role:true,status:true}},
+          evidence:{select:{userId:true}},
+          judgments:{where:{status:"completed"},orderBy:{createdAt:"desc"},
+            select:{id:true,winnerId:true}},
+          verdictResponses:{select:{userId:true,decision:true}},
+          reviewCase:{select:{status:true,resolution:true,
+            resolvedWinnerId:true,finalJudgmentId:true}},
+        }},
+      },
+      orderBy:{createdAt:"asc"},
+      take:MAX_TICKET_SOURCE_EVENTS+1,
+    });
+    const receipts=await tx.summonTicket.findMany({
+      where:{ownerId},
+      select:{
+        ownerId:true,professionId:true,grantKey:true,status:true,
+        sourceVersion:true,spentByGrant:true,spentAt:true,
+      },
+      orderBy:{createdAt:"asc"},
+      take:PROFESSIONS.length*MAX_TICKETS_PER_CAREER+1,
+    });
+    if(events.length>MAX_TICKET_SOURCE_EVENTS||
+       receipts.length>PROFESSIONS.length*MAX_TICKETS_PER_CAREER)
+      throw new SummonTicketSourceError("Ticket source coverage is incomplete");
+    const names=[...new Set([...events.map(e=>e.professionId),
+      ...receipts.map(r=>r.professionId)])].sort();
+    if(names.length>PROFESSIONS.length)
+      throw new SummonTicketSourceError("Unrecognized career ticket history");
+    const byProfession=names.map(name=>{
+      const professionId=name as ProfessionId;
+      const source=events.filter(e=>e.professionId===name);
+      const plan=computeEligibleCareerTickets(ownerId,professionId,source);
+      for(const event of source)assertCurrentQuestReceipt(event);
+      const actual=receipts.filter(r=>r.professionId===name);
+      if(actual.length>plan.grants.length)
+        throw new SummonTicketSourceError("More tickets exist than audited milestones");
+      // Partial issuance may be pending. A minted higher ordinal without all
+      // earlier ordinals is an inconsistent ledger, never an extra reward.
+      const expected=new Set(plan.grants.slice(0,actual.length).map(g=>g.grantKey));
+      if(actual.some(r=>r.ownerId!==ownerId||
+         r.sourceVersion!==TICKET_GRANT_RULE_VERSION||
+         !expected.has(r.grantKey)||
+         !["available","spent"].includes(r.status)||
+         (r.status==="spent"&&(!r.spentByGrant||!r.spentAt))||
+         (r.status==="available"&&(r.spentByGrant!==null||r.spentAt!==null))))
+        throw new SummonTicketSourceError("Free ticket receipt requires reconciliation");
+      return {
+        professionId,verifiedXp:plan.verifiedXp,
+        eligibleMilestones:plan.earnedMilestones,
+        issued:actual.length,
+        available:actual.filter(r=>r.status==="available").length,
+        spent:actual.filter(r=>r.status==="spent").length,
+        awaitingIssuance:plan.earnedMilestones-actual.length,
+      };
+    });
+    const available=byProfession.reduce((n,p)=>n+p.available,0);
+    const spent=byProfession.reduce((n,p)=>n+p.spent,0);
+    const awaitingIssuance=byProfession.reduce((n,p)=>n+p.awaitingIssuance,0);
+    return assertFreeTicketSummary({
+      source:"audited-free-profession-tickets-v1",
+      coverage:"recorded-verification-events-only",
+      available,spent,issued:available+spent,awaitingIssuance,byProfession,
+    });
+  },{isolationLevel:"RepeatableRead",maxWait:15_000,timeout:20_000});
 }

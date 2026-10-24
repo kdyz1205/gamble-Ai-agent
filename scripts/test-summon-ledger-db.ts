@@ -7,7 +7,8 @@ import {COSTS} from "../src/lib/credits";
 import {ensureUniversalPico,accountSummonLedger,starterGrantKey,
   reconcileVerifiedQuestProfessionXp,XP_LEDGER_VERSION}
   from "../src/lib/summons/server-ledger";
-import {reconcileFreeCareerTickets,ticketGrantKey,TICKET_GRANT_RULE_VERSION}
+import {reconcileFreeCareerTickets,ticketGrantKey,TICKET_GRANT_RULE_VERSION,
+  readFreeCareerTicketLedger}
   from "../src/lib/summons/free-ticket-ledger";
 
 // Integration test intentionally requires a *local* isolated PostgreSQL.
@@ -179,6 +180,11 @@ async function main(){
     eq((await accountSummonLedger(outsider.id))?.xp,null,
       "No receipt is UNKNOWN, not zero XP");
     process.env.SUMMON_TICKETS_ENABLED="true";
+    const preIssue=await readFreeCareerTicketLedger(user.id);
+    eq([preIssue?.issued,preIssue?.available,preIssue?.awaitingIssuance],[0,0,1],
+      "Ticket read sees an earned milestone without creating a receipt");
+    eq(await prisma.summonTicket.count({where:{ownerId:user.id}}),0,
+      "Ticket read must never mint a reward");
     const freeFirst=await Promise.all(Array.from({length:10},
       ()=>reconcileFreeCareerTickets({ownerId:user.id,professionId:"software"})));
     eq(new Set(freeFirst.map(x=>x.grantIds[0])).size,1,
@@ -186,6 +192,11 @@ async function main(){
     eq(freeFirst[0].earnedMilestones,1,"100 win XP yields one career ticket");
     eq(freeFirst[0].verifiedXp,100,"Ticket XP is sourced from win event only");
     eq(freeFirst[0].available,1,"First ticket available only once");
+    const firstRead=await readFreeCareerTicketLedger(user.id);
+    eq([firstRead?.available,firstRead?.spent,firstRead?.awaitingIssuance],[1,0,0],
+      "Only one actual issued ticket shown");
+    eq((await readFreeCareerTicketLedger(friend.id))?.available,0,
+      "No opponent ticket data leak");
     const firstTicket=await prisma.summonTicket.findFirstOrThrow({
       where:{ownerId:user.id,professionId:"software"},
     });
@@ -233,6 +244,9 @@ async function main(){
     });
     eq([spent.available,spent.spent],[1,1],
       "Previously spent ticket is not restored by reconciliation");
+    const spentRead=await readFreeCareerTicketLedger(user.id);
+    eq([spentRead?.issued,spentRead?.available,spentRead?.spent],[2,1,1],
+      "Readback preserves spent receipts");
     eq(await prisma.summonTicket.count({where:{
       ownerId:user.id,professionId:"software",
     }}),2,"Spent ticket is not duplicated or reminted");
@@ -256,6 +270,8 @@ async function main(){
     await ticketRej(()=>reconcileFreeCareerTickets({
       ownerId:user.id,professionId:"software",
     }),"Forged final-receipt XP cannot mint free tickets");
+    await ticketRej(()=>readFreeCareerTicketLedger(user.id),
+      "Forged XP cannot be displayed as a ticket balance");
     await prisma.professionXpEvent.delete({where:{eventKey:forgedKey}});
     const correctionKey="correction-fixture:"+id;
     await prisma.professionXpEvent.create({data:{
@@ -359,6 +375,8 @@ async function main(){
       professionId:"software"}),"Persistence flag OFF rejects ticket issuance");
     process.env.SUMMON_PERSISTENCE_ENABLED="true";
     process.env.SUMMON_TICKETS_ENABLED="false";
+    eq(await readFreeCareerTicketLedger(user.id),null,
+      "Flag-off ticket balance is UNKNOWN, not fabricated zero");
     await ticketRej(()=>reconcileFreeCareerTickets({ownerId:user.id,
       professionId:"software"}),"Ticket flag OFF independently rejects issuance");
     process.env.SUMMON_PERSISTENCE_ENABLED="false";
