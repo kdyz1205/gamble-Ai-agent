@@ -7,6 +7,7 @@ import {useOpenQuests,useOwnQuests,usePublicActivity,useStarterPico} from "./IOS
 import {deriveQuestMilestoneRank} from "@/lib/ios-quest-rank";
 import IOSLoadingCards from "./IOSLoadingCards";
 import ProfessionSummonStudio from "./ProfessionSummonStudio";
+import {PROFESSIONS} from "@/lib/summons/profession-system";
 
 const categories=[
   { id:"all", label:"All" },{id:"move",label:"Move"},{id:"create",label:"Create"},{id:"grow",label:"Grow"},
@@ -89,6 +90,7 @@ export function PicosScreen() {
   const {quests,loading,error,signedIn}=useOwnQuests();
   const pico=useStarterPico();
   const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
+  const recordedXp=pico.progression?.verifiedProfessionXp;
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
     <section className="ios-pico-hero">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
@@ -124,6 +126,24 @@ export function PicosScreen() {
         <p>{rank.nextThreshold===null?"Current top milestone reached.":(rank.nextThreshold-rank.settled)+" settled Quests until the next level."}</p>
       </>:<p role="status">Checking your Quest Level…</p>}
       <small>This is a read-only settled-Quest milestone, not an XP wallet, credit reward or Familiar Bond level.</small>
+    </section>
+
+    <section className="ios-milestone" aria-label="Recorded Profession XP">
+      <span className="ios-overline">SERVER RECEIPTS · NOT A SIMULATION</span>
+      <h2>Your recorded profession XP</h2>
+      {!pico.signedIn?<p>Sign in to check server-verified Quest XP for your account.</p>:
+        pico.loading?<p role="status">Checking verified XP receipts…</p>:
+        pico.error?<p role="alert">Recorded XP is unavailable while the account service is offline.</p>:
+        !pico.progression?.available?<p>Profession XP records are not active on this server yet; your total is unknown.</p>:
+        recordedXp?<div>
+          <p><strong>{recordedXp.totalRecordedXp} recorded XP</strong> across {recordedXp.receiptCount} verified Quest receipt{recordedXp.receiptCount===1?"":"s"}.</p>
+          {recordedXp.byProfession.map(entry=><p key={entry.professionId}>
+            <strong>{PROFESSIONS.find(prof=>prof.id===entry.professionId)?.name??entry.professionId}</strong>
+            {" · "+entry.recordedXp+" XP · "+entry.receiptCount+" receipt"+(entry.receiptCount===1?"":"s")}
+          </p>)}
+        </div>:
+        <p>No XP receipts have been recorded for this account under the current rule. Historical progress is unknown.</p>}
+      <small>These are server-recorded Quest XP receipts since the ledger rule began, not lifetime XP. Older Quests are not backfilled. No free ticket, random creature or fusion is awarded here.</small>
     </section>
 
     <ProfessionSummonStudio/>
