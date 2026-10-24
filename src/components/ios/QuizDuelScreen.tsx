@@ -16,7 +16,7 @@ const TOPICS=[
 ] as const;
 type Topic=typeof TOPICS[number]["id"];
 type PublicQuestion={id:string;prompt:string;choices:string[]};
-type Score={userId:string;score:number|null;answerHash:string|null};
+type Score={userId:string;score:number|null;answerHash:string|null;answers:number[]|null};
 type QuizResult={
   version:string;bankVersion:string;questionIds:string[];
   correctAnswers:Array<{id:string;answer:number}>;
@@ -37,7 +37,8 @@ type QuizView={
   creatorUsername:string;opponentUsername:string|null;
   isCreator:boolean;
   playerUserId:string;accepted:boolean;canJoin:boolean;
-  expiresAt:string|null;answerCommitment:string;questions:PublicQuestion[]|null;
+  expiresAt:string|null;answerCommitment:string;resolutionHash:string|null;
+  questions:PublicQuestion[]|null;
   ownSubmitted:boolean;opponentSubmitted:boolean;result:QuizResult|null;
   receiptVersion:string;
 };
@@ -325,9 +326,21 @@ export default function QuizDuelScreen({id}:{id?:string}){
                   return <p key={a.id}>Q{i+1}: {q?.choices[a.answer]??"Server answer"}
                   </p>;
                 })}
+                <details className="ios-quiz-receipt" data-testid="quiz-verified-answer-receipt">
+                  <summary>Recalculate the result · sealed answer receipts</summary>
+                  {result.scores.map(s=><div key={s.userId}>
+                    <strong>{s.userId===quiz.playerUserId?"Your choices":"Other player's choices"}</strong>
+                    <p>{s.answers?s.answers.map((answer,i)=>
+                      "Q"+(i+1)+": option "+(answer+1)).join(" · "):"No submitted answers"}</p>
+                    <code>{s.answerHash??"No answer hash"}</code>
+                  </div>)}
+                  <p>Final Quiz resolution SHA-256:</p>
+                  <code>{quiz.resolutionHash??"Not available"}</code>
+                </details>
                 <small>No credits were transferred. Receipt version: {result.version}.
-                  Final decision can be independently recalculated from the
-                  question bank and sealed answer scores.</small>
+                  Recompute each score using these answer indices and the
+                  revealed correct answers. The final hash identifies the
+                  exact server-recorded outcome.</small>
               </div>
               <IosAction href="/app/quiz" secondary>Start another free Quiz</IosAction>
             </>}
