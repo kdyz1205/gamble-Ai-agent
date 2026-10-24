@@ -23,7 +23,9 @@ export function proofInputError(policy: string, input: { fileType?: string; url?
 
 /** Use capabilities, including MP4-only recorders; undefined lets the browser choose its default. */
 export function recordingMimeType(isSupported: (type: string) => boolean): string | undefined {
-  return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4;codecs=avc1", "video/mp4"].find(isSupported);
+  // Prefer hardware-friendly H.264/MP4 when supported, especially on iOS.
+  // VP8 and VP9 are compatibility fallbacks, not mobile defaults.
+  return ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp8", "video/webm", "video/webm;codecs=vp9"].find(isSupported);
 }
 
 export function recordingExtension(mime: string): "mp4" | "webm" {

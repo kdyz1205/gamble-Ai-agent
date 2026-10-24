@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 
 export const AuditActions = {
   CHALLENGE_CREATED: "challenge.created",
+  JUDGEABILITY_ASSESSED: "challenge.judgeability_assessed",
   CHALLENGE_STATUS: "challenge.status_changed",
   CHALLENGE_ACCEPTED: "challenge.accepted",
   EVIDENCE_SUBMITTED: "evidence.submitted",

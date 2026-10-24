@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
 import { createChallengeForUser, ChallengeCreationInputError, ChallengeCreationCreditsError } from "@/lib/challenge-creation";
+import { assessJudgeability } from "@/lib/judgeability";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   catch { return Response.json({ error: "Invalid JSON body" }, { status: 400 }); }
   try {
     const challenge = await createChallengeForUser(user, body);
-    return Response.json({ challenge }, { status: 201 });
+    return Response.json({ challenge, judgeability: assessJudgeability(challenge) }, { status: 201 });
   } catch (error) {
     if (error instanceof ChallengeCreationInputError) return Response.json({ error: error.message }, { status: 400 });
     if (error instanceof ChallengeCreationCreditsError) return noCredits(error.needed, error.balance);

@@ -2,6 +2,7 @@ import { parseProofDeadline } from "./proof-deadline";
 import prisma from "./db";
 import { AuditActions } from "./audit-log";
 import { QUIZ_RULE_VERSION } from "./quiz/quiz-bank";
+import { assessJudgeability } from "./judgeability";
 
 export class ChallengeCreationInputError extends Error {}
 export class ChallengeCreationCreditsError extends Error {
@@ -56,6 +57,12 @@ function creationInput(raw: unknown) {
 /** Escrow, linked ledger, challenge, participant, audit and activity form one commit. */
 export async function createChallengeForUser(user: { userId: string; username: string }, raw: unknown) {
   const input = creationInput(raw);
+  let preflight: ReturnType<typeof assessJudgeability>;
+  try { preflight = assessJudgeability(input); }
+  catch (error) {
+    if (error instanceof TypeError) throw new ChallengeCreationInputError(error.message);
+    throw error;
+  }
   return prisma.$transaction(async (tx) => {
     if (input.stake > 0) {
       const debited = await tx.user.updateMany({ where: { id: user.userId, credits: { gte: input.stake } }, data: { credits: { decrement: input.stake } } });
@@ -80,6 +87,12 @@ export async function createChallengeForUser(user: { userId: string; username: s
     await tx.auditLog.create({ data: {
       action: AuditActions.CHALLENGE_CREATED, actorUserId: user.userId, challengeId: challenge.id,
       payload: JSON.stringify({ stake: input.stake, stakeToken: input.stakeToken, status: "open" }),
+    } });
+    // Freeze the preflight receipt atomically with the Quest. This is an
+    // advisory proof-review classification, never an authorization to settle.
+    await tx.auditLog.create({ data: {
+      action: AuditActions.JUDGEABILITY_ASSESSED, actorUserId: user.userId, challengeId: challenge.id,
+      payload: JSON.stringify(preflight),
     } });
     await tx.activityEvent.create({ data: {
       type: "challenge_created", userId: user.userId, challengeId: challenge.id,
