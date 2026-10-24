@@ -1,5 +1,6 @@
 import prisma from "./db";
 import { COSTS } from "./credits";
+import {ensureUniversalPico,summonPersistenceEnabled} from "./summons/server-ledger";
 
 export class SignupConflictError extends Error {
   constructor(public readonly field: "email" | "username") {
@@ -95,6 +96,10 @@ export async function provisionSignupUser(input: SignupInput) {
         credits: COSTS.SIGNUP_BONUS, isOnline: true,
       } });
       await linkGoogle(user.id);
+      // Release-gated atomic starter grant: user, welcome receipt and Pico
+      // either commit together or all roll back. Existing users can use the
+      // idempotent authenticated claim endpoint after rollout.
+      if(summonPersistenceEnabled()) await ensureUniversalPico(user.id,tx);
       await tx.creditTx.create({ data: {
         userId: user.id, type: "bonus", amount: COSTS.SIGNUP_BONUS,
         balanceAfter: COSTS.SIGNUP_BONUS, description: "Welcome bonus",

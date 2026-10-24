@@ -98,7 +98,9 @@ export function PicosScreen() {
         {!pico.signedIn?"Sign in to activate your included starter Pico.":
         pico.loading?"Checking your Pico starter rule…":
         pico.error?"Starter status unavailable. Try again after reconnecting.":
-        pico.starter?"Pico is included for your account · permanent inventory coming later.":
+        pico.starter?.persistedInventory?
+          "Pico is in your permanent Summon collection.":
+        pico.starter?"Pico is included for your account · persistent collection activates after the server rollout.":
         "Pico starter status is not yet confirmed."}
       </p>
     </section>
