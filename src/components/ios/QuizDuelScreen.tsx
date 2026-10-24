@@ -24,6 +24,12 @@ type QuizResult={
   scores:Score[];winnerId:string|null;outcome:"win"|"tie"|"void_timeout";
   creditsTransferred:0;escrowCredits:0;expiresAt:string|null;
 };
+type AiCapabilities={
+  text:{providerId:string;transport:string;configured:boolean};
+  speech:{providerId:string;transport:string;configured:boolean};
+  quizGrading:{providerId:string;model:string;externalAiCalls:number};
+  subscriptionSharing:{availableInThisApp:boolean};
+};
 type QuizView={
   id:string;title:string;topic:string;bankVersion:string;
   status:"open"|"live"|"completed";
@@ -63,6 +69,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
   const [description,setDescription]=useState("");
   const [opponent,setOpponent]=useState("");
   const [voiceNotice,setVoiceNotice]=useState("");
+  const [runtime,setRuntime]=useState<AiCapabilities|null>(null);
   const [quiz,setQuiz]=useState<QuizView|null>(null);
   const [choices,setChoices]=useState<number[]>([-1,-1,-1]);
   const [now,setNow]=useState(0);
@@ -83,6 +90,14 @@ export default function QuizDuelScreen({id}:{id?:string}){
     const tick=setInterval(()=>setNow(Date.now()),1000);
     return()=>clearInterval(tick);
   },[]);
+  useEffect(()=>{
+    if(status!=="authenticated")return;
+    let active=true;
+    void fetchJson<{capabilities:AiCapabilities}>("/api/ai/runtime")
+      .then(result=>{if(active)setRuntime(result.capabilities);})
+      .catch(()=>{if(active)setRuntime(null);});
+    return()=>{active=false;};
+  },[status]);
   useEffect(()=>{
     if(!id||status!=="authenticated")return;
     let active=true;
@@ -301,6 +316,23 @@ export default function QuizDuelScreen({id}:{id?:string}){
           </div>:<p>Quiz unavailable.</p>}
       </section>}
     {error&&<p className="ios-message ios-message--error" role="alert">{error}</p>}
+    {status==="authenticated"&&<section className="ios-quiz-runtime"
+      aria-label="AI provider routing">
+      <strong>How this Quiz uses AI</strong>
+      <p>Speech: {runtime?
+        runtime.speech.configured
+          ?"Server transcription via "+runtime.speech.providerId+" API"
+          :"Browser speech preview, manual confirmation required"
+        :"Checking configured voice provider…"}</p>
+      <p>Chat / other Quests: {runtime?
+        runtime.text.configured
+          ?runtime.text.providerId+" server API"
+          :"Local rules fallback; an AI provider is not currently configured"
+        :"Checking configured text provider…"}</p>
+      <p>Quiz winner: fixed server answer key; no GPT grading call.</p>
+      <small>ChatGPT personal subscriptions are not shared with participants.
+        Provider API credentials remain on the server.</small>
+    </section>}
     <p className="ios-footer-note">Preview release: objective free challenges only.
       Paid wagers require separate security, anti-cheat, legal and settlement reviews.
       Your personal ChatGPT subscription is never shared with other players.</p>
