@@ -71,7 +71,7 @@ const tabs = [
   { href: "/app/today", label: "Home", icon: "home" },
   { href: "/app/discover", label: "Discover", icon: "discover" },
   { href: "/app/create", label: "Create", icon: "create" },
-  { href: "/app/picos", label: "Picos", icon: "pico" },
+  { href: "/app/picos", label: "Familiars", icon: "pico" },
   { href: "/app/profile", label: "Profile", icon: "user" },
 ] as const;
 
