@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assessEvidenceAdmission, type EvidenceAdmissionInput } from "../src/lib/media/evidence-admission.ts";
+import { assessEvidenceAdmission, type EvidenceAdmissionInput } from "../src/lib/media/evidence-admission";
 
 const valid: EvidenceAdmissionInput = {
   participantAuthorized: true,
