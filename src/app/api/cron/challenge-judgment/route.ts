@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { ChallengeStatus } from "@/lib/enums";
+import { QUIZ_RULE_VERSION } from "@/lib/quiz/quiz-bank";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
@@ -43,6 +44,9 @@ async function runCron() {
     where: {
       status: { in: [ChallengeStatus.live] },
       deadline: { not: null, lte: now },
+      // QuizDuels are finalized exclusively by their own sealed-answer
+      // resolver. Do not send them through AI judgment or credit fees.
+      OR: [{ arbiter: null }, { arbiter: { not: QUIZ_RULE_VERSION } }],
     },
     data: { status: ChallengeStatus.judging },
   });
@@ -62,6 +66,7 @@ async function runCron() {
     where: {
       status: ChallengeStatus.judging,
       judgments: { none: { status: "completed" } },
+      OR: [{ arbiter: null }, { arbiter: { not: QUIZ_RULE_VERSION } }],
     },
     select: { id: true, title: true },
     take: 20,
