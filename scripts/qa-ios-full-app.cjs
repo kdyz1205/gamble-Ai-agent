@@ -274,6 +274,8 @@ for(const width of widths){
       await page.getByTestId("creature-family-art").click();
       assert.equal(await page.getByTestId("toggle-creature-3d").count(),0,
         "Other, unmodeled careers cannot claim 3D availability");
+      // Restore Software before the original Carebyte/Prism Echo fusion checks.
+      await page.getByTestId("creature-family-software").click();
 
       await select("Summon Preview");
       assert.equal(await page.locator(".ios-summon-odds > div").count(),5);
