@@ -71,12 +71,22 @@ async function main(){
     "One transaction created the Quiz, all other initial requests reused it");
   const repeated=await Promise.all(Array.from({length:5},()=>createQuizDuel(alice.id,{
     topic:"technology",requestKey,opponentUsername:bob.username,
+    description:"Voice: challenge my friend to a coding knowledge quiz",
   })));
   ok(repeated.every(v=>v.challengeId===first.challengeId&&v.reused),
     "Concurrent same-key retries never mint a second challenge");
   await rej(()=>createQuizDuel(alice.id,{
     topic:"sports",requestKey,opponentUsername:bob.username,
+    description:"Voice: challenge my friend to a coding knowledge quiz",
   }),409,"Request key cannot be reused for a different topic");
+  await rej(()=>createQuizDuel(alice.id,{
+    topic:"technology",requestKey,opponentUsername:outsider.username,
+    description:"Voice: challenge my friend to a coding knowledge quiz",
+  }),409,"Existing request key cannot silently redirect a friend invitation");
+  await rej(()=>createQuizDuel(alice.id,{
+    topic:"technology",requestKey,opponentUsername:bob.username,
+    description:"A different set of Quiz instructions",
+  }),409,"Existing request key cannot silently discard edited voice transcript");
   const invite=await getQuizDuelView(first.challengeId,alice.id);
   eq(invite.questions,null,"No questions before opponent joins");
   eq(invite.status,"open","Not falsely live before acceptance");
