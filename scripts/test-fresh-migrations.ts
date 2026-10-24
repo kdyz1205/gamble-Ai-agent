@@ -14,7 +14,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const ADDITIVE = "20261020090000_complete_challenge_schema";
 const PROTECT = "20261020090100_protect_credit_ledger_user_fk";
 const SUMMON_LEDGER = "20261024022500_summon_ledger_foundation";
+const QUIZ_DUELS = "20261024074500_verified_free_quiz_duels";
 const SUMMON_TABLES = ["ProfessionXpEvent", "SummonInstance", "SummonTicket"];
+const QUIZ_TABLES = ["QuizAttempt","QuizDuel"];
 const addedColumns: Record<string, string[]> = {
   Challenge: ["arbiter", "disputeWindow", "eventTime", "evidenceHash", "fallbackRule", "joinWindow", "marketType", "paramsHash", "proofSource", "proofWindow", "proposition", "resolutionHash", "settlementMode", "stakeToken", "visibility"],
   Evidence: ["prepareError", "preparedAt", "preparedDurationSec", "preparedFrames", "preparedMode"],
@@ -70,12 +72,16 @@ async function main() {
     const entries = await readdir(allMigrations, { withFileTypes: true });
     const migrationFolders = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
     assert(migrationFolders.includes(SUMMON_LEDGER), "Summon ledger migration must be present");
-    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER].includes(entry.name))
+    assert(migrationFolders.includes(QUIZ_DUELS), "Free Quiz migration must be present");
+    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER, QUIZ_DUELS].includes(entry.name))
       await cp(join(allMigrations, entry.name), join(baseline, entry.name), { recursive: true });
     const freshConfig = await config("fresh", allMigrations); const legacyConfig = await config("legacy", baseline);
     const additive = await readFile(join(allMigrations, ADDITIVE, "migration.sql"), "utf8");
     const protection = await readFile(join(allMigrations, PROTECT, "migration.sql"), "utf8");
     const summonMigration = await readFile(join(allMigrations, SUMMON_LEDGER, "migration.sql"), "utf8");
+    const quizMigration = await readFile(join(allMigrations, QUIZ_DUELS, "migration.sql"), "utf8");
+    assert.doesNotMatch(quizMigration.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
+    assert.doesNotMatch(quizMigration, /ALTER\s+TABLE\s+"(?:CreditTx|User|Challenge|Judgment|Evidence)"/i);
     assert.doesNotMatch(summonMigration.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     assert.doesNotMatch(summonMigration, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|Evidence)"/i);
     assert.doesNotMatch(additive.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
@@ -85,7 +91,9 @@ async function main() {
     assert.equal((await fresh.query(`SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows[0].n, migrationFolders.length);
     const readSummonTables = async (db: pg.Client) => (await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1::text[]) ORDER BY table_name`, [SUMMON_TABLES])).rows.map((row: { table_name: string }) => row.table_name);
     assert.deepEqual(await readSummonTables(fresh), SUMMON_TABLES);
-    console.log("PASS additive Summon inventory, XP and ticket tables exist after migrations");
+    const readQuizTables = async (db: pg.Client) => (await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1::text[]) ORDER BY table_name`, [QUIZ_TABLES])).rows.map((row: {table_name:string}) => row.table_name);
+    assert.deepEqual(await readQuizTables(fresh), QUIZ_TABLES);
+    console.log("PASS additive Summon and Quiz tables exist after migrations");
     await command(databases[0], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     await command(databases[0], ["migrate", "diff", "--from-migrations", "prisma/migrations", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS fresh migrate deploy and independent shadow replay exactly match canonical columns, types, defaults, indexes and constraints");
@@ -116,6 +124,7 @@ async function main() {
     await command(databases[1], ["migrate", "deploy"], freshConfig);
     assert.deepEqual(await snapshot(legacy), manualHotfix);
     assert.deepEqual(await readSummonTables(legacy), SUMMON_TABLES);
+    assert.deepEqual(await readQuizTables(legacy), QUIZ_TABLES);
     assert.equal((await legacy.query(`SELECT "isPublic" FROM "Challenge" WHERE id='qa-quest'`)).rows[0].isPublic, true);
     await command(databases[1], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS populated legacy migration and repeated/manual-hotfix replay preserve every old field, balance, proof, audit, ledger, custom value and visibility");
