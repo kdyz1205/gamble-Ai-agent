@@ -538,3 +538,124 @@
 .ios-app[data-hydrated=true] :is(button,input,textarea,select) {
   pointer-events: auto;
 }
+
+/* Creature Atlas v1: blueprints are symbolic marks, NOT creature portraits. */
+.ios-summon-chapters {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;
+  padding:5px;background:#f1edfc;border:1px solid #e5dcf6;
+  border-radius:16px;min-width:0;
+}
+.ios-summon-chapter {
+  min-width:0;min-height:43px;padding:6px 2px;
+  font-size:10px;line-height:1.25;font-weight:750;text-align:center;
+  color:#696084;border:1px solid transparent;border-radius:12px;
+  background:transparent;cursor:pointer;
+}
+.ios-summon-chapter.is-selected {
+  color:#4d397b;background:#fff;border-color:#dfd4f3;
+  box-shadow:0 3px 9px #8973ac16;
+}
+.ios-summon-chapter:focus-visible,.ios-creature-atlas-card:focus-visible {
+  outline:3px solid #7568e4;outline-offset:2px;
+}
+.ios-creature-atlas {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;min-width:0;
+}
+.ios-creature-atlas-card {
+  min-width:0;display:grid;justify-items:center;align-content:start;
+  gap:5px;padding:13px 5px 11px;min-height:128px;text-align:center;
+  background:#fffdfa;border:1.5px solid #e8e0f5;
+  border-radius:17px;cursor:pointer;transition:transform .18s ease,border-color .18s ease;
+}
+.ios-creature-atlas-card.is-selected {
+  border-color:#9381ee;
+  box-shadow:0 0 0 2px #9381ee22,inset 0 -12px 22px #e4dafa25;
+}
+.ios-creature-atlas-card:active{transform:scale(.985);}
+.ios-creature-atlas-card strong {
+  font-size:12px;line-height:1.15;overflow-wrap:anywhere;
+  color:#473b66;
+}
+.ios-creature-atlas-card small {
+  max-width:100%;font-size:9px;line-height:1.25;color:#82798c;
+  overflow-wrap:anywhere;
+}
+.ios-creature-crest {
+  display:block;position:relative;isolation:isolate;
+  width:58px;height:58px;flex:none;margin:3px auto 6px;
+  border-radius:46% 55% 42% 58% / 55% 45% 58% 42%;
+  background:
+    radial-gradient(circle at 34% 27%,#fff 0 8%,transparent 23%),
+    radial-gradient(circle at 28% 20%,var(--atlas-0) 0 14%,var(--atlas-1) 59%,var(--atlas-2) 100%);
+  border:2px solid #ffffffb9;
+  box-shadow:inset 3px 5px 8px #ffffffb2,inset -8px -8px 14px #54406a21,
+    0 8px 13px #433f6827;
+}
+.ios-creature-crest::before,.ios-creature-crest::after {
+  content:"";position:absolute;display:block;z-index:-1;
+  background:linear-gradient(145deg,var(--atlas-0),var(--atlas-2));
+  box-shadow:inset 2px 2px 6px #ffffffa8;
+}
+.ios-creature-crest::before {
+  width:36%;height:45%;left:8%;top:-18%;
+  border-radius:75% 15% 70% 25%;transform:rotate(-20deg);
+}
+.ios-creature-crest::after {
+  width:40%;height:48%;right:-13%;bottom:-10%;
+  border-radius:15% 65% 35% 80%;transform:rotate(42deg);
+}
+.ios-creature-crest--software {border-radius:31% 36% 30% 35%;}
+.ios-creature-crest--software::before {border-radius:14%;width:23%;left:23%;transform:rotate(-40deg);}
+.ios-creature-crest--software::after {border-radius:14%;transform:rotate(10deg);}
+.ios-creature-crest--engineering {border-radius:33% 48% 36% 49%;transform:rotate(-8deg);}
+.ios-creature-crest--engineering::before {width:24%;height:27%;border-radius:15%;transform:rotate(45deg);}
+.ios-creature-crest--healthcare {border-radius:56% 46% 55% 49%;transform:rotate(7deg);}
+.ios-creature-crest--healthcare::after {width:52%;height:30%;border-radius:90% 5%;transform:rotate(-26deg);}
+.ios-creature-crest--research {border-radius:55% 20% 55% 20%;}
+.ios-creature-crest--research::before {border-radius:70% 20% 80% 30%;width:53%;}
+.ios-creature-crest--art {border-radius:18% 67% 18% 67%;transform:rotate(12deg);}
+.ios-creature-crest--art::after {border-radius:60% 15% 60% 15%;width:60%;height:65%;}
+.ios-creature-crest--music::before {width:23%;height:75%;left:9%;top:-30%;border-radius:80% 20%;transform:rotate(-24deg);}
+.ios-creature-crest--music::after {width:23%;height:75%;right:9%;top:-30%;border-radius:20% 80%;transform:rotate(24deg);}
+.ios-creature-crest--education::before {border-radius:12% 80%;transform:rotate(-65deg);}
+.ios-creature-crest--culinary {border-radius:65% 45% 68% 50%;}
+.ios-creature-crest--culinary::after {border-radius:80%;width:55%;height:34%;}
+.ios-creature-crest--nature::before {border-radius:20% 80%;height:76%;top:-38%;}
+.ios-creature-crest--nature::after {border-radius:20% 80%;height:76%;right:3%;top:-38%;}
+.ios-creature-crest--business {border-radius:38% 48% 52% 42%;transform:rotate(-12deg);}
+.ios-creature-crest--business::after {border-radius:50%;width:50%;}
+.ios-creature-crest--trades {border-radius:32% 49% 32% 49%;}
+.ios-creature-crest--trades::before {border-radius:16%;transform:rotate(45deg);}
+.ios-creature-crest--trades::after {border-radius:16%;transform:rotate(45deg);}
+.ios-creature-portrait {display:grid;place-items:center;background:linear-gradient(145deg,#fff,#f1edff);}
+.ios-creature-portrait .ios-creature-crest{width:65px;height:65px;margin:10px;}
+.ios-evolution-strip {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;min-width:0;
+}
+.ios-evolution-stage {
+  min-width:0;display:grid;justify-items:center;align-content:start;
+  gap:5px;text-align:center;padding:12px 5px;
+  border:1px solid #e9ddf6;border-radius:14px;
+  background:linear-gradient(165deg,#fff,#f8f2ff);
+}
+.ios-evolution-stage.is-current {border-color:#917bf0;box-shadow:0 0 0 2px #917bf020;}
+.ios-evolution-stage span {font-size:9px;letter-spacing:.1em;color:#7662c3;font-weight:850;}
+.ios-evolution-stage strong {font-size:11px;color:#58437b;overflow-wrap:anywhere;line-height:1.15;}
+.ios-evolution-stage small {font-size:9px;color:#8b8297;line-height:1.25;}
+.ios-fusion-parents .ios-creature-crest {width:81px;height:81px;}
+.ios-fusion-parents small {overflow-wrap:anywhere;}
+.ios-app--night .ios-summon-chapters {background:#29253f;border-color:#4e4266;}
+.ios-app--night .ios-summon-chapter {color:#c7bcec;}
+.ios-app--night .ios-summon-chapter.is-selected {background:#493c67;color:#fff;border-color:#62547b;}
+.ios-app--night .ios-creature-atlas-card,
+.ios-app--night .ios-evolution-stage {background:#322744;border-color:#524567;}
+.ios-app--night .ios-creature-atlas-card strong,
+.ios-app--night .ios-evolution-stage strong {color:#f1eaff;}
+.ios-app--night .ios-creature-atlas-card small,
+.ios-app--night .ios-evolution-stage small {color:#c4b7d2;}
+.ios-app[data-reduce-motion="true"] .ios-creature-atlas-card {transition:none;}
+@media (max-width:345px) {
+  .ios-creature-atlas {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ios-summon-chapter {font-size:9px;}
+}
