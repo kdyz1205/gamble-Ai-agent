@@ -83,13 +83,26 @@ const parseFinal=(raw:string|null)=>{
 /** Creation is one DB commit: challenge, reserved opponent, Quiz and audit. */
 export async function createQuizDuel(userId:string,raw:unknown){
   const input=createInput(userId,raw);
+  const intendedOpponent=input.username
+    ?await prisma.user.findUnique({where:{username:input.username},select:{id:true}})
+    :null;
+  if(input.username&&!intendedOpponent)fail(404,"Invited username does not exist");
+  const originalDescription=input.description||"A shared, verifiable knowledge challenge.";
+  const sameRequest=(existing:{
+    topic:string;invitedUserId:string|null;
+    challenge:{creatorId:string;description:string|null};
+  })=>{
+    if(existing.challenge.creatorId!==userId||existing.topic!==input.topic||
+       existing.invitedUserId!==(intendedOpponent?.id??null)||
+       existing.challenge.description!==originalDescription)
+      fail(409,"Request key was already used for different Quiz settings");
+  };
   const existing=await prisma.quizDuel.findUnique({
     where:{requestKey:input.requestKey},
-    include:{challenge:{select:{creatorId:true}}},
+    include:{challenge:{select:{creatorId:true,description:true}}},
   });
   if(existing){
-    if(existing.challenge.creatorId!==userId||existing.topic!==input.topic)
-      fail(409,"Request key already belongs to a different Quiz");
+    sameRequest(existing);
     return {challengeId:existing.challengeId,reused:true};
   }
   const selected=chooseQuestionIds(input.topic);
@@ -102,11 +115,10 @@ export async function createQuizDuel(userId:string,raw:unknown){
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.requestKey}, 7009))`;
       const prior=await tx.quizDuel.findUnique({
         where:{requestKey:input.requestKey},
-        include:{challenge:{select:{creatorId:true}}},
+        include:{challenge:{select:{creatorId:true,description:true}}},
       });
       if(prior){
-        if(prior.challenge.creatorId!==userId||prior.topic!==input.topic)
-          fail(409,"Request key belongs to a different Quiz");
+        sameRequest(prior);
         return {challengeId:prior.challengeId,reused:true};
       }
       const creator=await tx.user.findUnique({where:{id:userId},
@@ -161,10 +173,12 @@ export async function createQuizDuel(userId:string,raw:unknown){
     if((err as {code?:string}).code==="P2002"){
       const previous=await prisma.quizDuel.findUnique({
         where:{requestKey:input.requestKey},
-        include:{challenge:{select:{creatorId:true}}},
+        include:{challenge:{select:{creatorId:true,description:true}}},
       });
-      if(previous?.challenge.creatorId===userId&&previous.topic===input.topic)
+      if(previous){
+        sameRequest(previous);
         return {challengeId:previous.challengeId,reused:true};
+      }
       fail(409,"Quiz request key conflict");
     }
     throw err;
