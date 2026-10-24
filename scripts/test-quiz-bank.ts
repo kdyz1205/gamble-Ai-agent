@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {quizPilotEnabled,quizPilotUnavailable} from "../src/lib/quiz/availability";
 import {
   QUIZ_RULE_VERSION,QUIZ_QUESTION_COUNT,QUIZ_TOPICS,
   assertQuizTopic,assertQuestionIds,assertQuizAnswers,chooseQuestionIds,
@@ -49,4 +50,24 @@ for(const wrong of [[],[0],[0,0,0,0],[-1,1,2],[0,4,1],["1",2,3],[NaN,0,1]])
 bad(()=>assertQuestionIds(["gen-01","gen-01","gen-02"]),"No duplicated question IDs");
 bad(()=>assertQuestionIds(["gen-01","tech-01","sci-01"]),"No cross-topic bank");
 bad(()=>assertQuestionIds(["gen-01","gen-02","not-real"]),"Unknown question cannot be graded");
+// Activation is a runtime-only operator choice; no database query is allowed
+// while the flag is unset, even if a Vercel preview successfully builds.
+const prior=process.env.VERIFIED_QUIZ_ENABLED;
+try{
+  delete process.env.VERIFIED_QUIZ_ENABLED;
+  eq(quizPilotEnabled(),false,"Unconfigured preview must not permit Quiz writes");
+  process.env.VERIFIED_QUIZ_ENABLED="false";
+  eq(quizPilotEnabled(),false,"Explicitly disabled Quiz is unavailable");
+  process.env.VERIFIED_QUIZ_ENABLED="TRUE";
+  eq(quizPilotEnabled(),false,"Flag is strict, not truthy-string parsed");
+  process.env.VERIFIED_QUIZ_ENABLED="true";
+  eq(quizPilotEnabled(),true,"Isolated migrated CI can activate Quiz explicitly");
+  const disabled=quizPilotUnavailable();
+  eq(disabled.status,503,"Disabled route responds with service unavailable");
+  eq(disabled.headers.get("cache-control"),"private, no-store",
+    "Disabled response cannot be cached across user accounts");
+}finally{
+  if(prior===undefined)delete process.env.VERIFIED_QUIZ_ENABLED;
+  else process.env.VERIFIED_QUIZ_ENABLED=prior;
+}
 console.log("VERIFIED_QUIZ_BANK_RULES_PASS",checks,"assertions");
