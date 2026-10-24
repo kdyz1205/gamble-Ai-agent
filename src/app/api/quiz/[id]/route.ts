@@ -1,10 +1,12 @@
 import {getAuthUser,unauthorized} from "@/lib/auth";
+import {quizPilotEnabled,quizPilotUnavailable} from "@/lib/quiz/availability";
 import {getQuizDuelView,QuizDuelError} from "@/lib/quiz/quiz-duel";
 
 export const dynamic="force-dynamic";
 export async function GET(_req:Request,{params}:{params:Promise<{id:string}>}){
   const user=await getAuthUser();
   if(!user)return unauthorized();
+  if(!quizPilotEnabled())return quizPilotUnavailable();
   try{
     const {id}=await params;
     return Response.json({quiz:await getQuizDuelView(id,user.userId)},
