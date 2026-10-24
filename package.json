@@ -54,7 +54,8 @@
     "smoke:challenge-100": "tsx scripts/smoke-100-challenge-crack-matrix.ts",
     "eval:llm-judgeability-140": "tsx scripts/eval-llm-judgeability-140.ts",
     "eval:diverse-judgeability-140": "tsx scripts/eval-diverse-judgeability-140.ts",
-    "eval:data-source-topics-100": "tsx scripts/eval-data-source-topics-100.ts"
+    "eval:data-source-topics-100": "tsx scripts/eval-data-source-topics-100.ts",
+    "smoke:evidence-admission": "tsx --test scripts/smoke-evidence-admission.ts"
   },
   "repository": {
     "type": "git",
