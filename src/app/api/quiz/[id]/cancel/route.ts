@@ -1,5 +1,6 @@
 import prisma from "@/lib/db";
 import {getAuthUser,unauthorized} from "@/lib/auth";
+import {quizPilotEnabled,quizPilotUnavailable} from "@/lib/quiz/availability";
 import {cancelChallengeAtomic} from "@/lib/challenge-cancellation";
 import {getQuizDuelView,QuizDuelError} from "@/lib/quiz/quiz-duel";
 export const dynamic="force-dynamic";
@@ -8,6 +9,7 @@ export const dynamic="force-dynamic";
 export async function POST(_req:Request,{params}:{params:Promise<{id:string}>}){
   const user=await getAuthUser();
   if(!user)return unauthorized();
+  if(!quizPilotEnabled())return quizPilotUnavailable();
   const {id}=await params;
   const quiz=await prisma.quizDuel.findUnique({where:{challengeId:id},
     select:{challengeId:true}});
