@@ -475,6 +475,21 @@
 }
 .ios-summon-odds strong {font-size:13px;color:#695abb;}
 .ios-summon-hint {color:#887b99;font-size:11px;line-height:1.6;}
+.ios-pity-status {
+  display:grid;gap:5px;min-width:0;
+  border:1px solid #ded5f8;background:#f3eeff;
+  padding:12px;border-radius:14px;
+}
+.ios-pity-status strong {color:#53438d;font-size:12px;}
+.ios-pity-status span {color:#77708f;font-size:10px;line-height:1.55;}
+.ios-pity-status .ios-pity-status__ready {
+  font-weight:790;color:#6851af;background:#e9dfff;border-radius:9px;padding:7px;
+}
+.ios-summon-reset {
+  width:100%;min-height:35px;
+  border:1px solid #dacbf2;background:#fff;border-radius:12px;
+  color:#615297;font-weight:740;font-size:11px;
+}
 .ios-summon-result,.ios-fusion-recipe {
   display:grid;gap:5px;min-width:0;border-radius:17px;
   padding:15px;background:linear-gradient(135deg,#ede6ff,#e4f5f6);

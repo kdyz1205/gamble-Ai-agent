@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  STARTER,PROFESSIONS,RARITY_ODDS,RARITY_VERSION,
-  drawRarity,previewSummon,previewFusion,previewVerifiedBattleXp,
+  STARTER,PROFESSIONS,RARITY_ODDS,RARITY_VERSION,INITIAL_PITY_STATE,
+  drawRarity,advancePityState,previewEffectiveOdds,
+  previewSummon,previewFusion,previewVerifiedBattleXp,
   previewMasteryFromXp,previewTicketMilestones,
 } from "../src/lib/summons/profession-system";
 
@@ -46,6 +47,44 @@ eq(drawRarity(0,{sinceRare:0,sinceEpic:79}).rarity,"epic","Epic pity wins preced
 for(const pity of [{sinceRare:-1,sinceEpic:0},{sinceRare:0,sinceEpic:1.4},
                    {sinceRare:Infinity,sinceEpic:0}])
   reject(()=>drawRarity(.2,pity),"Reject invalid pity");
+
+// Full, reproducible sequential pity simulation. Every draw updates the same
+// counter state, including when Rare hits but Epic has not yet hit.
+let pityCounter={...INITIAL_PITY_STATE};
+for(let turn=1;turn<=80;turn++){
+  const result=drawRarity(0,pityCounter);
+  if(turn===20||turn===40||turn===60) {
+    eq(result.rarity,"rare","Every 20th unfulfilled Rare guarantee "+turn);
+    eq(result.pity,"rare-20","Guarantee indicated in receipt "+turn);
+  }
+  if(turn===80) {
+    eq(result.rarity,"epic","80th consecutive non-Epic must guarantee Epic");
+    eq(result.pity,"epic-80","Epic guarantee takes priority");
+  }
+  pityCounter=advancePityState(pityCounter,result.rarity);
+}
+eq(pityCounter.sinceEpic,0,"Epic pity resets on Epic");
+eq(pityCounter.sinceRare,0,"Rare pity also resets on Epic");
+eq(advancePityState({sinceRare:19,sinceEpic:79},"common"),
+  {sinceRare:19,sinceEpic:79},"Counters cannot overflow even with invalid theoretical inputs");
+eq(advancePityState({sinceRare:19,sinceEpic:20},"rare"),
+  {sinceRare:0,sinceEpic:21},"Rare hit does not reset Epic miss counter");
+eq(previewEffectiveOdds({sinceRare:19,sinceEpic:0}).guarantee,
+  "rare-20","Next attempt odds disclose Rare guarantee");
+eq(previewEffectiveOdds({sinceRare:0,sinceEpic:79}).guarantee,
+  "epic-80","Next attempt odds disclose Epic guarantee");
+const rarePct=previewEffectiveOdds({sinceRare:19,sinceEpic:0}).odds;
+eq(rarePct.find(x=>x.id==="common")?.percent,0,"Common blocked at Rare pity");
+eq(rarePct.find(x=>x.id==="rare")?.percent,76.92,"Rare conditional probability disclosed");
+const epicPct=previewEffectiveOdds({sinceRare:0,sinceEpic:79}).odds;
+eq(epicPct.find(x=>x.id==="epic")?.percent,86.67,"Epic conditional probability disclosed");
+eq(previewEffectiveOdds({sinceRare:0,sinceEpic:0}).rareIn,20,"Fresh Rare countdown");
+eq(previewEffectiveOdds({sinceRare:18,sinceEpic:78}).epicIn,2,"Near-pity countdown");
+for(const v of ["invalid",""] as const)reject(
+  ()=>advancePityState(INITIAL_PITY_STATE,v as never),
+  "Invalid rarity cannot advance counters");
+reject(()=>advancePityState({sinceRare:-1,sinceEpic:0},"common"),
+  "Reject invalid current pity state");
 
 const base=previewSummon({professionId:"software",masteryLevel:1,randomUnit:.9});
 const evolved=previewSummon({professionId:"software",masteryLevel:3,randomUnit:.9});

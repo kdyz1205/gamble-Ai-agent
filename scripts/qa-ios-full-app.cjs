@@ -181,10 +181,19 @@ for(const width of widths){
       const mastery=page.getByRole("slider",{name:"Preview profession mastery level"});
       await mastery.focus();await mastery.press("End");
       assert.equal(await mastery.inputValue(),"5");
+      const pity=page.getByTestId("ios-simulated-pity");
+      assert((await pity.innerText()).includes("0 sample draws"),"Pity is fresh on new page");
       await page.getByRole("button",{name:/Preview a random summon/}).click();
       const draw=await page.locator(".ios-summon-result").innerText();
       assert(draw.includes("SIMULATION 1")&&draw.includes("NO ITEM AWARDED"),
         "No fake or paid rewards");
+      assert((await pity.innerText()).includes("1 sample draw"),
+        "Client preview must advance displayed pity state");
+      await page.getByRole("button",{name:"Reset sample-only counters"}).click();
+      assert((await pity.innerText()).includes("0 sample draws"),"Sample reset actually works");
+      assert(!(await page.getByRole("button",{name:"Reset sample-only counters"}).isEnabled()),
+        "Reset disabled while counters are fresh");
+      await page.getByRole("button",{name:/Preview a random summon/}).click();
       await primary.selectOption("art");await second.selectOption("music");
       assert((await page.locator(".ios-fusion-recipe").innerText()).includes("Prism Echo"));
       const images=await page.evaluate(async()=>{

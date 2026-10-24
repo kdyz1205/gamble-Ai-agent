@@ -38,7 +38,7 @@ A single free verified ticket enters an eligible profession pool. **Fixed base o
 
 Guaranteed Rare+ after 19 consecutive non-Rare draws (20th attempt); guaranteed Epic+ after 79 consecutive non-Epic draws (80th attempt). At pity, only qualifying rarity weights are re-normalized; show the actual odds. Mastery unlocks more advanced species/forms and more free opportunities, **not hidden multipliers based on wager size or purchased stake**.
 
-The browser prototype calls Math.random solely to display a sample. It never creates real items. The future production service needs secure server RNG, versioned weighted tables, atomic pity/ticket updates, append-only draw receipts, request idempotency, and public odds disclosure.
+The browser prototype calls Math.random solely to display a sample. It never creates real items. The future production service needs secure server RNG, versioned weighted tables, atomic pity/ticket updates, append-only draw receipts, request idempotency, and public odds disclosure. The interactive preview now advances Rare/Epic miss counters after each sample draw, enforces its 20/80 guarantees deterministically, shows the next-attempt counters and conditional rarity odds, and permits a full local reset. The browser-only counters are neither persistent, account-bound nor a real summon pity history; switching professions does not reset them during the session.
 
 ## Fusion / genetics
 

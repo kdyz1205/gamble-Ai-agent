@@ -1,11 +1,12 @@
 "use client";
 
-import {useState} from "react";
+import {useRef,useState} from "react";
 import {IosArt,IosAction,visuals} from "./IOSAppUI";
 import {
-  PROFESSIONS,RARITY_ODDS,professionById,previewFusion,previewSummon,
+  PROFESSIONS,RARITY_ODDS,INITIAL_PITY_STATE,advancePityState,
+  professionById,previewFusion,previewSummon,previewEffectiveOdds,
   previewVerifiedBattleXp,previewTicketMilestones,previewMasteryFromXp,
-  type ProfessionId,type SummonConcept,
+  type ProfessionId,type SummonConcept,type PityState,
 } from "@/lib/summons/profession-system";
 
 /**
@@ -20,6 +21,9 @@ export default function ProfessionSummonStudio(){
   const [mastery,setMastery]=useState(1);
   const [draw,setDraw]=useState<SummonConcept|null>(null);
   const [draws,setDraws]=useState(0);
+  const [pity,setPity]=useState<PityState>({...INITIAL_PITY_STATE});
+  const pityRef=useRef<PityState>({...INITIAL_PITY_STATE});
+  const nextOdds=previewEffectiveOdds(pity);
   const first=professionById(primary);
   const occupationName=first.specialties.find(s=>s.id===occupation)?.name ?? first.specialties[0].name;
   const other=professionById(secondary);
@@ -39,7 +43,7 @@ export default function ProfessionSummonStudio(){
     setPrimary(next);
     setOccupation(professionById(next).specialties[0].id);
     if(next===secondary)setSecondary(PROFESSIONS.find(entry=>entry.id!==next)!.id);
-    setDraw(null);setDraws(0);
+    setDraw(null);
   };
   const changeSecondary=(next:ProfessionId)=>{
     professionById(next);
@@ -49,9 +53,20 @@ export default function ProfessionSummonStudio(){
   const tryDraw=()=>{
     // A visual *example*, never a real item, grant, or guaranteed probability
     // source. A real service must use server-side CSPRNG and disclose odds.
-    setDraw(previewSummon({professionId:primary,occupationId:occupation,
-      masteryLevel:mastery,randomUnit:Math.random()}));
+    const result=previewSummon({professionId:primary,occupationId:occupation,
+      masteryLevel:mastery,randomUnit:Math.random(),pity:pityRef.current});
+    const after=advancePityState(pityRef.current,result.rarity);
+    pityRef.current=after;
+    setPity(after);
+    setDraw(result);
     setDraws(n=>n+1);
+  };
+  const resetPreview=()=>{
+    const zero={...INITIAL_PITY_STATE};
+    pityRef.current=zero;
+    setPity(zero);
+    setDraw(null);
+    setDraws(0);
   };
   return <section className="ios-summon-studio ios-section" aria-label="Profession Summon Studio">
     <div className="ios-section__heading">
@@ -76,7 +91,7 @@ export default function ProfessionSummonStudio(){
       </label>
       <label className="ios-summon-input">Specific profession or skill
         <select aria-label="Specific profession or skill" value={occupation} onChange={e=>{
-          setOccupation(e.target.value);setDraw(null);setDraws(0);
+          setOccupation(e.target.value);setDraw(null);
         }}>
           {first.specialties.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
@@ -95,7 +110,7 @@ export default function ProfessionSummonStudio(){
         <span>Hypothetical profession mastery · Lv {mastery}</span>
         <input aria-label="Preview profession mastery level" type="range" min={1}
           max={5} step={1} value={mastery} onChange={e=>{
-            setMastery(Number(e.target.value));setDraw(null);setDraws(0);
+            setMastery(Number(e.target.value));setDraw(null);
           }}/>
         <small>{mastery===1?"New explorer":mastery<3?"Learning your craft":
           mastery<5?"Evolved forms possible":"Ascended forms possible"} · sample only, not earned</small>
@@ -112,6 +127,19 @@ export default function ProfessionSummonStudio(){
           <span>{row.label}</span><strong>{row.weight/100}%</strong>
         </div>)}
       </div>
+      <div className="ios-pity-status" data-testid="ios-simulated-pity" aria-live="polite">
+        <strong>{draws} sample draw{draws===1?"":"s"} · browser-only counters</strong>
+        <span>Rare+ guarantee in at most {nextOdds.rareIn} more sample draw{nextOdds.rareIn===1?"":"s"}.</span>
+        <span>Epic+ guarantee in at most {nextOdds.epicIn} more sample draw{nextOdds.epicIn===1?"":"s"}.</span>
+        {nextOdds.guarantee!=="none"&&<span className="ios-pity-status__ready">
+          {nextOdds.guarantee==="epic-80"?"Epic+":"Rare+"} guarantee active for next sample
+        </span>}
+      </div>
+      {nextOdds.guarantee!=="none"&&<div className="ios-summon-odds" aria-label="Guaranteed next draw odds">
+        {nextOdds.odds.map(row=><div key={row.id}>
+          <span>{row.label}</span><strong>{row.percent}%</strong>
+        </div>)}
+      </div>}
       <p className="ios-summon-hint">Draft rule: every 20th consecutive attempt without Rare+ guarantees Rare+;
         every 80th without Epic+ guarantees Epic+. Higher mastery reveals new forms.
         Odds never improve because of the amount staked.</p>
@@ -121,11 +149,16 @@ export default function ProfessionSummonStudio(){
       <div className="ios-summon-result" role="status" aria-live="polite">
         {draw?<><span className="ios-overline">SIMULATION {draws} · NO ITEM AWARDED</span>
           <h3>{draw.speciesName}</h3>
-          <p>{draw.rarity.toUpperCase()} · {draw.occupationLabel} · {draw.visualStage} form</p>
+          <p>{draw.rarity.toUpperCase()} · {draw.occupationLabel} · {draw.visualStage} form
+            {draw.pity!=="none"?" · PITY GUARANTEE APPLIED":""}</p>
         </>:<><span className="ios-overline">SANDBOX · FREE PREVIEW</span>
           <h3>What could you summon?</h3>
           <p>Tap once to see one sample outcome. This does not use or award a real ticket.</p></>}
       </div>
+      <button type="button" className="ios-summon-reset" onClick={resetPreview}
+        disabled={draws===0}>Reset sample-only counters</button>
+      <p className="ios-summon-hint">Counters reset on page reload or by this button.
+        Nothing persists to your account and no Summon is granted.</p>
     </div>
 
     <div className="ios-summon-lab">

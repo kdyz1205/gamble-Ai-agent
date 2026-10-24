@@ -39,6 +39,7 @@ export const RARITY_VERSION = "summon-rarity-v1";
 export const FREE_TICKET_POLICY = "free-verified-quest-activities-only-proposal";
 
 export type PityState = {sinceRare:number;sinceEpic:number};
+export const INITIAL_PITY_STATE:Readonly<PityState> = {sinceRare:0,sinceEpic:0};
 export type DrawResult = {
   rarity: Rarity; pity: "none"|"rare-20"|"epic-80";
   effectiveWeights: ReadonlyArray<{id:Rarity; weight:number}>;
@@ -55,6 +56,35 @@ const isNonnegativeInteger=(n:number)=>Number.isSafeInteger(n)&&n>=0;
 const validatePity=(state:PityState)=>{
   if(!isNonnegativeInteger(state.sinceRare)||!isNonnegativeInteger(state.sinceEpic))throw ruleError("pity counter");
 };
+/** Preview-only counter transitions; no real entitlement is recorded.
+ * Every non-Rare increases the Rare miss count; every non-Epic increases
+ * the Epic miss count. Rare draws reset Rare pity but not Epic pity.
+ */
+export function advancePityState(state:PityState,rarity:Rarity):PityState{
+  validatePity(state);
+  if(!RARITY_ODDS.some(entry=>entry.id===rarity))throw ruleError("rarity");
+  const rarePlus=rarity==="rare"||rarity==="epic"||rarity==="legendary";
+  const epicPlus=rarity==="epic"||rarity==="legendary";
+  return {
+    sinceRare:rarePlus?0:Math.min(19,state.sinceRare+1),
+    sinceEpic:epicPlus?0:Math.min(79,state.sinceEpic+1),
+  };
+}
+
+export function previewEffectiveOdds(state:PityState) {
+  validatePity(state);
+  const guarantee=state.sinceEpic>=79?"epic-80":state.sinceRare>=19?"rare-20":"none";
+  const allowed=RARITY_ODDS.filter(entry=>guarantee==="none"||
+    (guarantee==="rare-20"?["rare","epic","legendary"].includes(entry.id):
+      ["epic","legendary"].includes(entry.id)));
+  const total=allowed.reduce((sum,entry)=>sum+entry.weight,0);
+  return {guarantee,odds:RARITY_ODDS.map(entry=>({
+    id:entry.id,label:entry.label,
+    percent:allowed.some(item=>item.id===entry.id)
+      ?Math.round(entry.weight*10000/total)/100:0,
+  })),rareIn:Math.max(1,20-state.sinceRare),epicIn:Math.max(1,80-state.sinceEpic)};
+}
+
 export function professionById(id:ProfessionId){
   const entry=PROFESSIONS.find(p=>p.id===id);
   if(!entry)throw ruleError("profession family");
