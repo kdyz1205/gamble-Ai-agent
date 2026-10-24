@@ -90,6 +90,9 @@ model User {
   reviewCasesRequested ReviewCase[]      @relation("ReviewRequester")
   reviewCasesResolved  ReviewCase[]      @relation("ReviewResolver")
   reviewCasesWon       ReviewCase[]      @relation("ReviewWinner")
+  summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
+  professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
+  summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
 }
 
 // ═══════════════════════════════════════
@@ -189,6 +192,7 @@ model Challenge {
   auditLogs        AuditLog[]        @relation("AuditLogChallenge")
   verdictResponses VerdictResponse[]
   reviewCase       ReviewCase?
+  professionXpEvents ProfessionXpEvent[]
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
   // by createdAt DESC; the "my markets" tab filters on creatorId; the judge
@@ -381,4 +385,64 @@ model ActivityEvent {
   // Feed reads order by createdAt DESC and often filter by type.
   @@index([createdAt])
   @@index([challengeId])
+}
+
+// Profession Summon server ledger — additive, no credits or cash coupling.
+// Application writes are gated by SUMMON_PERSISTENCE_ENABLED (off by default).
+model SummonInstance {
+  id             String   @id @default(cuid())
+  ownerId        String
+  speciesId      String
+  originKind     String // starter | free_ticket | fusion
+  grantKey       String   @unique
+  professionId   String?
+  occupationId   String?
+  rarity         String   @default("starter")
+  form           String   @default("base")
+  status         String   @default("owned") // owned | consumed
+  catalogVersion String   @default("summon-professions-v1")
+  parentOneId    String?
+  parentTwoId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner User @relation("SummonInventoryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, status, createdAt])
+  @@index([speciesId, rarity])
+}
+
+model ProfessionXpEvent {
+  id            String   @id @default(cuid())
+  ownerId       String
+  challengeId   String?
+  eventKey      String   @unique
+  professionId  String
+  awardType     String // verified_quest | correction
+  amount        Int
+  ruleVersion   String   @default("profession-xp-v1")
+  sourceReceipt String?
+  createdAt     DateTime @default(now())
+
+  owner     User       @relation("ProfessionXpOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, professionId, createdAt])
+  @@index([challengeId])
+}
+
+model SummonTicket {
+  id             String    @id @default(cuid())
+  ownerId        String
+  grantKey       String    @unique
+  status         String    @default("available") // available | spent | revoked
+  professionId   String
+  spentAt        DateTime?
+  spentByGrant   String?   @unique
+  sourceVersion  String    @default("free-tickets-v1")
+  createdAt      DateTime  @default(now())
+
+  owner User @relation("SummonTicketOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, status])
 }

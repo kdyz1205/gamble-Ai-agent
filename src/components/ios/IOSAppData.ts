@@ -148,7 +148,8 @@ export function useEvidenceGallery(enabled = true) {
 
 export type StarterPicoEntitlement = {
   speciesId:"pico";name:"Pico";initialForEveryAccount:true;
-  persistedInventory:false;tradable:false;supportsFusion:false;
+  persistedInventory:boolean;inventoryId?:string|null;
+  tradable:false;supportsFusion:false;
   awardedXp:null;awardedTickets:null;
   basis:"authenticated-account-rule";note:string;
 };
@@ -171,11 +172,32 @@ export function useStarterPico(enabled=true){
     fetch("/api/summons/me",{credentials:"same-origin",cache:"no-store",signal:controller.signal})
       .then(async response=>{
         if(!response.ok)throw Error("Starter service returned "+response.status);
-        const data=await response.json() as {starter?:StarterPicoEntitlement};
+        const data=await response.json() as {
+          starter?:StarterPicoEntitlement;
+          inventory?:{available:boolean};
+        };
         if(!data.starter||data.starter.speciesId!=="pico"||
-           data.starter.persistedInventory!==false)
+           typeof data.starter.persistedInventory!=="boolean")
           throw Error("Invalid starter response");
-        if(active){setStarter(data.starter);setLoading(false);}
+        let starter=data.starter;
+        if(data.inventory?.available&&!starter.persistedInventory){
+          // The server advertises persistence only after its schema flag is
+          // enabled. Existing accounts converge on one Pico via idempotent POST.
+          const grant=await fetch("/api/summons/starter/claim",{
+            method:"POST",credentials:"same-origin",cache:"no-store",
+            signal:controller.signal,
+          });
+          if(!grant.ok)throw Error("Pico activation returned "+grant.status);
+          const payload=await grant.json() as {starter?:StarterPicoEntitlement};
+          if(payload.starter?.speciesId!=="pico"||
+             payload.starter.persistedInventory!==true||
+             !payload.starter.inventoryId)
+            throw Error("Invalid Pico activation result");
+          starter=payload.starter;
+        }
+        if(starter.persistedInventory&&!starter.inventoryId)
+          throw Error("Starter persistence has no verified item");
+        if(active){setStarter(starter);setLoading(false);}
       }).catch(err=>{
         if(active){setError(message(err));setLoading(false);}
       });

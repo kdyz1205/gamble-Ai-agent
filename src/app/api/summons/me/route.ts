@@ -2,6 +2,7 @@ import {getServerSession} from "next-auth";
 import {authOptions} from "@/lib/auth-options";
 import {readStarterEntitlement,readSummonCatalog}
   from "@/lib/summons/starter-entitlement";
+import {accountSummonLedger} from "@/lib/summons/server-ledger";
 
 export const dynamic="force-dynamic";
 const noStore={"Cache-Control":"private, no-store"};
@@ -23,18 +24,32 @@ export async function GET(){
       status:401,headers:noStore,
     });
   }
+  let ledger;
+  try{
+    ledger=await accountSummonLedger(userId);
+  }catch{
+    // Enabled without a deployed schema is a hard failure, not an empty bag.
+    return Response.json({error:"Summon inventory service unavailable"},{
+      status:503,headers:noStore,
+    });
+  }
   return Response.json({
-    starter:pico,
+    starter:{...pico,persistedInventory:!!ledger?.starter,
+      inventoryId:ledger?.starter?.id??null},
     catalogVersion:readSummonCatalog().version,
-    inventory:{
+    inventory:ledger?{
+      available:true,items:ledger.items,
+      totalKnown:ledger.items.length<50,
+      reason:"Only actual database instances are included",
+    }:{
       available:false,
       extraSummons:null,
-      reason:"Persistent Summon inventory is not implemented",
+      reason:"Persistent Summon inventory is not enabled",
     },
     progression:{
       verifiedProfessionXp:null,
       summonTickets:null,
-      reason:"Audited per-profession XP and ticket ledger is not implemented",
+      reason:"An authoritative full profession XP/ticket rollout is not active",
     },
   },{headers:noStore});
 }
