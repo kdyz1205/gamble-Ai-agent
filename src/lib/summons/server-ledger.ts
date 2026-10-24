@@ -43,12 +43,24 @@ export async function ensureUniversalPico(userId:string,tx?:Prisma.TransactionCl
  * a user's complete career or any spendable ticket entitlement.
  */
 async function recordedProfessionXp(userId:string){
-  const groups=await prisma.professionXpEvent.groupBy({
-    by:["professionId"],
-    where:{ownerId:userId,ruleVersion:XP_LEDGER_VERSION},
-    _sum:{amount:true},
-    _count:{_all:true},
-  });
+  const scope={ownerId:userId,ruleVersion:XP_LEDGER_VERSION};
+  const [invalid,groups]=await Promise.all([
+    // A row that is not the current rule's fully auditable, positive Quest XP
+    // must never be labeled verified. Corrections need a reviewed read model.
+    prisma.professionXpEvent.findFirst({
+      where:{...scope,OR:[
+        {awardType:{not:"verified_quest"}},
+        {challengeId:null},{sourceReceipt:null},
+        {amount:{notIn:[80,100]}},
+      ]},
+      select:{id:true},
+    }),
+    prisma.professionXpEvent.groupBy({
+      by:["professionId"],where:scope,
+      _sum:{amount:true},_count:{_all:true},
+    }),
+  ]);
+  if(invalid)throw new Error("Unauditable profession XP receipt");
   if(groups.length===0)return null;
   const allowed=new Set<string>(PROFESSIONS.map(prof=>prof.id));
   const byProfession=groups.map(group=>{
