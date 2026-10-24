@@ -448,3 +448,71 @@ export async function finalizeExpiredQuiz(challengeIdRaw:unknown,userId:string){
   },{maxWait:15_000,timeout:20_000});
   return getQuizDuelView(challengeId,userId);
 }
+
+/**
+ * Background-only expiration sweep. Never invoke the generic AI judge.
+ * Its caller MUST gate this on a migrated Quiz DB and verified CRON_SECRET.
+ * Every candidate is rechecked after the exact same transaction advisory key
+ * used by create/accept/submit; timeouts never award a credit or ghost winner.
+ */
+export async function sweepExpiredQuizDuels(limit=15){
+  if(!Number.isSafeInteger(limit)||limit<1||limit>30)
+    throw new RangeError("Quiz sweep limit must be between 1 and 30");
+  const now=new Date();
+  const due=await prisma.quizDuel.findMany({
+    where:{OR:[
+      {status:"live",expiresAt:{not:null,lte:now}},
+      {status:"open",challenge:{deadline:{not:null,lte:now}}},
+    ]},
+    select:{challengeId:true},take:limit,
+    orderBy:{createdAt:"asc"},
+  });
+  const summary:{scanned:number;finalized:number;cancelled:number;
+    skipped:number;failures:Array<{id:string;error:string}>}={
+    scanned:due.length,finalized:0,cancelled:0,skipped:0,failures:[],
+  };
+  for(const row of due){
+    const id=row.challengeId;
+    try{
+      const status=await prisma.$transaction(async tx=>{
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 7117))`;
+        await tx.$queryRaw`SELECT id FROM "Challenge" WHERE id = ${id} FOR UPDATE`;
+        const duel=await tx.quizDuel.findUnique({where:{challengeId:id}});
+        const challenge=await tx.challenge.findUnique({where:{id}});
+        if(!duel||!challenge)
+          throw new Error("Missing Quiz or Quest record");
+        if(challenge.stake!==0||challenge.arbiter!==QUIZ_RULE_VERSION)
+          throw new Error("Quiz monetary or rule boundary inconsistent");
+        if(await tx.creditTx.count({where:{challengeId:id}}))
+          throw new Error("Unexpected credit ledger rows on free Quiz");
+        if(duel.status==="live"&&challenge.status==="live"&&
+           duel.expiresAt&&duel.expiresAt.getTime()<=Date.now()){
+          await finalizeLocked(tx,duel,challenge,true);
+          return "finalized" as const;
+        }
+        if(duel.status==="open"&&challenge.status==="open"&&
+           challenge.deadline&&challenge.deadline.getTime()<=Date.now()){
+          const accepted=await tx.participant.count({where:{
+            challengeId:id,role:"opponent",status:"accepted",
+          }});
+          if(accepted)throw new Error("An accepted opponent exists in open Quiz");
+          assertChallengeTransition(ChallengeStatus.open,ChallengeStatus.cancelled);
+          await tx.challenge.update({where:{id},data:{status:"cancelled"}});
+          await tx.quizDuel.update({where:{challengeId:id},
+            data:{status:"cancelled"}});
+          await tx.auditLog.create({data:{
+            action:"quiz.invitation.expired",challengeId:id,actorUserId:null,
+            payload:stringify({stakeCredits:0,expiry:challenge.deadline.toISOString()}),
+          }});
+          return "cancelled" as const;
+        }
+        return "skipped" as const;
+      },{maxWait:10_000,timeout:15_000});
+      summary[status]++;
+    }catch(err){
+      summary.failures.push({id,error:err instanceof Error?err.message.slice(0,140):
+        "Unknown expiration failure"});
+    }
+  }
+  return summary;
+}
