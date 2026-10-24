@@ -36,10 +36,47 @@ export async function ensureUniversalPico(userId:string,tx?:Prisma.TransactionCl
   return item;
 }
 
+/**
+ * Only existing immutable receipts count here. Historical Quests were NOT
+ * backfilled, so a missing row means UNKNOWN rather than zero career skill.
+ * Even when receipts exist, these totals cover this rule version only, not
+ * a user's complete career or any spendable ticket entitlement.
+ */
+async function recordedProfessionXp(userId:string){
+  const groups=await prisma.professionXpEvent.groupBy({
+    by:["professionId"],
+    where:{ownerId:userId,ruleVersion:XP_LEDGER_VERSION},
+    _sum:{amount:true},
+    _count:{_all:true},
+  });
+  if(groups.length===0)return null;
+  const allowed=new Set<string>(PROFESSIONS.map(prof=>prof.id));
+  const byProfession=groups.map(group=>{
+    const amount=group._sum.amount;
+    const receipts=group._count._all;
+    if(!allowed.has(group.professionId)||typeof amount!=="number"||
+       !Number.isSafeInteger(amount)||amount<0||
+       !Number.isSafeInteger(receipts)||receipts<1)
+      throw new Error("Profession XP receipts are inconsistent");
+    return {professionId:group.professionId,recordedXp:amount,receiptCount:receipts};
+  }).sort((a,b)=>a.professionId.localeCompare(b.professionId));
+  const totalRecordedXp=byProfession.reduce((sum,entry)=>sum+entry.recordedXp,0);
+  const receiptCount=byProfession.reduce((sum,entry)=>sum+entry.receiptCount,0);
+  if(!Number.isSafeInteger(totalRecordedXp)||!Number.isSafeInteger(receiptCount))
+    throw new Error("Profession XP aggregate exceeds safe integer range");
+  return {
+    source:"verified-quest-receipts" as const,
+    ruleVersion:XP_LEDGER_VERSION,
+    coverage:"partial-since-ledger-activation" as const,
+    completeHistory:false as const,
+    totalRecordedXp,receiptCount,byProfession,
+  };
+}
+
 export async function accountSummonLedger(userId:string){
   if(!summonPersistenceEnabled())return null;
   const key=starterGrantKey(userId);
-  const [starter,items]=await Promise.all([
+  const [starter,items,xp]=await Promise.all([
     prisma.summonInstance.findUnique({where:{grantKey:key},
       select:{id:true,ownerId:true,speciesId:true,rarity:true,form:true,status:true}}),
     prisma.summonInstance.findMany({
@@ -48,6 +85,7 @@ export async function accountSummonLedger(userId:string){
         occupationId:true,createdAt:true},
       orderBy:{createdAt:"desc"},take:50,
     }),
+    recordedProfessionXp(userId),
   ]);
   if(starter&&(starter.ownerId!==userId||starter.speciesId!=="pico"||
                starter.status!=="owned"))
@@ -57,9 +95,9 @@ export async function accountSummonLedger(userId:string){
     starter:starter?{id:starter.id,speciesId:starter.speciesId,
       rarity:starter.rarity,form:starter.form}:null,
     items,
-    xp:null, // unbackfilled lifetime progress remains UNKNOWN
+    xp, // null when no authoritative event receipts exist (UNKNOWN, not zero)
     tickets:null,
-    note:"Inventory rows are stored; profession XP and ticket history have not been backfilled.",
+    note:"Recorded XP covers this rule version only; historical Quests and free tickets have not been backfilled.",
   };
 }
 
