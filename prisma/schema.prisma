@@ -454,6 +454,7 @@ model SummonTicket {
 // ═══════════════════════════════════════
 model QuizDuel {
   challengeId      String   @id
+  requestKey       String   @unique
   topic            String
   bankVersion      String
   questionIds      String   // JSON string of canonical IDs, never answer keys
