@@ -37,6 +37,10 @@ async function main(){
   const rej=async(f:()=>Promise<unknown>,_message:string)=>{
     await assert.rejects(f);checks++;
   };
+  const ticketRej=async(f:()=>Promise<unknown>,message:string)=>{
+    await assert.rejects(f,{name:"SummonTicketSourceError"},message);
+    checks++;
+  };
   try{
     const user=await createUser("alpha");
     const friend=await createUser("beta");
@@ -196,7 +200,7 @@ async function main(){
     }}),2,"Spent ticket is not duplicated or reminted");
 
     await prisma.challenge.update({where:{id:third.id},data:{status:"disputed"}});
-    await rej(()=>reconcileFreeCareerTickets({
+    await ticketRej(()=>reconcileFreeCareerTickets({
       ownerId:user.id,professionId:"software",
     }),"Disputed source Quest blocks further ticket issuance");
     eq(await prisma.summonTicket.count({where:{ownerId:user.id,
@@ -211,7 +215,7 @@ async function main(){
       eventKey:forgedKey,professionId:"software",awardType:"verified_quest",
       amount:100,ruleVersion:XP_LEDGER_VERSION,sourceReceipt:"forged-final-receipt",
     }});
-    await rej(()=>reconcileFreeCareerTickets({
+    await ticketRej(()=>reconcileFreeCareerTickets({
       ownerId:user.id,professionId:"software",
     }),"Forged final-receipt XP cannot mint free tickets");
     await prisma.professionXpEvent.delete({where:{eventKey:forgedKey}});
@@ -221,7 +225,7 @@ async function main(){
       eventKey:correctionKey,professionId:"software",awardType:"correction",
       amount:-100,ruleVersion:XP_LEDGER_VERSION,sourceReceipt:unique[0].sourceReceipt,
     }});
-    await rej(()=>reconcileFreeCareerTickets({
+    await ticketRej(()=>reconcileFreeCareerTickets({
       ownerId:user.id,professionId:"software",
     }),"Corrected XP history requires reconciliation; no silent grants");
     await prisma.professionXpEvent.delete({where:{eventKey:correctionKey}});
@@ -293,11 +297,11 @@ async function main(){
       "Awarding XP never mutates the participant's credit ledger");
 
     process.env.SUMMON_PERSISTENCE_ENABLED="false";
-    await rej(()=>reconcileFreeCareerTickets({ownerId:user.id,
+    await ticketRej(()=>reconcileFreeCareerTickets({ownerId:user.id,
       professionId:"software"}),"Persistence flag OFF rejects ticket issuance");
     process.env.SUMMON_PERSISTENCE_ENABLED="true";
     process.env.SUMMON_TICKETS_ENABLED="false";
-    await rej(()=>reconcileFreeCareerTickets({ownerId:user.id,
+    await ticketRej(()=>reconcileFreeCareerTickets({ownerId:user.id,
       professionId:"software"}),"Ticket flag OFF independently rejects issuance");
     process.env.SUMMON_PERSISTENCE_ENABLED="false";
     await rej(()=>ensureUniversalPico(user.id),"Flag off prevents grants");
