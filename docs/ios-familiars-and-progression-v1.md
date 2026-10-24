@@ -1,5 +1,7 @@
 # Summoner.world — Familiar & Progression System (v1)
 
+**Historical design note:** The 4-character concept roster in this document was superseded by the user's profession-driven Summon and Fusion requirements. Current direction and implementation scope: [Profession / Battle / XP / Summon / Fusion](profession-summon-game-design-v1.md). Pico alone is the universal starter; do not treat Kiko/Nova/Moss as the fixed core roster.
+
 **Product principle:** real-world action creates progress. Pico is the starter guide, not the whole product. This is a Quest platform with companion characters, visible personal milestones, shared adventures and trustworthy proof—not a lootbox/cash product.
 
 ## What is implemented now vs planned
