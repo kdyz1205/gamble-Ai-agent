@@ -13,6 +13,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 const ADDITIVE = "20261020090000_complete_challenge_schema";
 const PROTECT = "20261020090100_protect_credit_ledger_user_fk";
+const SUMMON_LEDGER = "20261024022500_summon_ledger_foundation";
 const addedColumns: Record<string, string[]> = {
   Challenge: ["arbiter", "disputeWindow", "eventTime", "evidenceHash", "fallbackRule", "joinWindow", "marketType", "paramsHash", "proofSource", "proofWindow", "proposition", "resolutionHash", "settlementMode", "stakeToken", "visibility"],
   Evidence: ["prepareError", "preparedAt", "preparedDurationSec", "preparedFrames", "preparedMode"],
@@ -64,15 +65,27 @@ async function main() {
   try {
     for (const name of databases) await admin.query(`CREATE DATABASE "${name}"`);
     await mkdir(baseline);
-    for (const entry of await readdir(allMigrations)) if (entry !== ADDITIVE && entry !== PROTECT) await cp(join(allMigrations, entry), join(baseline, entry), { recursive: true });
+    // Legacy baseline excludes all later additive migrations. Otherwise a
+    // fresh Summon table silently becomes part of the supposedly old schema.
+    const entries = await readdir(allMigrations, { withFileTypes: true });
+    const migrationFolders = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+    assert(migrationFolders.includes(SUMMON_LEDGER), "Summon ledger migration must be present");
+    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER].includes(entry.name))
+      await cp(join(allMigrations, entry.name), join(baseline, entry.name), { recursive: true });
     const freshConfig = await config("fresh", allMigrations); const legacyConfig = await config("legacy", baseline);
     const additive = await readFile(join(allMigrations, ADDITIVE, "migration.sql"), "utf8");
     const protection = await readFile(join(allMigrations, PROTECT, "migration.sql"), "utf8");
+    const summonLedger = await readFile(join(allMigrations, SUMMON_LEDGER, "migration.sql"), "utf8");
+    assert.doesNotMatch(summonLedger.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
+    assert.doesNotMatch(summonLedger, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|Evidence)"/i);
     assert.doesNotMatch(additive.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     assert.doesNotMatch(protection.replace(/--[^\n]*/g, ""), /\bDROP\s+(TABLE|COLUMN)\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     await command(databases[0], ["migrate", "deploy"], freshConfig);
     const fresh = await connect(databases[0]);
-    assert.equal((await fresh.query(`SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows[0].n, 4);
+    assert.equal((await fresh.query(`SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows[0].n, migrationFolders.length);
+    const summonTables = (await fresh.query(`SELECT table_name FROM information_schema.tables WHERE table_schema=\'public\' AND table_name IN (\'SummonInstance\',\'ProfessionXpEvent\',\'SummonTicket\')`)).rows.map(row => row.table_name).sort();
+    assert.deepEqual(summonTables, ["ProfessionXpEvent", "SummonInstance", "SummonTicket"]);
+    console.log("PASS additive Summon inventory, XP and ticket tables exist after migrations");
     await command(databases[0], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     await command(databases[0], ["migrate", "diff", "--from-migrations", "prisma/migrations", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS fresh migrate deploy and independent shadow replay exactly match canonical columns, types, defaults, indexes and constraints");

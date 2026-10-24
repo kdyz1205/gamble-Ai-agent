@@ -151,6 +151,45 @@ async function main(){
       eq(await prisma.professionXpEvent.count({where:{challengeId:challenge.id}}),0,
         "No award for "+label);
     }
+    // A resolved review may mean a REFUND rather than a win, even if
+    // both players previously accepted an original recommendation.
+    const refunded=await createQuest("refunded");
+    const original=await prisma.judgment.findFirstOrThrow({
+      where:{challengeId:refunded.id},select:{id:true},
+    });
+    const finalRefund=await prisma.judgment.create({
+      data:{challengeId:refunded.id,status:"completed",method:"manual",
+        winnerId:null},
+    });
+    await prisma.reviewCase.create({data:{
+      challengeId:refunded.id,requestedByUserId:user.id,
+      originalJudgmentId:original.id,finalJudgmentId:finalRefund.id,
+      status:"resolved",resolution:"refund",resolvedWinnerId:null,
+      reason:"Refunded fixture with previous consent",
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    await rej(()=>reconcileVerifiedQuestProfessionXp({
+      challengeId:refunded.id,userId:user.id,
+    }),"A refunded Quest never awards XP even with earlier consent");
+    eq(await prisma.professionXpEvent.count({where:{challengeId:refunded.id}}),0,
+      "Refund path issues no XP receipt");
+
+    const upheld=await createQuest("upheld",{consent:false});
+    const upheldOriginal=await prisma.judgment.findFirstOrThrow({
+      where:{challengeId:upheld.id},select:{id:true},
+    });
+    await prisma.reviewCase.create({data:{
+      challengeId:upheld.id,requestedByUserId:friend.id,
+      originalJudgmentId:upheldOriginal.id,finalJudgmentId:upheldOriginal.id,
+      status:"resolved",resolution:"uphold",resolvedWinnerId:user.id,
+      reason:"Human review confirmed completed proof",
+      expiresAt:new Date(Date.now()+60_000),
+    }});
+    const reviewed=await reconcileVerifiedQuestProfessionXp({
+      challengeId:upheld.id,userId:friend.id,
+    });
+    eq(reviewed.amount,80,"Final upheld review can award documented losing participant");
+
     const all=await prisma.professionXpEvent.findMany({
       where:{challengeId:winning.id},
     });

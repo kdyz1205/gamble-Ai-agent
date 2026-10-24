@@ -170,6 +170,14 @@ for(const width of widths){
       assert((guest.headers()["cache-control"]||"").includes("no-store"));
       const body=await guest.json();
       assert(!("starter" in body),"No synthetic account response without login");
+      const spoofed=await page.request.post(base+"/api/summons/starter/claim",{
+        data:{userId:"victim-account",speciesId:"legendary"},
+      });
+      assert.equal(spoofed.status(),401,
+        "Guest-controlled IDs cannot trigger Pico or other grants");
+      assert((spoofed.headers()["cache-control"]||"").includes("no-store"));
+      const spoofBody=await spoofed.json();
+      assert(!("grant" in spoofBody),"No guest grant receipt");
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
       const guestLabel=await page.locator(".ios-pico-entitlement").innerText();

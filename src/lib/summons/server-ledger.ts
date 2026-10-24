@@ -113,8 +113,14 @@ export async function reconcileVerifiedQuestProfessionXp(input:{
     const evidenceIds=new Set(quest.evidence.map(e=>e.userId));
     if(!ids.every(id=>evidenceIds.has(id)))
       throw new ProgressSourceNotFinalError("Proof from both competitors is required");
-    if(quest.reviewCase&&quest.reviewCase.status!=="resolved")
-      throw new ProgressSourceNotFinalError("Review remains unresolved");
+    if(quest.reviewCase){
+      if(quest.reviewCase.status!=="resolved")
+        throw new ProgressSourceNotFinalError("Review remains unresolved");
+      if(!["uphold","override"].includes(quest.reviewCase.resolution||"")||
+         !quest.reviewCase.resolvedWinnerId||
+         (quest.reviewCase.resolution==="override"&&!quest.reviewCase.finalJudgmentId))
+        throw new ProgressSourceNotFinalError("Refunded or incomplete review cannot award XP");
+    }
     const consent=quest.verdictResponses.filter(r=>ids.includes(r.userId));
     const accepted=consent.length===2&&consent.every(r=>r.decision==="accepted");
     const resolved=quest.reviewCase?.status==="resolved"&&
