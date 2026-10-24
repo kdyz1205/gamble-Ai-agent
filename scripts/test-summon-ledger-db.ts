@@ -134,10 +134,39 @@ async function main(){
       challengeId:winning.id,userId:friend.id,
     });
     eq(losing.amount,80,"Proof-accepted losing participant also progresses");
+    const afterAward=await accountSummonLedger(user.id);
+    eq(afterAward?.xp?.totalRecordedXp,100,
+      "Authenticated account sees only its actual credited XP");
+    eq(afterAward?.xp?.receiptCount,1,
+      "Nine concurrent award attempts are still one counted receipt");
+    eq(afterAward?.xp?.byProfession,[{
+      professionId:"software",recordedXp:100,receiptCount:1,
+    }],"Recorded profession totals derive from server rows");
+    eq(afterAward?.xp?.ruleVersion,"verified-quest-skill-v1",
+      "Readback names the exact XP rule");
+    eq(afterAward?.xp?.coverage,"partial-since-ledger-activation",
+      "Recorded XP never claims lifetime completeness");
+    eq(afterAward?.xp?.completeHistory,false,
+      "Historical Quests remain explicitly unbackfilled");
+    eq((await accountSummonLedger(friend.id))?.xp?.totalRecordedXp,80,
+      "The losing account sees its own verified receipts only");
+    eq((await accountSummonLedger(outsider.id))?.xp,null,
+      "No receipt is UNKNOWN, not zero XP");
     eq(await prisma.professionXpEvent.count({where:{challengeId:winning.id}}),2,
       "No duplicate event for same Quest/player/career");
     eq(await prisma.professionXpEvent.count({where:{ownerId:outsider.id}}),0,
       "Outsider gets no progress");
+    const bad=await prisma.professionXpEvent.create({data:{
+      ownerId:outsider.id,challengeId:winning.id,
+      eventKey:"invalid-profession-"+id,professionId:"not-a-profession",
+      awardType:"verified_quest",amount:7,ruleVersion:"verified-quest-skill-v1",
+      sourceReceipt:null,
+    }});
+    await rej(()=>accountSummonLedger(outsider.id),
+      "Unknown profession receipts must fail closed, not inflate a score");
+    await prisma.professionXpEvent.delete({where:{id:bad.id}});
+    eq((await accountSummonLedger(outsider.id))?.xp,null,
+      "Removing invalid fixture restores UNKNOWN without inventing zero");
     await rej(()=>reconcileVerifiedQuestProfessionXp({
       challengeId:winning.id,userId:outsider.id,
     }),"Third parties cannot be credited");
