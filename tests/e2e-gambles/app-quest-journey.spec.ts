@@ -112,6 +112,27 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
       expect(response.status()).toBe(200);
       return (await response.json()).status as string;
     }, { timeout: 80_000, intervals: [1000, 1500, 2500, 5000] }).toBe("failed");
+    const prior = await creator.context.request.get(base + "/api/challenges/" + proofQuest + "/judge-job");
+    expect(prior.status()).toBe(200);
+    expect((await prior.json()).job).toEqual({ jobId, status: "failed" });
+    expect((await friend.context.request.get(
+      base + "/api/challenges/" + proofQuest + "/judge-job",
+    )).status()).toBe(200);
+    const unrelated = await browser.newContext();
+    try {
+      expect((await unrelated.request.get(
+        base + "/api/challenges/" + proofQuest + "/judge-job",
+      )).status()).toBe(401);
+    } finally {
+      await unrelated.close();
+    }
+    await creatorPage.reload();
+    await expect(creatorPage.getByText("Previous referee review failed.", { exact: false }))
+      .toBeVisible({ timeout: 20_000 });
+    expect((await db.query(
+      'SELECT COUNT(*)::int AS n FROM "JudgeJob" WHERE "challengeId"=$1',
+      [proofQuest],
+    )).rows[0].n).toBe(1);
     expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [proofQuest])).rows[0].status).toBe("judging");
     expect((await db.query('SELECT COUNT(*)::int AS n FROM "Judgment" WHERE "challengeId"=$1', [proofQuest])).rows[0].n).toBe(0);
     expect((await db.query('SELECT COUNT(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1', [proofQuest])).rows[0].n).toBe(0);
