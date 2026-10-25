@@ -38,16 +38,62 @@ export default function Creature3DPrototypeViewer({src,label}:{
           if(!stopped)setStatus("unavailable");
           return;
         }
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+        // Cap Retina resolution to protect mobile memory and battery.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,
+          window.matchMedia("(pointer:coarse)").matches?1.8:2));
         renderer.outputColorSpace=THREE.SRGBColorSpace;
+        renderer.toneMapping=THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure=1.08;
         const scene=new THREE.Scene();
-        scene.add(new THREE.HemisphereLight(0xffffff,0xd9ecff,2.1));
-        const sun=new THREE.DirectionalLight(0xfffaf0,2.0);
-        sun.position.set(-2,5,6);
-        scene.add(sun);
-        const fill=new THREE.DirectionalLight(0xffffff,1.1);
-        fill.position.set(3,3,5);
-        scene.add(fill);
+        scene.add(new THREE.HemisphereLight(0xffffff,0xd9ecff,1.25));
+        const sun=new THREE.DirectionalLight(0xfff2e1,2.25);
+        sun.position.set(-3,6,5);scene.add(sun);
+        const fill=new THREE.DirectionalLight(0xb9ecff,1.1);
+        fill.position.set(4,2,5);scene.add(fill);
+        const rim=new THREE.DirectionalLight(0xd8b9ff,1.45);
+        rim.position.set(2,4,-3);scene.add(rim);
+        // A subtle energy orbit and deterministic fireflies surround the GLB.
+        // Decorative meshes are not claimed as creature rigging or animation.
+        const orbit=new THREE.Mesh(
+          new THREE.TorusGeometry(1.39,0.012,6,96),
+          new THREE.MeshBasicMaterial({color:0x8bcfff,transparent:true,
+            opacity:0.58,blending:THREE.AdditiveBlending,depthWrite:false}),
+        );
+        orbit.rotation.x=-Math.PI/2;orbit.position.y=0.1;scene.add(orbit);
+        const positions=new Float32Array(55*3);
+        for(let i=0;i<55;i++){
+          const angle=i*2.399963,rad=1.1+(i%9)*0.095;
+          positions[i*3]=Math.cos(angle)*rad;
+          positions[i*3+1]=0.23+(i%13)*0.18;
+          positions[i*3+2]=Math.sin(angle)*rad;
+        }
+        const sparksGeometry=new THREE.BufferGeometry();
+        sparksGeometry.setAttribute("position",new THREE.BufferAttribute(positions,3));
+        const sparks=new THREE.Points(sparksGeometry,new THREE.PointsMaterial({
+          color:0xc4eaff,size:0.055,transparent:true,opacity:0.7,
+          sizeAttenuation:true,depthWrite:false,blending:THREE.AdditiveBlending,
+        }));
+        scene.add(sparks);
+        // One cheap, cached contact-shadow texture grounds the creature.
+        const shadowCanvas=document.createElement("canvas");
+        shadowCanvas.width=128;shadowCanvas.height=128;
+        const shadowCtx=shadowCanvas.getContext("2d");
+        if(shadowCtx){
+          const gradient=shadowCtx.createRadialGradient(64,64,5,64,64,63);
+          gradient.addColorStop(0,"rgba(13,28,59,.48)");
+          gradient.addColorStop(.6,"rgba(22,48,86,.22)");
+          gradient.addColorStop(1,"rgba(22,48,86,0)");
+          shadowCtx.fillStyle=gradient;
+          shadowCtx.fillRect(0,0,128,128);
+        }
+        const shadowTexture=new THREE.CanvasTexture(shadowCanvas);
+        const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.2,3.2),
+          new THREE.MeshBasicMaterial({
+            map:shadowTexture,transparent:true,opacity:.75,depthWrite:false,
+            side:THREE.DoubleSide,
+          }));
+        shadow.rotation.x=-Math.PI/2;shadow.position.y=0.025;
+        scene.add(shadow);
         const camera=new THREE.PerspectiveCamera(43,1,0.1,50);
         camera.position.set(4,3.2,5);
         const controls=new OrbitControls(camera,canvas);
@@ -58,8 +104,44 @@ export default function Creature3DPrototypeViewer({src,label}:{
         controls.minPolarAngle=0.15;
         controls.maxPolarAngle=Math.PI-0.15;
         let model:import("three").Group|null=null;
-        let originalHeight=2.5;
-        const render=()=>{if(!stopped)renderer.render(scene,camera);};
+        let modelBaseY=0;
+        let frameId=0,lastFrame=0,inView=true,contextHealthy=true;
+        const motionMedia=window.matchMedia("(prefers-reduced-motion: reduce)");
+        const motionDisabled=()=>{
+          try{return motionMedia.matches||
+            window.localStorage.getItem("sum-ios-reduced-motion")==="true";}
+          catch{return motionMedia.matches;}
+        };
+        const render=()=>{if(!stopped&&contextHealthy)renderer.render(scene,camera);};
+        const stopAnimation=()=>{
+          if(frameId){window.cancelAnimationFrame(frameId);frameId=0;}
+        };
+        const animate=(time:number)=>{
+          frameId=0;
+          if(stopped||!contextHealthy||!inView||document.hidden||motionDisabled())return;
+          if(time-lastFrame>=1000/30){
+            sparks.rotation.y=time*0.00007;
+            orbit.rotation.z=Math.sin(time*0.0005)*0.045;
+            if(model)model.position.y=modelBaseY+Math.sin(time*0.0014)*0.055;
+            render();lastFrame=time;
+          }
+          frameId=window.requestAnimationFrame(animate);
+        };
+        const syncAnimation=()=>{
+          stopAnimation();
+          if(model)model.position.y=modelBaseY;
+          render();
+          if(!stopped&&contextHealthy&&inView&&!document.hidden&&!motionDisabled())
+            frameId=window.requestAnimationFrame(animate);
+        };
+        const visibilityObserver=typeof IntersectionObserver==="function"?
+          new IntersectionObserver(entries=>{
+            inView=Boolean(entries[0]?.isIntersecting);syncAnimation();
+          },{threshold:0.03}):null;
+        visibilityObserver?.observe(container);
+        document.addEventListener("visibilitychange",syncAnimation);
+        window.addEventListener("sum-ios-preferences-changed",syncAnimation);
+        motionMedia.addEventListener?.("change",syncAnimation);
         const size=()=>{
           if(stopped)return;
           const width=Math.max(1,container.clientWidth);
@@ -70,7 +152,7 @@ export default function Creature3DPrototypeViewer({src,label}:{
           render();
         };
         const contextLost=(event:Event)=>{
-          event.preventDefault();
+          event.preventDefault();contextHealthy=false;stopAnimation();
           if(!stopped)setStatus("unavailable");
         };
         canvas.addEventListener("webglcontextlost",contextLost,false);
@@ -92,6 +174,10 @@ export default function Creature3DPrototypeViewer({src,label}:{
           });
         };
         release=()=>{
+          stopAnimation();visibilityObserver?.disconnect();
+          document.removeEventListener("visibilitychange",syncAnimation);
+          window.removeEventListener("sum-ios-preferences-changed",syncAnimation);
+          motionMedia.removeEventListener?.("change",syncAnimation);
           observer?.disconnect();
           window.removeEventListener("resize",size);
           canvas.removeEventListener("webglcontextlost",contextLost);
@@ -99,6 +185,11 @@ export default function Creature3DPrototypeViewer({src,label}:{
           controls.dispose();
           actionsRef.current=null;
           if(model){scene.remove(model);discard(model);}
+          scene.remove(orbit,sparks,shadow);
+          orbit.geometry.dispose();(orbit.material as import("three").Material).dispose();
+          sparksGeometry.dispose();(sparks.material as import("three").Material).dispose();
+          shadow.geometry.dispose();(shadow.material as import("three").Material).dispose();
+          shadowTexture.dispose();
           renderer.dispose();
           renderer.forceContextLoss();
         };
@@ -112,8 +203,10 @@ export default function Creature3DPrototypeViewer({src,label}:{
           gltf.scene.traverse(object=>{
             const mesh=object as import("three").Mesh;
             if(mesh.isMesh){
+              const before=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+              for(const old of before)old?.dispose();
               mesh.material=new THREE.MeshStandardMaterial({
-                vertexColors:true,metalness:0,roughness:0.72,
+                vertexColors:true,metalness:0.04,roughness:0.52,
               });
             }
           });
@@ -135,11 +228,19 @@ export default function Creature3DPrototypeViewer({src,label}:{
           const middle=new THREE.Vector3();
           box.getCenter(middle);
           axisRoot.position.set(-middle.x,-box.min.y,-middle.z);
+          modelBaseY=axisRoot.position.y;
           model=axisRoot;
           scene.add(axisRoot);
-          originalHeight=(box.max.y-box.min.y);
-          camera.position.set(4,Math.max(2.8,originalHeight*1.15),5);
-          controls.target.set(0,originalHeight*0.49,0);
+          // Fit each species to the phone viewport, not a fixed camera distance.
+          box.setFromObject(axisRoot);
+          const center=new THREE.Vector3(),sphere=new THREE.Sphere();
+          box.getCenter(center);box.getBoundingSphere(sphere);
+          const fov=THREE.MathUtils.degToRad(camera.fov);
+          const distance=Math.min(7.4,Math.max(3.8,
+            sphere.radius/Math.sin(fov/2)*1.12));
+          camera.position.set(distance*.62,center.y+distance*.35,distance*.81);
+          controls.target.copy(center);
+          controls.maxDistance=Math.max(10,distance*2.2);
           controls.update();
           controls.saveState();
           actionsRef.current={
@@ -152,6 +253,7 @@ export default function Creature3DPrototypeViewer({src,label}:{
           };
           size();
           setStatus("ready");
+          syncAnimation();
         },undefined,()=>{
           if(!stopped)setStatus("unavailable");
         });
