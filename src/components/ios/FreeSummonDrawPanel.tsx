@@ -77,12 +77,12 @@ export default function FreeSummonDrawPanel({
     <small>Rare+ guaranteed on the 20th consecutive miss; Epic+ on the 80th. Both guarantees apply across all your professions. The server stores the actual probabilities and result.</small>
     {result?<div role="status" aria-live="polite">
       <p><strong>Summoned: {result.speciesId}</strong> - {result.rarity}.</p>
-      <p>Verified draw #{result.ordinal}, receipt {result.receiptId}. No credits transferred.</p>
+      <p style={{overflowWrap:"anywhere"}}>Verified draw #{result.ordinal}, receipt {result.receiptId}. No credits transferred.</p>
       <p>Next pity counters: Rare {result.rareMissesAfter}/19, Epic {result.epicMissesAfter}/79.</p>
       <p>Actual draw weights: {result.effectiveWeights.map(x=>x.id+":"+x.weight).join(", ")}.</p>
     </div>:null}
     {available.length===0?<p>No available free career tickets. An earned milestone awaiting issuance cannot be spent.</p>:
-      <div>
+      <div className="ios-summon-input">
         <label htmlFor="free-summon-career">Career pool</label>
         <select id="free-summon-career" value={chosen}
           disabled={busy||Boolean(request)}

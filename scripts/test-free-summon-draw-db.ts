@@ -209,7 +209,7 @@ async function main(){
   before,"Credits and lifetime financial counters remain byte-for-byte unchanged");
 
   await prisma.summonDrawReceipt.update({
-    where:{id:previous.id},data:{rarity:"legendary"},
+    where:{id:previous.id},data:{rarity:"tampered-invalid-rarity"},
   });
   await refuses(()=>redeemFreeSummonTicket(draw),
     "Tampered immutable draw history fails receipt replay");
