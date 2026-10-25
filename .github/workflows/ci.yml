@@ -73,7 +73,7 @@ jobs:
         run: |
           docker run -d --rm --name trusted-storage-ci -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z server /data
+            pgsty/silo:RELEASE.2026-10-18T00-00-00Z server /data
           for attempt in {1..40}; do
             if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
               exit 0
