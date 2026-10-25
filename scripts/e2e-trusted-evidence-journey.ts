@@ -10,13 +10,14 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { request, type APIRequestContext } from "@playwright/test";
 import { Pool } from "pg";
 import ffmpegPath from "ffmpeg-static";
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import ffprobeStatic from "ffprobe-static";
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 
@@ -165,6 +166,43 @@ async function main() {
     assert.equal(await count("Evidence", challengeId), 0);
 
     const uploadA = await uploadFor(creator.ctx, challengeId);
+
+    // Independent real decoder receipt, through the PRIVATE S3 SDK rather
+    // than a public URL or a fabricated video header.
+    const objectRow = await db.query(
+      'SELECT "objectKey" FROM "TrustedEvidenceUpload" WHERE id=$1', [uploadA],
+    );
+    assert.equal(objectRow.rows.length, 1);
+    const retrieved = await store.send(new GetObjectCommand({
+      Bucket: "ci-private-evidence",
+      Key: objectRow.rows[0].objectKey as string,
+    }));
+    assert.ok(retrieved.Body);
+    const chunks: Buffer[] = [];
+    let transferred = 0;
+    for await (const item of retrieved.Body as AsyncIterable<Uint8Array>) {
+      const chunk = Buffer.from(item);
+      transferred += chunk.length;
+      assert.ok(transferred <= 80 * 1024 * 1024, "Private object read exceeds budget");
+      chunks.push(chunk);
+    }
+    const downloaded = Buffer.concat(chunks);
+    assert.equal(createHash("sha256").update(downloaded).digest("hex"), digest);
+    const decodedPath = join(folder, "s3-retrieved.mp4");
+    await writeFile(decodedPath, downloaded);
+    assert.ok(ffprobeStatic.path, "Bundled FFprobe must be available");
+    const duration = Number(execFileSync(ffprobeStatic.path, [
+      "-v", "error", "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1", decodedPath,
+    ], { encoding: "utf8", timeout: 15_000 }).trim());
+    assert.ok(duration >= 1 && duration < 3, "Private MP4 decode produced invalid duration");
+    const imagePath = join(folder, "actual-decoded-frame.jpg");
+    execFileSync(ffmpegPath, [
+      "-hide_banner", "-loglevel", "error", "-y", "-i", decodedPath,
+      "-frames:v", "1", imagePath,
+    ], { timeout: 25_000 });
+    assert.ok((await stat(imagePath)).size > 500, "Private MP4 did not yield a JPEG frame");
+
     const otherFinish = await friend.ctx.post("/api/uploads/trusted-evidence/" + uploadA + "/complete");
     assert.equal(otherFinish.status(), 404);
     assert.equal(await count("Evidence", challengeId), 1);
@@ -210,6 +248,7 @@ async function main() {
       privateMP4Bytes: bytes.length,
       distinctUploads: 2, immutableEvidenceRows: 2,
       sha256Verified: true, presignedReplayRejected: true,
+      decoderDurationSeconds: Number(duration.toFixed(3)), verifiedPrivateFrames: 1,
       AI: "disabled_and_http_storage_denied",
       fakeVerdicts: 0, creditMovement: 0, xpIssued: 0,
     }));
