@@ -258,7 +258,7 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
 });
 
 
-test("cinematic particle canvas pauses when offscreen or motion is reduced",async({browser})=>{
+test("cinematic game-first HUD pauses offscreen and honors motion settings",async({browser},testInfo)=>{
   const context=await browser.newContext({
     viewport:{width:390,height:360},reducedMotion:"no-preference",
   });
@@ -266,13 +266,25 @@ test("cinematic particle canvas pauses when offscreen or motion is reduced",asyn
     const page=await context.newPage();
     await page.goto(BASE+"/app/quiz");
     const arena=page.getByTestId("ios-quiz-arena");
+    const hud=page.getByTestId("ios-duel-hud");
     await expect(arena).toBeVisible({timeout:30_000});
     await expect(page.getByTestId("ios-quiz-arena-vfx")).toHaveCount(1);
-    // The scene begins below this short mobile viewport.
+    await expect(hud).toContainText("Free challenge · 0 credits at stake");
+    const order=await page.evaluate(()=>{
+      const stage=document.querySelector('[data-testid="ios-quiz-arena"]');
+      const controls=document.querySelector('[data-testid="ios-duel-hud"]');
+      return !!stage&&!!controls&&Boolean(
+        stage.compareDocumentPosition(controls)&Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(order).toBe(true);
+    // The arena leads the mobile viewport, with the controls below it.
+    await expect(arena).toHaveAttribute("data-vfx","canvas",{timeout:15_000});
+    await expect(arena).toHaveAttribute("data-vfx-quality",/^(balanced|adaptive)$/);
+    await page.screenshot({path:testInfo.outputPath("game-first-duel-mobile.png"),fullPage:true});
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
     await expect(arena).toHaveAttribute("data-vfx","static",{timeout:15_000});
     await arena.scrollIntoViewIfNeeded();
     await expect(arena).toHaveAttribute("data-vfx","canvas",{timeout:15_000});
-    await expect(arena).toHaveAttribute("data-vfx-quality",/^(balanced|adaptive)$/);
 
     await page.emulateMedia({reducedMotion:"reduce"});
     await expect(arena).toHaveAttribute("data-vfx","static");
@@ -288,7 +300,7 @@ test("cinematic particle canvas pauses when offscreen or motion is reduced",asyn
       window.dispatchEvent(new Event("sum-ios-preferences-changed"));
     });
     await expect(arena).toHaveAttribute("data-vfx","canvas");
-    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
     await expect(arena).toHaveAttribute("data-vfx","static");
   }finally{
     await context.close();

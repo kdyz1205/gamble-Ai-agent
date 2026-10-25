@@ -48,6 +48,11 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
     aria-label="Pico Quiz arena"
     data-testid="ios-quiz-arena" data-phase={phase}>
     <div className="ios-quiz-arena__sky" aria-hidden="true"/>
+    <div className="ios-quiz-arena__rift" aria-hidden="true">
+      <span className="ios-quiz-arena__rift-ring"/>
+      <span className="ios-quiz-arena__rift-beam"/>
+      <span className="ios-quiz-arena__rift-core"/>
+    </div>
     <QuizArenaParticles phase={phase}/>
     <div className="ios-quiz-arena__sparks" aria-hidden="true">
       {SPARKS.map((spark,index)=><span key={index}

@@ -1106,3 +1106,151 @@
 }
 .ios-app[data-reduce-motion="true"] .ios-quiz-arena__winner-mark{animation:none;}
 .ios-app[data-reduce-motion="true"] .ios-quiz-arena__impact{display:none;}
+
+
+/* 4A-inspired duel HUD: the game scene leads; copy and actions follow it. */
+.ios-app .ios-main > .ios-quiz-arena {
+  margin:0;min-height:375px;border-radius:28px;
+  border:1px solid #84bbec;
+  background:
+    radial-gradient(ellipse at 52% 83%,#4a8bd880 0%,transparent 52%),
+    radial-gradient(ellipse at 22% 32%,#3797dc83 0%,transparent 45%),
+    radial-gradient(ellipse at 83% 24%,#9b6de48c 0%,transparent 43%),
+    linear-gradient(167deg,#101d49 0%,#273d80 56%,#141b46 100%);
+  box-shadow:0 16px 34px #1b346c37,inset 0 0 0 1px #ecfaff40;
+  animation:ios-duel-enter .62s cubic-bezier(.17,.78,.22,1) both;
+}
+.ios-app .ios-main > .ios-quiz-arena + .ios-quiz-hero {margin-top:10px}
+.ios-quiz-arena__fighters {min-height:267px}
+.ios-quiz-arena__pico {
+  width:min(100%,176px);max-height:176px;
+  filter:drop-shadow(0 10px 13px #03102a9e);
+}
+.ios-quiz-arena__fighter-label {margin-top:-7px;gap:4px}
+.ios-quiz-arena__fighter-label strong {font-size:13px;letter-spacing:-.02em}
+.ios-quiz-arena__platform {bottom:65px;height:48px}
+.ios-quiz-arena__aura {width:136px;height:167px;top:20px}
+.ios-quiz-arena__versus {
+  width:48px;height:48px;
+  box-shadow:0 0 28px #bbefff8e,inset 0 0 14px #fff5;
+}
+.ios-quiz-arena__top {padding:18px 16px 0}
+.ios-quiz-arena__free {border-color:#c7ffeb8a}
+.ios-quiz-arena--open .ios-quiz-arena__versus {
+  box-shadow:0 0 12px #9fc6ff62,inset 0 0 14px #fff3;
+}
+.ios-quiz-arena--live .ios-quiz-arena__versus {
+  box-shadow:0 0 24px #ade9fff0,inset 0 0 18px #ffffff52;
+}
+.ios-quiz-arena--live .ios-quiz-arena__aura {
+  animation-duration:2.2s;
+}
+.ios-quiz-arena__rift {
+  position:absolute;inset:15% 12% 17%;
+  z-index:1;pointer-events:none;opacity:.55;
+  transform:translateZ(0);
+}
+.ios-quiz-arena__rift-ring {
+  position:absolute;left:50%;top:50%;
+  width:73%;aspect-ratio:1;border-radius:50%;
+  border:1px solid #bfefff38;
+  box-shadow:0 0 20px #89dfff34,inset 0 0 35px #a1e5ff10;
+  transform:translate(-50%,-50%) rotateX(62deg);
+}
+.ios-quiz-arena__rift-beam {
+  position:absolute;left:12%;right:12%;top:46%;height:27px;
+  opacity:.45;transform:rotate(-2deg);
+  background:linear-gradient(90deg,transparent,#92eaff52 31%,
+    #e5d0ffbf 51%,#e8aaff58 68%,transparent);
+  -webkit-mask-image:radial-gradient(ellipse,black,transparent 75%);
+  mask-image:radial-gradient(ellipse,black,transparent 75%);
+}
+.ios-quiz-arena__rift-core {
+  position:absolute;left:50%;top:47%;width:59px;height:59px;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle,#effbffac 0%,#d8beff68 16%,
+    #b0dfff3c 36%,transparent 73%);
+}
+.ios-quiz-arena--live .ios-quiz-arena__rift {
+  opacity:1;
+}
+.ios-quiz-arena--live .ios-quiz-arena__rift-beam {
+  animation:ios-duel-beam 2.2s ease-in-out infinite;
+}
+.ios-quiz-arena--live .ios-quiz-arena__rift-core {
+  animation:ios-duel-core 1.65s ease-in-out infinite;
+}
+.ios-quiz-arena--completed .ios-quiz-arena__rift-beam {opacity:.8}
+.ios-quiz-arena--cancelled .ios-quiz-arena__rift {opacity:.1}
+.ios-quiz-arena__ground {bottom:21px;opacity:.75}
+.ios-quiz-arena__status {
+  background:#091a3ed6;border-color:#a9defe77;
+  font-size:12px!important;min-height:41px;
+  display:grid;place-content:center;
+}
+.ios-quiz-hero--compact {
+  padding:15px 16px 16px;
+  gap:8px;border-radius:18px;
+  border-color:#dbe5fa;
+  background:linear-gradient(145deg,#ffffff,#f3f7ff 70%,#fff9fd);
+  box-shadow:0 7px 21px #344f8d0a;
+}
+.ios-quiz-hero__top {
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;min-width:0;
+}
+.ios-quiz-hero__top .ios-overline {
+  font-size:10px;font-weight:850;color:#6972aa;letter-spacing:.14em;
+}
+.ios-quiz-hero__phase {
+  border:1px solid #bcd5fb;padding:4px 8px;
+  border-radius:999px;color:#425aa3;background:#eef5ff;
+  font-size:9px;font-weight:900;letter-spacing:.1em;
+}
+.ios-quiz-hero--compact h1 {
+  font-size:21px;line-height:1.17;margin:0;font-family:"Fraunces",Georgia,serif;
+}
+.ios-quiz-hero--compact p {
+  font-size:12px;line-height:1.55;color:#5e6e83;
+}
+.ios-quiz-hero--compact > strong {
+  border-radius:10px;padding:7px 10px;
+  font-size:11px;font-weight:850;min-height:30px;
+}
+.ios-app--night .ios-quiz-hero--compact {
+  background:linear-gradient(130deg,#302e52,#283752);
+  border-color:#5c628f;
+}
+.ios-app--night .ios-quiz-hero--compact p {color:#d2d7f4}
+.ios-app--night .ios-quiz-hero__phase {color:#e0e8ff;background:#3f4b7d;border-color:#7d8dd0}
+.ios-quiz-arena[data-vfx="static"] .ios-quiz-arena__sky,
+.ios-quiz-arena[data-vfx="static"] .ios-quiz-arena__sparks span,
+.ios-quiz-arena[data-vfx="static"] .ios-quiz-arena__rift span {
+  animation:none!important;
+}
+@keyframes ios-duel-enter {
+  from {opacity:.2;transform:translate3d(0,12px,0) scale(.985);}
+  to {opacity:1;transform:translate3d(0,0,0) scale(1);}
+}
+@keyframes ios-duel-beam {
+  0%,100% {opacity:.35;transform:rotate(-2deg) scaleX(.83);}
+  50% {opacity:1;transform:rotate(2deg) scaleX(1.14);}
+}
+@keyframes ios-duel-core {
+  0%,100% {opacity:.57;transform:translate(-50%,-50%) scale(.75);}
+  50% {opacity:1;transform:translate(-50%,-50%) scale(1.28);}
+}
+@media(max-width:345px){
+  .ios-app .ios-main > .ios-quiz-arena{min-height:322px}
+  .ios-quiz-arena__fighters{min-height:218px;padding:0 5px}
+  .ios-quiz-arena__pico{max-height:143px}
+  .ios-quiz-arena__aura{height:141px;width:112px}
+  .ios-quiz-arena__platform{bottom:57px}
+  .ios-quiz-hero--compact h1{font-size:19px}
+}
+@media(prefers-reduced-motion:reduce){
+  .ios-app .ios-main > .ios-quiz-arena {animation:none}
+  .ios-quiz-arena__rift span {animation:none!important}
+}
+.ios-app[data-reduce-motion="true"] .ios-main > .ios-quiz-arena {animation:none}
+.ios-app[data-reduce-motion="true"] .ios-quiz-arena__rift span {animation:none!important}
