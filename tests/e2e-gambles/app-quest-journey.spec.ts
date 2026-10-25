@@ -48,10 +48,10 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     people.push({ id: session.id as string, context });
     return { id: session.id as string, context };
   }
-  async function createFree(creator: BrowserContext, title: string) {
+  async function createFree(creator: BrowserContext, title: string, evidenceType = "text") {
     const response = await creator.request.post(base + "/api/challenges", {
       data: {
-        title, type: "General", stake: 0, evidenceType: "text",
+        title, type: "General", stake: 0, evidenceType,
         visibility: "invite_only", isPublic: false, deadline: "2 hours",
         rules: "Each accepted player supplies their own written evidence. No guesses when evidence is absent.",
       },
@@ -120,6 +120,38 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
 
     // Separate fail-closed no-proof case proves that real participant consent
     // is reachable in /app/quest; the deadline rule must never invent a winner.
+    // The same in-app proof page must offer the real file-picker/uploader.
+    // Force a transfer failure and prove no Evidence record was minted.
+    const photoQuest = await createFree(creator.context, "App photo upload failure " + tag, "photo");
+    expect((await friend.context.request.post(base + "/api/challenges/" + photoQuest + "/accept")).status()).toBe(200);
+    const photoPage = await creator.context.newPage();
+    await photoPage.route("**/api/challenges/" + photoQuest + "/evidence/blob-handle", route =>
+      route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Test Blob disabled" }) }));
+    await photoPage.route("**/api/uploads/evidence-presign", route =>
+      route.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ uploadUrl: "https://no-upload.example.invalid/evidence.png",
+          publicUrl: "https://no-upload.example.invalid/evidence.png" }) }));
+    let rejectedUploadAttempts = 0;
+    await photoPage.route("https://no-upload.example.invalid/evidence.png", route => {
+      rejectedUploadAttempts++;
+      return route.fulfill({ status: 403, body: "Upload forbidden by fixture" });
+    });
+    await photoPage.goto(base + "/app/evidence-add?id=" + photoQuest);
+    await expect(photoPage.getByTestId("ios-app-media-uploader")).toBeVisible();
+    const chooser = photoPage.waitForEvent("filechooser");
+    await photoPage.getByRole("button", { name: "Upload photo" }).click();
+    await (await chooser).setFiles({
+      name: "isolated-test.png", mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9SIZ0V4AAAAASUVORK5CYII=", "base64"),
+    });
+    await photoPage.getByRole("button", { name: "Submit proof" }).click();
+    await expect(photoPage.getByText(/upload failed|proof was not submitted|Upload forbidden/i).first())
+      .toBeVisible({ timeout: 20_000 });
+    expect(rejectedUploadAttempts).toBeGreaterThan(0);
+    expect((await db.query('SELECT COUNT(*)::int AS n FROM "Evidence" WHERE "challengeId"=$1', [photoQuest])).rows[0].n).toBe(0);
+    expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [photoQuest])).rows[0].status).toBe("live");
+    await photoPage.close();
+
     const deadlineQuest = await createFree(creator.context, "App no-proof deadline " + tag);
     expect((await friend.context.request.post(
       base + "/api/challenges/" + deadlineQuest + "/accept",

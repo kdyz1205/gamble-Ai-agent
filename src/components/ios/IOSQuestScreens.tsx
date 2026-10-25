@@ -9,6 +9,7 @@ import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import IOSQuestJudgment from "./IOSQuestJudgment";
+import EvidenceUploader from "@/components/EvidenceUploader";
 
 export function CreateScreen({seed}: {seed?:string}) {
   const [chosen,setChosen]=useState(seed==="craft"||seed==="grow"?seed:"move");
@@ -120,6 +121,7 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   ));
   const policy=(quest?.evidenceType||"").toLowerCase();
   const textAllowed=policy==="text"||policy==="self_report";
+  const alreadySubmitted=Boolean(quest?.evidence?.some(p=>p.userId===session?.user?.id));
   const save=async()=>{
     if(!quest||!accepted||!textAllowed||!note.trim()||busy)return;
     setBusy(true);setSubmitError("");
@@ -132,15 +134,17 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   return <IosFrame title="Add Evidence" eyebrow="THE PROOF CHAPTER" back={id?"/app/quest?id="+encodeURIComponent(id):"/app/today"}>
     {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
     <>
-      <div className="ios-proof-hero"><IosArt src={visuals.create} alt="A creative desk for your memories"/>
-        <span className="ios-overline">REAL PROOF · {quest.evidenceType.replace(/_/g," ")}</span>
-      </div>
-      <h1 className="ios-page-title">{quest.title}</h1>
+      <section className="ios-app-proof-heading" aria-label="Proof submission">
+        <span className="ios-app-proof-heading__icon"><IosIcon name="camera" size={23}/></span>
+        <div><span className="ios-overline">REQUIRED PROOF / {quest.evidenceType.replace(/_/g," ")}</span>
+          <h1>{quest.title}</h1>
+        </div>
+      </section>
       {quest.status!=="live"?<IosEmpty image={visuals.mascot} heading="Proof is not open yet."
         description={"Quest status: "+quest.status+". Evidence may only be changed while a Quest is live."} action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
       !accepted?<AuthInvitation title="Only accepted players can submit proof." detail="Sign in with the account participating in this Quest."/>:
-      success?<IosEmpty image={visuals.mascotHappy} heading="Your proof was saved."
-        description="This submission was accepted by the actual Quest service. You can review its record." action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
+      success||alreadySubmitted?<IosEmpty image={visuals.mascotHappy} heading="Your proof was saved."
+        description="Your real proof submission is recorded. The referee cannot judge until every required player has submitted." action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
       <>
         <section className="ios-proof-form">
           <h2>What happened?</h2><p>Describe the real attempt and keep the agreed proof requirements in mind.</p>
@@ -151,11 +155,18 @@ export function EvidenceAddScreen({id}:{id?:string}) {
             <button className="ios-primary" type="button" disabled={!note.trim()||busy} onClick={()=>void save()}>
               {busy?"Submitting…":"Save written evidence"}
             </button></>:
-            <><div className="ios-proof-media"><IosIcon name="camera" size={26}/>
-              <strong>{policy==="video"?"Upload your video":policy==="photo"?"Upload your photo":"Prepare your required proof"}</strong>
-              <p>The existing protected uploader verifies file requirements, access and deadlines.</p>
-            </div>
-            <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>Open secure proof uploader</IosAction></>}
+            ["photo","video"].includes(policy) ?
+              <div className="ios-app-media-proof" data-testid="ios-app-media-uploader">
+                <p className="ios-message">Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules.</p>
+                <EvidenceUploader
+                  challengeId={quest.id}
+                  evidenceType={quest.evidenceType}
+                  onSubmitted={() => setSuccess(true)}
+                />
+              </div> :
+              <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>
+                Open policy-specific proof capture
+              </IosAction>}
         </section>
       </>}
     </>}
