@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import type {CSSProperties} from "react";
+import dynamic from "next/dynamic";
+import {useCallback,useState,type CSSProperties} from "react";
 import {visuals} from "./IOSAppUI";
 import QuizArenaParticles from "./QuizArenaParticles";
+
+const Pico3DScene=dynamic(()=>import("./Pico3DScene"),{ssr:false});
 
 type Phase="preview"|"open"|"live"|"completed"|"cancelled";
 type Outcome="won"|"lost"|"tie"|"timeout"|null;
@@ -43,17 +46,30 @@ function statusText(phase:Phase,outcome:Outcome){
  */
 export default function QuizArenaStage({phase,creator,opponent,outcome=null,winnerSide=null}:Props){
   const resolved=phase==="completed"&&winnerSide!==null;
+  const [show3D,setShow3D]=useState(false);
+  const [ready3D,setReady3D]=useState(false);
+  const [modelError,setModelError]=useState(false);
+  const onReady=useCallback(()=>setReady3D(true),[]);
+  const onUnavailable=useCallback(()=>{
+    setReady3D(false);setShow3D(false);setModelError(true);
+  },[]);
+  const switchMode=()=>{
+    setReady3D(false);setModelError(false);
+    setShow3D(open=>!open);
+  };
   return <section className={"ios-quiz-arena ios-quiz-arena--"+phase+
-    (resolved?" ios-quiz-arena--"+winnerSide+"-win":"")}
+    (resolved?" ios-quiz-arena--"+winnerSide+"-win":"")+
+    (show3D&&ready3D?" ios-quiz-arena--3d":"")}
     aria-label="Pico Quiz arena"
-    data-testid="ios-quiz-arena" data-phase={phase}>
+    data-testid="ios-quiz-arena" data-phase={phase}
+    data-render-mode={show3D&&ready3D?"3d":"illustration"}>
     <div className="ios-quiz-arena__sky" aria-hidden="true"/>
     <div className="ios-quiz-arena__rift" aria-hidden="true">
       <span className="ios-quiz-arena__rift-ring"/>
       <span className="ios-quiz-arena__rift-beam"/>
       <span className="ios-quiz-arena__rift-core"/>
     </div>
-    <QuizArenaParticles phase={phase}/>
+    <QuizArenaParticles phase={phase} paused={show3D&&ready3D}/>
     <div className="ios-quiz-arena__sparks" aria-hidden="true">
       {SPARKS.map((spark,index)=><span key={index}
         style={{
@@ -66,9 +82,19 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
     </div>
     <div className="ios-quiz-arena__top">
       <span className="ios-quiz-arena__eyebrow">SUMMONER ARENA <span aria-hidden="true">✦</span></span>
-      <span className="ios-quiz-arena__free">FREE · 0 CREDITS</span>
+      <div className="ios-quiz-arena__top-actions">
+        <button type="button" className="ios-quiz-arena__mode"
+          data-testid="toggle-pico-3d"
+          aria-label={show3D?"Return to Pico illustrations":"Show procedural Pico 3D prototype"}
+          aria-pressed={show3D} onClick={switchMode}>
+          {show3D?"2D ART":"3D MODE"}
+        </button>
+        <span className="ios-quiz-arena__free">FREE · 0 CREDITS</span>
+      </div>
     </div>
     <div className="ios-quiz-arena__fighters">
+      {show3D&&<Pico3DScene phase={phase} winnerSide={winnerSide}
+        onReady={onReady} onUnavailable={onUnavailable}/>}
       <div className="ios-quiz-arena__fighter">
         <div className="ios-quiz-arena__platform" aria-hidden="true"/>
         <div className="ios-quiz-arena__aura" aria-hidden="true"/>
@@ -105,6 +131,10 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
     </div>
     <div className="ios-quiz-arena__ground" aria-hidden="true"/>
     {resolved&&<div className="ios-quiz-arena__impact" aria-hidden="true"/>}
+    {show3D&&ready3D&&<span className="ios-quiz-arena__prototype-note">
+      Original mesh prototype · drag to rotate</span>}
+    {modelError&&<p className="ios-quiz-arena__fallback" role="status">
+      3D is unavailable here. The illustrated Pico is still playable.</p>}
     <p className="ios-quiz-arena__status" role="status">{statusText(phase,outcome)}</p>
   </section>;
 }
