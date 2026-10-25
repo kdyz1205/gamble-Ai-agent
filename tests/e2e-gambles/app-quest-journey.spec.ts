@@ -70,8 +70,18 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     )).rows;
 
     const proofQuest = await createFree(creator.context, "App evidence flow " + tag);
-    const accepted = await friend.context.request.post(base + "/api/challenges/" + proofQuest + "/accept");
-    expect(accepted.status(), await accepted.text()).toBe(200);
+    const invitation = await friend.context.newPage();
+    await invitation.goto(base + "/app/join?id=" + proofQuest);
+    await expect(invitation.getByTestId("ios-quest-invite")).toBeVisible();
+    await expect(invitation.getByTestId("ios-accept-quest")).toBeDisabled();
+    await invitation.getByTestId("ios-accept-rules").check();
+    const accepted = invitation.waitForResponse(res =>
+      res.url().endsWith("/api/challenges/" + proofQuest + "/accept") &&
+      res.request().method() === "POST");
+    await invitation.getByTestId("ios-accept-quest").click();
+    expect((await accepted).status(), await (await accepted).text()).toBe(200);
+    await expect(invitation).toHaveURL(/\/app\/quest\?id=/);
+    await invitation.close();
 
     for (const [participant, note] of [[creator, "Creator wrote own observation"], [friend, "Friend wrote own observation"]] as const) {
       const page = await participant.context.newPage();
