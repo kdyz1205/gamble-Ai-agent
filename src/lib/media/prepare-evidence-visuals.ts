@@ -76,10 +76,25 @@ function sniffIsMp4(buf: Buffer): boolean {
   return buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70;
 }
 
+/** Never copy private S3 bearer capabilities into model-facing extraction notes. */
+export function redactVideoTransportError(error: unknown, privateMedia: boolean): string {
+  if (privateMedia) return "Server-verified private media was not readable.";
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function mediaSourceNote(
+  url: string | null | undefined,
+  privateMedia: boolean,
+): string | null {
+  if (privateMedia) return "source=server-verified private object";
+  return url?.trim() ? `url=${url}` : null;
+}
+
 async function runVideoPipeline(
   participantLabel: string,
   url: string,
   preambleLines: string[],
+  privateMedia = false,
 ): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
   const visuals: JudgeVisionImage[] = [];
   if (!ffmpegAvailable()) {
@@ -124,7 +139,7 @@ async function runVideoPipeline(
       if (img) visuals.push(img);
     }
   } catch (e) {
-    preambleLines.push(`  → Video frame extraction failed: ${e instanceof Error ? e.message : String(e)}`);
+    preambleLines.push(`  → Video frame extraction failed: ${redactVideoTransportError(e, privateMedia)}`);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -134,7 +149,7 @@ async function runVideoPipeline(
 
 export async function prepareParticipantVisuals(
   participantLabel: string,
-  evidence: EvidencePayload | null,
+  evidence: (EvidencePayload & { privateMedia?: boolean }) | null,
 ): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
   const preambleLines: string[] = [];
   const visuals: JudgeVisionImage[] = [];
@@ -147,7 +162,7 @@ export async function prepareParticipantVisuals(
   const meta = [
     `type=${evidence.type}`,
     evidence.description ? `description=${evidence.description}` : null,
-    evidence.url ? `url=${evidence.url}` : null,
+    mediaSourceNote(evidence.url, evidence.privateMedia === true),
   ].filter(Boolean);
   preambleLines.push(`${participantLabel}: ${meta.join(" | ")}`);
 
@@ -176,7 +191,7 @@ export async function prepareParticipantVisuals(
     }
 
     if (isVideoType(evidence) || looksLikeVideoMime(null, url)) {
-      return await runVideoPipeline(participantLabel, url, preambleLines);
+      return await runVideoPipeline(participantLabel, url, preambleLines, evidence.privateMedia === true);
     }
 
     // Ambiguous (e.g. text evidence with attachment URL): sniff body
@@ -189,13 +204,13 @@ export async function prepareParticipantVisuals(
     }
 
     if (looksLikeVideoMime(contentType, url) || sniffIsMp4(buffer)) {
-      return await runVideoPipeline(participantLabel, url, preambleLines);
+      return await runVideoPipeline(participantLabel, url, preambleLines, evidence.privateMedia === true);
     }
 
     preambleLines.push(`  → URL is not a recognized image/video stream for auto vision.`);
     return { preambleLines, visuals };
   } catch (e) {
-    preambleLines.push(`  → Media fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+    preambleLines.push(`  → Media fetch failed: ${redactVideoTransportError(e, evidence.privateMedia === true)}`);
     return { preambleLines, visuals };
   }
 }
