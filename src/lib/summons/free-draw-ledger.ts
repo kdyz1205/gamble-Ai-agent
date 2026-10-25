@@ -62,7 +62,8 @@ async function authenticatedPityHistory(tx:Prisma.TransactionClient,ownerId:stri
       ticket:{select:{ownerId:true,professionId:true,grantKey:true,
         status:true,spentByGrant:true,spentAt:true}},
       instance:{select:{id:true,ownerId:true,professionId:true,
-        occupationId:true,rarity:true,speciesId:true,originKind:true,grantKey:true}},
+        occupationId:true,rarity:true,speciesId:true,originKind:true,grantKey:true,
+        status:true,form:true,createdAt:true}},
     },
   });
   if(rows.length>MAX_ACCOUNT_DRAWS)
@@ -90,6 +91,8 @@ async function authenticatedPityHistory(tx:Prisma.TransactionClient,ownerId:stri
        row.instance.professionId!==row.professionId||
        row.instance.occupationId!==row.occupationId||
        row.instance.originKind!=="free_ticket"||
+       row.instance.status!=="owned"||
+       !["base","evolved","ascended"].includes(row.instance.form)||
        row.instance.grantKey!==freeDrawGrantKey(row.ticket.grantKey)||
        row.instance.rarity!==row.rarity||
        row.instance.speciesId!==
@@ -105,6 +108,38 @@ async function authenticatedPityHistory(tx:Prisma.TransactionClient,ownerId:stri
       invalid("Persisted draw pity counters are discontinuous");
   }
   return {pity,ordinal:rows.length,rows};
+}
+
+/**
+ * Authenticated, read-only inventory projection backed by the COMPLETE
+ * versioned draw ledger. Reading cannot grant an item or spend a ticket.
+ * Keep the existing Pico and other future inventory contracts separate.
+ */
+export async function readOwnedFreeDrawInventory(ownerId:string){
+  if(!freeDrawEnabled())return null;
+  if(typeof ownerId!=="string"||!ownerId.trim()||ownerId.length>256)
+    throw new SummonDrawError(401,"Authenticated account required");
+  return prisma.$transaction(async tx=>{
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ownerId}, 843219))`;
+    const verified=await authenticatedPityHistory(tx,ownerId);
+    const actual=await tx.summonInstance.count({
+      where:{ownerId,originKind:"free_ticket"},
+    });
+    if(actual!==verified.rows.length)
+      invalid("Unreceipted, missing, or conflicting free-ticket inventory records");
+    const recent=verified.rows.slice().sort((a,b)=>
+      b.instance.createdAt.getTime()-a.instance.createdAt.getTime()||
+      b.instance.id.localeCompare(a.instance.id)).slice(0,50);
+    return {
+      items:recent.map(row=>({
+        id:row.instance.id,speciesId:row.instance.speciesId,
+        rarity:row.instance.rarity,form:row.instance.form,
+        professionId:row.professionId,occupationId:row.occupationId,
+        createdAt:row.instance.createdAt.toISOString(),
+      })),
+      totalKnown:verified.rows.length<50,
+    };
+  },{isolationLevel:"ReadCommitted",maxWait:20_000,timeout:30_000});
 }
 
 type DrawView={

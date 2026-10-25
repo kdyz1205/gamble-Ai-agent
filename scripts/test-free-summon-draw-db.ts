@@ -10,7 +10,9 @@ import {reconcileVerifiedQuestProfessionXp,accountSummonLedger}
   from "../src/lib/summons/server-ledger";
 import {reconcileFreeCareerTickets,readFreeCareerTicketLedger}
   from "../src/lib/summons/free-ticket-ledger";
-import {redeemFreeSummonTicket,SummonDrawError}
+import {assertOwnedInventorySnapshot}
+  from "../src/lib/summons/owned-inventory-contract";
+import {redeemFreeSummonTicket,SummonDrawError,readOwnedFreeDrawInventory}
   from "../src/lib/summons/free-draw-ledger";
 
 const uri=process.env.DATABASE_URL;
@@ -194,6 +196,22 @@ async function main(){
   const actualInventory=await accountSummonLedger(owner);
   eq(actualInventory?.items.length,3,
     "Three real owned database Summons, not cosmetic previews");
+  const strictOwned=await readOwnedFreeDrawInventory(owner);
+  const ownedSnapshot=assertOwnedInventorySnapshot({
+    available:true,source:"server-owned-free-ticket-instances",
+    items:strictOwned?.items??[],
+    totalKnown:strictOwned?.totalKnown??false,
+    reason:"Authenticated free ticket inventory",
+  });
+  eq(ownedSnapshot.available,true,
+    "Stored real Summons produce a valid client-visible owned collection");
+  if(ownedSnapshot.available){
+    eq(ownedSnapshot.items.length,3,"Owned collection includes all three minted items");
+    eq(new Set(ownedSnapshot.items.map(row=>row.id)).size,3,
+      "Actual owned item identifiers remain unique across professions");
+    eq(new Set(ownedSnapshot.items.map(row=>row.professionId)).size,2,
+      "Software and athletics inventory remains distinct, not a mock catalog");
+  }
   eq((await readFreeCareerTicketLedger(owner))?.spent,3,
     "Read model sees all three actual spent tickets");
   eq((await readFreeCareerTicketLedger(owner))?.available,0,
@@ -201,6 +219,19 @@ async function main(){
   eq(await prisma.auditLog.count({where:{
     actorUserId:owner,action:"summon.free-draw.committed",
   }}),3,"Exactly one append-only audit event per committed draw");
+  eq((await readOwnedFreeDrawInventory(stranger.id))?.items.length,0,
+    "Another account sees none of the owner's actual free-ticket inventory");
+  const orphan=await prisma.summonInstance.create({data:{
+    ownerId:owner,professionId:"software",occupationId:"coding",
+    speciesId:"software-coding-common-base",
+    originKind:"free_ticket",grantKey:"unreceipted-summon:"+id,
+    rarity:"common",form:"base",status:"owned",
+  }});
+  await refuses(()=>readOwnedFreeDrawInventory(owner),
+    "Orphan unreceipted item must never appear as an earned Familiar");
+  await prisma.summonInstance.delete({where:{id:orphan.id}});
+  eq((await readOwnedFreeDrawInventory(owner))?.items.length,3,
+    "Deleting forged fixture restores the exact three verified owned Summons");
   eq(await prisma.creditTx.count({where:{userId:{in:users}}}),0,
     "Neither rewards nor retries write financial CreditTx");
   eq(await prisma.user.findUniqueOrThrow({where:{id:owner},
@@ -213,6 +244,8 @@ async function main(){
   });
   await refuses(()=>redeemFreeSummonTicket(draw),
     "Tampered immutable draw history fails receipt replay");
+  await refuses(()=>readOwnedFreeDrawInventory(owner),
+    "Tampered draw history cannot pass off forged items as owned");
   await prisma.summonDrawReceipt.update({
     where:{id:previous.id},data:{rarity:previous.rarity},
   });

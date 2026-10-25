@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import * as api from "@/lib/api-client";
 import {assertFreeTicketSummary,type AccountFreeTicketSummary} from "@/lib/summons/ticket-read-contract";
+import {assertOwnedInventorySnapshot,type OwnedInventorySnapshot}
+  from "@/lib/summons/owned-inventory-contract";
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "The connection could not be completed.";
@@ -172,29 +174,32 @@ export function useStarterPico(enabled=true){
   const userId=session?.user?.id;
   const [starter,setStarter]=useState<StarterPicoEntitlement|null>(null);
   const [progression,setProgression]=useState<SummonProgression|null>(null);
+  const [inventory,setInventory]=useState<OwnedInventorySnapshot|null>(null);
   const [revision,setRevision]=useState(0);
   const refresh=useCallback(()=>setRevision(count=>count+1),[]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   useEffect(()=>{
-    if(!enabled){setStarter(null);setProgression(null);setLoading(false);setError("");return;}
+    if(!enabled){setStarter(null);setProgression(null);setInventory(null);setLoading(false);setError("");return;}
     if(status==="loading"){setLoading(true);return;}
     if(status!=="authenticated"||!userId){
-      setStarter(null);setProgression(null);setLoading(false);setError("");return;
+      setStarter(null);setProgression(null);setInventory(null);setLoading(false);setError("");return;
     }
     let active=true;const controller=new AbortController();
-    setStarter(null);setProgression(null);setLoading(true);setError("");
+    setStarter(null);setProgression(null);setInventory(null);setLoading(true);setError("");
     fetch("/api/summons/me",{credentials:"same-origin",cache:"no-store",signal:controller.signal})
       .then(async response=>{
         if(!response.ok)throw Error("Starter service returned "+response.status);
         const data=await response.json() as {
           starter?:StarterPicoEntitlement;
           inventory?:{available:boolean};
+          ownedCollection?:unknown;
           progression?:SummonProgression;
         };
         if(!data.starter||data.starter.speciesId!=="pico"||
            typeof data.starter.persistedInventory!=="boolean")
           throw Error("Invalid starter response");
+        const snapshot=assertOwnedInventorySnapshot(data.ownedCollection);
         const progression=data.progression;
         if(!progression||typeof progression.available!=="boolean"||
            typeof progression.freeDrawsAvailable!=="boolean"||
@@ -236,12 +241,13 @@ export function useStarterPico(enabled=true){
         }
         if(starter.persistedInventory&&!starter.inventoryId)
           throw Error("Starter persistence has no verified item");
-        if(active){setStarter(starter);setProgression(progression);setLoading(false);}
+        if(active){setStarter(starter);setProgression(progression);
+          setInventory(snapshot);setLoading(false);}
       }).catch(err=>{
         if(active){setError(message(err));setLoading(false);}
       });
     return ()=>{active=false;controller.abort();};
   },[enabled,status,userId,revision]);
-  return {starter,progression,loading:enabled&&(loading||status==="loading"),
+  return {starter,progression,inventory,loading:enabled&&(loading||status==="loading"),
     error,signedIn:status==="authenticated"&&!!userId,refresh};
 }
