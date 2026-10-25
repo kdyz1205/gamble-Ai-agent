@@ -205,6 +205,43 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     expect((await db.query('SELECT count(*)::int AS n FROM "QuizAttempt" WHERE "challengeId"=$1',[id])).rows[0].n).toBe(2);
     expect((await db.query('SELECT count(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1',[id])).rows[0].n).toBe(0);
 
+    // The same server-verifiable receipt becomes a *read-only* match history
+    // for each participant, never spendable career XP or a Summon ticket.
+    expect((await guestCtx.request.get(BASE+"/api/quiz/history")).status()).toBe(401);
+    const creatorHistoryResponse=await creatorCtx.request.get(BASE+"/api/quiz/history");
+    expect(creatorHistoryResponse.status()).toBe(200);
+    const creatorHistory=(await creatorHistoryResponse.json()).history;
+    expect(creatorHistory.items.find((row:{challengeId:string})=>
+      row.challengeId===id)).toMatchObject({
+      outcome:"won",myScore:3,opponentScore:0,
+      opponentUsername:friend.username,creditedCareerXp:0,
+      creditedSummonTickets:0,stakeCredits:0,
+    });
+    const otherHistory=(await (await friendCtx.request.get(
+      BASE+"/api/quiz/history")).json()).history;
+    expect(otherHistory.items.find((row:{challengeId:string})=>
+      row.challengeId===id)).toMatchObject({
+      outcome:"lost",myScore:0,opponentScore:3,
+      opponentUsername:creator.username,creditedCareerXp:0,
+    });
+    expect(JSON.stringify(creatorHistory)).not.toContain("correctAnswers");
+    expect(JSON.stringify(creatorHistory)).not.toContain("answersJson");
+    expect((await db.query(
+      'SELECT count(*)::int AS n FROM "ProfessionXpEvent" WHERE "challengeId"=$1',
+      [id])).rows[0].n).toBe(0);
+    expect((await db.query(
+      'SELECT count(*)::int AS n FROM "SummonTicket" WHERE "ownerId"=$1',
+      [creator.id])).rows[0].n).toBe(0);
+    await a.goto(BASE+"/app/quiz");
+    await expect(a.getByTestId("quiz-verified-history")).toBeVisible();
+    const historyRow=a.getByTestId("quiz-history-"+id);
+    await expect(historyRow).toBeVisible({timeout:15_000});
+    await expect(historyRow).toContainText("Victory");
+    await expect(historyRow).toContainText("3 / 3");
+    await historyRow.getByRole("link",{name:/View verified receipt/i}).click();
+    await expect(a).toHaveURL(new RegExp("/app/quiz\\?id="+id));
+    await expect(a.getByTestId("quiz-final-verdict")).toBeVisible();
+
     // Creator can revoke a second, still-unaccepted invitation without
     // exposing stale "open" state or writing a credit refund.
     const pending=await creatorCtx.request.post(BASE+"/api/quiz",{
