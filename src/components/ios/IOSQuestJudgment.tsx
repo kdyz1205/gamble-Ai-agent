@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ChallengeData } from "@/lib/api-client";
 import * as api from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
+import { startVisiblePolling } from "@/lib/visible-polling";
 import { useCreditBalance } from "./IOSAppData";
 import { IosIcon } from "./IOSAppUI";
 import VerdictReviewControls from "@/components/VerdictReviewControls";
@@ -55,36 +56,45 @@ export default function IOSQuestJudgment({ quest, userId, onUpdated }: Props) {
   const canStart = accepted && creator && quest.status === "judging" &&
     (quest.judgments?.length ?? 0) === 0 && validProof;
 
-  const poll = useCallback(async (id: string) => {
-    if (document.visibilityState !== "visible") return;
+  const poll = useCallback(async (id: string, signal: AbortSignal): Promise<boolean> => {
+    if (signal.aborted || document.visibilityState !== "visible") return true;
     try {
       const current = await api.getJudgeJob(id);
+      if (signal.aborted) return false;
       if (current.status === "completed") {
         setJobId(null);
         setBusy(false);
         setNotice("Familiar review is ready. Both players must check the result.");
         await onUpdated();
-      } else if (current.status === "failed") {
+        return false;
+      }
+      if (current.status === "failed") {
         setJobId(null);
         setBusy(false);
         setError(current.error || "The referee could not review the evidence. Retry the review.");
         await onUpdated();
+        return false;
       }
     } catch {
-      setNotice("Connection interrupted. The review remains on the server; refresh to check its status.");
+      if (!signal.aborted) setNotice("Connection interrupted. The review remains on the server; checking again when visible.");
     }
+    return true;
   }, [onUpdated]);
 
   useEffect(() => {
     if (!jobId || quest.status !== "judging") return;
-    const refreshWhenVisible = () => { void poll(jobId); };
-    const timer = window.setInterval(refreshWhenVisible, 6000);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    void poll(jobId);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
+    // No overlapping HTTP requests; no wakeups while the phone tab is hidden.
+    // Returning to the foreground triggers an immediate status read.
+    return startVisiblePolling({
+      delays: [1_000, 2_000, 4_000, 6_000, 10_000],
+      immediate: true,
+      timeoutMs: 15 * 60_000,
+      task: (signal) => poll(jobId, signal),
+      onTimeout: () => {
+        setBusy(false);
+        setNotice("Referee check timed out. Reopen this Quest to resume the server job.");
+      },
+    });
   }, [jobId, quest.status, poll]);
 
   // Mobile Safari may terminate a suspended tab. Read server state on return
