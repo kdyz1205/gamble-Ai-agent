@@ -175,7 +175,10 @@ export function PicosScreen() {
       enabled={pico.progression?.freeDrawsAvailable===true}
       onDrawComplete={pico.refresh}/>
     <OwnedFamiliarCollection inventory={pico.inventory}
-      signedIn={pico.signedIn} loading={pico.loading} error={pico.error}/>
+      signedIn={pico.signedIn} loading={pico.loading} error={pico.error}
+      evolutionAvailable={pico.progression?.evolutionAvailable===true}
+      verifiedProfessionXp={pico.progression?.verifiedProfessionXp?.byProfession??[]}
+      onEvolutionComplete={pico.refresh}/>
     <ProfessionSummonStudio/>
 
     <section className="ios-section">

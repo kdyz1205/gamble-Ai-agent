@@ -94,6 +94,7 @@ model User {
   professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
   summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
   summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
+  summonEvolutionReceipts SummonEvolutionReceipt[] @relation("SummonEvolutionOwner")
   quizAttempts          QuizAttempt[]
 }
 
@@ -411,6 +412,7 @@ model SummonInstance {
 
   owner User @relation("SummonInventoryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   drawReceipt SummonDrawReceipt?
+  evolutionReceipts SummonEvolutionReceipt[]
 
   @@index([ownerId, status, createdAt])
   @@index([speciesId, rarity])
@@ -479,6 +481,26 @@ model SummonDrawReceipt {
   instance SummonInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
 
   @@unique([ownerId, ordinal])
+  @@index([ownerId, createdAt])
+}
+
+// Authenticated, deterministic cosmetic form changes, never random re-draws.
+model SummonEvolutionReceipt {
+  id           String   @id @default(cuid())
+  ownerId      String
+  instanceId   String
+  requestKey   String   @unique
+  professionId String
+  fromForm     String
+  toForm       String
+  verifiedXp   Int
+  ruleVersion  String
+  createdAt    DateTime @default(now())
+
+  owner    User           @relation("SummonEvolutionOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  instance SummonInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+
+  @@unique([instanceId, toForm])
   @@index([ownerId, createdAt])
 }
 
