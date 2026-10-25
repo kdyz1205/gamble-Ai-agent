@@ -78,6 +78,7 @@ model User {
   challengesCreated   Challenge[]          @relation("ChallengeCreator")
   participations      Participant[]
   evidenceSubmissions Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   judgmentsGiven      Judgment[]           @relation("JudgeUser")
   judgmentsWon        Judgment[]           @relation("WinnerUser")
   transactions        CreditTx[]
@@ -217,6 +218,7 @@ model Challenge {
   participantBindings ParticipantBinding[]
   recordingSessions   RecordingSession[]
   evidence            Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   evidenceChecks      EvidenceCheck[]
   judgments           Judgment[]
   creditTxs           CreditTx[]
@@ -307,6 +309,35 @@ model RecordingSession {
   createdBy User      @relation("RecordingSessionCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
 
   @@index([challengeId])
+}
+
+
+/**
+ * Isolated private-object upload intake. A verified upload is NOT an Evidence
+ * submission and cannot trigger judgment/settlement until a separate,
+ * transactional binding flow exists.
+ */
+model TrustedEvidenceUpload {
+  id                String    @id @default(cuid())
+  challengeId       String
+  userId            String
+  objectKey         String    @unique
+  contentType       String
+  expectedSizeBytes Int
+  recordingSessionId String?
+  status            String    @default("issued") // issued | verified | consumed | revoked
+  sha256            String?
+  observedSizeBytes Int?
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId, userId, status])
+  @@index([expiresAt, status])
 }
 
 model Evidence {

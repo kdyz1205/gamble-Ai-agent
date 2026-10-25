@@ -1267,6 +1267,39 @@ export async function presignEvidenceUpload(input: {
   });
 }
 
+/* ── Opt-in trusted private evidence intake (NOT challenge submission) ── */
+export interface TrustedEvidenceUploadTicket {
+  uploadSessionId: string;
+  uploadUrl: string;
+  method: "PUT";
+  headers: Record<string, string>;
+  expiresAt: string;
+  status: "issued";
+}
+
+export function issueTrustedEvidenceUpload(input: {
+  challengeId: string;
+  contentType: string;
+  fileSizeBytes: number;
+  recordingSessionId?: string | null;
+}): Promise<TrustedEvidenceUploadTicket> {
+  return apiFetch("/uploads/trusted-evidence", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function completeTrustedEvidenceUpload(uploadSessionId: string): Promise<{
+  uploadSessionId: string;
+  status: "verified";
+  sha256: string;
+  sizeBytes?: number;
+}> {
+  return apiFetch(`/uploads/trusted-evidence/${encodeURIComponent(uploadSessionId)}/complete`, {
+    method: "POST",
+  });
+}
+
 export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs?: Record<string, unknown>): Promise<{
   jobId: string;
   dailyQuota?: DailyAiQuotaStatus;
