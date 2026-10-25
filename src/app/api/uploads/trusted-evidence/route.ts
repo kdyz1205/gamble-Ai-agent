@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   try {
     if (challenge.protocol?.specJson) {
       const spec = parseProtocolSpecV2(JSON.parse(challenge.protocol.specJson));
+      if (!spec) throw new Error("missing_protocol_spec");
       requiresRecordingSession =
         spec.evidenceProtocol.mode === "same_camera_video" ||
         spec.evidenceProtocol.mode === "live_host_video";
