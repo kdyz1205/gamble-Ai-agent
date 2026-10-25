@@ -22,6 +22,7 @@ const executablePath = process.platform === "win32"
       const gateway = await page.goto(base + "/enter", { waitUntil: "domcontentloaded", timeout: 45000 });
       assert.equal(gateway.status(), 200, "Landing route must work");
       assert.equal(await page.locator("[data-testid=ios-tabbar]").count(), 0, "Landing is not the app");
+      assert.equal(await page.locator("[data-testid=sum-app-dock]").count(), 0, "Marketing has no game tab bar");
       const launch = page.getByTestId("world-summon-cta");
       assert.equal(await launch.getAttribute("href"), "/app", "Gateway should launch the separate app");
 

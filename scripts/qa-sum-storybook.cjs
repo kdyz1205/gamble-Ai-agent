@@ -74,9 +74,9 @@ async function main() {
               };
             });
             assert(data.overflow <= 1, "horizontal overflow " + data.overflow + "px");
-            assert(data.dockCount === 1, "shared app dock must appear exactly once");
-            assert.equal(data.dockVisible, width < 960, "responsive app dock visibility");
-            assert.equal(data.dockLabels.length, 5, "app nav needs five destinations");
+            assert.equal(data.dockCount, route === "/enter" ? 0 : 1, "marketing has no game dock; legacy scenes have one");
+            assert.equal(data.dockVisible, route !== "/enter" && width < 960, "responsive app dock visibility");
+            assert.equal(data.dockLabels.length, route === "/enter" ? 0 : 5, "game nav is separate from marketing");
             assert(errors.length === 0, "uncaught JavaScript errors: " + errors.join("; "));
             if (route === "/enter" || route === "/rituals") {
               const required = route === "/enter" ? 5 : 1;
