@@ -28,7 +28,7 @@ let checks=0;
 const eq=(a:unknown,b:unknown,m:string)=>{assert.deepEqual(a,b,m);checks++;};
 const ok=(v:unknown,m:string)=>{assert.ok(v,m);checks++;};
 const refuses=async(fn:()=>Promise<unknown>,m:string)=>{
-  await assert.rejects(fn);checks++;
+  await assert.rejects(fn,undefined,m);checks++;
 };
 const id=randomUUID().replaceAll("-","").slice(0,16);
 const users:string[]=[];const quests:string[]=[];
