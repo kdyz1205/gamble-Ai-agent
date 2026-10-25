@@ -2,6 +2,8 @@
 
 import {useRef,useState,type CSSProperties} from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
+import {getCreatureBlockout} from "@/lib/summons/creature-model-manifest";
 import {IosAction} from "./IOSAppUI";
 import {creatureRenderFor} from "@/lib/summons/creature-render-manifest";
 import type {CreatureStage} from "@/lib/summons/creature-visual-bible";
@@ -13,6 +15,10 @@ import {
   previewVerifiedBattleXp,previewTicketMilestones,previewMasteryFromXp,
   type ProfessionId,type SummonConcept,type PityState,
 } from "@/lib/summons/profession-system";
+
+const Creature3DPrototypeViewer=dynamic(
+  ()=>import("./Creature3DPrototypeViewer"),{ssr:false},
+);
 
 type Chapter="career"|"summon"|"fusion"|"progress";
 const CHAPTERS=[
@@ -51,6 +57,7 @@ export default function ProfessionSummonStudio(){
   const [occupation,setOccupation]=useState("badminton");
   const [secondary,setSecondary]=useState<ProfessionId>("software");
   const [mastery,setMastery]=useState(1);
+  const [showPrototype,setShowPrototype]=useState(false);
   const [activeChapter,setActiveChapter]=useState<Chapter>("career");
   const [draw,setDraw]=useState<SummonConcept|null>(null);
   const [draws,setDraws]=useState(0);
@@ -61,6 +68,7 @@ export default function ProfessionSummonStudio(){
   const firstVisual=creatureVisualFor(primary);
   const otherVisual=creatureVisualFor(secondary);
   const stage=creatureStageForMastery(mastery);
+  const blockout=getCreatureBlockout(primary,stage);
   const occupationName=first.specialties.find(s=>s.id===occupation)?.name ?? first.specialties[0].name;
   const other=professionById(secondary);
   const example=previewSummon({professionId:primary,occupationId:occupation,
@@ -80,6 +88,7 @@ export default function ProfessionSummonStudio(){
     setOccupation(professionById(next).specialties[0].id);
     if(next===secondary)setSecondary(PROFESSIONS.find(entry=>entry.id!==next)!.id);
     setDraw(null);
+    setShowPrototype(false);
   };
   const changeSecondary=(next:ProfessionId)=>{
     professionById(next);
@@ -194,6 +203,27 @@ export default function ProfessionSummonStudio(){
       </div>
       <p className="ios-summon-hint">These are proposed cosmetic forms. No level, skill, ticket
         or creature is awarded by this preview.</p>
+
+      <div className="ios-3d-entry" data-testid="career-3d-entry">
+        <div>
+          <span className="ios-overline">OPTIONAL MODELING PROTOTYPE</span>
+          <h3>View the real 3D blockout</h3>
+          <p className="ios-summon-hint">
+            {blockout
+              ?"A real editable GLB mesh exists for this sample form. The polished illustration remains the default."
+              :"A 3D mesh has not been built for this family. The original career concept remains available."}
+          </p>
+        </div>
+        {blockout&&<button type="button" className="ios-3d-entry__toggle"
+          data-testid="toggle-creature-3d"
+          aria-pressed={showPrototype}
+          onClick={()=>setShowPrototype(open=>!open)}>
+          {showPrototype?"Close 3D preview":"Inspect 3D prototype"}
+        </button>}
+        {blockout&&showPrototype&&<Creature3DPrototypeViewer
+          key={blockout.src} src={blockout.src}
+          label={firstVisual.stageNames[stage==="base"?0:stage==="evolved"?1:2]}/>}
+      </div>
     </div>}
 
     {activeChapter==="summon"&&<div className="ios-summon-lab" role="tabpanel"

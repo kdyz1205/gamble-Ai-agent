@@ -6,6 +6,7 @@ import {useSession} from "next-auth/react";
 import {IosFrame,IosAction} from "./IOSAppUI";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import {QuizVoiceInput} from "./QuizVoiceInput";
+import QuizArenaStage from "./QuizArenaStage";
 
 const TOPICS=[
   {id:"general",label:"General knowledge / 常识"},
@@ -174,6 +175,10 @@ export default function QuizDuelScreen({id}:{id?:string}){
     !quiz.ownSubmitted&&!expired&&choices.length===3&&
     choices.every(x=>Number.isInteger(x)&&x>=0&&x<=3)&&!working);
   const result=quiz?.result;
+  const arenaPhase=!pilotEnabled||!id||!quiz?"preview":quiz.status;
+  const arenaOutcome=arenaPhase!=="completed"||!result?null:
+    result.outcome==="tie"?"tie":result.outcome==="void_timeout"?"timeout":
+    result.winnerId===quiz?.playerUserId?"won":"lost";
   return <IosFrame title="Voice Quiz Duel" eyebrow="VERIFIED · FRIEND VS FRIEND"
     back="/app/today">
     <section className="ios-quiz-hero">
@@ -183,6 +188,11 @@ export default function QuizDuelScreen({id}:{id?:string}){
         answers and publishes a verifiable receipt.</p>
       <strong>Free challenge · 0 credits at stake</strong>
     </section>
+    <QuizArenaStage phase={arenaPhase} creator={quiz?.creatorUsername}
+      opponent={quiz?.opponentUsername} outcome={arenaOutcome}
+      winnerSide={arenaPhase==="completed"&&result?.outcome==="win"&&quiz?
+        ((result.winnerId===quiz.playerUserId)===quiz.isCreator?"creator":"opponent"):
+        null}/>
     {status==="loading"?<p role="status">Checking account…</p>:
       status!=="authenticated"?<AuthInvitation
         title="Sign in to play a real Quiz"
