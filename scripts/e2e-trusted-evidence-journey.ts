@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { request, type APIRequestContext } from "@playwright/test";
 import { Pool } from "pg";
+import ffmpegPath from "ffmpeg-static";
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
@@ -51,7 +52,8 @@ async function main() {
   const folder = await mkdtemp(join(tmpdir(), "sum-trusted-video-"));
   const tag = randomUUID().replaceAll("-", "").slice(0, 13);
   const mp4 = join(folder, "one-second-real-video.mp4");
-  execFileSync("ffmpeg", [
+  assert.ok(ffmpegPath, "Bundled FFmpeg binary is required; no system FFmpeg assumption");
+  execFileSync(ffmpegPath, [
     "-hide_banner", "-loglevel", "error", "-y",
     "-f", "lavfi", "-i", "color=c=blue:s=320x180:r=15:d=1.5",
     "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p",

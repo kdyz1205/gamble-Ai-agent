@@ -146,7 +146,7 @@ jobs:
 
       - name: Exercise private MP4 submission from two authenticated accounts
         run: |
-          ffmpeg -version | head -n 1
+          node -e 'const f=require("ffmpeg-static");if(!f || !require("fs").existsSync(f)) process.exit(1)'
           npm run build > /tmp/summoner-trusted-build.log 2>&1 || {
             tail -n 120 /tmp/summoner-trusted-build.log
             exit 1
