@@ -88,7 +88,13 @@ evidence that the game can autonomously identify winners in arbitrary videos.
 - `npx tsx scripts/e2e-trusted-evidence-storage.ts`: real conditional PUT,
   replay rejection, streamed SHA and media-signature checks against ephemeral
   S3-compatible storage; no production credentials or data.
+- `npx tsx scripts/e2e-trusted-evidence-journey.ts`: two disposable signed-in
+  accounts, actual FFmpeg-generated MP4 files, private signed transfers, real
+  PostgreSQL binding transactions, one-proof-per-player, replay/auth checks,
+  no permanent public evidence URL, no unexpected credits/XP, and a referee
+  refusal when the test storage endpoint is HTTP localhost. This is **not** a
+  successful AI winner test and deliberately does not call a live model.
 
-Do not merge or turn on the flags until authenticated two-account binding
-tests, real-device Safari transfer/return, codec corpus and real model/referee
+Do not merge or turn on the flags until the complete isolated two-account CI,
+real-device Safari transfer/return, codec corpus and real model/referee
 reliability tests all pass.
