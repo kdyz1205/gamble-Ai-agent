@@ -80,7 +80,7 @@ try{
   ok(/^[0-9a-f]{64}$/.test(first.serverNonce),
     "Server retains an independent non-guessable 256-bit nonce");
   const exposed=JSON.stringify(first.public);
-  ok(!exposed.includes("answerIndex")&&!exposed.includes("reviewDigest")&&
+  ok(!exposed.includes("answerIndex")&&!exposed.includes("reviewSignature")&&
       !exposed.includes("serverNonce")&&!exposed.includes(first.serverNonce),
     "Client-safe projection contains no answer key, reviewer key, or opening salt");
 
@@ -120,7 +120,7 @@ try{
     bankVersion:version,topic:"technology",
     previouslyExposedQuestionIds:rows.slice(0,rows.length-2).map(r=>r.id),
   }),"POOL_EXHAUSTED","Insufficient never-exposed questions stop future rounds");
-  const attacked=rows[0];
+  const attacked=byId.get(first.public.questions[0].id)!;
   await prisma.quizProtectedQuestion.update({where:{id:attacked.id},
     data:{answerIndex:(attacked.answerIndex+1)%4}});
   await refuses(()=>prepareProtectedQuizRound({
