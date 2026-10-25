@@ -195,6 +195,17 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     expect((await creatorCtx.request.post(BASE+"/api/quiz/"+id+"/answer",
       {data:{answers:correct}})).status()).toBe(200);
 
+    // The same completed Quiz must remain reachable inside the shared Web App,
+    // not only through a standalone Quiz URL or a marketing page.
+    await a.goto(BASE + "/app/today");
+    const recent = a.getByRole("region", { name: "Recent settled Quest receipts" });
+    await expect(recent).toBeVisible();
+    await expect(recent.getByTestId("ios-quest-card")).toHaveCount(1);
+    await recent.getByTestId("ios-quest-card").click();
+    await expect(a.getByTestId("ios-quiz-flow")).toBeVisible();
+    await a.getByRole("link", { name: "Open Quiz and final receipt" }).click();
+    await expect(a.getByTestId("quiz-final-verdict")).toBeVisible();
+
     const rows=await db.query(
       'SELECT c.status,c.stake,c."resolutionHash",j.method,j."aiModel" FROM "Challenge" c JOIN "Judgment" j ON j."challengeId"=c.id WHERE c.id=$1',
       [id]);

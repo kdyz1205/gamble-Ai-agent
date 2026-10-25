@@ -104,6 +104,16 @@ export function TodayScreen() {
                 </div>}
     </section>
 
+    {complete.length > 0 && <section className="ios-command-quests" aria-label="Recent settled Quest receipts">
+      <div className="ios-command-section-header">
+        <div><span className="ios-overline">RECORDED OUTCOMES / NO FABRICATED REWARDS</span><h2>Recent results</h2></div>
+      </div>
+      <div className="ios-list">
+        {complete.slice(0, 3).map(q => <IosQuestCard challenge={q} compact key={q.id}/>)}
+      </div>
+      <p className="ios-footer-note">Results shown here come from the server. Rewards appear only after their own verified grant.</p>
+    </section>}
+
     <details className="ios-command-daily">
       <summary><IosIcon name="calendar" size={18}/><span>Daily rituals</span><small>Optional on-device check-ins</small><IosIcon name="arrow" size={16}/></summary>
       <IOSDailyRituals/>
