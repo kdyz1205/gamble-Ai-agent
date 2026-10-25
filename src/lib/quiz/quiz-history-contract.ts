@@ -45,6 +45,7 @@ export function verifyQuizHistoryItem(args:{
   challengeId:string;creatorId:string;finalizedAt:Date|null;
   winnerId:string|null;
   participants:readonly {userId:string;role:string;status:string}[];
+  attempts:readonly {userId:string;score:number}[];
   userId:string;
   view:unknown;
 }):VerifiedQuizHistoryItem{
@@ -96,6 +97,16 @@ export function verifyQuizHistoryItem(args:{
   });
   if(new Set(parsed.map(p=>p.userId)).size!==2)
     fail("Duplicate or missing competitor score");
+  const attempts=args.attempts;
+  if(!Array.isArray(attempts)||attempts.length>2||
+     new Set(attempts.map(a=>a.userId)).size!==attempts.length||
+     !attempts.every(a=>ids.has(a.userId)&&resultScore(a.score)&&a.score!==null))
+    fail("Unexpected outsider, duplicate or fabricated answer submission");
+  for(const scored of parsed){
+    const submitted=attempts.find(a=>a.userId===scored.userId);
+    if(scored.score!==(submitted?submitted.score:null))
+      fail("Published score has no matching real sealed answer submission");
+  }
   const mine=parsed.find(s=>s.userId===userId);
   const other=parsed.find(s=>s.userId!==userId);
   if(!mine||!other)fail("Authenticated player score cannot be located");

@@ -30,6 +30,7 @@ export async function getVerifiedQuizHistory(ownerId:string){
     },
     select:{
       challengeId:true,finalizedAt:true,winnerId:true,
+      attempts:{select:{userId:true,score:true}},
       challenge:{select:{
         creatorId:true,
         participants:{select:{userId:true,role:true,status:true}},
@@ -48,7 +49,7 @@ export async function getVerifiedQuizHistory(ownerId:string){
       challengeId:row.challengeId,creatorId:row.challenge.creatorId,
       finalizedAt:row.finalizedAt,winnerId:row.winnerId,
       participants:row.challenge.participants,
-      userId:ownerId,view,
+      attempts:row.attempts,userId:ownerId,view,
     }));
   }
   return buildQuizHistory(summaries,rows.length<QUIZ_HISTORY_PAGE_SIZE);

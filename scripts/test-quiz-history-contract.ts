@@ -32,7 +32,9 @@ const view={
 const template={
   challengeId:challenge,creatorId:alice,
   finalizedAt:new Date("2026-10-25T18:00:00.000Z") as Date|null,
-  winnerId:alice as string|null,participants,userId:alice,view,
+  winnerId:alice as string|null,participants,
+  attempts:[{userId:alice,score:3},{userId:bob,score:1}],
+  userId:alice,view,
 };
 const mutate=(fn:(fixture:typeof template)=>void)=>{
   const f=structuredClone(template);fn(f);return f;
@@ -55,11 +57,13 @@ eq([lost.myScore,lost.opponentScore],[1,3],"Opponent score is not your score");
 const tied=verify(mutate(x=>{
   x.winnerId=null;x.view.result.winnerId=null;
   x.view.result.outcome="tie";x.view.result.scores[1].score=3;
+  x.attempts[1].score=3;
 }));
 eq(tied.outcome,"tie","Equal verified scores remain an explicit tie");
 const voided=verify(mutate(x=>{
   x.winnerId=null;x.view.result.winnerId=null;
   x.view.result.outcome="void_timeout";x.view.result.scores[1].score=null as never;
+  x.attempts.pop();
 }));
 eq(voided.outcome,"void_timeout","No-show cannot mint a victory");
 fails(()=>verify(mutate(x=>{x.view.result.winnerId=bob;})),
@@ -68,6 +72,12 @@ fails(()=>verify(mutate(x=>{x.view.result.scores[0].score=0;})),
   "Reported winner must match highest score");
 fails(()=>verify(mutate(x=>{x.view.result.scores[1].userId=alice;})),
   "One competitor cannot occupy both receipt rows");
+fails(()=>verify(mutate(x=>{x.attempts.pop();})),
+  "A forged completed score cannot stand without the actual submitted answer");
+fails(()=>verify(mutate(x=>{x.attempts[1].score=0;})),
+  "Edited source score cannot match the final score receipt");
+fails(()=>verify(mutate(x=>{x.attempts[1].userId="quiz-outsider-12345";})),
+  "No outsider attempt may count as one of the two player answers");
 fails(()=>verify(mutate(x=>{x.view.result.scores[1].score=4;})),
   "Three-question scores cannot exceed three");
 fails(()=>verify(mutate(x=>{x.view.result.creditsTransferred=5;})),
