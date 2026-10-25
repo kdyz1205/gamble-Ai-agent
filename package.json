@@ -56,7 +56,8 @@
     "eval:diverse-judgeability-140": "tsx scripts/eval-diverse-judgeability-140.ts",
     "eval:data-source-topics-100": "tsx scripts/eval-data-source-topics-100.ts",
     "smoke:evidence-admission": "tsx --test scripts/smoke-evidence-admission.ts",
-    "smoke:upload-session-policy": "tsx --test scripts/smoke-upload-session-policy.ts"
+    "smoke:upload-session-policy": "tsx --test scripts/smoke-upload-session-policy.ts",
+    "smoke:trusted-evidence-intake": "tsx --test scripts/smoke-trusted-evidence-intake.ts"
   },
   "repository": {
     "type": "git",
