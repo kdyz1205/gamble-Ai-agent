@@ -48,3 +48,40 @@ jobs:
       - run: npm run smoke:trusted-evidence-intake
 
       - run: npx next build
+
+  trusted-storage:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      S3_TRUSTED_EVIDENCE_BUCKET: ci-private-evidence
+      S3_EVIDENCE_BUCKET: legacy-public-evidence
+      S3_TRUSTED_EVIDENCE_ENDPOINT: http://127.0.0.1:9000
+      S3_TRUSTED_EVIDENCE_FORCE_PATH_STYLE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Start disposable private S3-compatible storage
+        run: |
+          docker run -d --rm --name trusted-storage-ci -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z server /data
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs trusted-storage-ci
+          exit 1
+
+      - name: Verify conditional PUT, one-time upload and server-side SHA
+        run: npx tsx scripts/e2e-trusted-evidence-storage.ts
