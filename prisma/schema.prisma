@@ -504,6 +504,23 @@ model SummonEvolutionReceipt {
   @@index([ownerId, createdAt])
 }
 
+// Optional server-private, independently reviewed question source.
+// No client routes expose answers or reviewer attestation material.
+model QuizProtectedQuestion {
+  id              String   @id
+  bankVersion     String
+  topic           String
+  prompt          String
+  choicesJson     String
+  answerIndex     Int
+  reviewSignature String
+  reviewedAt      DateTime
+  retiredAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([bankVersion, topic, retiredAt])
+}
+
 // DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)
 // ═══════════════════════════════════════
 model QuizDuel {
