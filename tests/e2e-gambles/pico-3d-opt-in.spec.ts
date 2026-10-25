@@ -75,7 +75,7 @@ test("WebGL failure restores 2D Pico without changing Quiz state",
   async({page})=>{
     await page.addInitScript(()=>{
       const original=HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext=function(type:never,...args:never[]){
+      HTMLCanvasElement.prototype.getContext=function(this:HTMLCanvasElement,type:never,...args:never[]){
         if(String(type).toLowerCase().includes("webgl"))return null;
         return original.call(this,type,...args);
       } as typeof original;
