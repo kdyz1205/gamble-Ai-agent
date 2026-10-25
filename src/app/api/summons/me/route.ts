@@ -5,6 +5,7 @@ import {readStarterEntitlement,readSummonCatalog}
 import {accountSummonLedger} from "@/lib/summons/server-ledger";
 import {readFreeCareerTicketLedger} from "@/lib/summons/free-ticket-ledger";
 import {freeDrawEnabled,readOwnedFreeDrawInventory} from "@/lib/summons/free-draw-ledger";
+import {evolutionEnabled} from "@/lib/summons/evolution-rules";
 import {assertOwnedInventorySnapshot,type OwnedInventorySnapshot}
   from "@/lib/summons/owned-inventory-contract";
 
@@ -67,6 +68,7 @@ export async function GET(){
       verifiedProfessionXp:ledger.xp,
       summonTickets:ticketLedger,
       freeDrawsAvailable:!!ticketLedger&&freeDrawEnabled(),
+      evolutionAvailable:inventory.available&&evolutionEnabled(),
       reason:ticketLedger
         ?freeDrawEnabled()?"Verified free ticket draws are active only on this account" : "Only audited ticket receipts are shown; ticket spending and draws remain disabled"
         :ledger.xp
@@ -77,6 +79,7 @@ export async function GET(){
       verifiedProfessionXp:null,
       summonTickets:null,
       freeDrawsAvailable:false,
+      evolutionAvailable:false,
       reason:"Account progression ledger has not been activated; XP and tickets are UNKNOWN",
     },
   },{headers:noStore});
