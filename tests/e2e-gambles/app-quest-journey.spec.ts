@@ -5,7 +5,7 @@ import { expect, test, type BrowserContext } from "@playwright/test";
 
 const base = process.env.TEST_BASE_URL || "http://localhost:3000";
 
-test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", video: "off" });
+test.use({ viewport: { width: 390, height: 844 }, video: "off" });
 
 /**
  * Safe, isolated mobile-Web-App journey. Everything uses zero stake, two new
