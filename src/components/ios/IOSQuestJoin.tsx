@@ -103,7 +103,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
          <label className="ios-quest-invite__approval">
            <input data-testid="ios-accept-rules" type="checkbox" checked={agreedRules}
              onChange={e => setAgreedRules(e.target.checked)}/>
-           I have read and agree to this Quest's rules and proof requirements.
+           I have read and agree to these Quest rules and proof requirements.
          </label>
          {paidApprovalRequired && <label className="ios-quest-invite__approval">
            <input data-testid="ios-accept-stake" type="checkbox" checked={agreedStake}

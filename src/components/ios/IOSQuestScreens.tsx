@@ -31,7 +31,7 @@ export function CreateScreen({seed}: {seed?:string}) {
         onClick={()=>choose(q.id)}>{q.label}</button>)}
     </div>
     <section className="ios-composer" data-testid="ios-real-quest-composer">
-      <PactComposer key={prompt} initialPrompt={prompt}/>
+      <PactComposer key={prompt} initialPrompt={prompt} appMode/>
     </section>
     <IosAction href="/app/quiz" secondary>Or start a voice Quiz</IosAction>
     <p className="ios-footer-note">Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf.</p>
