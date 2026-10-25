@@ -31,7 +31,7 @@ function OwnedFamiliarCard({item}:{item:OwnedFamiliar}){
       <h3>{career?.species??"Unknown Familiar"}</h3>
       <p>{career?.name??item.professionId} / {occupation?.name??item.occupationId}</p>
       <p><strong>{item.rarity.toUpperCase()}</strong> - {item.form} form</p>
-      <small>Recorded {new Date(item.createdAt).toLocaleDateString()}.</small>
+      <small>Recorded {item.createdAt.slice(0,10)} UTC.</small>
       {image?<small>Concept artwork only; the item ID below is your actual inventory record.</small>:
         <small>Illustration not ready; ownership is independently recorded.</small>}
       <small style={{display:"block",overflowWrap:"anywhere"}}>

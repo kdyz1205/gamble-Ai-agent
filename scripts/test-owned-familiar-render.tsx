@@ -27,6 +27,7 @@ includes(owned,"OWNED DATABASE INSTANCE","Actual owned list marked explicitly");
 includes(owned,"owned-summon-"+item.id,"Exact real instance ID exposed on owned card");
 includes(owned,"Circuitling","Profession species is derived from signed catalog");
 includes(owned,"Robotics","Exact earned specialization is displayed");
+includes(owned,"Recorded 2026-10-24 UTC","SSR date stays stable across device time zones");
 includes(owned,"RARE","Rarity comes from verified server row");
 includes(owned,"Concept artwork only","Image never impersonates authentic instance photograph");
 excludes(owned,"No owned free-ticket Summons have been recorded","Existing ownership cannot show as empty");
