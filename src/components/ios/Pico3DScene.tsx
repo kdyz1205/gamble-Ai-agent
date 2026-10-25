@@ -21,8 +21,6 @@ type Props={
  */
 export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Props){
   const canvasRef=useRef<HTMLCanvasElement>(null);
-  const callbacksRef=useRef({onReady,onUnavailable});
-  callbacksRef.current={onReady,onUnavailable};
 
   useEffect(()=>{
     const canvas=canvasRef.current;
@@ -30,7 +28,6 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     let renderer:THREE.WebGLRenderer|undefined;
     let disposed=false,contextHealthy=true,visible=true;
     let raf=0,width=0,height=0,lastDraw=0;
-    let cleanup:(()=>void)|undefined;
     try{
       renderer=new THREE.WebGLRenderer({
         canvas,alpha:true,antialias:true,powerPreference:"low-power",
@@ -41,7 +38,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
       renderer.toneMapping=THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure=1.25;
     }catch{
-      callbacksRef.current.onUnavailable();
+      onUnavailable();
       return;
     }
     const engine=renderer;
@@ -183,7 +180,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     function onLost(event:Event){
       event.preventDefault();
       contextHealthy=false;stop();
-      callbacksRef.current.onUnavailable();
+      onUnavailable();
     }
     function onPointerDown(event:PointerEvent){
       if(event.pointerType!=="mouse"&&event.pointerType!=="touch")return;
@@ -221,7 +218,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     window.addEventListener("sum-ios-preferences-changed",sync);
     reduceMedia.addEventListener?.("change",sync);
 
-    cleanup=()=>{
+    const cleanup=()=>{
       disposed=true;stop();
       onView?.disconnect();resizeObserver?.disconnect();
       window.removeEventListener("resize",sync);
@@ -244,13 +241,13 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     try{
       resize();
       sync();
-      callbacksRef.current.onReady();
+      onReady();
     }catch{
       cleanup();
-      callbacksRef.current.onUnavailable();
+      onUnavailable();
     }
-    return ()=>cleanup?.();
-  },[phase,winnerSide]);
+    return cleanup;
+  },[phase,winnerSide,onReady,onUnavailable]);
 
   return <canvas ref={canvasRef} className="ios-quiz-arena__3d-canvas"
     data-testid="pico-3d-canvas"
