@@ -4,6 +4,7 @@
  * Disabled unless BOTH persistence and ticket flags are enabled.
  */
 import prisma from "@/lib/db";
+import type {Prisma} from "@/generated/prisma/client";
 import {PROFESSIONS,previewTicketMilestones,type ProfessionId} from "./profession-system";
 import {XP_LEDGER_VERSION,summonPersistenceEnabled} from "./server-ledger";
 import {assertFreeTicketSummary} from "./ticket-read-contract";
@@ -134,6 +135,38 @@ function assertCurrentQuestReceipt(event:{
     throw new SummonTicketSourceError("XP event amount conflicts with final result");
 }
 
+/**
+ * Same-transaction source proof validation, shared by ticket minting and draws.
+ * The caller MUST hold the appropriate user/career transaction lock first.
+ */
+export async function requireVerifiedCareerTicketPlan(
+  tx:Prisma.TransactionClient,ownerId:string,professionId:ProfessionId
+){
+  validateCareer(ownerId,professionId);
+  const events=await tx.professionXpEvent.findMany({
+    where:{ownerId,professionId},
+    select:{
+      ownerId:true,professionId:true,awardType:true,eventKey:true,
+      challengeId:true,sourceReceipt:true,ruleVersion:true,amount:true,
+      challenge:{select:{
+        creatorId:true,status:true,type:true,
+        participants:{select:{userId:true,role:true,status:true}},
+        evidence:{select:{userId:true}},
+        judgments:{where:{status:"completed"},orderBy:{createdAt:"desc"},
+          select:{id:true,winnerId:true}},
+        verdictResponses:{select:{userId:true,decision:true}},
+        reviewCase:{select:{status:true,resolution:true,
+          resolvedWinnerId:true,finalJudgmentId:true}},
+      }},
+    },
+    orderBy:{createdAt:"asc"},
+    take:MAX_TICKET_SOURCE_EVENTS+1,
+  });
+  const plan=computeEligibleCareerTickets(ownerId,professionId,events);
+  for(const event of events)assertCurrentQuestReceipt(event);
+  return plan;
+}
+
 /** Transaction + advisory lock + PostgreSQL ON CONFLICT DO NOTHING.
  * Never exposed as a public user endpoint and never called by settlement.
  */
@@ -146,27 +179,7 @@ export async function reconcileFreeCareerTickets(input:{
   return prisma.$transaction(async tx=>{
     // Static parameterized SQL: shared lock for this user's specific skill.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.ownerId+":"+input.professionId}, 843217))`;
-    const events=await tx.professionXpEvent.findMany({
-      where:{ownerId:input.ownerId,professionId:input.professionId},
-      select:{
-        ownerId:true,professionId:true,awardType:true,eventKey:true,
-        challengeId:true,sourceReceipt:true,ruleVersion:true,amount:true,
-        challenge:{select:{
-          creatorId:true,status:true,type:true,
-          participants:{select:{userId:true,role:true,status:true}},
-          evidence:{select:{userId:true}},
-          judgments:{where:{status:"completed"},orderBy:{createdAt:"desc"},
-            select:{id:true,winnerId:true}},
-          verdictResponses:{select:{userId:true,decision:true}},
-          reviewCase:{select:{status:true,resolution:true,
-            resolvedWinnerId:true,finalJudgmentId:true}},
-        }},
-      },
-      orderBy:{createdAt:"asc"},
-      take:MAX_TICKET_SOURCE_EVENTS+1,
-    });
-    const plan=computeEligibleCareerTickets(input.ownerId,input.professionId,events);
-    for(const event of events)assertCurrentQuestReceipt(event);
+    const plan=await requireVerifiedCareerTicketPlan(tx,input.ownerId,input.professionId);
     if(plan.grants.length)
       await tx.summonTicket.createMany({data:plan.grants,skipDuplicates:true});
     const receipts=await tx.summonTicket.findMany({

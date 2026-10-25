@@ -4,6 +4,7 @@ import {readStarterEntitlement,readSummonCatalog}
   from "@/lib/summons/starter-entitlement";
 import {accountSummonLedger} from "@/lib/summons/server-ledger";
 import {readFreeCareerTicketLedger} from "@/lib/summons/free-ticket-ledger";
+import {freeDrawEnabled} from "@/lib/summons/free-draw-ledger";
 
 export const dynamic="force-dynamic";
 const noStore={"Cache-Control":"private, no-store"};
@@ -53,8 +54,9 @@ export async function GET(){
       available:true,
       verifiedProfessionXp:ledger.xp,
       summonTickets:ticketLedger,
+      freeDrawsAvailable:!!ticketLedger&&freeDrawEnabled(),
       reason:ticketLedger
-        ?"Only audited ticket receipts are shown; ticket spending and draws remain disabled"
+        ?freeDrawEnabled()?"Verified free ticket draws are active only on this account" : "Only audited ticket receipts are shown; ticket spending and draws remain disabled"
         :ledger.xp
         ?"Only recorded, verified Quest XP from this rule version is shown; full historical XP is UNKNOWN"
         :"No verified XP receipts exist under this rule version; historical XP remains UNKNOWN",
@@ -62,6 +64,7 @@ export async function GET(){
       available:false,
       verifiedProfessionXp:null,
       summonTickets:null,
+      freeDrawsAvailable:false,
       reason:"Account progression ledger has not been activated; XP and tickets are UNKNOWN",
     },
   },{headers:noStore});

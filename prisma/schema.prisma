@@ -93,6 +93,7 @@ model User {
   summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
   professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
   summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
+  summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
   quizAttempts          QuizAttempt[]
 }
 
@@ -409,6 +410,7 @@ model SummonInstance {
   updatedAt      DateTime @updatedAt
 
   owner User @relation("SummonInventoryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  drawReceipt SummonDrawReceipt?
 
   @@index([ownerId, status, createdAt])
   @@index([speciesId, rarity])
@@ -445,11 +447,41 @@ model SummonTicket {
   createdAt      DateTime  @default(now())
 
   owner User @relation("SummonTicketOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  drawReceipt SummonDrawReceipt?
 
   @@index([ownerId, status])
 }
 
 // ═══════════════════════════════════════
+// Immutable, server-authoritative FREE Summon draws. No purchased tokens.
+model SummonDrawReceipt {
+  id                  String   @id @default(cuid())
+  ownerId             String
+  professionId        String
+  occupationId        String
+  requestKey          String   @unique
+  ticketId            String   @unique
+  instanceId          String   @unique
+  ordinal             Int
+  rarity              String
+  pityKind            String
+  randomValue         Int
+  effectiveWeights    String
+  rareMissesBefore    Int
+  epicMissesBefore    Int
+  rareMissesAfter     Int
+  epicMissesAfter     Int
+  ruleVersion         String
+  createdAt           DateTime @default(now())
+
+  owner    User           @relation("SummonDrawOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  ticket   SummonTicket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  instance SummonInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+
+  @@unique([ownerId, ordinal])
+  @@index([ownerId, createdAt])
+}
+
 // DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)
 // ═══════════════════════════════════════
 model QuizDuel {
