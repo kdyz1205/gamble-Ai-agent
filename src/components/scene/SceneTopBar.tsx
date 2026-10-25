@@ -10,7 +10,7 @@ interface SceneTopBarProps {
   rightSlot?: React.ReactNode;
 }
 
-export default function SceneTopBar({ title = sceneBrand.world, rightSlot }: SceneTopBarProps) {
+export default function SceneTopBar({ title = sceneBrand.world, rightSlot, activePath }: SceneTopBarProps) {
   return (
     <header className="quest-hud">
       <Link href="/enter" className="group quest-hud__cluster min-w-0" aria-label="Summoner.world home">
@@ -30,9 +30,9 @@ export default function SceneTopBar({ title = sceneBrand.world, rightSlot }: Sce
               <span className="grid h-6 w-6 place-items-center rounded-lg bg-[rgba(112,214,165,0.2)] text-[#157b58]"><QuestGlyph className="h-3.5 w-3.5" kind="spark" /></span>
               Pico ready
             </span>
-            <Link aria-label="New quest" className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href="/summons">
+            <Link aria-label={activePath === "/enter" ? "Open SUM web app" : "New quest"} className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href={activePath === "/enter" ? "/app" : "/summons"}>
               <QuestGlyph className="h-4 w-4" kind="spark" />
-              <span className="hidden sm:inline">New quest</span>
+              <span className="inline">{activePath === "/enter" ? "Open app" : "New quest"}</span>
             </Link>
           </>
         )}

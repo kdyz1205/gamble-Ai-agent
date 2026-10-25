@@ -4,7 +4,8 @@ import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
 import QuizDuelScreen from "./QuizDuelScreen";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
-import {TodayScreen,ProfileScreen,AchievementsScreen,EvidenceScreen,StatsScreen,SettingsScreen} from "./IOSPersonalScreens";
+import {ProfileScreen,AchievementsScreen,EvidenceScreen,StatsScreen,SettingsScreen} from "./IOSPersonalScreens";
+import {TodayScreen} from "./IOSGameHome";
 import {DiscoverScreen,CommunityScreen,PicosScreen} from "./IOSExploreScreens";
 import {CreateScreen,QuestDetailScreen,QuestCreatedScreen,QuestCompleteScreen,EvidenceAddScreen} from "./IOSQuestScreens";
 

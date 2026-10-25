@@ -17,13 +17,12 @@ export function CreateScreen({seed}: {seed?:string}) {
     const found=questSeeds.find(item=>item.id===id);
     if(found)setPrompt(found.prompt);
   };
-  return <IosFrame title="Create Your Quest" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
-    <section className="ios-create-hero">
-      <IosArt src={visuals.mascotHappy} alt="Pico ready to help with your idea"/>
-      <div><h1>Every adventure<br/>starts with an idea.</h1>
-      <p>Tell Pico what you want to do. You review the rules and decide whether to publish.</p></div>
+  return <IosFrame title="Quest Forge" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
+    <section className="ios-forge-bar" aria-label="Quest creation">
+      <IosArt src={visuals.mascotHappy} alt="Pico"/>
+      <div><span className="ios-overline">PICO / RULE BUILDER</span><h1>New Quest</h1>
+        <p>Describe a challenge. Review its rules before you invite anyone.</p></div>
     </section>
-    <IosAction href="/app/quiz" secondary>Start a voice Quiz with a friend</IosAction>
     <div className="ios-filters" aria-label="Starting categories">
       {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
         className={"ios-chip"+(chosen===q.id?" is-selected":"")}
@@ -32,6 +31,7 @@ export function CreateScreen({seed}: {seed?:string}) {
     <section className="ios-composer" data-testid="ios-real-quest-composer">
       <PactComposer key={prompt} initialPrompt={prompt}/>
     </section>
+    <IosAction href="/app/quiz" secondary>Or start a voice Quiz</IosAction>
     <p className="ios-footer-note">Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf.</p>
   </IosFrame>;
 }

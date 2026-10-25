@@ -21,10 +21,10 @@ export default function EnterPage() {
               A little spark can become a real adventure. Create a Quest, invite your people, share your proof, and let Pico help you make the moment count.
             </p>
             <div className="sw-hero__actions">
-              <Link className="sw-button sum-award-cta" href="/summons" data-testid="world-summon-cta">
-                <SummonSigil/> Summon a Quest <Arrow/>
+              <Link className="sw-button sum-award-cta" href="/app" data-testid="world-summon-cta">
+                <SummonSigil/> Open Web App <Arrow/>
               </Link>
-              <Link className="sw-text-link" href="/rituals">Meet Pico, your Familiar <Arrow/></Link>
+              <Link className="sw-text-link" href="#how-it-works">How it works <Arrow/></Link>
             </div>
             <div className="sum-kawaii-hero__whisper" aria-hidden="true"><span>✦</span> Small ideas. Brighter tomorrows.</div>
             <div className="sum-award-hero__meta">

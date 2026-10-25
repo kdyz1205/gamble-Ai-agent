@@ -29,17 +29,17 @@ export function DiscoverScreen() {
     (q.title+" "+q.description+" "+q.type).toLowerCase().includes(search.toLowerCase().trim())
   ),[quests,filter,search]);
   return <IosFrame title="Discover" eyebrow="SHARED POSSIBILITIES">
-    <section className="ios-discover-hero">
-      <div><span className="ios-overline">FIND A NEW ADVENTURE</span><h1>Your next<br/>little big step.</h1>
-        <p>Open Quests from real people, ready to explore.</p></div>
-      <IosArt src={visuals.mascotHappy} alt="" className="ios-discover-hero__art"/>
+    <section className="ios-discover-console" aria-label="Matchmaking">
+      <div><span className="ios-overline">MATCHMAKING / PUBLIC QUESTS</span><h1>Find a Duel</h1>
+        <p>Join an open Quest or host a challenge of your own.</p></div>
+      <Link href="/app/create" className="ios-discover-console__new"><IosIcon name="spark" size={16}/> Host</Link>
     </section>
     <label className="ios-search"><IosIcon name="discover" size={18}/>
       <span className="sr-only">Search Quests</span>
       <input aria-label="Search Quests" placeholder="Search Quests…" value={search} onChange={e=>setSearch(e.target.value)}/>
     </label>
     <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}</button>)}</div>
-    <div className="ios-section__heading"><div><small>REAL OPEN CHALLENGES</small><h2>Explore together</h2></div><button className="ios-text-action" type="button" onClick={refresh}>Refresh</button></div>
+    <div className="ios-section__heading"><div><small>REAL OPEN CHALLENGES</small><h2>Open matches</h2></div><button className="ios-text-action" type="button" onClick={refresh}>Refresh</button></div>
     {loading ? <IOSLoadingCards label="Finding public Quests…" /> :
       error ? <p className="ios-message ios-message--error" role="alert">{error}</p> :
       visible.length===0 ? <IosEmpty image={visuals.move} heading="A new Quest could start with you."

@@ -1,0 +1,228 @@
+/* In-product Quest HUD. Landing pages intentionally retain their own styles.
+   All selectors are scoped to /app's iOS frame; the public /enter site is untouched. */
+.ios-command-hud {
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  min-height: 244px;
+  padding: 17px 17px 16px;
+  border-radius: 27px;
+  color: #fcf9ff;
+  background:
+    radial-gradient(circle at 84% 27%, rgba(254, 168, 217, .4), transparent 32%),
+    radial-gradient(circle at 15% 93%, rgba(91, 96, 240, .6), transparent 52%),
+    linear-gradient(135deg, #24224d 4%, #443881 62%, #56469a 100%);
+  border: 1px solid rgba(220, 197, 255, .37);
+  box-shadow: 0 9px 0 rgba(46, 38, 91, .10), 0 22px 46px rgba(80, 63, 156, .21);
+}
+.ios-command-hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .3;
+  pointer-events: none;
+  background-image: radial-gradient(circle, white .75px, transparent 1px);
+  background-size: 25px 28px;
+}
+.ios-command-hud__eyebrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .1em;
+  color: #d7ccff;
+}
+.ios-command-hud__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(242,233,255,.26);
+  border-radius: 100px;
+  background: rgba(31, 22, 71, .38);
+  padding: 6px 9px;
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: .025em;
+  color: #f6f1ff;
+}
+.ios-command-hud__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c1a9ff;
+  box-shadow: 0 0 8px #d0aaf8;
+}
+.ios-command-hud__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 0 15px;
+}
+.ios-command-hud__welcome {
+  margin-bottom: 7px !important;
+  color: #d1caff;
+  font-size: 9px;
+  letter-spacing: .13em;
+  font-weight: 850;
+}
+.ios-app .ios-command-hud h1 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-size: clamp(23px, 7vw, 30px);
+  font-weight: 850;
+  letter-spacing: -.06em;
+  line-height: 1.05;
+}
+.ios-app .ios-command-hud__hint {
+  max-width: 225px;
+  color: #e4dcff;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.ios-command-hud__familiar {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  isolation: isolate;
+  min-width: 0;
+}
+.ios-command-hud__halo {
+  position: absolute;
+  z-index: -1;
+  width: 115px;
+  height: 115px;
+  top: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 238, 255, .55);
+  background: radial-gradient(circle, rgba(255,225,249,.62), rgba(197,178,253,.3) 60%, transparent 72%);
+  box-shadow: 0 0 32px rgba(255,197,248,.24), inset 0 0 22px rgba(255,255,255,.24);
+}
+.ios-app .ios-command-hud__pico {
+  width: 108px;
+  height: 113px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  filter: drop-shadow(0 11px 9px rgba(37,16,83,.27));
+}
+.ios-command-hud__pico-label {
+  margin-top: -3px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  color: #fff6ff;
+  background: rgba(44,34,90,.5);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+.ios-command-hud__primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 45px;
+  border-radius: 14px;
+  background: #fbe5a9;
+  color: #302854 !important;
+  box-shadow: 0 5px 0 #d4a978;
+  font-size: 13px;
+  font-weight: 850;
+}
+.ios-command-hud__primary svg:last-child { margin-left: auto; margin-right: 14px; }
+.ios-command-hud__primary svg:first-child { margin-left: 14px; }
+.ios-command-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ios-command-mode {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 9px;
+  min-height: 72px;
+  padding: 11px;
+  border: 1px solid #ded9f6;
+  border-radius: 18px;
+  color: #433d6c !important;
+  background: #fffefa;
+  box-shadow: 0 5px 0 #e9e6f6;
+}
+.ios-command-mode__icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  height: 38px;
+  width: 38px;
+  border-radius: 12px;
+  color: #6256b1;
+  background: #e8e5ff;
+}
+.ios-command-mode:nth-child(2) .ios-command-mode__icon { color: #167f72; background: #d7f4ed; }
+.ios-command-mode:nth-child(3) .ios-command-mode__icon { color: #c16c53; background: #ffecdd; }
+.ios-command-mode:nth-child(4) .ios-command-mode__icon { color: #a45e91; background: #ffe3f5; }
+.ios-command-mode strong { min-width: 0; font-size: 12px; line-height: 1.2; }
+.ios-command-mode small { min-width: 0; color: #807b9b; font-size: 9px; line-height: 1.35; }
+.ios-command-quests { display: grid; gap: 13px; }
+.ios-command-section-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.ios-app .ios-command-section-header h2 { font-size: 21px; font-weight: 850; letter-spacing: -.04em; margin-top: 3px; color: #3c366a; }
+.ios-command-counters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+.ios-command-counters > div { display: flex; gap: 6px; align-items: baseline; flex-direction: column; padding: 11px; border: 1px solid #e7e3f4; background: #fff; border-radius: 12px; }
+.ios-command-counters strong { font-size: 20px; color: #474078; line-height: 1; }
+.ios-command-counters span { font-size: 10px; color: #817b9e; }
+.ios-command-next { display: grid; gap: 9px; }
+.ios-command-next__status { justify-self: start; text-transform: uppercase; font-size: 9px; font-weight: 800; letter-spacing: .08em; border-radius: 20px; background: #e8e5ff; color: #6554ac; padding: 5px 9px; }
+.ios-command-next__open { display: inline-flex; align-items: center; gap: 8px; justify-content: center; min-height: 42px; background: #e9e5fc; border-radius: 12px; color: #564ca2 !important; font-size: 12px; font-weight: 850; }
+.ios-command-empty { display: flex; align-items: center; gap: 10px; padding: 14px 11px; background: #f4f2fd; border: 1px solid #e5ddf8; border-radius: 16px; color: #675eb5; }
+.ios-command-empty > svg { flex-shrink: 0; }
+.ios-command-empty > div { flex: 1; min-width: 0; }
+.ios-command-empty strong { display: block; font-size: 11px; line-height: 1.4; color: #48426f; }
+.ios-command-empty p { margin-top: 4px !important; color: #7e7699; font-size: 10px; line-height: 1.45; }
+.ios-command-signin { border: 0; border-radius: 11px; min-width: 62px; min-height: 37px; padding: 7px; color: white !important; background: #6c60d4; font-size: 10px !important; text-align: center; font-weight: 850; }
+.ios-command-daily { padding: 12px; border-radius: 16px; border: 1px solid #e8e1f5; background: #fff; }
+.ios-command-daily > summary { cursor: pointer; display: flex; align-items: center; gap: 9px; list-style: none; min-height: 29px; font-size: 12px; font-weight: 800; color: #59517f; }
+.ios-command-daily > summary::-webkit-details-marker { display: none; }
+.ios-command-daily > summary small { margin-left: auto; text-align: right; font-size: 9px; color: #9a92ac; font-weight: 600; }
+.ios-command-daily > summary svg:last-child { transform: rotate(90deg); flex-shrink: 0; }
+.ios-command-daily[open] > summary svg:last-child { transform: rotate(-90deg); }
+.ios-command-daily > .ios-section { margin-top: 14px; }
+
+/* Compact in-app creation and matchmaking controls: content first, not a hero billboard. */
+.ios-app .ios-forge-bar, .ios-app .ios-discover-console {
+  border-radius: 19px;
+  border: 1px solid #e5e0f5;
+  background: linear-gradient(115deg,#eeeaff,#fff8f2);
+  padding: 12px 15px;
+}
+.ios-app .ios-forge-bar { display: flex; align-items: center; gap: 13px; }
+.ios-app .ios-forge-bar .ios-art { width: 64px; height: 64px; border-radius: 20px; object-fit: cover; flex-shrink: 0; }
+.ios-app .ios-forge-bar h1 { font-family: "Plus Jakarta Sans",system-ui,sans-serif; font-size: 17px; font-weight: 850; letter-spacing: -.035em; color: #453b75; }
+.ios-app .ios-forge-bar p { margin-top: 4px; font-size: 11px; line-height: 1.45; color: #777090; }
+.ios-app .ios-discover-console { display: flex; align-items: center; gap: 10px; }
+.ios-app .ios-discover-console h1 { font-family: "Plus Jakarta Sans",system-ui,sans-serif; font-size: 19px; font-weight: 850; letter-spacing: -.04em; color: #40356c; }
+.ios-app .ios-discover-console p { font-size: 10px; color: #77708e; line-height: 1.45; margin-top: 3px; }
+.ios-app .ios-discover-console__new { display: flex; align-items: center; gap: 4px; border-radius: 12px; background: #625dd4; color: #fff !important; font-size: 11px; font-weight: 850; padding: 9px; margin-left: auto; flex-shrink: 0; }
+.ios-app .ios-main > .ios-command-modes + .ios-command-quests { margin-top: 12px; }
+.ios-app .ios-main > .ios-command-quests + .ios-command-daily { margin-top: 12px; }
+@media (hover:hover) {
+  .ios-command-mode:hover { border-color: #a7a0e5; background: #f7f3ff; }
+  .ios-command-hud__primary:hover { filter: brightness(1.05); }
+}
+@media (max-width: 355px) {
+  .ios-command-hud { padding: 13px; }
+  .ios-command-hud__content { grid-template-columns: minmax(0,1fr) 91px; }
+  .ios-app .ios-command-hud__pico { width: 90px; height: 95px; }
+  .ios-command-hud__halo { width: 92px; height: 92px; }
+  .ios-command-mode { padding: 9px; gap: 1px 6px; }
+  .ios-command-mode__icon { width: 33px; height: 33px; }
+  .ios-command-empty { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ios-command-hud *, .ios-command-mode * { animation: none !important; transition: none !important; }
+}
