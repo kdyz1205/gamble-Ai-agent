@@ -165,7 +165,8 @@ export type RecordedProfessionXp = {
 };
 export type SummonProgression = {
   available:boolean;verifiedProfessionXp:RecordedProfessionXp|null;
-  summonTickets:AccountFreeTicketSummary|null;freeDrawsAvailable:boolean;reason:string;
+  summonTickets:AccountFreeTicketSummary|null;freeDrawsAvailable:boolean;
+  evolutionAvailable:boolean;reason:string;
 };
 
 /** Reads authenticated, server-backed Pico/XP records; never creates XP. */
@@ -203,6 +204,9 @@ export function useStarterPico(enabled=true){
         const progression=data.progression;
         if(!progression||typeof progression.available!=="boolean"||
            typeof progression.freeDrawsAvailable!=="boolean"||
+           typeof progression.evolutionAvailable!=="boolean"||
+           (progression.evolutionAvailable&&(!snapshot.available||
+             !progression.freeDrawsAvailable))||
            (progression.freeDrawsAvailable&&(!progression.available||progression.summonTickets===null))||
            (progression.summonTickets!==null&&!progression.available)||
            (progression.verifiedProfessionXp!==null&&!progression.available))

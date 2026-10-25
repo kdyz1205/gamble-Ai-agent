@@ -6,8 +6,12 @@ import {creatureRenderFor} from "@/lib/summons/creature-render-manifest";
 import type {CreatureStage} from "@/lib/summons/creature-visual-bible";
 import type {OwnedInventorySnapshot,OwnedFamiliar}
   from "@/lib/summons/owned-inventory-contract";
+import FamiliarEvolutionAction from "./FamiliarEvolutionAction";
 
-function OwnedFamiliarCard({item}:{item:OwnedFamiliar}){
+function OwnedFamiliarCard({item,evolutionAvailable,verifiedXp,onEvolutionComplete}:{
+  item:OwnedFamiliar;evolutionAvailable:boolean;verifiedXp:number|null;
+  onEvolutionComplete?:()=>void;
+}){
   const career=PROFESSIONS.find(p=>p.id===item.professionId);
   const professionId=item.professionId as ProfessionId;
   const stage=item.form as CreatureStage;
@@ -37,13 +41,21 @@ function OwnedFamiliarCard({item}:{item:OwnedFamiliar}){
       <small style={{display:"block",overflowWrap:"anywhere"}}>
         Item ID: {item.id}
       </small>
+      {evolutionAvailable?<FamiliarEvolutionAction item={item}
+        verifiedXp={verifiedXp} onEvolutionComplete={onEvolutionComplete}/>:null}
     </div>
   </article>;
 }
 
-export default function OwnedFamiliarCollection({inventory,signedIn,loading,error}:{
+export default function OwnedFamiliarCollection({
+  inventory,signedIn,loading,error,evolutionAvailable=false,
+  verifiedProfessionXp=[],onEvolutionComplete,
+}:{
   inventory:OwnedInventorySnapshot|null;
   signedIn:boolean;loading:boolean;error:string;
+  evolutionAvailable?:boolean;
+  verifiedProfessionXp?:readonly {professionId:string;recordedXp:number}[];
+  onEvolutionComplete?:()=>void;
 }){
   return <section className="ios-section" aria-label="Your Owned Familiars">
     <div className="ios-section__heading">
@@ -62,7 +74,10 @@ export default function OwnedFamiliarCollection({inventory,signedIn,loading,erro
         </p>
         <div role="list" style={{display:"grid",gap:12}}>
           {inventory.items.map(item=><div key={item.id} role="listitem">
-            <OwnedFamiliarCard item={item}/>
+            <OwnedFamiliarCard item={item}
+              evolutionAvailable={evolutionAvailable}
+              verifiedXp={verifiedProfessionXp.find(x=>x.professionId===item.professionId)?.recordedXp??null}
+              onEvolutionComplete={onEvolutionComplete}/>
           </div>)}
         </div>
       </div>}
