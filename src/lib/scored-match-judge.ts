@@ -19,6 +19,7 @@ interface ScoredMatchEvidence {
   description: string | null;
   type: string;
   url?: string | null;
+  privateMedia?: boolean;
 }
 
 export interface ShortScoredMatchJudgeParams {
@@ -159,7 +160,8 @@ export async function judgeShortScoredMatch(
     const message = firstError?.status === "rejected" && firstError.reason instanceof Error
       ? firstError.reason.message
       : "timeline extraction failed";
-    return fail(message);
+    return fail((params.evidenceA.privateMedia || params.evidenceB.privateMedia)
+      ? "private video extraction failed; review requires a readable recording" : message);
   }
 
   const timelineA = usableTimelines.find((entry) => entry.source.id === "A")?.timeline.visuals ?? [];
@@ -226,7 +228,9 @@ Find all rally windows in chronological order. Do not infer identity or continui
     detailImages = preparedDetails.visuals;
     detailFramesPerSecond = preparedDetails.framesPerSecond;
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "dense rally extraction failed");
+    return fail((params.evidenceA.privateMedia || params.evidenceB.privateMedia)
+      ? "private rally frame extraction failed"
+      : error instanceof Error ? error.message : "dense rally extraction failed");
   }
 
   const detail = await callVisionJson<DetailResult>({

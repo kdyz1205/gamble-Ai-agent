@@ -79,6 +79,7 @@ model User {
   challengesCreated    Challenge[]       @relation("ChallengeCreator")
   participations       Participant[]
   evidenceSubmissions  Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   judgmentsGiven       Judgment[]        @relation("JudgeUser")
   judgmentsWon         Judgment[]        @relation("WinnerUser")
   transactions         CreditTx[]
@@ -188,6 +189,7 @@ model Challenge {
   creator          User              @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   participants     Participant[]
   evidence         Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   judgments        Judgment[]
   creditTxs        CreditTx[]
   activityEvents   ActivityEvent[]
@@ -225,6 +227,30 @@ model Participant {
 // EVIDENCE & JUDGMENT
 // ═══════════════════════════════════════
 
+/** Private S3 evidence intake, feature gated; this table is NOT a verdict or award. */
+model TrustedEvidenceUpload {
+  id                String    @id
+  challengeId       String
+  userId            String
+  objectKey         String    @unique
+  contentType       String
+  expectedSizeBytes Int
+  status            String    @default("issued") // issued | verified | consumed | revoked
+  sha256            String?
+  observedSizeBytes Int?
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence Evidence?
+
+  @@index([challengeId,userId,status])
+  @@index([expiresAt,status])
+}
+
 model Evidence {
   id          String   @id @default(cuid())
   challengeId String
@@ -232,6 +258,7 @@ model Evidence {
   type        String // video | photo | gps | text
   url         String?
   description String?
+  trustedUploadId String? @unique // nullable; private blob never persists a presigned URL
   metadata    String? // JSON string
   createdAt   DateTime @default(now())
 
@@ -244,6 +271,7 @@ model Evidence {
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trustedUpload TrustedEvidenceUpload? @relation(fields: [trustedUploadId], references: [id], onDelete: SetNull)
 
   // One evidence row per (challenge, user). Prevents double-submit from
   // flooding the judge with N rows per player where only the first is read.

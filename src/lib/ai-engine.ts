@@ -426,6 +426,7 @@ export interface JudgeEvidencePayload {
   description: string | null;
   type: string;
   url?: string | null;
+  privateMedia?: boolean; // transport URL must never enter model text
   preparedFrames?: string[] | null;
   preparedDurationSec?: number | null;
   preparedMode?: string | null;
@@ -592,10 +593,10 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
   }
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
   const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
-description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
+description: ${evidenceA!.description || "(none)"}${evidenceA!.privateMedia ? "\nmedia: server-verified private object" : evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
 
 Participant B evidence (${evidenceB!.type}):
-description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}`;
+description: ${evidenceB!.description || "(none)"}${evidenceB!.privateMedia ? "\nmedia: server-verified private object" : evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}`;
 
   const userText = `Challenge: "${title}"
 Type: ${type}

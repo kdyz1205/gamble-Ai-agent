@@ -210,6 +210,76 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       let finalUrl: string | undefined = trimmedUrl || undefined;
       let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : requiredMedia || evidenceType || "text";
 
+      // Prefer the server-verified PRIVATE object path when the new intake is
+      // explicitly available. A configured server error is NOT a reason to
+      // silently downgrade to public Blob/URL evidence.
+      if (f) {
+        const offer = await fetch("/api/uploads/trusted-evidence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            challengeId, contentType: f.type, fileSizeBytes: f.size,
+          }),
+        });
+        if (offer.status !== 404) {
+          if (!offer.ok) {
+            const problem = await offer.json().catch(() => ({}));
+            throw new Error(problem.error || "Verified private upload is not available");
+          }
+          const ticket = await offer.json() as {
+            uploadSessionId: string; uploadUrl: string;
+            headers: Record<string, string>;
+          };
+          if (!ticket.uploadSessionId || !ticket.uploadUrl || !ticket.headers) {
+            throw new Error("Trusted storage did not return an upload receipt");
+          }
+          setUploading(true);
+          setUploadProgress(0);
+          try {
+            const put = await fetch(ticket.uploadUrl, {
+              method: "PUT", headers: ticket.headers, body: f,
+            });
+            if (!put.ok) throw new Error("Private object transfer failed (" + put.status + ")");
+            setUploadProgress(100);
+
+            const completed = await fetch(
+              "/api/uploads/trusted-evidence/" +
+                encodeURIComponent(ticket.uploadSessionId) + "/complete",
+              { method: "POST" },
+            );
+            if (!completed.ok) {
+              const problem = await completed.json().catch(() => ({}));
+              throw new Error(problem.error || "Private media integrity check failed");
+            }
+
+            const bound = await fetch(
+              "/api/challenges/" + encodeURIComponent(challengeId) +
+                "/evidence/trusted",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  uploadSessionId: ticket.uploadSessionId,
+                  description: trimmedDescription || ("Uploaded: " + f.name),
+                }),
+              },
+            );
+            if (!bound.ok) {
+              const problem = await bound.json().catch(() => ({}));
+              throw new Error(problem.error || "Verified evidence could not be bound to this Quest");
+            }
+            // No permanent S3 URL is returned to the user or stored in Evidence.
+            resetAll();
+            setMode(null);
+            setDescription("");
+            await onSubmitted();
+            return;
+          } finally {
+            setUploading(false);
+          }
+        }
+      }
+
       // Upload file via Vercel Blob if present
       if (f) {
         setUploading(true);

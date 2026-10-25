@@ -127,6 +127,7 @@ export interface ChallengeData {
     userId: string;
     type: string;
     url: string | null;
+    trustedUploadId?: string | null;
     description: string | null;
     createdAt: string;
     user?: { id: string; username: string; image?: string | null };

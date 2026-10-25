@@ -47,7 +47,13 @@ export async function POST(
     where: { id },
     select: { creatorId: true, status: true, title: true, stake: true, evidenceType: true,arbiter:true,
       participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
-      evidence: { select: { userId: true, type: true, url: true, description: true } } },
+      evidence: { select: { userId: true, type: true, url: true, description: true,
+        trustedUploadId: true,
+        trustedUpload: { select: {
+          id: true, status: true, userId: true, challengeId: true,
+          sha256: true, contentType: true,
+        } },
+      } } },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -71,7 +77,17 @@ export async function POST(
     && players.some((p) => p.role === "opponent") && players.every((p) => {
       const proof = challenge.evidence.find((e) => e.userId === p.userId);
       if (!proof) return false;
-      if (["photo", "video"].includes(challenge.evidenceType)) return proof.type === challenge.evidenceType && !!proof.url?.trim();
+      if (["photo", "video"].includes(challenge.evidenceType)) {
+        const receipt = proof.trustedUpload;
+        const trusted = Boolean(proof.trustedUploadId && receipt &&
+          receipt.id === proof.trustedUploadId &&
+          receipt.status === "consumed" && receipt.userId === proof.userId &&
+          receipt.challengeId === id && /^[a-f0-9]{64}$/i.test(receipt.sha256 ?? "") &&
+          (proof.type === "video" ? receipt.contentType.startsWith("video/") :
+            receipt.contentType.startsWith("image/")));
+        if (process.env.TRUSTED_EVIDENCE_REQUIRED_FOR_MEDIA === "true") return trusted;
+        return proof.type === challenge.evidenceType && (trusted || !!proof.url?.trim());
+      }
       return !!proof.description?.trim();
     });
   if (!complete) return Response.json({ error: "Background review needs valid proof from both players. Use the deadline-rule review when proof is missing." }, { status: 409 });
