@@ -1,0 +1,69 @@
+/* In-app Quest lifecycle controls. These do not change the marketing site. */
+.ios-app .ios-quest-judge {
+  display: grid;
+  gap: 13px;
+  padding: 18px 16px;
+  border-radius: 18px;
+  border: 1px solid #c9c2f5;
+  background: linear-gradient(135deg, #eceaff, #fdf9ff);
+  box-shadow: 0 6px 19px rgba(58, 39, 118, .1);
+}
+.ios-app .ios-quest-judge h2 {
+  color: #3b326c;
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: -.025em;
+}
+.ios-app .ios-quest-judge p {
+  margin: 0;
+  color: #645e85;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.ios-app .ios-quest-judge__approval {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e4ce97;
+  background: #fffaf0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #594367;
+}
+.ios-app .ios-quest-judge__approval input {
+  width: 19px;
+  height: 19px;
+  margin-top: 0;
+  accent-color: #6c59d4;
+  flex-shrink: 0;
+}
+.ios-app .ios-quest-judge__receipt {
+  padding: 13px;
+  border: 1px solid #ddd5f2;
+  border-radius: 13px;
+  background: #fff;
+}
+.ios-app .ios-quest-judge__receipt strong {
+  display: block;
+  color: #3d335e;
+  font-size: 14px;
+}
+.ios-app .ios-quest-judge__receipt p {
+  margin-top: 7px;
+  font-size: 12px;
+}
+.ios-app .ios-quest-judge .ios-primary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  margin-top: 1px;
+}
+.ios-app .ios-quest-judge .ios-secondary-button { color: #6051af !important; }
+.ios-app .ios-quest-judge [role="status"],
+.ios-app .ios-quest-judge [role="alert"] {
+  overflow-wrap: anywhere;
+}

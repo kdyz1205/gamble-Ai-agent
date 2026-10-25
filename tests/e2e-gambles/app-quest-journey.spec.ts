@@ -1,0 +1,188 @@
+import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
+import { expect, test, type BrowserContext } from "@playwright/test";
+
+const base = process.env.TEST_BASE_URL || "http://localhost:3000";
+
+test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", video: "off" });
+
+/**
+ * Safe, isolated mobile-Web-App journey. Everything uses zero stake, two new
+ * disposable accounts and localhost PostgreSQL; no external paid AI model.
+ * Exercises the exact App proof and verdict controls, and proves AI failure
+ * doesn't invent victory/settlement/reward.
+ */
+test("App: two-player proof, guarded referee, consented deadline verdict, no counterfeit XP", async ({ browser }) => {
+  test.setTimeout(280_000);
+  const dbUrl = new URL(process.env.DATABASE_URL || "postgresql://invalid/none");
+  test.skip(
+    !["localhost", "127.0.0.1"].includes(dbUrl.hostname) ||
+    dbUrl.pathname !== "/summoner_verification" ||
+    process.env.AI_ENABLED !== "false",
+    "Only isolated summoner_verification with AI explicitly disabled",
+  );
+
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const tag = randomUUID().replace(/-/g, "").slice(0, 14);
+  const people: Array<{ id: string; context: BrowserContext }> = [];
+  const questIds: string[] = [];
+  async function register(role: string) {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 }, isMobile: true,
+      hasTouch: true, reducedMotion: "reduce",
+    });
+    const csrf = (await (await context.request.get(base + "/api/auth/csrf")).json()).csrfToken;
+    const username = "app_journey_" + role + "_" + tag;
+    const email = username + "@example.invalid";
+    const registered = await context.request.post(base + "/api/auth/callback/credentials", {
+      form: {
+        csrfToken: csrf, action: "register", email,
+        username, password: randomUUID() + "aA9!",
+        callbackUrl: base + "/app", json: "true",
+      },
+    });
+    expect(registered.status(), await registered.text()).toBe(200);
+    const session = (await (await context.request.get(base + "/api/auth/session")).json()).user;
+    expect(session?.email).toBe(email);
+    people.push({ id: session.id as string, context });
+    return { id: session.id as string, context };
+  }
+  async function createFree(creator: BrowserContext, title: string) {
+    const response = await creator.request.post(base + "/api/challenges", {
+      data: {
+        title, type: "General", stake: 0, evidenceType: "text",
+        visibility: "invite_only", isPublic: false, deadline: "2 hours",
+        rules: "Each accepted player supplies their own written evidence. No guesses when evidence is absent.",
+      },
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    const id = (await response.json()).challenge.id as string;
+    questIds.push(id);
+    return id;
+  }
+  try {
+    const creator = await register("creator");
+    const friend = await register("friend");
+    const initialBalances = (await db.query(
+      'SELECT id,credits FROM "User" WHERE id=ANY($1::text[]) ORDER BY id',
+      [[creator.id, friend.id]],
+    )).rows;
+
+    const proofQuest = await createFree(creator.context, "App evidence flow " + tag);
+    const accepted = await friend.context.request.post(base + "/api/challenges/" + proofQuest + "/accept");
+    expect(accepted.status(), await accepted.text()).toBe(200);
+
+    for (const [participant, note] of [[creator, "Creator wrote own observation"], [friend, "Friend wrote own observation"]] as const) {
+      const page = await participant.context.newPage();
+      await page.goto(base + "/app/quest?id=" + proofQuest);
+      await expect(page.getByRole("link", { name: "Submit your proof" })).toBeVisible();
+      await page.getByRole("link", { name: "Submit your proof" }).click();
+      await expect(page).toHaveURL(/\/app\/evidence-add\?id=/);
+      await page.locator("#ios-proof-note").fill(note + " " + tag);
+      await page.getByRole("button", { name: "Save written evidence" }).click();
+      await expect(page.getByText("Your proof was saved.")).toBeVisible();
+      await page.close();
+    }
+
+    expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [proofQuest])).rows[0].status).toBe("judging");
+    expect((await db.query('SELECT COUNT(*)::int AS count FROM "Evidence" WHERE "challengeId"=$1', [proofQuest])).rows[0].count).toBe(2);
+    const creatorPage = await creator.context.newPage();
+    await creatorPage.goto(base + "/app/quest?id=" + proofQuest);
+    await expect(creatorPage.getByTestId("ios-judge-gate")).toBeVisible();
+    const trigger = creatorPage.getByTestId("ios-run-judge");
+    await expect(trigger).toBeEnabled();
+    await expect(trigger).toHaveText(/free/i);
+
+    const friendPage = await friend.context.newPage();
+    await friendPage.goto(base + "/app/quest?id=" + proofQuest);
+    await expect(friendPage.getByTestId("ios-judge-gate")).toBeVisible();
+    await expect(friendPage.getByTestId("ios-run-judge")).toHaveCount(0);
+    const jobRequest = creatorPage.waitForResponse(r =>
+      r.url().endsWith("/api/challenges/" + proofQuest + "/judge/async") &&
+      r.request().method() === "POST");
+    await trigger.click();
+    const admitted = await jobRequest;
+    expect(admitted.status(), await admitted.text()).toBe(202);
+    const { jobId } = await admitted.json();
+    expect(jobId).toBeTruthy();
+
+    await expect.poll(async () => {
+      const response = await creator.context.request.get(base + "/api/judge-jobs/" + jobId);
+      expect(response.status()).toBe(200);
+      return (await response.json()).status as string;
+    }, { timeout: 80_000, intervals: [1000, 1500, 2500, 5000] }).toBe("failed");
+    expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [proofQuest])).rows[0].status).toBe("judging");
+    expect((await db.query('SELECT COUNT(*)::int AS n FROM "Judgment" WHERE "challengeId"=$1', [proofQuest])).rows[0].n).toBe(0);
+    expect((await db.query('SELECT COUNT(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1', [proofQuest])).rows[0].n).toBe(0);
+    await creatorPage.close();
+    await friendPage.close();
+
+    // Separate fail-closed no-proof case proves that real participant consent
+    // is reachable in /app/quest; the deadline rule must never invent a winner.
+    const deadlineQuest = await createFree(creator.context, "App no-proof deadline " + tag);
+    expect((await friend.context.request.post(
+      base + "/api/challenges/" + deadlineQuest + "/accept",
+    )).status()).toBe(200);
+    await db.query(
+      'UPDATE "Challenge" SET deadline=NOW()-INTERVAL \'1 minute\',status=$2 WHERE id=$1',
+      [deadlineQuest, "judging"],
+    );
+    const deadlineDecision = await creator.context.request.post(base + "/api/challenges/" + deadlineQuest + "/judge", {
+      data: { tier: 1 },
+    });
+    expect(deadlineDecision.status(), await deadlineDecision.text()).toBe(200);
+    expect((await deadlineDecision.json()).judgment.winnerId).toBeNull();
+
+    for (const participant of [creator, friend]) {
+      const page = await participant.context.newPage();
+      await page.goto(base + "/app/quest?id=" + deadlineQuest);
+      await expect(page.getByTestId("ios-verdict-ready")).toBeVisible();
+      const acceptance = page.waitForResponse(r =>
+        r.url().endsWith("/api/challenges/" + deadlineQuest + "/verdict-response") &&
+        r.request().method() === "POST");
+      await page.getByRole("button", { name: "Accept result" }).click();
+      expect((await acceptance).ok()).toBe(true);
+      await page.close();
+    }
+    const settled = await creator.context.request.get(base + "/api/challenges/" + deadlineQuest);
+    expect((await settled.json()).challenge.status).toBe("settled");
+    const receiptPage = await creator.context.newPage();
+    await receiptPage.goto(base + "/app/quest?id=" + deadlineQuest);
+    await receiptPage.getByRole("link", { name: "View real result" }).click();
+    await expect(receiptPage.getByText("Quest Complete!")).toBeVisible();
+    await expect(receiptPage.getByText("No winner recorded")).toBeVisible();
+    await receiptPage.close();
+
+    const balancesAfter = (await db.query(
+      'SELECT id,credits FROM "User" WHERE id=ANY($1::text[]) ORDER BY id',
+      [[creator.id, friend.id]],
+    )).rows;
+    expect(balancesAfter).toEqual(initialBalances);
+    for (const id of questIds) {
+      expect((await db.query('SELECT COUNT(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1', [id])).rows[0].n).toBe(0);
+      expect((await db.query('SELECT COUNT(*)::int AS n FROM "ProfessionXpEvent" WHERE "challengeId"=$1', [id])).rows[0].n).toBe(0);
+    }
+    console.log(JSON.stringify({
+      result: "PASS", proofQuest, submittedProofRecords: 2,
+      paidAiCalls: 0, aiFailureFailClosed: true,
+      deadlineQuest, deadlineOutcome: "no_winner",
+      consentCount: 2, creditMovement: 0, xpAwarded: 0,
+    }));
+  } finally {
+    for (const user of people) await user.context.close();
+    for (const id of questIds) {
+      await db.query('DELETE FROM "AuditLog" WHERE "challengeId"=$1', [id]).catch(() => {});
+      await db.query('DELETE FROM "ActivityEvent" WHERE "challengeId"=$1', [id]).catch(() => {});
+      await db.query('DELETE FROM "Challenge" WHERE id=$1', [id]).catch(() => {});
+    }
+    if (people.length) {
+      const ids = people.map(p => p.id);
+      await db.query('DELETE FROM "CreditTx" WHERE "userId"=ANY($1::text[])', [ids]).catch(() => {});
+      await db.query('DELETE FROM "ActivityEvent" WHERE "userId"=ANY($1::text[])', [ids]).catch(() => {});
+      await db.query('DELETE FROM "AuditLog" WHERE "actorUserId"=ANY($1::text[]) OR "targetUserId"=ANY($1::text[])', [ids]).catch(() => {});
+      await db.query('DELETE FROM "User" WHERE id=ANY($1::text[])', [ids]).catch(() => {});
+    }
+    await db.end();
+  }
+});

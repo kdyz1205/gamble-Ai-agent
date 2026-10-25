@@ -8,6 +8,7 @@ import * as api from "@/lib/api-client";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
+import IOSQuestJudgment from "./IOSQuestJudgment";
 
 export function CreateScreen({seed}: {seed?:string}) {
   const [chosen,setChosen]=useState(seed==="craft"||seed==="grow"?seed:"move");
@@ -92,9 +93,16 @@ export function QuestDetailScreen({id}: {id?:string}) {
           <IosAction href={"/join/"+encodeURIComponent(quest.id)}>Review and join Quest</IosAction>}
         <button type="button" className="ios-secondary-button" onClick={()=>void share()}>{copied?"Shared or copied":"Share invitation"}</button>
       </div>}
-      {quest.status==="live"&&<IosAction href={"/app/evidence-add?id="+encodeURIComponent(quest.id)}>Add your evidence</IosAction>}
-      {quest.status==="settled"&&<IosAction href={"/app/quest-complete?id="+encodeURIComponent(quest.id)}>View real result</IosAction>}
-      {["judging","pending_settlement","disputed"].includes(quest.status)&&<p className="ios-message">The result is still being reviewed or settled. No completed outcome is claimed.</p>}
+      {quest.arbiter==="quiz-curated-mcq-v1"
+        ? <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>
+        : <>
+          {quest.status==="live"&&<IosAction href={"/app/evidence-add?id="+encodeURIComponent(quest.id)}>
+            {quest.evidence?.some(row=>row.userId===me) ? "View proof status" : "Submit your proof"}
+          </IosAction>}
+          {quest.status==="settled"&&<IosAction href={"/app/quest-complete?id="+encodeURIComponent(quest.id)}>View real result</IosAction>}
+          {["judging","pending_settlement","disputed"].includes(quest.status)&&
+            <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>}
+        </>}
       <button type="button" className="ios-text-action ios-refresh" onClick={refresh}>Refresh Quest status</button>
     </>}
   </IosFrame>;
