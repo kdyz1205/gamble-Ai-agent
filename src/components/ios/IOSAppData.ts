@@ -163,7 +163,7 @@ export type RecordedProfessionXp = {
 };
 export type SummonProgression = {
   available:boolean;verifiedProfessionXp:RecordedProfessionXp|null;
-  summonTickets:AccountFreeTicketSummary|null;reason:string;
+  summonTickets:AccountFreeTicketSummary|null;freeDrawsAvailable:boolean;reason:string;
 };
 
 /** Reads authenticated, server-backed Pico/XP records; never creates XP. */
@@ -172,6 +172,8 @@ export function useStarterPico(enabled=true){
   const userId=session?.user?.id;
   const [starter,setStarter]=useState<StarterPicoEntitlement|null>(null);
   const [progression,setProgression]=useState<SummonProgression|null>(null);
+  const [revision,setRevision]=useState(0);
+  const refresh=useCallback(()=>setRevision(count=>count+1),[]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   useEffect(()=>{
@@ -195,6 +197,8 @@ export function useStarterPico(enabled=true){
           throw Error("Invalid starter response");
         const progression=data.progression;
         if(!progression||typeof progression.available!=="boolean"||
+           typeof progression.freeDrawsAvailable!=="boolean"||
+           (progression.freeDrawsAvailable&&(!progression.available||progression.summonTickets===null))||
            (progression.summonTickets!==null&&!progression.available)||
            (progression.verifiedProfessionXp!==null&&!progression.available))
           throw Error("Invalid account progression response");
@@ -237,7 +241,7 @@ export function useStarterPico(enabled=true){
         if(active){setError(message(err));setLoading(false);}
       });
     return ()=>{active=false;controller.abort();};
-  },[enabled,status,userId]);
+  },[enabled,status,userId,revision]);
   return {starter,progression,loading:enabled&&(loading||status==="loading"),
-    error,signedIn:status==="authenticated"&&!!userId};
+    error,signedIn:status==="authenticated"&&!!userId,refresh};
 }
