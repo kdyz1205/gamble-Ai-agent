@@ -63,11 +63,11 @@ export async function POST(
     });
     if (!upload) throw new BindingError("upload_session_not_found", 404);
     if (upload.status === "consumed") {
-      const already = await prisma.evidence.findUnique({
-        where: { trustedUploadId: upload.id },
-      });
+      const already = upload.evidenceId ? await prisma.evidence.findUnique({
+        where: { id: upload.evidenceId },
+      }) : null;
       if (already?.challengeId === challengeId && already.userId === user.userId) {
-        return Response.json({ evidence: already, reused: true }, {
+        return Response.json({ evidence: { ...already, trustedUploadId: upload.id }, reused: true }, {
           headers: { "Cache-Control": "private, no-store" },
         });
       }
@@ -131,25 +131,12 @@ export async function POST(
         where: { challengeId_userId: { challengeId, userId: user.userId } },
       });
       if (existing) throw new BindingError("evidence_already_submitted", 409);
-      const locked = await tx.trustedEvidenceUpload.updateMany({
-        where: {
-          id: upload.id,
-          userId: user.userId,
-          challengeId,
-          status: "verified",
-          sha256: receipt.sha256,
-          expiresAt: { gt: new Date() },
-        },
-        data: { status: "consumed", consumedAt: new Date() },
-      });
-      if (locked.count !== 1) throw new BindingError("upload_session_state_changed", 409);
       const proof = await tx.evidence.create({
         data: {
           challengeId,
           userId: user.userId,
           type: challenge.evidenceType,
           url: null,
-          trustedUploadId: upload.id,
           description,
           metadata: JSON.stringify({
             source: "verified_private_object_v1",
@@ -159,6 +146,21 @@ export async function POST(
           }),
         },
       });
+      // Both writes are in the same Quest-locked transaction. If the
+      // upload was consumed concurrently, the Evidence insert rolls back.
+      const locked = await tx.trustedEvidenceUpload.updateMany({
+        where: {
+          id: upload.id,
+          userId: user.userId,
+          challengeId,
+          evidenceId: null,
+          status: "verified",
+          sha256: receipt.sha256,
+          expiresAt: { gt: new Date() },
+        },
+        data: { status: "consumed", evidenceId: proof.id, consumedAt: new Date() },
+      });
+      if (locked.count !== 1) throw new BindingError("upload_session_state_changed", 409);
       await tx.activityEvent.create({ data: {
         type: "evidence_submitted",
         userId: user.userId,
@@ -201,7 +203,10 @@ export async function POST(
       return proof;
     }, { maxWait: 15_000, timeout: 30_000 });
 
-    return Response.json({ evidence, reused: false }, {
+    return Response.json({
+      evidence: { ...evidence, trustedUploadId: upload.id },
+      reused: false,
+    }, {
       status: 201,
       headers: { "Cache-Control": "private, no-store" },
     });

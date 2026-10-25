@@ -45,6 +45,8 @@ jobs:
 
       - run: npm run test:trusted-evidence:smoke
 
+      - run: npx tsx scripts/test-preview-migration-compat.ts
+
       - run: npx tsc --noEmit
 
       - run: node scripts/test-ios-clean-art.cjs

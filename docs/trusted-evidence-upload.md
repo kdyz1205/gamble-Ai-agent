@@ -4,6 +4,13 @@
 branch. Not rolled into the production game, not turned on in Vercel, and not
 evidence that the game can autonomously identify winners in arbitrary videos.
 
+**Legacy preview compatibility:** The optional foreign key is
+`TrustedEvidenceUpload.evidenceId`, inside the new table. The existing
+`Evidence` table receives **no additional column**. All reads of the
+optional upload table are guarded by `ENABLE_TRUSTED_EVIDENCE_UPLOADS=true`.
+With the feature off, old Web App routes continue to work even when the
+private-upload migration has not yet run.
+
 ## End-to-end path
 
 1. The authenticated accepted player calls

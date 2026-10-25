@@ -60,5 +60,19 @@ export async function GET(
     orderBy: { createdAt: "desc" },
   });
 
-  return Response.json({ evidence }, { headers: { "Cache-Control": "private, no-store" } });
+  const linkedUploads = process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS === "true"
+    ? await prisma.trustedEvidenceUpload.findMany({
+      where: { challengeId: id, status: "consumed", evidenceId: {
+        in: evidence.map(row => row.id),
+      } },
+      select: { id: true, evidenceId: true },
+    })
+    : [];
+  const links = new Map(linkedUploads.filter(row => row.evidenceId)
+    .map(row => [row.evidenceId!, row.id] as const));
+  const visible = evidence.map(row => ({
+    ...row,
+    trustedUploadId: links.get(row.id) ?? null,
+  }));
+  return Response.json({ evidence: visible }, { headers: { "Cache-Control": "private, no-store" } });
 }

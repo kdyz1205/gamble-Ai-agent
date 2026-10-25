@@ -62,9 +62,17 @@ export async function submitChallengeEvidence(
     }
     const existing = await tx.evidence.findUnique({ where: { challengeId_userId: { challengeId, userId: user.userId } },
       include: { user: { select: { id: true, username: true } } } });
-    if (existing?.trustedUploadId) {
-      throw new EvidenceSubmissionError(
-        "A trusted private proof cannot be replaced through the legacy URL endpoint", 409);
+    // The optional trusted-upload table is queried ONLY when that feature is
+    // enabled. Disabled previews must work against the unchanged old schema.
+    if (existing && process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS === "true") {
+      const bound = await tx.trustedEvidenceUpload.findUnique({
+        where: { evidenceId: existing.id },
+        select: { id: true },
+      });
+      if (bound) {
+        throw new EvidenceSubmissionError(
+          "A trusted private proof cannot be replaced through the legacy URL endpoint", 409);
+      }
     }
     const unchanged = existing && existing.type === input.type && existing.url === input.url
       && existing.description === input.description && existing.metadata === input.metadata;

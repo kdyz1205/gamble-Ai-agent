@@ -235,6 +235,7 @@ model TrustedEvidenceUpload {
   objectKey         String    @unique
   contentType       String
   expectedSizeBytes Int
+  evidenceId        String?   @unique // FK lives ONLY in opt-in upload table
   status            String    @default("issued") // issued | verified | consumed | revoked
   sha256            String?
   observedSizeBytes Int?
@@ -245,7 +246,7 @@ model TrustedEvidenceUpload {
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  evidence Evidence?
+  evidence Evidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([challengeId,userId,status])
   @@index([expiresAt,status])
@@ -258,7 +259,6 @@ model Evidence {
   type        String // video | photo | gps | text
   url         String?
   description String?
-  trustedUploadId String? @unique // nullable; private blob never persists a presigned URL
   metadata    String? // JSON string
   createdAt   DateTime @default(now())
 
@@ -271,7 +271,7 @@ model Evidence {
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trustedUpload TrustedEvidenceUpload? @relation(fields: [trustedUploadId], references: [id], onDelete: SetNull)
+  trustedUpload TrustedEvidenceUpload? // relation virtual: zero new Evidence columns
 
   // One evidence row per (challenge, user). Prevents double-submit from
   // flooding the judge with N rows per player where only the first is read.

@@ -97,7 +97,7 @@ async function executeClaimedJudgment(
         where: { status: "accepted" },
         include: { user: { select: { id: true, username: true } } },
       },
-      evidence: { include: { trustedUpload: true } },
+      evidence: true,
     },
   });
 
@@ -158,9 +158,31 @@ async function executeClaimedJudgment(
   let privateA: Awaited<ReturnType<typeof resolveJudgeEvidenceMedia>> | null = null;
   let privateB: Awaited<ReturnType<typeof resolveJudgeEvidenceMedia>> | null = null;
   try {
+    // No extra-column reads or joins in the existing Evidence table. When the
+    // feature is OFF, do not query the optional private-upload table at all.
+    const rows = process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS === "true"
+      ? await prisma.trustedEvidenceUpload.findMany({
+          where: { challengeId, evidenceId: {
+            in: challenge.evidence.map(item => item.id),
+          } },
+        })
+      : [];
+    const linked = new Map(rows.filter(row => !!row.evidenceId)
+      .map(row => [row.evidenceId!, row] as const));
+    const resolve = (item: (typeof challenge.evidence)[number] | undefined) => {
+      if (!item) return Promise.resolve(null);
+      const receipt = linked.get(item.id) ?? null;
+      return resolveJudgeEvidenceMedia({
+        challengeId: item.challengeId,
+        userId: item.userId,
+        type: item.type,
+        url: item.url,
+        trustedUploadId: receipt?.id ?? null,
+        trustedUpload: receipt,
+      });
+    };
     [privateA, privateB] = await Promise.all([
-      evidenceA ? resolveJudgeEvidenceMedia(evidenceA) : Promise.resolve(null),
-      evidenceB ? resolveJudgeEvidenceMedia(evidenceB) : Promise.resolve(null),
+      resolve(evidenceA), resolve(evidenceB),
     ]);
   } catch {
     return { ok: false, status: 409,
