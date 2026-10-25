@@ -15,7 +15,9 @@ const ADDITIVE = "20261020090000_complete_challenge_schema";
 const PROTECT = "20261020090100_protect_credit_ledger_user_fk";
 const SUMMON_LEDGER = "20261024022500_summon_ledger_foundation";
 const QUIZ_DUELS = "20261024074500_verified_free_quiz_duels";
-const SUMMON_TABLES = ["ProfessionXpEvent", "SummonInstance", "SummonTicket"];
+const FREE_DRAW = "20261024200500_free_summon_draw_receipts";
+const EVOLUTION = "20261025100000_audited_free_summon_evolution";
+const SUMMON_TABLES = ["ProfessionXpEvent", "SummonDrawReceipt", "SummonEvolutionReceipt", "SummonInstance", "SummonTicket"];
 const QUIZ_TABLES = ["QuizAttempt","QuizDuel"];
 const addedColumns: Record<string, string[]> = {
   Challenge: ["arbiter", "disputeWindow", "eventTime", "evidenceHash", "fallbackRule", "joinWindow", "marketType", "paramsHash", "proofSource", "proofWindow", "proposition", "resolutionHash", "settlementMode", "stakeToken", "visibility"],
@@ -73,13 +75,24 @@ async function main() {
     const migrationFolders = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
     assert(migrationFolders.includes(SUMMON_LEDGER), "Summon ledger migration must be present");
     assert(migrationFolders.includes(QUIZ_DUELS), "Free Quiz migration must be present");
-    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER, QUIZ_DUELS].includes(entry.name))
+    assert(migrationFolders.includes(FREE_DRAW), "Audited free draw migration must be present");
+    assert(migrationFolders.includes(EVOLUTION), "Verified evolution migration must be present");
+    assert(EVOLUTION > FREE_DRAW, "Evolution FKs require free draw item foundations first");
+    assert(FREE_DRAW > SUMMON_LEDGER && FREE_DRAW > QUIZ_DUELS,
+      "Free draw foreign keys require the existing ticket and Quiz migration order");
+    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER, QUIZ_DUELS, FREE_DRAW, EVOLUTION].includes(entry.name))
       await cp(join(allMigrations, entry.name), join(baseline, entry.name), { recursive: true });
     const freshConfig = await config("fresh", allMigrations); const legacyConfig = await config("legacy", baseline);
     const additive = await readFile(join(allMigrations, ADDITIVE, "migration.sql"), "utf8");
     const protection = await readFile(join(allMigrations, PROTECT, "migration.sql"), "utf8");
     const summonMigration = await readFile(join(allMigrations, SUMMON_LEDGER, "migration.sql"), "utf8");
     const quizMigration = await readFile(join(allMigrations, QUIZ_DUELS, "migration.sql"), "utf8");
+    const drawMigration = await readFile(join(allMigrations, FREE_DRAW, "migration.sql"), "utf8");
+    const evolutionMigration = await readFile(join(allMigrations, EVOLUTION, "migration.sql"), "utf8");
+    assert.doesNotMatch(evolutionMigration.replace(/--[^\n]*/g,""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
+    assert.doesNotMatch(evolutionMigration, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|Evidence)"/i);
+    assert.doesNotMatch(drawMigration.replace(/--[^\n]*/g,""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
+    assert.doesNotMatch(drawMigration, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|Evidence)"/i);
     assert.doesNotMatch(quizMigration.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     assert.doesNotMatch(quizMigration, /ALTER\s+TABLE\s+"(?:CreditTx|User|Challenge|Judgment|Evidence)"/i);
     assert.doesNotMatch(summonMigration.replace(/--[^\n]*/g, ""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
@@ -93,7 +106,7 @@ async function main() {
     assert.deepEqual(await readSummonTables(fresh), SUMMON_TABLES);
     const readQuizTables = async (db: pg.Client) => (await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1::text[]) ORDER BY table_name`, [QUIZ_TABLES])).rows.map((row: {table_name:string}) => row.table_name);
     assert.deepEqual(await readQuizTables(fresh), QUIZ_TABLES);
-    console.log("PASS additive Summon and Quiz tables exist after migrations");
+    console.log("PASS additive Summon, free draw, evolution, and Quiz tables exist after migrations");
     await command(databases[0], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     await command(databases[0], ["migrate", "diff", "--from-migrations", "prisma/migrations", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS fresh migrate deploy and independent shadow replay exactly match canonical columns, types, defaults, indexes and constraints");
