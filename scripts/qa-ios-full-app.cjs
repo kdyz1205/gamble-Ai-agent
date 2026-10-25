@@ -139,7 +139,7 @@ for(const width of widths){
       } finally {await compact.close();}
     });
     await test("First install onboarding advances three real pages",async()=>{
-      await page.goto(base+"/app",{waitUntil:"domcontentloaded"});
+      await page.goto(base+"/app/onboarding",{waitUntil:"domcontentloaded"});
       await page.waitForURL(/\/app\/onboarding/,{timeout:45000});
       await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});
       await page.locator("[data-hydrated=true]").waitFor({state:"visible",timeout:45000});

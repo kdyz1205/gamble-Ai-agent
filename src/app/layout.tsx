@@ -9,6 +9,8 @@ import "./sum-universe.css";
 import "./sum-award-v4.css";
 import "./sum-storybook.css";
 import "./ios-app.css";
+import "./ios-game-console.css";
+import "./ios-quest-journey.css";
 import "./quest-starter-controls.css";
 
 export const metadata: Metadata = {

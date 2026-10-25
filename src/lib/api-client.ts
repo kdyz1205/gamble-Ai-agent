@@ -566,6 +566,13 @@ export async function judgeChallengeAsync(id: string, tier: 1 | 2 | 3 = 1, prefs
   });
 }
 
+/** Discover existing server-owned judge task after reloading Safari. Read-only. */
+export async function getLatestJudgeJob(challengeId: string): Promise<{
+  job: { jobId: string; status: string } | null;
+}> {
+  return apiFetch(`/challenges/${encodeURIComponent(challengeId)}/judge-job`);
+}
+
 export async function getJudgeJob(jobId: string): Promise<{ jobId: string; status: string; result?: unknown; error?: string }> {
   return apiFetch(`/judge-jobs/${jobId}`);
 }

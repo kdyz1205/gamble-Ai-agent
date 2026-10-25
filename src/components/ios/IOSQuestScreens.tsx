@@ -8,6 +8,8 @@ import * as api from "@/lib/api-client";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
+import IOSQuestJudgment from "./IOSQuestJudgment";
+import EvidenceUploader from "@/components/EvidenceUploader";
 
 export function CreateScreen({seed}: {seed?:string}) {
   const [chosen,setChosen]=useState(seed==="craft"||seed==="grow"?seed:"move");
@@ -17,21 +19,21 @@ export function CreateScreen({seed}: {seed?:string}) {
     const found=questSeeds.find(item=>item.id===id);
     if(found)setPrompt(found.prompt);
   };
-  return <IosFrame title="Create Your Quest" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
-    <section className="ios-create-hero">
-      <IosArt src={visuals.mascotHappy} alt="Pico ready to help with your idea"/>
-      <div><h1>Every adventure<br/>starts with an idea.</h1>
-      <p>Tell Pico what you want to do. You review the rules and decide whether to publish.</p></div>
+  return <IosFrame title="Quest Forge" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
+    <section className="ios-forge-bar" aria-label="Quest creation">
+      <IosArt src={visuals.mascotHappy} alt="Pico"/>
+      <div><span className="ios-overline">PICO / RULE BUILDER</span><h1>New Quest</h1>
+        <p>Describe a challenge. Review its rules before you invite anyone.</p></div>
     </section>
-    <IosAction href="/app/quiz" secondary>Start a voice Quiz with a friend</IosAction>
     <div className="ios-filters" aria-label="Starting categories">
       {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
         className={"ios-chip"+(chosen===q.id?" is-selected":"")}
         onClick={()=>choose(q.id)}>{q.label}</button>)}
     </div>
     <section className="ios-composer" data-testid="ios-real-quest-composer">
-      <PactComposer key={prompt} initialPrompt={prompt}/>
+      <PactComposer key={prompt} initialPrompt={prompt} appMode/>
     </section>
+    <IosAction href="/app/quiz" secondary>Or start a voice Quiz</IosAction>
     <p className="ios-footer-note">Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf.</p>
   </IosFrame>;
 }
@@ -55,7 +57,7 @@ export function QuestDetailScreen({id}: {id?:string}) {
   const creator=Boolean(me&&quest?.creatorId===me);
   const share=async()=>{
     if(!quest)return;
-    const url=window.location.origin+"/join/"+encodeURIComponent(quest.id);
+    const url=window.location.origin+"/app/join?id="+encodeURIComponent(quest.id);
     try{
       if(navigator.share) await navigator.share({title:quest.title,url});
       else await navigator.clipboard.writeText(url);
@@ -89,12 +91,19 @@ export function QuestDetailScreen({id}: {id?:string}) {
       </section>
       {quest.status==="open"&&<div className="ios-actions">
         {creator?<p className="ios-message">Waiting for another person to join your Quest.</p>:
-          <IosAction href={"/join/"+encodeURIComponent(quest.id)}>Review and join Quest</IosAction>}
+          <IosAction href={"/app/join?id="+encodeURIComponent(quest.id)}>Review and join Quest</IosAction>}
         <button type="button" className="ios-secondary-button" onClick={()=>void share()}>{copied?"Shared or copied":"Share invitation"}</button>
       </div>}
-      {quest.status==="live"&&<IosAction href={"/app/evidence-add?id="+encodeURIComponent(quest.id)}>Add your evidence</IosAction>}
-      {quest.status==="settled"&&<IosAction href={"/app/quest-complete?id="+encodeURIComponent(quest.id)}>View real result</IosAction>}
-      {["judging","pending_settlement","disputed"].includes(quest.status)&&<p className="ios-message">The result is still being reviewed or settled. No completed outcome is claimed.</p>}
+      {quest.arbiter==="quiz-curated-mcq-v1"
+        ? <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>
+        : <>
+          {quest.status==="live"&&<IosAction href={"/app/evidence-add?id="+encodeURIComponent(quest.id)}>
+            {quest.evidence?.some(row=>row.userId===me) ? "View proof status" : "Submit your proof"}
+          </IosAction>}
+          {quest.status==="settled"&&<IosAction href={"/app/quest-complete?id="+encodeURIComponent(quest.id)}>View real result</IosAction>}
+          {["judging","pending_settlement","disputed"].includes(quest.status)&&
+            <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>}
+        </>}
       <button type="button" className="ios-text-action ios-refresh" onClick={refresh}>Refresh Quest status</button>
     </>}
   </IosFrame>;
@@ -112,6 +121,7 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   ));
   const policy=(quest?.evidenceType||"").toLowerCase();
   const textAllowed=policy==="text"||policy==="self_report";
+  const alreadySubmitted=Boolean(quest?.evidence?.some(p=>p.userId===session?.user?.id));
   const save=async()=>{
     if(!quest||!accepted||!textAllowed||!note.trim()||busy)return;
     setBusy(true);setSubmitError("");
@@ -124,15 +134,17 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   return <IosFrame title="Add Evidence" eyebrow="THE PROOF CHAPTER" back={id?"/app/quest?id="+encodeURIComponent(id):"/app/today"}>
     {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
     <>
-      <div className="ios-proof-hero"><IosArt src={visuals.create} alt="A creative desk for your memories"/>
-        <span className="ios-overline">REAL PROOF · {quest.evidenceType.replace(/_/g," ")}</span>
-      </div>
-      <h1 className="ios-page-title">{quest.title}</h1>
+      <section className="ios-app-proof-heading" aria-label="Proof submission">
+        <span className="ios-app-proof-heading__icon"><IosIcon name="camera" size={23}/></span>
+        <div><span className="ios-overline">REQUIRED PROOF / {quest.evidenceType.replace(/_/g," ")}</span>
+          <h1>{quest.title}</h1>
+        </div>
+      </section>
       {quest.status!=="live"?<IosEmpty image={visuals.mascot} heading="Proof is not open yet."
         description={"Quest status: "+quest.status+". Evidence may only be changed while a Quest is live."} action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
       !accepted?<AuthInvitation title="Only accepted players can submit proof." detail="Sign in with the account participating in this Quest."/>:
-      success?<IosEmpty image={visuals.mascotHappy} heading="Your proof was saved."
-        description="This submission was accepted by the actual Quest service. You can review its record." action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
+      success||alreadySubmitted?<IosEmpty image={visuals.mascotHappy} heading="Your proof was saved."
+        description="Your real proof submission is recorded. The referee cannot judge until every required player has submitted." action="View Quest" href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
       <>
         <section className="ios-proof-form">
           <h2>What happened?</h2><p>Describe the real attempt and keep the agreed proof requirements in mind.</p>
@@ -143,11 +155,18 @@ export function EvidenceAddScreen({id}:{id?:string}) {
             <button className="ios-primary" type="button" disabled={!note.trim()||busy} onClick={()=>void save()}>
               {busy?"Submitting…":"Save written evidence"}
             </button></>:
-            <><div className="ios-proof-media"><IosIcon name="camera" size={26}/>
-              <strong>{policy==="video"?"Upload your video":policy==="photo"?"Upload your photo":"Prepare your required proof"}</strong>
-              <p>The existing protected uploader verifies file requirements, access and deadlines.</p>
-            </div>
-            <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>Open secure proof uploader</IosAction></>}
+            ["photo","video"].includes(policy) ?
+              <div className="ios-app-media-proof" data-testid="ios-app-media-uploader">
+                <p className="ios-message">Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules.</p>
+                <EvidenceUploader
+                  challengeId={quest.id}
+                  evidenceType={quest.evidenceType}
+                  onSubmitted={() => setSuccess(true)}
+                />
+              </div> :
+              <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>
+                Open policy-specific proof capture
+              </IosAction>}
         </section>
       </>}
     </>}

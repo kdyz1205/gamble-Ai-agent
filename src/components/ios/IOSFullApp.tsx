@@ -3,13 +3,15 @@
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
 import QuizDuelScreen from "./QuizDuelScreen";
+import IOSQuestJoin from "./IOSQuestJoin";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
-import {TodayScreen,ProfileScreen,AchievementsScreen,EvidenceScreen,StatsScreen,SettingsScreen} from "./IOSPersonalScreens";
+import {ProfileScreen,AchievementsScreen,EvidenceScreen,StatsScreen,SettingsScreen} from "./IOSPersonalScreens";
+import {TodayScreen} from "./IOSGameHome";
 import {DiscoverScreen,CommunityScreen,PicosScreen} from "./IOSExploreScreens";
 import {CreateScreen,QuestDetailScreen,QuestCreatedScreen,QuestCompleteScreen,EvidenceAddScreen} from "./IOSQuestScreens";
 
 export const mobilePages = [
-  "splash","onboarding","today","discover","create","quest-created","quest",
+  "splash","onboarding","today","discover","create","join","quest-created","quest",
   "evidence-add","quest-complete","picos","quiz","profile","achievements",
   "evidence","stats","community","settings"
 ] as const;
@@ -69,6 +71,7 @@ export default function IOSFullApp({view,questId,seed}:{
     case "today":return <TodayScreen/>;
     case "discover":return <DiscoverScreen/>;
     case "create":return <CreateScreen seed={seed}/>;
+    case "join":return <IOSQuestJoin id={questId}/>;
     case "quest-created":return <QuestCreatedScreen id={questId}/>;
     case "quest":return <QuestDetailScreen id={questId}/>;
     case "evidence-add":return <EvidenceAddScreen id={questId}/>;
