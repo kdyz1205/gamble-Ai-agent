@@ -10,6 +10,7 @@ import {
   PROFESSIONS,RARITY_VERSION,INITIAL_PITY_STATE,drawRarity,advancePityState,
   previewSummon,type ProfessionId,type PityState,
 } from "./profession-system";
+import {verifyOwnedEvolutionHistory} from "./evolution-receipts";
 import {
   TICKET_GRANT_RULE_VERSION,MAX_TICKETS_PER_CAREER,
   requireVerifiedCareerTicketPlan,summonTicketsEnabled,
@@ -55,7 +56,7 @@ export function freeDrawGrantKey(ticketGrantKey:string){
 /** Verify ALL preceding draws, not just last counters. One account-wide
  * sequence: changing professions never resets Rare/Epic pity.
  */
-async function authenticatedPityHistory(tx:Prisma.TransactionClient,ownerId:string){
+export async function authenticatedPityHistory(tx:Prisma.TransactionClient,ownerId:string){
   const rows=await tx.summonDrawReceipt.findMany({
     where:{ownerId},orderBy:{ordinal:"asc"},take:MAX_ACCOUNT_DRAWS+1,
     include:{
@@ -122,6 +123,7 @@ export async function readOwnedFreeDrawInventory(ownerId:string){
   return prisma.$transaction(async tx=>{
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ownerId}, 843219))`;
     const verified=await authenticatedPityHistory(tx,ownerId);
+    await verifyOwnedEvolutionHistory(tx,ownerId,verified.rows);
     const actual=await tx.summonInstance.count({
       where:{ownerId,originKind:"free_ticket"},
     });
@@ -185,6 +187,7 @@ export async function redeemFreeSummonTicket(input:{
     // Account-wide lock is required because pity persists across careers.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.ownerId}, 843219))`;
     const history=await authenticatedPityHistory(tx,input.ownerId);
+    await verifyOwnedEvolutionHistory(tx,input.ownerId,history.rows);
     const plan=await requireVerifiedCareerTicketPlan(
       tx,input.ownerId,input.professionId);
     const duplicate=await tx.summonDrawReceipt.findUnique({

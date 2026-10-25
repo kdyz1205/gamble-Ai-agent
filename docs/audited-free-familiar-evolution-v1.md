@@ -1,0 +1,23 @@
+# Summoner.world: audited, zero-payment Familiar evolution (v1)
+
+**Scope:** A real, authenticated cosmetic form transition for an already-owned, receipt-backed free-ticket Familiar. The player retains the same item ID, species identity, rarity, ticket, odds, and owner. No artificial XP, Credits, cash, wagers or USDT affect this path. This is not fusion or the general Quest XP grant rollout.
+
+## Rules (frozen at verified-career-evolution-v1)
+
+- Base -> Evolved: at least **350** currently verified XP in that Familiar's actual profession. Evolved -> Ascended: at least **1600** XP in that same career. No direct Base -> Ascended jump and no duplicate evolution. Both thresholds correspond to the existing `MASTERY_XP_THRESHOLDS` levels 3 and 5.
+- An audited XP source includes both accepted competitors' evidence, valid settlement, accepted verdict or resolved review, and matching original judgment. Disputed/reversed/fabricated sources fail closed. XP may be reused to evolve multiple owned Familiars within the same career; evolution does not deduct XP or mint tickets.
+- Server controls everything via `POST /api/summons/evolve`: user identity from session only; `instanceId`, `toForm`, stable `requestKey` and `confirmEvolution:true` are the only allowed body properties. Four feature flags must explicitly equal true: `SUMMON_PERSISTENCE_ENABLED`, `SUMMON_TICKETS_ENABLED`, `SUMMON_DRAWS_ENABLED`, **`SUMMON_EVOLUTION_ENABLED`**. All default OFF in production and preview.
+- PostgreSQL uses the **same account-wide advisory lock** as the draw and collection read (843219). The complete draw/pity/ownership history and the complete evolution sequence are verified in the same transaction before any writes. One mutation changes only `SummonInstance.form`, creates one immutable `SummonEvolutionReceipt`, then one append-only audit event.
+- Evolution receipt is unique by account-bound request key and by `(instanceId,toForm)`. Exact retries return the same receipt even if the item later Ascends. A different target with the same key fails; independent concurrent attempts to evolve the same stage cannot duplicate the form or receipt.
+- New migration `20261025100000_audited_free_summon_evolution` creates **only** the additive receipt table, with foreign keys, uniqueness and SQL checks for valid transitions and minimum recorded XP. Does not touch old user/Quest/credit balance rows.
+- Authenticated collection reads revalidate the **entire** draw and evolution ledger, including original XP source receipts. A manually edited `form='ascended'` without both consecutive receipts, a corrupted version, or a refunded source must not appear as verified owned evolution.
+- UI only offers the *next* stage when a fully authenticated account has current recorded XP satisfying the displayed threshold and the server advertises the independently gated capability. Clicking requires a second explicit confirmation. A network timeout keeps the **same** idempotency key; no automatic retries with a new key. The server remains authoritative over XP eligibility.
+
+## Acceptance and limitations
+
+- Pure rules: `scripts/test-summon-evolution-policy.ts` covers stages/threshold boundaries, malformed keys, independent flags, NaN/negative/fraction XP, invalid transitions.
+- Actual React rendering: `scripts/test-summon-evolution-render.tsx` checks signed-out, disabled, locked, base/evolved/ascended, recorded XP and item identity, without network writes.
+- Isolated local Postgres: `scripts/test-summon-evolution-db.ts` creates synthetic accepted 0-stake Quests and derives actual XP. It exercises six same-key evolution requests, different-key races, cross-account and cross-profession refusal, 350/1600 thresholds, idempotency after further evolution, tampered receipts, disputed proofs, unchanged rarity/species/credits/tickets, and safe teardown.
+- Fresh migration tests prove additive schema install and populated historic migration upgrade; existing Quiz/Quest/credit, free-ticket/draw and browser regressions must stay green, as must exact-head iPhone Simulator startup/screenshot and unsigned archive.
+
+**Release blockers:** Real-Quest farming/collusion prevention, irreversible asset compensation for post-evolution appeal/reversal, rate limiting, staged flag activation, external odds/anti-gambling review where applicable, signed TestFlight, real-device thermal battery/FPS checks. Never activate this feature in production or run this migration against real user data without independently verifying its release and rollback plan. The 3D/2D art remains prototype or concept imagery, not fully rigged evolved character models.
