@@ -7,6 +7,8 @@ import {useOpenQuests,useOwnQuests,usePublicActivity,useStarterPico} from "./IOS
 import {deriveQuestMilestoneRank} from "@/lib/ios-quest-rank";
 import IOSLoadingCards from "./IOSLoadingCards";
 import ProfessionSummonStudio from "./ProfessionSummonStudio";
+import FreeSummonDrawPanel from "./FreeSummonDrawPanel";
+import OwnedFamiliarCollection from "./OwnedFamiliarCollection";
 import {PROFESSIONS} from "@/lib/summons/profession-system";
 
 const categories=[
@@ -169,6 +171,14 @@ export function PicosScreen() {
       <small>Read-only current rule receipts, not lifetime rewards. No payment, random draw or item claim occurs here.</small>
     </section>
 
+    <FreeSummonDrawPanel tickets={tickets??null}
+      enabled={pico.progression?.freeDrawsAvailable===true}
+      onDrawComplete={pico.refresh}/>
+    <OwnedFamiliarCollection inventory={pico.inventory}
+      signedIn={pico.signedIn} loading={pico.loading} error={pico.error}
+      evolutionAvailable={pico.progression?.evolutionAvailable===true}
+      verifiedProfessionXp={pico.progression?.verifiedProfessionXp?.byProfession??[]}
+      onEvolutionComplete={pico.refresh}/>
     <ProfessionSummonStudio/>
 
     <section className="ios-section">

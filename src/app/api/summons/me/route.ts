@@ -4,6 +4,10 @@ import {readStarterEntitlement,readSummonCatalog}
   from "@/lib/summons/starter-entitlement";
 import {accountSummonLedger} from "@/lib/summons/server-ledger";
 import {readFreeCareerTicketLedger} from "@/lib/summons/free-ticket-ledger";
+import {freeDrawEnabled,readOwnedFreeDrawInventory} from "@/lib/summons/free-draw-ledger";
+import {evolutionEnabled} from "@/lib/summons/evolution-rules";
+import {assertOwnedInventorySnapshot,type OwnedInventorySnapshot}
+  from "@/lib/summons/owned-inventory-contract";
 
 export const dynamic="force-dynamic";
 const noStore={"Cache-Control":"private, no-store"};
@@ -27,9 +31,19 @@ export async function GET(){
   }
   let ledger;
   let ticketLedger:Awaited<ReturnType<typeof readFreeCareerTicketLedger>>=null;
+  let inventory:OwnedInventorySnapshot;
   try{
     ledger=await accountSummonLedger(userId);
     ticketLedger=ledger?await readFreeCareerTicketLedger(userId):null;
+    const verified=ledger?await readOwnedFreeDrawInventory(userId):null;
+    inventory=assertOwnedInventorySnapshot(verified?{
+      available:true,source:"server-owned-free-ticket-instances",
+      items:verified.items,totalKnown:verified.totalKnown,
+      reason:"Only receipt-verified free-ticket Summons are shown",
+    }:{
+      available:false,extraSummons:null,
+      reason:"Audited free Summon collection is not enabled",
+    });
   }catch{
     // Enabled without a deployed schema is a hard failure, not an empty bag.
     return Response.json({error:"Summon inventory service unavailable"},{
@@ -45,16 +59,18 @@ export async function GET(){
       totalKnown:ledger.items.length<50,
       reason:"Only actual database instances are included",
     }:{
-      available:false,
-      extraSummons:null,
+      available:false,extraSummons:null,
       reason:"Persistent Summon inventory is not enabled",
     },
+    ownedCollection:inventory,
     progression:ledger?{
       available:true,
       verifiedProfessionXp:ledger.xp,
       summonTickets:ticketLedger,
+      freeDrawsAvailable:!!ticketLedger&&freeDrawEnabled(),
+      evolutionAvailable:inventory.available&&evolutionEnabled(),
       reason:ticketLedger
-        ?"Only audited ticket receipts are shown; ticket spending and draws remain disabled"
+        ?freeDrawEnabled()?"Verified free ticket draws are active only on this account" : "Only audited ticket receipts are shown; ticket spending and draws remain disabled"
         :ledger.xp
         ?"Only recorded, verified Quest XP from this rule version is shown; full historical XP is UNKNOWN"
         :"No verified XP receipts exist under this rule version; historical XP remains UNKNOWN",
@@ -62,6 +78,8 @@ export async function GET(){
       available:false,
       verifiedProfessionXp:null,
       summonTickets:null,
+      freeDrawsAvailable:false,
+      evolutionAvailable:false,
       reason:"Account progression ledger has not been activated; XP and tickets are UNKNOWN",
     },
   },{headers:noStore});
