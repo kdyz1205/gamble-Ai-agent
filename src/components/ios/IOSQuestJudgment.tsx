@@ -87,6 +87,29 @@ export default function IOSQuestJudgment({ quest, userId, onUpdated }: Props) {
     };
   }, [jobId, quest.status, poll]);
 
+  // Mobile Safari may terminate a suspended tab. Read server state on return
+  // rather than creating a duplicate judgment or asking the player to pay again.
+  useEffect(() => {
+    if (!creator || quest.status !== "judging" ||
+        (quest.judgments?.length ?? 0) > 0) return;
+    let alive = true;
+    void api.getLatestJudgeJob(quest.id).then(({ job }) => {
+      if (!alive || !job) return;
+      if (job.status === "pending" || job.status === "processing") {
+        setJobId(current => current ?? job.jobId);
+        setBusy(true);
+        setNotice("Reconnected to the existing referee job. Checking its result…");
+      } else if (job.status === "completed") {
+        setNotice("A referee task finished. Refresh this Quest to read the verified verdict.");
+      } else if (job.status === "failed") {
+        setError("Previous referee review failed. You can retry without a fabricated result.");
+      }
+    }).catch(() => {
+      // A broken read must never submit work or suppress the explicit judge gate.
+    });
+    return () => { alive = false; };
+  }, [creator, quest.id, quest.status, quest.judgments?.length]);
+
   async function runJudge() {
     if (!canStart || busy || jobId || needsCredits ||
         (reviewCost > 0 && !agreedCost)) return;

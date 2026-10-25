@@ -31,7 +31,7 @@ export function CreateScreen({seed}: {seed?:string}) {
         onClick={()=>choose(q.id)}>{q.label}</button>)}
     </div>
     <section className="ios-composer" data-testid="ios-real-quest-composer">
-      <PactComposer key={prompt} initialPrompt={prompt}/>
+      <PactComposer key={prompt} initialPrompt={prompt} appMode/>
     </section>
     <IosAction href="/app/quiz" secondary>Or start a voice Quiz</IosAction>
     <p className="ios-footer-note">Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf.</p>
@@ -57,7 +57,7 @@ export function QuestDetailScreen({id}: {id?:string}) {
   const creator=Boolean(me&&quest?.creatorId===me);
   const share=async()=>{
     if(!quest)return;
-    const url=window.location.origin+"/join/"+encodeURIComponent(quest.id);
+    const url=window.location.origin+"/app/join?id="+encodeURIComponent(quest.id);
     try{
       if(navigator.share) await navigator.share({title:quest.title,url});
       else await navigator.clipboard.writeText(url);
@@ -91,7 +91,7 @@ export function QuestDetailScreen({id}: {id?:string}) {
       </section>
       {quest.status==="open"&&<div className="ios-actions">
         {creator?<p className="ios-message">Waiting for another person to join your Quest.</p>:
-          <IosAction href={"/join/"+encodeURIComponent(quest.id)}>Review and join Quest</IosAction>}
+          <IosAction href={"/app/join?id="+encodeURIComponent(quest.id)}>Review and join Quest</IosAction>}
         <button type="button" className="ios-secondary-button" onClick={()=>void share()}>{copied?"Shared or copied":"Share invitation"}</button>
       </div>}
       {quest.arbiter==="quiz-curated-mcq-v1"

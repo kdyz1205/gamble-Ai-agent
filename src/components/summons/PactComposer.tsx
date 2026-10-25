@@ -47,7 +47,7 @@ function newRequestId(prefix: string) {
   return `${prefix}_${random}`;
 }
 
-export default function PactComposer({ initialPrompt = "" }: { initialPrompt?: string } = {}) {
+export default function PactComposer({ initialPrompt = "", appMode = false }: { initialPrompt?: string; appMode?: boolean } = {}) {
   const { data: session, status: sessionStatus } = useSession();
   const restoredAuthRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -297,7 +297,11 @@ export default function PactComposer({ initialPrompt = "" }: { initialPrompt?: s
       const toolResult = response.toolResult as
         | { marketUrl?: string; shareUrl?: string; challengeId?: string }
         | undefined;
-      setMarketUrl(toolResult?.marketUrl || toolResult?.shareUrl || (toolResult?.challengeId ? `/challenge/${toolResult.challengeId}` : null));
+      const publishedId = toolResult?.challengeId;
+      setMarketUrl(appMode && publishedId && /^[a-zA-Z0-9_-]{8,128}$/.test(publishedId)
+        ? `/app/quest?id=${encodeURIComponent(publishedId)}`
+        : toolResult?.marketUrl || toolResult?.shareUrl ||
+          (publishedId ? `/challenge/${publishedId}` : null));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not draft challenge";
       if (/401|unauthorized/i.test(message)) {
@@ -338,7 +342,11 @@ export default function PactComposer({ initialPrompt = "" }: { initialPrompt?: s
       const toolResult = response.toolResult as
         | { marketUrl?: string; shareUrl?: string; challengeId?: string }
         | undefined;
-      const nextUrl = toolResult?.marketUrl || toolResult?.shareUrl || (toolResult?.challengeId ? `/challenge/${toolResult.challengeId}` : null);
+      const publishedId = toolResult?.challengeId;
+      const nextUrl = appMode && publishedId && /^[a-zA-Z0-9_-]{8,128}$/.test(publishedId)
+        ? `/app/quest?id=${encodeURIComponent(publishedId)}`
+        : toolResult?.marketUrl || toolResult?.shareUrl ||
+          (publishedId ? `/challenge/${publishedId}` : null);
       if (!nextUrl) {
         setError("The server did not return the published quest link.");
         return;
