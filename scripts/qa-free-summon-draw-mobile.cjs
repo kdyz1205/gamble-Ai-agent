@@ -161,7 +161,13 @@ async function main() {
     await page.getByRole("button", { name: "Cancel" }).click();
     assert.equal(seen.length, 0);
     await page.getByRole("button", { name: "Review free ticket use" }).click();
-    await page.getByRole("button", { name: "Confirm and summon" }).click();
+    // Burst two clicks within the same task before the response arrives.
+    await page.evaluate(() => {
+      const button = document.querySelector('[aria-label="Confirm irreversible free ticket use"] button');
+      if (!(button instanceof HTMLButtonElement)) throw Error("Missing confirm button");
+      button.click();
+      button.click();
+    });
     await page.getByRole("alert").filter({ hasText: "Synthetic receipt network timeout" }).waitFor();
     assert.equal(seen.length, 1, "Only explicit confirmation sends a request");
 
