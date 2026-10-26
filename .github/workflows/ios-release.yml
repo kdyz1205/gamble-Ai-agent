@@ -221,7 +221,18 @@ jobs:
           if not ios:
               print("NO_AVAILABLE_IPHONE_SIMULATOR",file=sys.stderr)
               sys.exit(1)
-          runtime,device=ios[-1]
+          # Selecting ios[-1] picked the iOS 26.2 iPhone SE (3rd gen)
+          # in the failing black-screen receipt. Prefer a current iPhone Pro
+          # and the latest available runtime, deterministically.
+          import re
+          preferred={"iPhone 17 Pro":0,"iPhone 16 Pro":1,
+                     "iPhone 17":2,"iPhone 16":3,"iPhone 15 Pro":4}
+          def choose(entry):
+              runtime,device=entry
+              versions=[int(x) for x in re.findall(r"\d+",runtime.split("iOS-")[-1])]
+              major,minor=(versions+[0,0])[:2]
+              return (preferred.get(device["name"],99),-major,-minor,device["name"])
+          runtime,device=min(ios,key=choose)
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as out:
               out.write("IOS_SIMULATOR_UDID="+device["udid"]+"\n")
           print("SELECTED_SIMULATOR",runtime,device["name"],device["udid"])
