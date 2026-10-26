@@ -1,6 +1,7 @@
 "use client";
 
 import {useState} from "react";
+import {SumText} from "@/components/locale/SumLanguage";
 import {useSession} from "next-auth/react";
 import PactComposer from "@/components/summons/PactComposer";
 import {questSeeds} from "@/components/universe/quest-seeds";
@@ -22,8 +23,8 @@ export function CreateScreen({seed}: {seed?:string}) {
   return <IosFrame title="Quest Forge" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
     <section className="ios-forge-bar" aria-label="Quest creation">
       <IosArt src={visuals.mascotHappy} alt="Pico"/>
-      <div><span className="ios-overline">PICO / RULE BUILDER</span><h1>New Quest</h1>
-        <p>Describe a challenge. Review its rules before you invite anyone.</p></div>
+      <div><span className="ios-overline"><SumText en="PICO / RULE BUILDER" zh="PICO / 规则助手"/></span><h1><SumText en="New Quest" zh="创建 Quest"/></h1>
+        <p><SumText en="Describe a challenge. Review its rules before you invite anyone." zh="描述你想发起的挑战。邀请朋友前请先核对规则。"/></p></div>
     </section>
     <div className="ios-filters" aria-label="Starting categories">
       {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
@@ -33,8 +34,8 @@ export function CreateScreen({seed}: {seed?:string}) {
     <section className="ios-composer" data-testid="ios-real-quest-composer">
       <PactComposer key={prompt} initialPrompt={prompt} appMode/>
     </section>
-    <IosAction href="/app/quiz" secondary>Or start a voice Quiz</IosAction>
-    <p className="ios-footer-note">Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf.</p>
+    <IosAction href="/app/quiz" secondary><SumText en="Or start a voice Quiz" zh="或开始双人语音 Quiz"/></IosAction>
+    <p className="ios-footer-note"><SumText en="Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf." zh="发布 Quest 或使用积分必须经过现有确认流程。Pico 不会替你发布挑战。"/></p>
   </IosFrame>;
 }
 

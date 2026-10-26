@@ -2,14 +2,14 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Summon World",
-    short_name: "Summon",
+    id: "/app",
+    name: "SUM — Summoner.world Web App",
+    short_name: "SUM",
     description:
       "Summon quests, invite challengers, submit proof, and let AI familiars referee the result.",
-    start_url: "/enter",
-    scope: "/",
+    start_url: "/app/today",
+    scope: "/app/",
     display: "standalone",
-    orientation: "portrait",
     background_color: "#DFF5FF",
     theme_color: "#DFF5FF",
     icons: [

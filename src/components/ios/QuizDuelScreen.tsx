@@ -7,6 +7,7 @@ import {IosFrame,IosAction} from "./IOSAppUI";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import {QuizVoiceInput} from "./QuizVoiceInput";
 import QuizArenaStage from "./QuizArenaStage";
+import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 
 const TOPICS=[
   {id:"general",label:"General knowledge / 常识"},
@@ -67,6 +68,7 @@ async function fetchJson<T>(url:string,options?:RequestInit):Promise<T>{
 const mutation={method:"POST",headers:{"Content-Type":"application/json"}} as const;
 
 export default function QuizDuelScreen({id}:{id?:string}){
+  const language=useSumLanguage();
   const {status}=useSession();
   const router=useRouter();
   const [topic,setTopic]=useState<Topic>("general");
@@ -189,18 +191,28 @@ export default function QuizDuelScreen({id}:{id?:string}){
     <section className="ios-quiz-hero ios-quiz-hero--compact"
       data-testid="ios-duel-hud" aria-label="Duel controls and match status">
       <div className="ios-quiz-hero__top">
-        <span className="ios-overline">1V1 · VERIFIED QUIZ</span>
-        <span className="ios-quiz-hero__phase">{arenaPhase.toUpperCase()}</span>
+        <span className="ios-overline"><SumText en="1V1 · VERIFIED QUIZ" zh="双人对决 · 结果可核查"/></span>
+        <span className="ios-quiz-hero__phase">{translated(language,arenaPhase.toUpperCase(),({preview:"演示",open:"待加入",live:"进行中",completed:"已完成",cancelled:"已取消"} as const)[arenaPhase])}</span>
       </div>
-      <h1>{quiz?.status==="open"?"Invite your challenger":
+      <h1>{translated(language,
+      quiz?.status==="open"?"Invite your challenger":
         quiz?.status==="live"?quiz.ownSubmitted?"Answers locked in":"Your turn to play":
         quiz?.status==="completed"?"Your match receipt is ready":
-        quiz?.status==="cancelled"?"Invitation closed":"Challenge a friend to a Quiz"}</h1>
-      <p>{quiz?.status==="live"?"Both players receive the same three sealed questions. The server checks each answer.":
+        quiz?.status==="cancelled"?"Invitation closed":"Challenge a friend to a Quiz",
+      quiz?.status==="open"?"邀请你的对手":
+        quiz?.status==="live"?quiz.ownSubmitted?"答案已提交":"轮到你答题":
+        quiz?.status==="completed"?"已生成比赛记录":
+        quiz?.status==="cancelled"?"邀请已关闭":"邀请朋友进行 Quiz 对决")}</h1>
+      <p>{translated(language,
+      quiz?.status==="live"?"Both players receive the same three sealed questions. The server checks each answer.":
         quiz?.status==="completed"?"The server has finalized the score. Review the sealed result below.":
         quiz?.status==="cancelled"?"No credits were reserved or transferred.":
-        "Speak, invite, then answer three sealed questions. A server receipt confirms the outcome."}</p>
-      <strong>Free challenge · 0 credits at stake</strong>
+        "Speak, invite, then answer three sealed questions. A server receipt confirms the outcome.",
+      quiz?.status==="live"?"双方回答同样的三道题，答案由服务器核验。":
+        quiz?.status==="completed"?"比分已由服务器结算，请查看下方可核查的记录。":
+        quiz?.status==="cancelled"?"此次取消没有预留或转移积分。":
+        "描述想出的题目、邀请好友、回答三道题，最后查看服务器结果。")}</p>
+      <strong><SumText en="Free challenge · 0 credits at stake" zh="免费对决 · 不押注积分"/></strong>
     </section>
     {status==="loading"?<p role="status">Checking account…</p>:
       status!=="authenticated"?<AuthInvitation
@@ -213,7 +225,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
           enabled test environment. No account, answer or credit will be changed.</p>
       </section>:
       !id?<section className="ios-quiz-card" data-testid="quiz-create-form">
-        <h2>1. Describe your Quiz</h2>
+        <h2><SumText en="1. Describe your Quiz" zh="1. 描述你的 Quiz"/></h2>
         <QuizVoiceInput value={description} disabled={working}
           onChange={updateDescription}
           onResult={v=>setVoiceNotice(v.usedFallback?
@@ -239,7 +251,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
             onChange={e=>{setOpponent(e.target.value);requestKey.current=null;}}/>
         </label>
         <div className="ios-quiz-rules">
-          <strong>2. Verify the match rules</strong>
+          <strong><SumText en="2. Verify the match rules" zh="2. 核对比赛规则"/></strong>
           <p>Three multiple-choice questions · 15 minutes once joined · one
           final answer per person · no edits · a tie stays a draw. Missing
           answers at timeout produce no winner. Answers are checked by a fixed
