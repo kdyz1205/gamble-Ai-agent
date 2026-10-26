@@ -5,8 +5,16 @@
 1. 将代码推送到 GitHub（本仓库已可连接）。
 2. 打开 [Vercel Dashboard](https://vercel.com/dashboard) → **Add New…** → **Project**，导入该仓库。
 3. **Framework Preset** 选 Next.js；**Root Directory** 保持仓库根目录（除非你把前端放在子目录）。
-4. **Build Command**：本仓库在 `vercel.json` 里已设为 **`npm run build:vercel`**（`prisma generate && next build`），避免在 Vercel 构建机上跑 `prisma migrate deploy`（Supabase **直连** `db.*.supabase.co:5432` 在 Vercel 上常因 **IPv4/IPv6** 无法连通）。**改表结构**后，在能连上生产库的环境执行：`npx prisma migrate deploy`。
+4. **Build Command**：`vercel.json` 统一调用 **`npm run build:vercel`**，其命令为 **`prisma generate && next build`**。Vercel 构建过程**不得执行** `prisma migrate deploy` 或 `prisma db push`；数据库变更必须由独立审核的部署流程执行，避免构建环境在数据库直连不可达时失败，或意外修改生产数据。
 5. 在 **Environment Variables** 中先填入下方「必配」变量（至少 `DATABASE_URL`、`NEXTAUTH_URL`、`NEXTAUTH_SECRET`），再点 **Deploy**。
+
+### 本地 CLI 项目与 GitHub 自动部署目标必须一致
+
+2026-10-25 的核验发现：GitHub 的成功 Vercel 检查指向项目 **`stubborn`**，但部分 Windows 工作区的本地 `.vercel/project.json` 绑定项目名是 **`gamble-ai-agent`**。两者不能混用；错误绑定会将 `vercel deploy` 发往其他项目，使 Dashboard 看起来不断失败或看不到刚完成的部署。
+
+部署前先运行 `npm run vercel:preflight`。如果显示 `VERCEL_PROJECT_MISMATCH`，停止部署；打开 Vercel 对应团队的项目设置，确认目标项目及账号权限，再通过官方 `vercel link --project stubborn --scope kdyz1205s-projects` 重新授权/连接，**不要手改 projectId**。重新运行检查通过后，才能手动部署。此检查只读，不会调用网络或修改账号。
+
+本地 `.vercel/project.json` 被 Git 忽略，不会随 GitHub PR 同步，因此本地 CLI 绑定不等于线上 GitHub 自动部署绑定。预览显示 Ready 也不意味着生产发布或数据库迁移已完成。
 
 ### Supabase：线上 `DATABASE_URL` 建议用 Pooler
 
