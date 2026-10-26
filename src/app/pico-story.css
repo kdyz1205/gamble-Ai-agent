@@ -280,3 +280,14 @@
   .ios-pico-story-entry__body{flex-wrap:wrap;}
   .ios-pico-story-entry__body>a{width:100%;}
 }
+
+/* A story chapter is immersive: the fixed app dock must not cover its final
+   primary link. The header back affordance stays available at every beat. */
+.ios-pico-story .ios-main{padding-bottom:30px;}
+.pico-story__illustration img{
+  -webkit-mask-image:radial-gradient(ellipse 70% 74% at 50% 48%,
+    #000 43%,#000e 63%,transparent 99%);
+  mask-image:radial-gradient(ellipse 70% 74% at 50% 48%,
+    #000 43%,#000e 63%,transparent 99%);
+}
+.pico-story[data-render-mode="3d"] .pico-story__target{opacity:0;}

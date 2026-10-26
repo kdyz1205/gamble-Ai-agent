@@ -70,9 +70,10 @@ export default function PicoStoryChapter(){
     phase==="ready"||phase==="casting"?1:2;
 
   return <IosFrame title="Pico · Chapter One" eyebrow="ONE STORY · ONE MOVE"
-    back="/app/today" tone="ios-pico-story">
+    back="/app/today" tone="ios-pico-story" withNav={false}>
     <section className={"pico-story pico-story--"+phase}
       data-testid="pico-story" data-phase={phase}
+      data-render-mode={ready3D?"3d":"illustration"}
       data-content-type="local-playable-prologue"
       data-sequence={STORY_SEQUENCE_ID}>
       <div className="pico-story__caption">
