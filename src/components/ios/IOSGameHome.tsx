@@ -106,7 +106,7 @@ export function TodayScreen() {
             <button className="ios-command-signin" type="button" onClick={() => setAuthOpen(true)}><SumText en="Sign in" zh="登录"/></button>
           </div>
         : loading
-          ? <p role="status" className="ios-message">Syncing your Quests…</p>
+          ? <p role="status" className="ios-message">{translated(language,"Syncing your Quests…","正在同步 Quest…")}</p>
           : error
             ? <p role="alert" className="ios-message ios-message--error">{error}</p>
             : nextQuest
@@ -121,28 +121,25 @@ export function TodayScreen() {
                 </div>
               : <div className="ios-command-empty">
                   <IosIcon name="spark" size={24}/>
-                  <div><strong>No active Quests</strong><p><SumText en="New challenges and invitations appear here." zh="新的挑战与邀请会显示在这里。"/></p></div>
+                  <div><strong><SumText en="No active Quests" zh="暂无进行中的 Quest"/></strong><p><SumText en="New challenges and invitations appear here." zh="新的挑战与邀请会显示在这里。"/></p></div>
                   <Link className="ios-command-signin" href="/app/create"><SumText en="Create" zh="创建"/></Link>
                 </div>}
     </section>
 
     {complete.length > 0 && <section className="ios-command-quests" aria-label="Recent settled Quest receipts">
       <div className="ios-command-section-header">
-        <div><span className="ios-overline">RECORDED OUTCOMES / NO FABRICATED REWARDS</span><h2>Recent results</h2></div>
+        <div><span className="ios-overline">RECORDED OUTCOMES / NO FABRICATED REWARDS</span><h2><SumText en="Recent results" zh="最近结果"/></h2></div>
       </div>
       <div className="ios-list">
         {complete.slice(0, 3).map(q => <IosQuestCard challenge={q} compact key={q.id}/>)}
       </div>
-      <p className="ios-footer-note">Results shown here come from the server. Rewards appear only after their own verified grant.</p>
+      <p className="ios-footer-note"><SumText en="Results shown here come from the server. Rewards appear only after their own verified grant." zh="这里的结果来自服务器记录。奖励仅在符合条件并通过核验后显示。"/></p>
     </section>}
 
     <details className="ios-command-daily">
-      <summary><IosIcon name="calendar" size={18}/><span>Daily rituals</span><small>Optional on-device check-ins</small><IosIcon name="arrow" size={16}/></summary>
+      <summary><IosIcon name="calendar" size={18}/><span><SumText en="Daily rituals" zh="日常习惯"/></span><small><SumText en="Optional on-device check-ins" zh="设备内的可选打卡"/></small><IosIcon name="arrow" size={16}/></summary>
       <IOSDailyRituals/>
     </details>
     <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onSuccess={() => { setAuthOpen(false); refresh(); }}/>
-  </IosFrame>;
-}
-(false)} onSuccess={() => { setAuthOpen(false); refresh(); }}/>
   </IosFrame>;
 }

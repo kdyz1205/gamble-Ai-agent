@@ -12,6 +12,7 @@ import "./ios-app.css";
 import "./sum-language.css";
 import "./pico-story.css";
 import "./ios-game-console.css";
+import "./sum-client-desktop.css";
 import "./ios-quest-journey.css";
 import "./quest-starter-controls.css";
 
@@ -20,11 +21,6 @@ export const metadata: Metadata = {
   title: "SUM — Make Reality Summonable",
   description:
     "Summon quests, invite challengers, submit proof, and let AI familiars referee the result.",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Summon World",
-  },
   icons: {
     apple: "/apple-touch-icon.png",
     icon: [
@@ -46,7 +42,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html data-scroll-behavior="smooth" lang="en">
       <head>
-        <meta name="apple-mobile-web-app-capable" content="yes" />
         {/* Suppress MetaMask / wallet extension "Cannot redefine property: ethereum" errors */}
         <script
           dangerouslySetInnerHTML={{
