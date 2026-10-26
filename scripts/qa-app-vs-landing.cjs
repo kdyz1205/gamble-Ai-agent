@@ -19,16 +19,23 @@ const executablePath = process.platform === "win32"
       const errors = [];
       page.on("pageerror", e => errors.push(e.message));
 
-      const gateway = await page.goto(base + "/enter", { waitUntil: "domcontentloaded", timeout: 45000 });
-      assert.equal(gateway.status(), 200, "Landing route must work");
+      const gateway = await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 45000 });
+      assert.equal(gateway.status(), 200, "Public website root must work");
+      assert.equal(await page.getByTestId("sum-marketing-site").count(), 1,
+        "The domain root must render the website, not a product redirect");
       assert.equal(await page.locator("[data-testid=ios-tabbar]").count(), 0, "Landing is not the app");
       assert.equal(await page.locator("[data-testid=sum-app-dock]").count(), 0, "Marketing has no game tab bar");
       const launch = page.getByTestId("world-summon-cta");
+      const publicLinks = await page.locator('[data-testid="sum-marketing-site"] a')
+        .evaluateAll(nodes=>nodes.map(node=>node.getAttribute("href")));
+      assert(!publicLinks.some(href=>/^\/(summons|markets|rituals|judgment)(?:\/|\?|$)/.test(href||"")),
+        "Website cards must not launch a legacy competing client");
       assert.equal(await launch.getAttribute("href"), "/app", "Gateway should launch the separate app");
 
       await launch.click();
       await page.waitForURL(/\/app\/today\/?$/, { timeout: 45000 });
       assert.equal(await page.locator("[data-testid=ios-full-app]").count(), 1, "Web app frame");
+      assert.equal(await page.getByTestId("ios-full-app").getAttribute("data-product-surface"),"web-app");
       assert.equal(await page.locator("[data-testid=ios-tabbar]").count(), 1, "Single app dock");
       assert.equal(await page.locator(".sw-hero").count(), 0, "No marketing hero inside app");
       assert.equal(await page.locator("[data-testid=ios-start-quest]").getAttribute("href"), "/app/create");

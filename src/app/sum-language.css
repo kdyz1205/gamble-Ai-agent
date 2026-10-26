@@ -1,0 +1,111 @@
+/* Same language preference for the public website and the SUM client.
+   Each retains its own navigation, layout and product vocabulary. */
+.sum-language-switch{
+  display:inline-flex;flex:none;align-items:center;gap:2px;
+  border:1px solid #d0c6de;border-radius:999px;
+  padding:3px;background:#ffffffdd;
+  box-shadow:0 3px 10px #382b6d13;
+}
+.sum-language-switch button{
+  min-width:30px;height:30px;border:0;border-radius:999px;
+  padding:0 5px;background:transparent;color:#716987;
+  font-size:10px;font-weight:850;cursor:pointer;white-space:nowrap;
+}
+.sum-language-switch button[aria-pressed="true"]{
+  background:#443c75;color:#fff;box-shadow:0 2px 5px #443c7540;
+}
+.sum-language-switch button:focus-visible{
+  outline:2px solid #5e62db;outline-offset:2px;
+}
+.sum-language-switch--app{padding:2px;background:#f7f1fe;}
+.sum-language-switch--app button{min-width:27px;height:27px;font-size:9px;}
+.ios-header__controls{display:flex;flex:none;align-items:center;gap:5px;}
+.ios-header__title{min-width:0;}
+.ios-header__title strong{
+  line-height:1.3;overflow-wrap:anywhere;
+}
+.ios-intro-language{
+  position:absolute;z-index:50;right:14px;top:calc(10px + env(safe-area-inset-top));
+}
+@media(max-width:350px){
+  .ios-header{gap:5px;padding-inline:11px;}
+  .ios-header__controls{gap:3px;}
+  .ios-header__avatar,.ios-back{flex-basis:32px;height:32px;}
+  .sum-language-switch--app button{min-width:25px;height:25px;}
+  .ios-header__title strong{font-size:13px;}
+}
+@media(max-width:390px){
+  .quest-hud[data-product-navigation="marketing"]{
+    gap:6px;
+  }
+  .sum-language-switch--site button{min-width:27px;height:29px;}
+  .quest-hud[data-product-navigation="marketing"] .sum-world-button{
+    padding-inline:11px;font-size:11px;
+  }
+}
+
+/* Marketing is the public website. The actual SUM product is a responsive
+   Web App on /app, not a fixed-width smartphone mock on desktop. */
+@media(max-width:420px){
+  .quest-hud[data-product-navigation="marketing"] .sum-world-button{
+    display:none;
+  }
+  .quest-hud[data-product-navigation="marketing"]{
+    padding-inline:12px;
+  }
+}
+@media(min-width:900px){
+  .ios-app[data-product-surface="web-app"]{
+    width:min(calc(100% - 44px),1180px);
+    min-height:calc(100dvh - 24px);
+    margin:12px auto;
+    border-radius:26px;
+    overflow:visible;
+    box-shadow:0 22px 65px #3b31501c;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-header{
+    padding-inline:34px;
+    border-radius:26px 26px 0 0;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-main{
+    width:100%;
+    padding:30px 36px 128px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-tabbar{
+    width:min(calc(100% - 100px),870px);
+    bottom:14px;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-main{
+    display:grid;
+    grid-template-columns:minmax(0,1.14fr) minmax(320px,.86fr);
+    gap:18px;
+    align-items:stretch;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-main > *{
+    min-width:0;
+    margin-top:0;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-command-hud,
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-pico-story-entry{
+    min-height:280px;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-pico-story-entry{
+    align-content:space-between;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud)
+    :is(.ios-command-modes,.ios-command-quests,.ios-command-daily){
+    grid-column:1/-1;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-command-hud) .ios-command-modes{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-quiz-arena) .ios-main,
+  .ios-app[data-product-surface="web-app"]:has(.pico-story) .ios-main{
+    max-width:830px;
+    margin-inline:auto;
+  }
+  .ios-app[data-product-surface="web-app"]:has(.ios-real-quest-composer) .ios-main{
+    max-width:1000px;
+    margin-inline:auto;
+  }
+}
