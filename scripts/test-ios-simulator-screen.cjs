@@ -7,6 +7,8 @@
  */
 const sharp = require("sharp");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 async function analyze(input) {
   const meta = await sharp(input).metadata();
@@ -62,7 +64,13 @@ async function selfTest() {
   assert.equal((await analyze(white)).ok,false,"white blank page must fail");
   assert.equal((await analyze(spinner)).ok,false,"black spinner must fail");
   assert.equal((await analyze(illustrated)).ok,true,"actual colorful content must pass");
-  console.log("IOS_SCREEN_VISUAL_GUARD_SELF_TEST_PASS: 4 positive/negative fixtures");
+  const info=fs.readFileSync(path.join(__dirname,"../ios/App/App/Info.plist"),"utf8");
+  const appBounds=info.split("<key>WKAppBoundDomains</key>")[1]?.split("</array>")[0]||"";
+  assert.match(appBounds,/<string>localhost<\/string>/,
+    "Capacitor's local WebView origin must be in the app-bound whitelist");
+  assert.match(appBounds,/<string>summoner\.world<\/string>/,
+    "Production WebView host must remain app-bound");
+  console.log("IOS_SCREEN_VISUAL_GUARD_SELF_TEST_PASS: 4 image fixtures and 2 origin guards");
 }
 if (require.main===module) {
   (async()=>{
