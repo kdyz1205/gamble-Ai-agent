@@ -200,7 +200,7 @@ export async function prepareParticipantVisuals(
         }
         return { preambleLines, visuals };
       }
-    } catch (e) {
+    } catch {
       preambleLines.push("Private media could not be read; review is required.");
       return { preambleLines, visuals };
     }
