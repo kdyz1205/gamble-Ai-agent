@@ -85,6 +85,7 @@ const appTitles:Record<string,string>={
   "New Quest":"新建 Quest","Profile":"个人主页",
   "Achievements":"成就","Stats":"统计","Evidence":"证据",
   "Settings":"设置","Community":"社区",
+  "My Evidence":"我的证据","Your Journey":"我的历程",
   "Quest Created":"Quest 创建成功","Quest Complete":"Quest 已完成",
 };
 const appEyebrows:Record<string,string>={
@@ -99,6 +100,11 @@ const appEyebrows:Record<string,string>={
   "THE PROOF CHAPTER":"证据提交",
   "THE STORY YOU MADE":"你的结果记录",
   "A NEW ADVENTURE":"新的冒险",
+  "YOUR OWN LITTLE WORLD":"你的 Quest 世界",
+  "MILESTONES":"成长里程碑",
+  "YOUR PRIVATE PROOF GALLERY":"你的私人证据库",
+  "REAL QUEST ACTIVITY":"真实 Quest 活动",
+  "MAKE IT YOUR OWN":"个性化设置",
 };
 
 export function IosBottomNav() {
