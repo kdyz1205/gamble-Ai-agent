@@ -29,11 +29,13 @@ private-upload migration has not yet run.
    A transaction locks the Quest, validates participants and deadline,
    consumes the session exactly once and updates `live -> judging` only
    after two accepted players submit.
-4. The AI judge, when explicitly requested by the creator, rehashes
-   each consumed object, signs a **10-minute private GET** in server memory,
-   and gives this temporary URL only to its frame extractor. Neither the
-   Evidence row, the returned player API JSON nor the LLM prompt contains
-   the signed URL. AI failures, unreadable video, inconsistent hashes or
+4. The AI judge, when explicitly requested by the creator, checks the
+   consumed object against the recorded SHA-256. Its trusted decoder streams
+   **directly through the authenticated S3 SDK to a restricted temporary
+   local file**, rehashing the exact bytes that FFmpeg will decode. No signed
+   GET URL, CDN exposure or external HTTP fetch is used for this private
+   path. The model only receives decoded images, timestamps and a generic
+   trusted-source note. AI failures, unreadable video, inconsistent hashes or
    unavailable storage **must not produce a winner or a reward**.
 5. The result remains a referee **recommendation**. Both participants
    accept or request human review. Existing settlement and credit invariants
@@ -45,8 +47,8 @@ private-upload migration has not yet run.
 - `ENABLE_TRUSTED_EVIDENCE_UPLOADS=true` activates private intake.
 - `TRUSTED_EVIDENCE_REQUIRED_FOR_MEDIA=true` blocks legacy URL-based photo
   and video submissions and blocks judging legacy media. **Do not set it
-  before private direct PUT, bucket CORS, signed GET and all codecs are
-  tested on a real iPhone.**
+  before private direct PUT, bucket CORS, authenticated SDK reads and
+  supported codecs are tested on a real iPhone.**
 - `S3_TRUSTED_EVIDENCE_BUCKET` must differ from `S3_EVIDENCE_BUCKET` and
   must remain inaccessible through a public bucket, CDN or public ACL.
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` are the
@@ -56,9 +58,11 @@ private-upload migration has not yet run.
   Cloudflare R2 uses a public HTTPS account endpoint and `AWS_REGION=auto`.
 - Bucket CORS must allow only the Web App origin and the signed PUT headers
   `Content-Type` and `If-None-Match`.
-- Signed read endpoints must resolve to a public HTTPS IP (outbound SSRF
-  policy forbids internal HTTP/IPs). **Local MinIO on HTTP is for private
-  integrity/transaction tests, not a model-judging environment.**
+- Private reads are **server-only SDK GetObject streams**, not bearer URL
+  requests. The public URL SSRF rules continue to apply to *legacy media
+  URLs*, while the trusted path accepts a private/loopback **S3 endpoint**
+  only in isolated CI. No model receives credentials, object keys, bucket
+  endpoints or signatures. Production R2/S3 should use TLS and scoped IAM.
 - Create bucket lifecycle cleanup for unused/expired objects plus retention
   rules for review, appeal and deletion requests.
 
@@ -71,9 +75,10 @@ private-upload migration has not yet run.
   need separate adjudication and appeal gates.
 - The existing legacy Blob/public URL route remains available **unless**
   the explicitly separate `TRUSTED_EVIDENCE_REQUIRED_FOR_MEDIA` switch is on.
-- A private S3 signed GET has bearer-capability semantics. It is never
-  persisted, sent to AI prompts or returned to clients, but it does transit
-  the trusted decoder. Storage origin and logs must be secured.
+- No signed GET is generated. The private source is an in-memory server
+  handle; every streamed staging operation rehashes the actual bytes before
+  FFmpeg reads a local temp file and unlinks failed or tampered downloads.
+  AWS SDK credentials and the private bucket must remain server-only.
 - Current synchronous full-object verification doubles or triples object
   transfers. A durable bounded queue and per-file object lifecycle policy
   are required before higher-traffic release.
@@ -100,8 +105,9 @@ private-upload migration has not yet run.
   PostgreSQL binding transactions, one-proof-per-player, replay/auth checks,
   no permanent public evidence URL, **post-verification object overwrite
   rejected even when file size and MP4 signature still match**, no unexpected
-  credits/XP, and a referee refusal when the test storage endpoint is HTTP localhost. This is **not** a
-  successful AI winner test and deliberately does not call a live model.
+  credits/XP; also tests private S3 -> FFmpeg vision/timeline/dense rally
+  extraction on decoded synthetic footage. This is **not** a successful AI
+  winner accuracy test and deliberately does not call a live model.
 
 Do not merge or turn on the flags until the complete isolated two-account CI,
 real-device Safari transfer/return, codec corpus and real model/referee

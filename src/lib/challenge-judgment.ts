@@ -249,6 +249,7 @@ async function executeClaimedJudgment(
           type: e.type,
           url: media?.url ?? e.url,
           privateMedia: Boolean(media?.privateMedia),
+          trustedSource: media?.trustedSource,
           preparedFrames: parseFrames(e.preparedFrames),
           preparedDurationSec: e.preparedDurationSec,
           preparedMode: e.preparedMode,

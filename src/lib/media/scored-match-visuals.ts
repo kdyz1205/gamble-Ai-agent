@@ -1,5 +1,5 @@
 import { mediaTimeBudget } from "./media-budget";
-import { stageEvidenceVideo } from "./local-evidence-video";
+import { stageEvidenceVideo, type VideoEvidenceSource } from "./local-evidence-video";
 import sharp from "sharp";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { join } from "path";
@@ -134,13 +134,13 @@ export function planRallyDetailFps(candidateCount: number): number {
  */
 export async function prepareScoredMatchTimeline(
   sourceLabel: string,
-  url: string,
+  source: VideoEvidenceSource,
 ): Promise<ScoredTimelineVisuals> {
-  if (!isEvidenceUrlAllowed(url)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
+  if (typeof source === "string" && !isEvidenceUrlAllowed(source)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
   const temp = await mkdtemp(join(tmpdir(), "scored-timeline-"));
   try {
     const remaining = mediaTimeBudget(120_000);
-    const { path: localVideo, duration: durationSec } = await stageEvidenceVideo(url, temp, remaining);
+    const { path: localVideo, duration: durationSec } = await stageEvidenceVideo(source, temp, remaining);
     if (durationSec == null) throw new Error("Could not measure scored-match video duration.");
     if (durationSec > 240) throw new Error("Short-match automatic judging requires a continuous video of 4 minutes or less.");
     const plan = planScoredTimeline(durationSec);
@@ -161,18 +161,27 @@ export async function prepareScoredMatchTimeline(
 /** Second pass: 8fps windows around each candidate rally ending. */
 export async function prepareRallyDetailVisuals(
   sourceLabel: string,
-  url: string,
+  source: VideoEvidenceSource,
   candidates: RallyWindowCandidate[],
 ): Promise<ScoredRallyDetailVisuals> {
-  if (!isEvidenceUrlAllowed(url)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
+  if (typeof source === "string" && !isEvidenceUrlAllowed(source)) throw new Error("Scored-match video must be a direct public HTTPS URL.");
   const temp = await mkdtemp(join(tmpdir(), "scored-detail-"));
   try {
     // Download once, then seek all rally windows locally. Seeking the remote
     // URL once per rally multiplies latency and bandwidth by up to 11x.
     const remaining = mediaTimeBudget(120_000);
     const localVideo = join(temp, "source-video");
-    const { buffer } = await fetchBinaryCapped(url, 160 * 1024 * 1024, Math.min(90_000, remaining()));
-    await writeFile(localVideo, buffer);
+    if (typeof source === "string") {
+      const { buffer } = await fetchBinaryCapped(
+        source, 160 * 1024 * 1024, Math.min(90_000, remaining()),
+      );
+      await writeFile(localVideo, buffer);
+    } else {
+      // The same authenticated server-side storage stream feeds the rally
+      // detail extractor; no signed/public GET URL is ever generated.
+      const { stageTrustedEvidenceObject } = await import("./trusted-evidence-storage");
+      await stageTrustedEvidenceObject(source, localVideo);
+    }
     const frameGroups: TimestampedFrame[][] = [];
     const limitedCandidates = candidates.slice(0, 11);
     const framesPerSecond = planRallyDetailFps(limitedCandidates.length);

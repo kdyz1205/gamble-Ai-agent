@@ -7,6 +7,7 @@
  * computes SHA-256 from the actual object bytes streamed with a bounded cap.
  */
 import { createHash } from "node:crypto";
+import { open, unlink } from "node:fs/promises";
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -108,20 +109,94 @@ export function matchesTrustedMediaSignature(mime: string, first: Uint8Array): b
 }
 
 /**
- * Ephemeral, server-side read capability for a previously authorized object.
- * NEVER persist or log this URL or send its signature to a model prompt.
+ * Only an authenticated, consumed, server-bound upload may supply this
+ * in-memory read handle. It cannot come from user request JSON.
+ * The decoder reads from the private bucket via AWS credentials, never through
+ * a public object URL or S3/R2 signed GET URL.
  */
-export async function signTrustedEvidenceRead(key: string): Promise<string> {
-  if (!key.startsWith("trusted-evidence/") || key.includes("..") ||
-      key.includes("\\") || key.startsWith("/") || key.length > 512) {
-    throw new TrustedUploadError("invalid_private_object_key", 409);
+export type TrustedEvidenceSource = {
+  key: string;
+  contentType: string;
+  expectedSizeBytes: number;
+  sha256: string;
+};
+
+/** Stream authenticated private object bytes to one restricted temp file.
+ * Full SHA-256, length and MIME magic are re-validated IN THE SAME stream
+ * that feeds FFmpeg. No full video is held in process RAM.
+ */
+export async function stageTrustedEvidenceObject(
+  source: TrustedEvidenceSource,
+  destination: string,
+): Promise<TrustedUploadReceipt> {
+  const max = TRUSTED_MEDIA_LIMITS[source.contentType];
+  if (!source.key.startsWith("trusted-evidence/") ||
+      source.key.includes("..") || source.key.includes("\\") ||
+      source.key.length > 512 ||
+      !max || !Number.isSafeInteger(source.expectedSizeBytes) ||
+      source.expectedSizeBytes <= 0 || source.expectedSizeBytes > max ||
+      !/^[a-f0-9]{64}$/i.test(source.sha256)) {
+    throw new TrustedUploadError("invalid_private_read_source", 409);
   }
   const client = s3();
+  let file: Awaited<ReturnType<typeof open>> | null = null;
+  let complete = false;
   try {
-    return await getSignedUrl(client, new GetObjectCommand({
-      Bucket: getBucket(), Key: key,
-    }), { expiresIn: 600 });
+    const head = await client.send(new HeadObjectCommand({
+      Bucket: getBucket(), Key: source.key,
+    }));
+    if (head.ContentType !== source.contentType ||
+        head.ContentLength !== source.expectedSizeBytes) {
+      throw new TrustedUploadError("private_object_metadata_mismatch", 409);
+    }
+    const body = await client.send(new GetObjectCommand({
+      Bucket: getBucket(), Key: source.key,
+      ...(head.ETag ? { IfMatch: head.ETag } : {}),
+    }));
+    if (!body.Body) throw new TrustedUploadError("private_object_unreadable", 409);
+    file = await open(destination, "wx", 0o600);
+    const digest = createHash("sha256");
+    let length = 0;
+    let signature = Buffer.alloc(0);
+    for await (const bytes of body.Body as AsyncIterable<Uint8Array>) {
+      const part = Buffer.from(bytes);
+      length += part.length;
+      if (length > source.expectedSizeBytes || length > max) {
+        throw new TrustedUploadError("private_object_oversize", 409);
+      }
+      digest.update(part);
+      if (signature.length < 32) {
+        signature = Buffer.concat([
+          signature, part.subarray(0, 32 - signature.length),
+        ]);
+      }
+      let written = 0;
+      const start = length - part.length;
+      while (written < part.length) {
+        const result = await file.write(
+          part, written, part.length - written, start + written,
+        );
+        if (result.bytesWritten <= 0) {
+          throw new TrustedUploadError("private_disk_write_failed", 503);
+        }
+        written += result.bytesWritten;
+      }
+    }
+    if (length !== source.expectedSizeBytes ||
+        digest.digest("hex").toLowerCase() !== source.sha256.toLowerCase() ||
+        !matchesTrustedMediaSignature(source.contentType, signature)) {
+      throw new TrustedUploadError("private_object_digest_mismatch", 409);
+    }
+    complete = true;
+    return {
+      key: source.key,
+      contentType: source.contentType,
+      sizeBytes: length,
+      sha256: source.sha256.toLowerCase(),
+    };
   } finally {
+    await file?.close();
+    if (!complete && file) await unlink(destination).catch(() => {});
     client.destroy();
   }
 }

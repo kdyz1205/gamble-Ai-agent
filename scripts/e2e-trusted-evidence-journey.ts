@@ -18,6 +18,10 @@ import { Pool } from "pg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { resolveJudgeEvidenceMedia } from "../src/lib/media/trusted-evidence-judge-read";
+import { prepareParticipantVisuals } from "../src/lib/media/prepare-evidence-visuals";
+import { prepareScoredMatchTimeline, prepareRallyDetailVisuals } from "../src/lib/media/scored-match-visuals";
+import { stageTrustedEvidenceObject } from "../src/lib/media/trusted-evidence-storage";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 
@@ -204,6 +208,18 @@ async function main() {
     );
     assert.equal(refused.status(), 409, await refused.text());
     assert.equal((await readJson(refused)).error, "upload_digest_changed");
+    const forbiddenStage = join(folder, "replaced-private-source.mp4");
+    await assert.rejects(
+      () => stageTrustedEvidenceObject({
+        key: tamperRow.rows[0].objectKey as string,
+        contentType: "video/mp4", expectedSizeBytes: bytes.length,
+        sha256: digest,
+      }, forbiddenStage),
+      /private_object_digest_mismatch/,
+      "Decoder must also reject the byte-replaced private object",
+    );
+    await assert.rejects(() => stat(forbiddenStage),
+      /ENOENT/, "Partial/tampered media must be removed");
     assert.equal(await count("Evidence", challengeId), 0);
     assert.equal((await db.query(
       'SELECT status FROM "TrustedEvidenceUpload" WHERE id=$1', [tamperId],
@@ -246,6 +262,46 @@ async function main() {
       "-frames:v", "1", imagePath,
     ], { timeout: 25_000 });
     assert.ok((await stat(imagePath)).size > 500, "Private MP4 did not yield a JPEG frame");
+
+    // Read authenticated, bound media directly via S3 (including HTTP MinIO
+    // in this isolated CI). No public HTTPS link or presigned GET is needed.
+    const boundMetadata = await db.query(
+      'SELECT id, "challengeId", "userId", "objectKey", "contentType", ' +
+      '"expectedSizeBytes", "observedSizeBytes", sha256, status ' +
+      'FROM "TrustedEvidenceUpload" WHERE id=$1',
+      [uploadA],
+    );
+    assert.equal(boundMetadata.rows.length, 1);
+    const resolved = await resolveJudgeEvidenceMedia({
+      challengeId, userId: creator.id, type: "video", url: null,
+      trustedUploadId: uploadA, trustedUpload: boundMetadata.rows[0],
+    });
+    assert.equal(resolved.privateMedia, true);
+    assert.equal(resolved.url, null, "No bearer URL may enter the AI judge");
+    assert.ok(resolved.trustedSource);
+    assert.equal(resolved.trustedSource.sha256, digest);
+    const privateVision = await prepareParticipantVisuals("Player A", {
+      type: "video", url: null,
+      description: "Synthetic video only; no claim of winning",
+      privateMedia: true,
+      trustedSource: resolved.trustedSource,
+    });
+    assert.ok(privateVision.visuals.length >= 1,
+      "Private SDK file must decode into actual JPEG vision frames");
+    const sourceNotes = privateVision.preambleLines.join("\\n");
+    assert.ok(!sourceNotes.includes("X-Amz"), "No signed access key in prompt");
+    assert.ok(!sourceNotes.includes("http://127.0.0.1:9000"),
+      "Raw S3 transport URL must never be sent to the model");
+    const timeline = await prepareScoredMatchTimeline(
+      "SOURCE-A", resolved.trustedSource,
+    );
+    assert.ok(timeline.frameCount >= 3 && timeline.visuals.length >= 1,
+      "Short-match overview must read verified private source");
+    const dense = await prepareRallyDetailVisuals(
+      "SOURCE-A", resolved.trustedSource, [{ index: 1, endSec: 1.2 }],
+    );
+    assert.ok(dense.frameCount >= 1 && dense.visuals.length >= 1,
+      "Second-pass rally detail must also read private S3 bytes");
 
     const otherFinish = await friend.ctx.post("/api/uploads/trusted-evidence/" + uploadA + "/complete");
     assert.equal(otherFinish.status(), 404);
@@ -294,6 +350,7 @@ async function main() {
       sha256Verified: true, postVerificationTamperRejected: true,
       presignedReplayRejected: true,
       decoderDurationSeconds: Number(duration.toFixed(3)), verifiedPrivateFrames: 1,
+      privateVisionFrames: 1, privateScoredTimeline: true, privateDenseRallies: true,
       AI: "disabled_and_http_storage_denied",
       fakeVerdicts: 0, creditMovement: 0, xpIssued: 0,
     }));

@@ -1,9 +1,8 @@
-import { isEvidenceUrlAllowed } from "./evidence-url";
 import {
   trustedEvidenceUploadsEnabled,
   trustedStorageConfigured,
   verifyTrustedEvidenceObject,
-  signTrustedEvidenceRead,
+  type TrustedEvidenceSource,
 } from "./trusted-evidence-storage";
 
 /** DB-linked evidence only. Never accept trusted flags, object keys or digests
@@ -31,6 +30,7 @@ export type TrustedJudgeEvidence = {
 export type JudgeMediaResolution = {
   url: string | null;
   privateMedia: boolean;
+  trustedSource?: TrustedEvidenceSource;
 };
 
 export async function resolveJudgeEvidenceMedia(evidence: TrustedJudgeEvidence): Promise<JudgeMediaResolution> {
@@ -68,11 +68,16 @@ export async function resolveJudgeEvidenceMedia(evidence: TrustedJudgeEvidence):
   if (observed.sha256 !== stored.sha256 || observed.sizeBytes !== stored.observedSizeBytes) {
     throw new Error("Private evidence bytes no longer match their immutable upload receipt");
   }
-  const url = await signTrustedEvidenceRead(stored.objectKey);
-  if (!isEvidenceUrlAllowed(url)) {
-    throw new Error("Private evidence storage endpoint is not an approved public HTTPS transport");
-  }
-  // The URL is ONLY passed to the trusted server-side decoder. Never persist
-  // it in Evidence.url, include it in model prompts, or expose it in JSON.
-  return { url, privateMedia: true };
+  // The authenticated SDK re-checks the stream checksum while staging the
+  // media for FFmpeg. Neither judge nor decoder needs a bearer URL.
+  return {
+    url: null,
+    privateMedia: true,
+    trustedSource: {
+      key: stored.objectKey,
+      contentType: stored.contentType,
+      expectedSizeBytes: stored.expectedSizeBytes,
+      sha256: stored.sha256!,
+    },
+  };
 }

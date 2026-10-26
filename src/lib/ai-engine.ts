@@ -8,6 +8,7 @@ import {
   type JudgeVisionImage,
 } from "./media/prepare-evidence-visuals";
 import { describeEvidenceForJudge } from "./media/judge-evidence-summary";
+import type { TrustedEvidenceSource } from "./media/trusted-evidence-storage";
 import { detectScoredMatchContract } from "./scored-match";
 import { judgeShortScoredMatch } from "./scored-match-judge";
 import { AiBudgetError } from "./ai-governance";
@@ -427,7 +428,8 @@ export interface JudgeEvidencePayload {
   description: string | null;
   type: string;
   url?: string | null;
-  privateMedia?: boolean; // transport URL must never enter model text
+  privateMedia?: boolean; // no transport URL ever enters model text
+  trustedSource?: TrustedEvidenceSource;
   preparedFrames?: string[] | null;
   preparedDurationSec?: number | null;
   preparedMode?: string | null;
@@ -473,6 +475,7 @@ async function getVisualsForParticipant(
     type: evidence.type,
     url: evidence.url ?? null,
     privateMedia: evidence.privateMedia === true,
+    trustedSource: evidence.trustedSource,
   });
 }
 
@@ -485,7 +488,8 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   const invalidProof = [evidenceA, evidenceB].some((evidence) => {
     if (!evidence) return false;
     if (required === "video" || required === "photo") {
-      return evidence.type !== required || !evidence.url?.trim();
+      return evidence.type !== required ||
+        !(evidence.url?.trim() || (evidence.privateMedia && evidence.trustedSource));
     }
     if (required === "text" || required === "self_report") {
       return !evidence.description?.trim();
