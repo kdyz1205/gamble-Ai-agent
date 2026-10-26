@@ -130,7 +130,7 @@ jobs:
           node scripts/test-ios-xcodeproj-integrity.cjs
           if [[ "$SUM_IOS_TARGET" == 'preview' ]]; then
             PREVIEW_HOST=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
-            /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $PREVIEW_HOST" ios/App/App/Info.plist
+            /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string $PREVIEW_HOST" ios/App/App/Info.plist
           fi
           npm run ios:sync
           node -e 'const x=require("./ios/App/App/capacitor.config.json");if(x.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
@@ -242,7 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           preview_host=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
-          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $preview_host" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string $preview_host" ios/App/App/Info.plist
           npm run ios:sync
           node -e 'const c=require("./ios/App/App/capacitor.config.json");if(c.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
           mkdir -p ios/build/simulator-evidence

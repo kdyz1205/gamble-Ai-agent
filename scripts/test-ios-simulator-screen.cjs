@@ -70,7 +70,12 @@ async function selfTest() {
     "Capacitor's local WebView origin must be in the app-bound whitelist");
   assert.match(appBounds,/<string>summoner\.world<\/string>/,
     "Production WebView host must remain app-bound");
-  console.log("IOS_SCREEN_VISUAL_GUARD_SELF_TEST_PASS: 4 image fixtures and 2 origin guards");
+  const workflow=fs.readFileSync(path.join(__dirname,"../.github/workflows/ios-release.yml"),"utf8");
+  assert(!workflow.includes("Add :WKAppBoundDomains:1"),
+    "Preview app-bound domain insertion must not collide with localhost index 1");
+  assert.match(workflow,/Add :WKAppBoundDomains:2 string/,
+    "Preview host must append after production and localhost");
+  console.log("IOS_SCREEN_VISUAL_GUARD_SELF_TEST_PASS: 4 image fixtures and 4 origin guards");
 }
 if (require.main===module) {
   (async()=>{
