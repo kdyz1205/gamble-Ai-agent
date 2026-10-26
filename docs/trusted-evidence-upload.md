@@ -185,7 +185,9 @@ review status and resolved winner.
   request to the real `/api/summons/free-draw` endpoint; the response's
   owned inventory ID appears in the App, and database checks verify one
   consumed ticket, one free-ticket Familiar, stable retry idempotency and
-  unchanged credit balances. The Next server's progression flags are ON
+  unchanged credit balances. A separately signed-in opponent's inventory
+  stays empty; replaying the winner's exact draw key under the second account
+  is rejected. The Next server's progression flags are ON
   **only for that disposable GitHub CI PostgreSQL job**, never for public
   preview or production.
 - Source review approvals use a separate new table; **no legacy Evidence,

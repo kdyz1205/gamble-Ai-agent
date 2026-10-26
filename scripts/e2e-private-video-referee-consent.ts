@@ -99,6 +99,7 @@ async function main() {
   const mediaKeys: string[] = [];
   let mobileBrowser: Browser | null = null;
   const mobilePassword = randomUUID() + "Aa9!";
+  const opponentPassword = randomUUID() + "Bb8!";
   const people: string[] = [];
   let challengeId: string | null = null;
   let replayQuestId: string | null = null;
@@ -161,6 +162,7 @@ async function main() {
     const opponent = await prisma.user.create({ data: {
       username: "fixture_red_" + suffix,
       email: "fixture_red_" + suffix + "@example.invalid",
+      passwordHash: await bcrypt.hash(opponentPassword, 10),
       credits: 10,
     } });
     people.push(creator.id, opponent.id);
@@ -721,6 +723,48 @@ async function main() {
     await page.close();
     await mobileContext.close();
 
+    // A second, separately authenticated participant may not read the
+    // creator's owned item or steal an already-used request ID. Neither JWT
+    // nor ticket receipt can be inferred from the challenge membership.
+    const opponentContext = await mobileBrowser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true, hasTouch: true,
+    });
+    const otherCsrfRes = await opponentContext.request.get(origin + "/api/auth/csrf");
+    assert.equal(otherCsrfRes.status(), 200);
+    const otherCsrf = (await otherCsrfRes.json() as { csrfToken: string }).csrfToken;
+    const opponentLogin = await opponentContext.request.post(
+      origin + "/api/auth/callback/credentials",
+      { form: {
+        csrfToken: otherCsrf, email: opponent.email, password: opponentPassword,
+        action: "login", callbackUrl: origin + "/app/picos", json: "true",
+      } },
+    );
+    assert.equal(opponentLogin.status(), 200);
+    const otherUser = await opponentContext.request.get(origin + "/api/auth/session");
+    assert.equal((await otherUser.json() as { user?: { id?: string } }).user?.id,
+      opponent.id);
+    const otherInventory = await opponentContext.request.get(
+      origin + "/api/summons/me",
+    );
+    assert.equal(otherInventory.status(), 200);
+    const otherCollection = (await otherInventory.json() as {
+      ownedCollection?: { available?: boolean; items?: unknown[] };
+    }).ownedCollection;
+    assert.equal(otherCollection?.available, true);
+    assert.deepEqual(otherCollection?.items, [],
+      "An accepted opponent must never see another user's owned Familiar");
+    const stolenKey = await opponentContext.request.post(
+      origin + "/api/summons/free-draw",
+      { data: {
+        professionId: "athletics", occupationId: "badminton",
+        requestKey: actualDrawKey, confirmSpend: true,
+      } },
+    );
+    assert.equal(stolenKey.status(), 409,
+      "Someone else's draw key cannot authorize a new or replayed item");
+    await opponentContext.close();
+
     // Network retries reuse the same client-generated key. Neither a duplicate
     // database creature nor another free ticket may be consumed on retry.
     const replayedDraw = await redeemFreeSummonTicket({
@@ -769,6 +813,8 @@ async function main() {
       ownedFamiliars: 1,
       realAuthenticatedMobileWeb: true,
       browserConfirmedSingleSpend: observedDrawRequests.length === 1,
+      crossAccountInventoryIsolation: true,
+      stolenDrawKeyRejected: true,
       serverSelectedRarity: drawn.rarity,
       duplicateDrawRequests: 0,
       duplicateOwnedInstances: 0,
