@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { reconcileVerifiedQuestProfessionXp } from "@/lib/summons/server-ledger";
+import { reconcileFreeCareerTickets, summonTicketsEnabled } from "@/lib/summons/free-ticket-ledger";
 import { isReviewModerator } from "@/lib/verdict-review";
 import {
   approveTrustedQuestXpForReview,
@@ -97,9 +98,40 @@ export async function POST(req: NextRequest) {
     const receipt = await reconcileVerifiedQuestProfessionXp({
       challengeId, userId: ownerId,
     });
+    // Optional free-ticket milestone: separate, idempotent transaction with
+    // complete current-Quest provenance revalidation. If it fails, the XP
+    // receipt remains immutable and the moderator can retry the same action.
+    // The participant must STILL explicitly choose to spend a free ticket;
+    // no owned Familiar, evolution or credit movement occurs here.
+    if (summonTicketsEnabled()) {
+      try {
+        const tickets = await reconcileFreeCareerTickets({
+          ownerId, professionId: receipt.professionId,
+        });
+        return Response.json({
+          receipt,
+          freeTickets: {
+            status: "verified_and_issued",
+            available: tickets.available,
+            spent: tickets.spent,
+            verifiedXp: tickets.verifiedXp,
+          },
+          note: "XP and verified free-ticket milestones committed. No ticket was spent and no Familiar was minted.",
+        }, { headers });
+      } catch (error) {
+        console.error("[xp-review] separate free-ticket reconciliation requires review",
+          error instanceof Error ? error.name : "UnknownError");
+        return Response.json({
+          receipt,
+          freeTickets: { status: "pending_reconciliation" },
+          note: "XP was committed. Free ticket was not confirmed; retry after reviewing provenance.",
+        }, { status: 202, headers });
+      }
+    }
     return Response.json({
       receipt,
-      note: "XP only. Tickets, new Summons and evolution require separate audited actions.",
+      freeTickets: { status: "disabled" },
+      note: "XP committed. Free tickets and owned Summons remain disabled and are never issued by page reads.",
     }, { headers });
   } catch (err) {
     if (err instanceof ManualXpApprovalError) {

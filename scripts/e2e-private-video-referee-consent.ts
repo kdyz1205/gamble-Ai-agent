@@ -25,6 +25,7 @@ import { getProviderById } from "../src/lib/llm-providers";
 import { executeChallengeJudgment } from "../src/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "../src/lib/verdict-review";
 import { reconcileVerifiedQuestProfessionXp } from "../src/lib/summons/server-ledger";
+import { reconcileFreeCareerTickets } from "../src/lib/summons/free-ticket-ledger";
 import {
   approveTrustedQuestXpForReview,
   revokeTrustedQuestXpReview,
@@ -78,6 +79,7 @@ async function main() {
   const previousKey = process.env.OPENAI_API_KEY;
   const priorPersistence = process.env.SUMMON_PERSISTENCE_ENABLED;
   const priorManualReview = process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED;
+  const priorTicketFlag = process.env.SUMMON_TICKETS_ENABLED;
   const provider = getProviderById("openai");
   assert.ok(provider && provider.kind === "openai_compat");
   const originalBase = provider.baseUrl;
@@ -523,12 +525,44 @@ async function main() {
       ticketsIssued: 0,
       ownedSummonsIssued: 0,
     }));
+
+    // Separately enable free-ticket milestones only AFTER independently
+    // reviewed XP is in the immutable ledger. Never auto-draw a creature.
+    process.env.SUMMON_TICKETS_ENABLED = "true";
+    const earned = await reconcileFreeCareerTickets({
+      ownerId: creator.id, professionId: "athletics",
+    });
+    assert.equal(earned.verifiedXp, 100);
+    assert.equal(earned.earnedMilestones, 1);
+    assert.equal(earned.available, 1);
+    assert.equal(earned.spent, 0);
+    const again = await reconcileFreeCareerTickets({
+      ownerId: creator.id, professionId: "athletics",
+    });
+    assert.deepEqual(again.grantIds, earned.grantIds,
+      "A second milestone reconciliation must not mint another ticket");
+    assert.equal(await prisma.summonTicket.count({
+      where: { ownerId: creator.id },
+    }), 1);
+    assert.equal(await prisma.summonInstance.count({
+      where: { ownerId: { in: people } },
+    }), 0, "Earned free ticket is not an owned Familiar");
+    console.log(JSON.stringify({
+      result: "PASS", phase: "verified_free_ticket_after_manual_xp",
+      priorModeratorApprovalRequired: true,
+      verifiedCareerXp: 100, freeTicketsIssued: 1,
+      idempotentMilestone: true,
+      freeTicketsSpent: 0, ownedSummonsMinted: 0,
+      realPlayerRewards: 0,
+    }));
   } finally {
     process.env.AI_ENABLED = previousAi;
     if (priorPersistence === undefined) delete process.env.SUMMON_PERSISTENCE_ENABLED;
     else process.env.SUMMON_PERSISTENCE_ENABLED = priorPersistence;
     if (priorManualReview === undefined) delete process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED;
     else process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED = priorManualReview;
+    if (priorTicketFlag === undefined) delete process.env.SUMMON_TICKETS_ENABLED;
+    else process.env.SUMMON_TICKETS_ENABLED = priorTicketFlag;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
     provider.baseUrl = originalBase;
@@ -547,6 +581,9 @@ async function main() {
     if (challengeId) {
       // Manual reviewer approval is RESTRICT to retain forensic history in
       // production; the disposable fixture must explicitly drop its own rows.
+      await prisma.summonTicket.deleteMany({
+        where: { ownerId: { in: people } },
+      }).catch(() => {});
       await prisma.verifiedXpApproval.deleteMany({
         where: { challengeId },
       }).catch(() => {});

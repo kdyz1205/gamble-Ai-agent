@@ -149,8 +149,14 @@ review status and resolved winner.
   revocation refuses automatic clawback; a separate explicit ledger correction,
   ticket freeze and owned-item review will be necessary.
 - `ProfessionXpEvent.eventKey` remains unique and idempotent across retries.
-  Ticket draws and Familiar evolution have independent feature flags and
-  separate authorization; even successfully issued XP does not auto-mint them.
+  When the separate `SUMMON_TICKETS_ENABLED=true` feature is explicitly
+  activated, a moderator's confirmed XP issuance subsequently runs the
+  existing audited and idempotent free-career-ticket milestone reconciler.
+  A failure returns **XP committed / tickets pending reconciliation**, not
+  a false success or a second XP grant; the same action is safe to retry.
+- A free ticket is **not an owned Summon**. The player must separately
+  confirm a free-ticket draw. Draws and Familiar evolution have their own
+  independent feature flags; issuing XP alone never auto-mints a creature.
 - Source review approvals use a separate new table; **no legacy Evidence,
   Challenge or User columns are modified** in this migration. Preview builds
   keep all read/write calls behind the disabled feature flag.
