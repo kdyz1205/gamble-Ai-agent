@@ -18,6 +18,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
+import bcrypt from "bcryptjs";
+import { chromium, type Browser } from "@playwright/test";
 import { PutObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import prisma from "../src/lib/db";
 import { verifyTrustedEvidenceObject } from "../src/lib/media/trusted-evidence-storage";
@@ -95,6 +97,8 @@ async function main() {
   });
   const suffix = randomUUID().replaceAll("-", "").slice(0, 15);
   const mediaKeys: string[] = [];
+  let mobileBrowser: Browser | null = null;
+  const mobilePassword = randomUUID() + "Aa9!";
   const people: string[] = [];
   let challengeId: string | null = null;
   let replayQuestId: string | null = null;
@@ -151,6 +155,7 @@ async function main() {
     const creator = await prisma.user.create({ data: {
       username: "fixture_blue_" + suffix,
       email: "fixture_blue_" + suffix + "@example.invalid",
+      passwordHash: await bcrypt.hash(mobilePassword, 10),
       credits: 10,
     } });
     const opponent = await prisma.user.create({ data: {
@@ -631,29 +636,103 @@ async function main() {
       where: { id: { in: people } },
       select: { id: true, credits: true }, orderBy: { id: "asc" },
     });
-    const drawn = await redeemFreeSummonTicket({
-      ownerId: creator.id, professionId: "athletics",
-      occupationId: "badminton", requestKey: drawRequestKey,
+    // Authenticate as the ACTUAL fixture account on the separate Next App
+    // server. A 390px Chromium viewport exercises the real Familiars screen,
+    // authenticated API, explicit draw confirmation and persisted inventory.
+    // No direct library call may perform the initial draw in this stage.
+    mobileBrowser = await chromium.launch({ headless: true });
+    const mobileContext = await mobileBrowser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true, hasTouch: true, reducedMotion: "reduce",
     });
+    const origin = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
+    const csrf = await mobileContext.request.get(origin + "/api/auth/csrf");
+    assert.equal(csrf.status(), 200);
+    const csrfToken = (await csrf.json() as { csrfToken: string }).csrfToken;
+    const signedIn = await mobileContext.request.post(
+      origin + "/api/auth/callback/credentials",
+      { form: {
+        csrfToken, email: creator.email, password: mobilePassword,
+        action: "login", callbackUrl: origin + "/app/picos", json: "true",
+      } },
+    );
+    assert.equal(signedIn.status(), 200, await signedIn.text());
+    const authSession = await mobileContext.request.get(origin + "/api/auth/session");
+    assert.equal(authSession.status(), 200);
+    const actualUser = (await authSession.json() as { user?: { id?: string } }).user;
+    assert.equal(actualUser?.id, creator.id, "Browser must own the same funded fixture account");
+
+    const page = await mobileContext.newPage();
+    const browserErrors: string[] = [];
+    const observedDrawRequests: Array<{ requestKey: string; occupationId: string }> = [];
+    page.on("pageerror", error => browserErrors.push(error.message));
+    page.on("request", req => {
+      if (req.method() !== "POST" ||
+          !req.url().endsWith("/api/summons/free-draw")) return;
+      const value = req.postDataJSON() as {
+        requestKey: string; occupationId: string; confirmSpend: boolean;
+      };
+      assert.equal(value.confirmSpend, true);
+      observedDrawRequests.push(value);
+    });
+    const loaded = await page.goto(origin + "/app/picos", {
+      waitUntil: "domcontentloaded", timeout: 45_000,
+    });
+    assert.equal(loaded?.status(), 200);
+    await page.getByRole("heading", { name: "Summon a new Familiar" }).waitFor({
+      timeout: 40_000,
+    });
+    await page.getByText("1 available", { exact: false }).first().waitFor();
+    assert.equal(observedDrawRequests.length, 0, "Viewing the real inventory cannot draw");
+    await page.getByRole("button", { name: "Review free ticket use" }).click();
+    assert.equal(observedDrawRequests.length, 0, "Reviewing without confirmation cannot draw");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    assert.equal(observedDrawRequests.length, 0, "Cancelling review cannot draw");
+    await page.getByRole("button", { name: "Review free ticket use" }).click();
+    const initialResponse = page.waitForResponse(
+      response => response.request().method() === "POST" &&
+        response.url().endsWith("/api/summons/free-draw"),
+      { timeout: 30_000 },
+    );
+    await page.getByRole("button", { name: "Confirm and summon" }).click();
+    const serverResponse = await initialResponse;
+    assert.equal(serverResponse.status(), 201, await serverResponse.text());
+    const payload = await serverResponse.json() as {
+      draw?: Awaited<ReturnType<typeof redeemFreeSummonTicket>>;
+    };
+    assert.ok(payload.draw);
+    const drawn = payload.draw;
     assert.equal(drawn.reused, false);
     assert.equal(drawn.creditsTransferred, 0);
     assert.ok(drawn.receiptId && drawn.instanceId);
     assert.ok(drawn.speciesId.startsWith("athletics-badminton-"));
     assert.ok(["common","uncommon","rare","epic","legendary"].includes(drawn.rarity));
     assert.equal(drawn.ordinal, 1);
+    assert.equal(observedDrawRequests.length, 1);
+    const actualDrawKey = observedDrawRequests[0].requestKey;
+    assert.match(actualDrawKey, /^[0-9a-f-]{36}$/, "Real App must use one stable UUID");
+    await page.getByText("Summoned: " + drawn.speciesId).waitFor();
+    await page.getByTestId("owned-summon-" + drawn.instanceId).waitFor({
+      timeout: 35_000,
+    });
+    assert.equal(await page.evaluate(() =>
+      document.documentElement.scrollWidth - innerWidth), 0);
+    assert.deepEqual(browserErrors, []);
+    await page.close();
+    await mobileContext.close();
 
     // Network retries reuse the same client-generated key. Neither a duplicate
     // database creature nor another free ticket may be consumed on retry.
     const replayedDraw = await redeemFreeSummonTicket({
       ownerId: creator.id, professionId: "athletics",
-      occupationId: "badminton", requestKey: drawRequestKey,
+      occupationId: "badminton", requestKey: actualDrawKey,
     });
     assert.equal(replayedDraw.reused, true);
     assert.equal(replayedDraw.receiptId, drawn.receiptId);
     assert.equal(replayedDraw.instanceId, drawn.instanceId);
     await assert.rejects(() => redeemFreeSummonTicket({
       ownerId: creator.id, professionId: "athletics",
-      occupationId: "coaching", requestKey: drawRequestKey,
+      occupationId: "coaching", requestKey: actualDrawKey,
     }), /conflicts with an earlier free draw/i);
     await assert.rejects(() => redeemFreeSummonTicket({
       ownerId: creator.id, professionId: "athletics",
@@ -669,7 +748,7 @@ async function main() {
       where: { ownerId: creator.id },
     }), 1);
     assert.equal(await prisma.summonInstance.count({
-      where: { ownerId: creator.id },
+      where: { ownerId: creator.id, originKind: "free_ticket" },
     }), 1);
     const afterDrawTicket = await prisma.summonTicket.findUniqueOrThrow({
       where: { id: earned.grantIds[0] },
@@ -688,6 +767,8 @@ async function main() {
       verifiedFreeTicketsIssued: 1,
       freeTicketsSpent: 1,
       ownedFamiliars: 1,
+      realAuthenticatedMobileWeb: true,
+      browserConfirmedSingleSpend: observedDrawRequests.length === 1,
       serverSelectedRarity: drawn.rarity,
       duplicateDrawRequests: 0,
       duplicateOwnedInstances: 0,
@@ -696,6 +777,7 @@ async function main() {
       liveModelAccuracyClaim: false,
     }));
   } finally {
+    await mobileBrowser?.close().catch(() => {});
     process.env.AI_ENABLED = previousAi;
     if (priorPersistence === undefined) delete process.env.SUMMON_PERSISTENCE_ENABLED;
     else process.env.SUMMON_PERSISTENCE_ENABLED = priorPersistence;

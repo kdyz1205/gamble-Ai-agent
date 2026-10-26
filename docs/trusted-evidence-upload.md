@@ -176,6 +176,18 @@ review status and resolved winner.
   accepted server receipt refreshes the display, and a disabled feature
   shows no active draw button. The UI test complements rather than replaces
   the real S3/PostgreSQL RNG, ticket and owned-inventory E2E test.
+- A second **authenticated full-stack mobile test** is incorporated into
+  `e2e-private-video-referee-consent.ts`: after synthetic verified private
+  video, consented settlement, independent moderation, 100 XP and one
+  free-ticket milestone, Chromium signs in to the REAL Next Web App as the
+  same isolated fixture account. Opening `/app/picos` and reviewing/canceling
+  a draw must not send an HTTP POST. Explicit Confirm sends exactly one
+  request to the real `/api/summons/free-draw` endpoint; the response's
+  owned inventory ID appears in the App, and database checks verify one
+  consumed ticket, one free-ticket Familiar, stable retry idempotency and
+  unchanged credit balances. The Next server's progression flags are ON
+  **only for that disposable GitHub CI PostgreSQL job**, never for public
+  preview or production.
 - Source review approvals use a separate new table; **no legacy Evidence,
   Challenge or User columns are modified** in this migration. Preview builds
   keep all read/write calls behind the disabled feature flag.

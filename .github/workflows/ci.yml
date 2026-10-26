@@ -149,6 +149,9 @@ jobs:
       - name: Install disposable PostgreSQL schema
         run: npx prisma migrate deploy
 
+      - name: Install Chromium for authenticated mobile Web App draw
+        run: npx playwright install --with-deps chromium
+
       - name: Exercise private MP4 submission from two authenticated accounts
         run: |
           node -e 'const f=require("ffmpeg-static");if(!f || !require("fs").existsSync(f)) process.exit(1)'
@@ -156,7 +159,9 @@ jobs:
             tail -n 120 /tmp/summoner-trusted-build.log
             exit 1
           }
-          npm run start > /tmp/summoner-trusted-server.log 2>&1 &
+          # Test-only server process: disposable PostgreSQL fixture is isolated;
+          # these flags never reach the Vercel preview or production.
+          SUMMON_PERSISTENCE_ENABLED=true SUMMON_XP_MANUAL_REVIEW_ENABLED=true SUMMON_TICKETS_ENABLED=true SUMMON_DRAWS_ENABLED=true npm run start > /tmp/summoner-trusted-server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0;(async function ready(){try{const r=await fetch("http://127.0.0.1:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=90)process.exit(1);setTimeout(ready,1000)})()'
