@@ -165,7 +165,7 @@ export function EvidenceAddScreen({id}:{id?:string}) {
               placeholder="What did you do? What can the other player verify?"/>
             {submitError&&<p role="alert" className="ios-message ios-message--error">{submitError}</p>}
             <button className="ios-primary" type="button" disabled={!note.trim()||busy} onClick={()=>void save()}>
-              {busy?"Submitting…":"Save written evidence"}
+              {busy?translated(language,"Submitting…","正在提交…"):translated(language,"Save written evidence","保存书面证据")}
             </button></>:
             ["photo","video"].includes(policy) ?
               <div className="ios-app-media-proof" data-testid="ios-app-media-uploader">
