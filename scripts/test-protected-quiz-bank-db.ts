@@ -30,6 +30,7 @@ const refuses=async(fn:()=>Promise<unknown>,code:string,label:string)=>{
   await assert.rejects(fn,e=>e instanceof ProtectedBankError&&e.code===code,label);
   checks++;
 };
+async function runIntegrationTest(){
 try{
   process.env.QUIZ_PROTECTED_REVIEW_PUBLIC_KEY=pem;
   process.env.QUIZ_PROTECTED_BANK_ENABLED="false";
@@ -158,3 +159,8 @@ try{
   else process.env.QUIZ_PROTECTED_BANK_ENABLED=priorFlag;
   await prisma.$disconnect();
 }
+}
+void runIntegrationTest().catch(error=>{
+  console.error("PROTECTED_QUIZ_BANK_DB_FAILED",error);
+  process.exitCode=1;
+});
