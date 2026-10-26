@@ -19,7 +19,12 @@ private-upload migration has not yet run.
    accepted participant, proof deadline, MIME policy and 80 MiB request limit;
    refuses client claims of recording-session authentication. It issues a
    random, expiring **conditional PUT** into a separate private S3/R2 bucket.
-2. The mobile browser PUTs the raw file directly to that bucket.
+2. The mobile browser PUTs the raw file directly to that bucket using
+   XMLHttpRequest upload events to show actual transfer percentage; the UI
+   separately labels server SHA verification and the eventual Quest binding.
+   Cancelling the transfer never commits Evidence. Safari cannot guarantee
+   background uploads, so the player is asked to keep the page open. The
+   trusted path refuses any error-triggered downgrade to the public store.
    `POST /api/uploads/trusted-evidence/{id}/complete` independently uses
    HEAD + bounded GET to check actual size, media magic and SHA-256, then
    stores `issued -> verified` with a database compare-and-set.

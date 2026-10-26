@@ -7,6 +7,7 @@ import * as api from "@/lib/api-client";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
+import { putTrustedEvidenceFile } from "@/lib/media/trusted-browser-put";
 
 // Summoner.world proof palette.
 const NAVY = "#1E293B";
@@ -47,6 +48,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const [urlInput, setUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [privateUploadPhase, setPrivateUploadPhase] = useState<"idle" | "transfer" | "verify" | "bind">("idle");
+  const privateUploadController = useRef<AbortController | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,6 +75,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setUploadProgress(0);
     setError("");
   }, []);
+
+  // Browser backgrounding or navigation must not leave an old transfer writing
+  // to a new Quest screen. Aborting cannot create an Evidence row.
+  useEffect(() => () => privateUploadController.current?.abort(), []);
 
   // Stop any active webcam when component unmounts or mode changes
   useEffect(() => {
@@ -235,12 +242,18 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
           }
           setUploading(true);
           setUploadProgress(0);
+          setPrivateUploadPhase("transfer");
+          const controller = new AbortController();
+          privateUploadController.current = controller;
           try {
-            const put = await fetch(ticket.uploadUrl, {
-              method: "PUT", headers: ticket.headers, body: f,
+            await putTrustedEvidenceFile({
+              uploadUrl: ticket.uploadUrl,
+              headers: ticket.headers,
+              file: f,
+              signal: controller.signal,
+              onProgress: setUploadProgress,
             });
-            if (!put.ok) throw new Error("Private object transfer failed (" + put.status + ")");
-            setUploadProgress(100);
+            setPrivateUploadPhase("verify");
 
             const completed = await fetch(
               "/api/uploads/trusted-evidence/" +
@@ -252,6 +265,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
               throw new Error(problem.error || "Private media integrity check failed");
             }
 
+            setPrivateUploadPhase("bind");
             const bound = await fetch(
               "/api/challenges/" + encodeURIComponent(challengeId) +
                 "/evidence/trusted",
@@ -275,6 +289,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             await onSubmitted();
             return;
           } finally {
+            privateUploadController.current = null;
+            setPrivateUploadPhase("idle");
             setUploading(false);
           }
         }
@@ -477,7 +493,25 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
               transition={{ type: "tween" }}
             />
           </div>
-          <p className="text-xs font-semibold mt-1" style={{ color: PEACH_DARK }}>Uploading… {uploadProgress}%</p>
+          <p role="status" aria-live="polite" className="text-xs font-semibold mt-1"
+            style={{ color: PEACH_DARK }}>
+            {privateUploadPhase === "verify" ? "Verifying the uploaded file on the server?" :
+              privateUploadPhase === "bind" ? "Saving verified proof to your Quest?" :
+                `Transferring video/photo? ${uploadProgress}%`}
+          </p>
+          {privateUploadPhase !== "idle" && (
+            <p className="text-xs mt-1" style={{ color: NAVY_DIM }}>
+              Keep this page open until your Quest confirms the proof was saved.
+            </p>
+          )}
+          {privateUploadPhase === "transfer" && (
+            <button type="button"
+              className="mt-2 text-xs font-semibold underline"
+              onClick={() => privateUploadController.current?.abort()}
+              style={{ color: ROSE_TEXT }}>
+              Cancel transfer
+            </button>
+          )}
         </div>
       )}
 
