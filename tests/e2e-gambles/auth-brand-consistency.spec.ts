@@ -4,6 +4,11 @@ import { expect, test } from "@playwright/test";
  * Focused layout checks for the three entry surfaces of Summoners World.
  * They require a running local Next server; no account or DB mutation.
  */
+test.use({
+  baseURL: process.env.TEST_BASE_URL ?? "http://127.0.0.1:3000",
+  channel: process.env.SUM_AUTH_SYSTEM_CHROME === "1" ? "chrome" : undefined,
+});
+
 test.describe("Summoners World entry, auth and recovery", () => {
   test("landing page exposes a consistent sign-in portal", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
