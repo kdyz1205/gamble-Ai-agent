@@ -7,6 +7,9 @@
     radial-gradient(circle at 8% 94%, rgba(184, 231, 198, .48), transparent 37%),
     linear-gradient(165deg, #fffefa, #fff9f6 58%, #f4faf7);
   border: 1.5px solid rgba(110, 132, 111, .25);
+  /* Override the pre-storybook .auth-portal !important skin in summoner-world.css. */
+  border-radius: 28px !important;
+  box-shadow: 0 25px 70px rgba(49,94,82,.16), 0 4px 18px rgba(165,127,163,.13) !important;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
 }
 .auth-portal .sum-auth-close {

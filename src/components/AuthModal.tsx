@@ -192,10 +192,6 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
           >
             <motion.div
               className="auth-portal relative w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
-              style={{
-                borderRadius: "28px",
-                boxShadow: "0 25px 70px rgba(49,94,82,0.16), 0 4px 18px rgba(165,127,163,0.13)",
-              }}
               initial={{ scale: 0.92, y: 24, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.92, y: 24, opacity: 0 }}
