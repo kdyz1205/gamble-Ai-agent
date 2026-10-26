@@ -7,12 +7,12 @@ export default function EntryPolicyLinks() {
   const pathname = usePathname();
   const isPublicGateway = pathname === "/enter" || pathname === "/privacy" || pathname === "/terms" || pathname === "/support";
 
-  if (!isPublicGateway) return null;
+  if (!isPublicGateway || pathname === "/enter") return null;
 
   return (
     <nav
       aria-label="Policies and support"
-      className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-2 py-1.5 text-[11px] font-extrabold shadow-[0_8px_24px_rgba(40,102,133,0.14)] backdrop-blur-md"
+      className="relative z-20 mx-auto mb-[max(1.5rem,env(safe-area-inset-bottom))] mt-3 flex w-fit items-center gap-1 rounded-full border px-2 py-1.5 text-[11px] font-extrabold shadow-[0_8px_24px_rgba(40,102,133,0.12)] backdrop-blur-md"
       style={{
         background: "rgba(255,255,255,0.88)",
         borderColor: "var(--sum-border)",

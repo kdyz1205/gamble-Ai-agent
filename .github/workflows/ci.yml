@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/summoner_verification?schema=public
       NEXTAUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
       NEXTAUTH_URL: http://localhost:3000
+      VERIFIED_QUIZ_ENABLED: "true" # CI-only isolated migrated PostgreSQL, never production
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +44,12 @@ jobs:
       - run: npm run lint
 
       - run: npx tsc --noEmit
+
+      - run: node scripts/test-ios-clean-art.cjs
+
+      - run: node scripts/test-ios-pr-preview.cjs
+
+      - run: node scripts/test-ios-visual-gallery.cjs
 
       - run: npm run test:production:unit
 
@@ -62,7 +69,9 @@ jobs:
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
           npm run test:production:http
-          npx playwright test tests/e2e-gambles/composer-conversation.spec.ts tests/e2e-gambles/quest-cancellation.spec.ts tests/e2e-gambles/quest-browser-lifecycle.spec.ts tests/e2e-gambles/positive-stake-journey.spec.ts tests/e2e-gambles/evidence-ui-contract.spec.ts tests/e2e-gambles/review-browser-lifecycle.spec.ts --workers=1
+          SUM_IOS_URL=http://localhost:3000 SUM_IOS_QUICK=1 node scripts/qa-ios-full-app.cjs
+          node scripts/build-ios-visual-gallery.cjs
+          npx playwright test tests/e2e-gambles/composer-conversation.spec.ts tests/e2e-gambles/quest-cancellation.spec.ts tests/e2e-gambles/quest-browser-lifecycle.spec.ts tests/e2e-gambles/positive-stake-journey.spec.ts tests/e2e-gambles/evidence-ui-contract.spec.ts tests/e2e-gambles/review-browser-lifecycle.spec.ts tests/e2e-gambles/verified-voice-quiz-duel.spec.ts --workers=1
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -70,6 +79,7 @@ jobs:
           name: browser-flow-evidence
           path: |
             playwright-report
+            output/ios-full-app
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
           if-no-files-found: ignore

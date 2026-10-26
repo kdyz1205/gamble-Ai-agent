@@ -90,6 +90,15 @@ model User {
   reviewCasesRequested ReviewCase[]      @relation("ReviewRequester")
   reviewCasesResolved  ReviewCase[]      @relation("ReviewResolver")
   reviewCasesWon       ReviewCase[]      @relation("ReviewWinner")
+  summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
+  professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
+  summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
+  summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
+  summonEvolutionReceipts SummonEvolutionReceipt[] @relation("SummonEvolutionOwner")
+  quizAttempts          QuizAttempt[]
+  privateRoundsCreated QuizPrivateRound[] @relation("PrivateRoundCreator")
+  privateRoundsJoined  QuizPrivateRound[] @relation("PrivateRoundOpponent")
+  privateQuestionExposures QuizPrivateExposure[] @relation("PrivateExposureUser")
 }
 
 // ═══════════════════════════════════════
@@ -189,6 +198,8 @@ model Challenge {
   auditLogs        AuditLog[]        @relation("AuditLogChallenge")
   verdictResponses VerdictResponse[]
   reviewCase       ReviewCase?
+  professionXpEvents ProfessionXpEvent[]
+  quizDuel         QuizDuel?
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
   // by createdAt DESC; the "my markets" tab filters on creatorId; the judge
@@ -381,4 +392,218 @@ model ActivityEvent {
   // Feed reads order by createdAt DESC and often filter by type.
   @@index([createdAt])
   @@index([challengeId])
+}
+
+// Profession Summon server ledger — additive, no credits or cash coupling.
+// Application writes are gated by SUMMON_PERSISTENCE_ENABLED (off by default).
+model SummonInstance {
+  id             String   @id @default(cuid())
+  ownerId        String
+  speciesId      String
+  originKind     String // starter | free_ticket | fusion
+  grantKey       String   @unique
+  professionId   String?
+  occupationId   String?
+  rarity         String   @default("starter")
+  form           String   @default("base")
+  status         String   @default("owned") // owned | consumed
+  catalogVersion String   @default("summon-professions-v1")
+  parentOneId    String?
+  parentTwoId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner User @relation("SummonInventoryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  drawReceipt SummonDrawReceipt?
+  evolutionReceipts SummonEvolutionReceipt[]
+
+  @@index([ownerId, status, createdAt])
+  @@index([speciesId, rarity])
+}
+
+model ProfessionXpEvent {
+  id            String   @id @default(cuid())
+  ownerId       String
+  challengeId   String?
+  eventKey      String   @unique
+  professionId  String
+  awardType     String // verified_quest | correction
+  amount        Int
+  ruleVersion   String   @default("profession-xp-v1")
+  sourceReceipt String?
+  createdAt     DateTime @default(now())
+
+  owner     User       @relation("ProfessionXpOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, professionId, createdAt])
+  @@index([challengeId])
+}
+
+model SummonTicket {
+  id             String    @id @default(cuid())
+  ownerId        String
+  grantKey       String    @unique
+  status         String    @default("available") // available | spent | revoked
+  professionId   String
+  spentAt        DateTime?
+  spentByGrant   String?   @unique
+  sourceVersion  String    @default("free-tickets-v1")
+  createdAt      DateTime  @default(now())
+
+  owner User @relation("SummonTicketOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  drawReceipt SummonDrawReceipt?
+
+  @@index([ownerId, status])
+}
+
+// ═══════════════════════════════════════
+// Immutable, server-authoritative FREE Summon draws. No purchased tokens.
+model SummonDrawReceipt {
+  id                  String   @id @default(cuid())
+  ownerId             String
+  professionId        String
+  occupationId        String
+  requestKey          String   @unique
+  ticketId            String   @unique
+  instanceId          String   @unique
+  ordinal             Int
+  rarity              String
+  pityKind            String
+  randomValue         Int
+  effectiveWeights    String
+  rareMissesBefore    Int
+  epicMissesBefore    Int
+  rareMissesAfter     Int
+  epicMissesAfter     Int
+  ruleVersion         String
+  createdAt           DateTime @default(now())
+
+  owner    User           @relation("SummonDrawOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  ticket   SummonTicket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  instance SummonInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+
+  @@unique([ownerId, ordinal])
+  @@index([ownerId, createdAt])
+}
+
+// Authenticated, deterministic cosmetic form changes, never random re-draws.
+model SummonEvolutionReceipt {
+  id           String   @id @default(cuid())
+  ownerId      String
+  instanceId   String
+  requestKey   String   @unique
+  professionId String
+  fromForm     String
+  toForm       String
+  verifiedXp   Int
+  ruleVersion  String
+  createdAt    DateTime @default(now())
+
+  owner    User           @relation("SummonEvolutionOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  instance SummonInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+
+  @@unique([instanceId, toForm])
+  @@index([ownerId, createdAt])
+}
+
+// Optional server-private, independently reviewed question source.
+// No client routes expose answers or reviewer attestation material.
+model QuizProtectedQuestion {
+  id              String   @id
+  bankVersion     String
+  topic           String
+  prompt          String
+  choicesJson     String
+  answerIndex     Int
+  reviewSignature String
+  reviewedAt      DateTime
+  retiredAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  exposures QuizPrivateExposure[]
+
+  @@index([bankVersion, topic, retiredAt])
+}
+
+// Server-only locked selection. Does NOT belong to the public QuizDuel bank.
+// Secret nonce and pinned IDs must never appear in a client/API response.
+model QuizPrivateRound {
+  id               String   @id @default(cuid())
+  requestKey       String   @unique
+  creatorId        String
+  opponentId       String
+  bankVersion      String
+  topic            String
+  questionIdsJson  String
+  answerCommitment String
+  serverNonce      String
+  status           String   @default("reserved")
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  creator  User @relation("PrivateRoundCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  opponent User @relation("PrivateRoundOpponent", fields: [opponentId], references: [id], onDelete: Restrict)
+  exposures QuizPrivateExposure[]
+
+  @@index([creatorId, createdAt])
+  @@index([opponentId, createdAt])
+}
+
+model QuizPrivateExposure {
+  id          String @id @default(cuid())
+  roundId     String
+  userId      String
+  questionId  String
+  bankVersion String
+  createdAt   DateTime @default(now())
+
+  round    QuizPrivateRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  player   User @relation("PrivateExposureUser", fields: [userId], references: [id], onDelete: Restrict)
+  question QuizProtectedQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, bankVersion, questionId])
+  @@unique([roundId, userId, questionId])
+  @@index([roundId])
+}
+
+// DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)
+// ═══════════════════════════════════════
+model QuizDuel {
+  challengeId      String   @id
+  requestKey       String   @unique
+  topic            String
+  bankVersion      String
+  questionIds      String   // JSON string of canonical IDs, never answer keys
+  answerCommitment String   // Published hash; reveal when adjudication commits
+  invitedUserId    String?  // Exact validated user invitation (optional share link)
+  status           String   @default("open") // open | live | completed
+  startedAt        DateTime?
+  expiresAt        DateTime?
+  finalizedAt      DateTime?
+  winnerId         String?
+  resultJson       String?  // Final immutable objective score receipt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  attempts  QuizAttempt[]
+
+  @@index([status, expiresAt])
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  answersJson String   // Private until both finish
+  answerHash  String
+  score       Int
+  submittedAt DateTime @default(now())
+
+  quizDuel QuizDuel @relation(fields: [challengeId], references: [challengeId], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId, submittedAt])
 }

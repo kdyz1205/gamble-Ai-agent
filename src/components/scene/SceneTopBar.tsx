@@ -4,6 +4,8 @@ import QuestGlyph from "@/components/world/QuestGlyph";
 import { sceneBrand } from "@/lib/scene/scene-brand";
 
 interface SceneTopBarProps {
+  /** Compatibility with the routed SUM scene shell. */
+  activePath?: string;
   title?: string;
   rightSlot?: React.ReactNode;
 }

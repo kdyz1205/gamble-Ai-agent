@@ -1,0 +1,12 @@
+/* Restore real, keyboard-accessible Quest starter suggestions.
+   The prior world skin hid the entire strip despite the controls being present
+   in PactComposer, breaking first-use mobile and the real browser lifecycle. */
+.sw-app .quest-idea-strip {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.sw-app .quest-idea-strip button {
+  flex-shrink: 0;
+}

@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { ChallengeStatus } from "@/lib/enums";
+import { QUIZ_RULE_VERSION } from "@/lib/quiz/quiz-bank";
+import { sweepExpiredQuizDuels } from "@/lib/quiz/quiz-duel";
 import { executeChallengeJudgment } from "@/lib/challenge-judgment";
 import { sweepStuckJudgeJobs } from "@/lib/judge-async";
 import { AuditActions, appendAuditLog } from "@/lib/audit-log";
@@ -38,11 +40,21 @@ async function runCron() {
   const expiredReviews = await expireOverdueReviewCases();
   const recoveredConsentSettlements = await recoverPendingConsentSettlements();
 
+  // Run the independent free Quiz expiration resolver only after its additive
+  // migration has been deployed. The flag defaults OFF in production. Quiz
+  // never enters the generic AI-judgment or credit-fee path below.
+  const expiredQuizzes=process.env.VERIFIED_QUIZ_ENABLED==="true"&&
+    process.env.VERIFIED_QUIZ_CRON_ENABLED==="true"
+    ?await sweepExpiredQuizDuels(15):null;
+
   // (2) Live → judging for any deadline that has passed.
   const transitioned = await prisma.challenge.updateMany({
     where: {
       status: { in: [ChallengeStatus.live] },
       deadline: { not: null, lte: now },
+      // QuizDuels are finalized exclusively by their own sealed-answer
+      // resolver. Do not send them through AI judgment or credit fees.
+      OR: [{ arbiter: null }, { arbiter: { not: QUIZ_RULE_VERSION } }],
     },
     data: { status: ChallengeStatus.judging },
   });
@@ -62,6 +74,7 @@ async function runCron() {
     where: {
       status: ChallengeStatus.judging,
       judgments: { none: { status: "completed" } },
+      OR: [{ arbiter: null }, { arbiter: { not: QUIZ_RULE_VERSION } }],
     },
     select: { id: true, title: true },
     take: 20,
@@ -93,6 +106,7 @@ async function runCron() {
     sweptStuckJobs: sweepResult.swept,
     expiredReviews,
     recoveredConsentSettlements,
+    expiredQuizzes,
     transitionedToJudging: transitioned.count,
     pendingCount: pending.length,
     outcomes,
