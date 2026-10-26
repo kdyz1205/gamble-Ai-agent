@@ -36,6 +36,11 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Portals must render nothing on both the server and the first client render.
+  // Showing the dialog only after hydration avoids React hydration error #418.
+  useEffect(() => setMounted(true), []);
 
   // Reset transient state whenever modal closes so re-opening gives a clean slate
   // (fixes "modal closed but stuck" — old success/error/loading flags could keep
@@ -163,7 +168,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
     caretColor: PEACH_HOVER,
   };
 
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
 
   return createPortal(
     <AnimatePresence>

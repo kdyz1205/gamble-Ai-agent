@@ -22,6 +22,8 @@ test.describe("Summoners World entry, auth and recovery", () => {
   });
 
   test("mobile login does not show the application dock over the modal", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", error => pageErrors.push(error.message));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/auth/signin");
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -32,6 +34,7 @@ test.describe("Summoners World entry, auth and recovery", () => {
     expect(bounds!.width).toBeLessThanOrEqual(390);
     await page.getByRole("button", { name: "Close sign-in" }).click();
     await expect(page).toHaveURL(/\/enter$/);
+    expect(pageErrors).toEqual([]);
   });
 
   test("failed Google callback renders branded recovery, not an empty or generic error", async ({ page }) => {
