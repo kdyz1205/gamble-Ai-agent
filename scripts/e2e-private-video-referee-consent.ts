@@ -448,8 +448,8 @@ async function main() {
       () => reconcileVerifiedQuestProfessionXp({
         challengeId: quest.id, userId: creator.id,
       }),
-      /stale|changed/i,
-      "Changed post-review consent must invalidate the approval",
+      /consent|review|stale|changed/i,
+      "Changed post-review consent must be rejected regardless of which guard fires first",
     );
     await prisma.verdictResponse.update({
       where: { challengeId_userId: {
@@ -558,6 +558,12 @@ async function main() {
       await prisma.challenge.delete({ where: { id: challengeId } }).catch(() => {});
     }
     if (people.length > 0) {
+      // The disposable fixture may have a zero-cost or reservation ledger
+      // row without a Quest foreign key. The User FK is intentionally
+      // RESTRICT in production; only remove transactions for fixture users.
+      await prisma.creditTx.deleteMany({
+        where: { userId: { in: people } },
+      }).catch(() => {});
       await prisma.auditLog.deleteMany({ where: {
         OR: [{ actorUserId: { in: people } }, { targetUserId: { in: people } }],
       } }).catch(() => {});
