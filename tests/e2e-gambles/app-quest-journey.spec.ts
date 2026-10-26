@@ -215,6 +215,20 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     await receiptPage.getByRole("link", { name: "View real result" }).click();
     await expect(receiptPage.getByText("Quest Complete!")).toBeVisible();
     await expect(receiptPage.getByText("No winner recorded")).toBeVisible();
+    const xpCard = receiptPage.getByTestId("ios-real-xp-status");
+    await expect(xpCard).toBeVisible();
+    await expect(xpCard).toContainText("Career XP rewards are not enabled");
+    await expect(xpCard).not.toContainText("+100 XP");
+    const readOnlyStatus = await creator.context.request.get(
+      base + "/api/summons/quest-xp?challengeId=" + deadlineQuest,
+    );
+    expect(readOnlyStatus.status()).toBe(200);
+    expect((await readOnlyStatus.json()).status).toBe("disabled");
+    expect((await db.query(
+      'SELECT COUNT(*)::int AS n FROM "ProfessionXpEvent" WHERE "challengeId"=$1',
+      [deadlineQuest],
+    )).rows[0].n).toBe(0,
+      "Opening result and reading reward status must never issue XP");
     await receiptPage.close();
 
     const balancesAfter = (await db.query(

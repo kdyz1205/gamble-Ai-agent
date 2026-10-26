@@ -119,7 +119,7 @@ export async function accountSummonLedger(userId:string){
   };
 }
 
-const professionByQuestType:Record<string,ProfessionId>={
+export const professionByQuestType:Record<string,ProfessionId>={
   Coding:"software",Fitness:"athletics",Cooking:"culinary",
 };
 export class ProgressSourceNotFinalError extends Error {

@@ -26,6 +26,8 @@ export type TrustedXpAudit = TrustedXpAdmission & {
   // expose a fingerprint alone as proof that a reward is payable.
   sourceFingerprint: string | null;
   finalJudgmentId: string | null;
+  /** Internal final winner, for proving the award amount matches win/loss. */
+  finalWinningUserId: string | null;
 };
 
 export async function assessTrustedQuestXpForManualReview(input: {
@@ -52,6 +54,7 @@ export async function assessTrustedQuestXpWithTx(
     ownedSummonsGranted: 0,
     sourceFingerprint: null,
     finalJudgmentId: null,
+    finalWinningUserId: null,
   });
   if (process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS !== "true") {
     return wrap(["trusted_uploads_not_enabled"]);
@@ -203,5 +206,6 @@ export async function assessTrustedQuestXpWithTx(
       ownedSummonsGranted: 0 as const,
       sourceFingerprint,
       finalJudgmentId,
+      finalWinningUserId: validWinner ? receipt?.winnerId ?? null : null,
     };
 }

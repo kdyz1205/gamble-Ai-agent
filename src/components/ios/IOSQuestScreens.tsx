@@ -9,6 +9,7 @@ import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import IOSQuestJudgment from "./IOSQuestJudgment";
+import IOSQuestXpStatus from "./IOSQuestXpStatus";
 import EvidenceUploader from "@/components/EvidenceUploader";
 
 export function CreateScreen({seed}: {seed?:string}) {
@@ -190,6 +191,7 @@ export function QuestCompleteScreen({id}:{id?:string}) {
             <p>{quest.judgments[0].reasoning||"The result was recorded without a public explanation."}</p>
           </> : <p>No detailed judgment was returned with this record.</p>}
         </section>
+        <IOSQuestXpStatus challengeId={quest.id}/>
         <IosAction href={"/app/quest?id="+encodeURIComponent(quest.id)}>View result receipt</IosAction>
         <IosAction href="/app/create" secondary>Create another Quest</IosAction>
       </>}

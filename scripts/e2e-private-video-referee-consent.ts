@@ -31,6 +31,7 @@ import {
   revokeTrustedQuestXpReview,
 } from "../src/lib/summons/manual-xp-approval";
 import { assessTrustedQuestXpForManualReview } from "../src/lib/summons/trusted-xp-audit";
+import { readMyQuestXpStatus } from "../src/lib/summons/quest-xp-status";
 import { AI_RECEIPT_ACTION, AI_RESERVATION_ACTION } from "../src/lib/ai-governance";
 
 function assertIsolated() {
@@ -396,6 +397,15 @@ async function main() {
       credits: 10,
     } });
     people.push(moderator.id);
+    const preApproval = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(preApproval.status, "awaiting_independent_review");
+    assert.equal(preApproval.verifiedXp, null);
+    await assert.rejects(() => readMyQuestXpStatus({
+      challengeId: quest.id, userId: moderator.id,
+    }), /Only an accepted player/i,
+    "Even an authorized moderator cannot read another player's account card");
     await assert.rejects(
       () => reconcileVerifiedQuestProfessionXp({
         challengeId: quest.id, userId: creator.id,
@@ -426,6 +436,11 @@ async function main() {
     });
     assert.equal(authorized.status, "approved");
     assert.equal(authorized.issuedXp, false, "Approval is never automatic issuance");
+    const pending = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(pending.status, "approved_pending_issuance");
+    assert.equal(pending.verifiedXp, null);
     const approvalRetry = await approveTrustedQuestXpForReview({
       challengeId: quest.id, ownerId: creator.id,
       reviewerId: moderator.id,
@@ -453,6 +468,11 @@ async function main() {
       /consent|review|stale|changed/i,
       "Changed post-review consent must be rejected regardless of which guard fires first",
     );
+    const consentRevoked = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(consentRevoked.status, "not_eligible");
+    assert.equal(consentRevoked.verifiedXp, null);
     await prisma.verdictResponse.update({
       where: { challengeId_userId: {
         challengeId: quest.id, userId: opponent.id,
@@ -472,6 +492,27 @@ async function main() {
     assert.equal(await prisma.professionXpEvent.count({
       where: { challengeId: quest.id, ownerId: creator.id },
     }), 1);
+    const earnedStatus = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(earnedStatus.status, "awarded");
+    assert.equal(earnedStatus.verifiedXp, 100);
+    assert.equal(earnedStatus.professionId, "athletics");
+    // A forged or corrupted receipt MUST NEVER be shown as earned XP.
+    await prisma.professionXpEvent.update({
+      where: { id: awards[0].eventId }, data: { amount: 80 },
+    });
+    const corruptedStatus = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(corruptedStatus.status, "requires_correction");
+    assert.equal(corruptedStatus.verifiedXp, null);
+    await prisma.professionXpEvent.update({
+      where: { id: awards[0].eventId }, data: { amount: 100 },
+    });
+    assert.equal((await readMyQuestXpStatus({
+      challengeId: quest.id, userId: creator.id,
+    })).status, "awarded");
 
     // An independent moderator may revoke a *not-yet-issued* opponent review,
     // but must not silently reverse XP already spent or converted into items.
@@ -487,6 +528,11 @@ async function main() {
       reason: "Further identity verification requested before awarding the opponent career experience.",
     });
     assert.equal(revoked.revoked, true);
+    const revokedStatus = await readMyQuestXpStatus({
+      challengeId: quest.id, userId: opponent.id,
+    });
+    assert.equal(revokedStatus.status, "review_revoked");
+    assert.equal(revokedStatus.verifiedXp, null);
     await assert.rejects(
       () => reconcileVerifiedQuestProfessionXp({
         challengeId: quest.id, userId: opponent.id,
@@ -522,6 +568,14 @@ async function main() {
       deniedSilentClawback: true,
       qaXpEventCount: 1,
       realPlayerXpGrants: 0,
+      playerReadStates: [
+        "awaiting_independent_review",
+        "approved_pending_issuance",
+        "awarded",
+        "review_revoked",
+        "requires_correction",
+      ],
+      forgedXpReceiptHidden: true,
       ticketsIssued: 0,
       ownedSummonsIssued: 0,
     }));
