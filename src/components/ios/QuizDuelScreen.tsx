@@ -181,18 +181,27 @@ export default function QuizDuelScreen({id}:{id?:string}){
     result.winnerId===quiz?.playerUserId?"won":"lost";
   return <IosFrame title="Voice Quiz Duel" eyebrow="VERIFIED · FRIEND VS FRIEND"
     back="/app/today">
-    <section className="ios-quiz-hero">
-      <span className="ios-overline">SPEAK · INVITE · ANSWER · VERIFY</span>
-      <h1>Challenge a friend to a Quiz</h1>
-      <p>Everyone answers the same sealed questions. The server checks exact
-        answers and publishes a verifiable receipt.</p>
-      <strong>Free challenge · 0 credits at stake</strong>
-    </section>
     <QuizArenaStage phase={arenaPhase} creator={quiz?.creatorUsername}
       opponent={quiz?.opponentUsername} outcome={arenaOutcome}
       winnerSide={arenaPhase==="completed"&&result?.outcome==="win"&&quiz?
         ((result.winnerId===quiz.playerUserId)===quiz.isCreator?"creator":"opponent"):
         null}/>
+    <section className="ios-quiz-hero ios-quiz-hero--compact"
+      data-testid="ios-duel-hud" aria-label="Duel controls and match status">
+      <div className="ios-quiz-hero__top">
+        <span className="ios-overline">1V1 · VERIFIED QUIZ</span>
+        <span className="ios-quiz-hero__phase">{arenaPhase.toUpperCase()}</span>
+      </div>
+      <h1>{quiz?.status==="open"?"Invite your challenger":
+        quiz?.status==="live"?quiz.ownSubmitted?"Answers locked in":"Your turn to play":
+        quiz?.status==="completed"?"Your match receipt is ready":
+        quiz?.status==="cancelled"?"Invitation closed":"Challenge a friend to a Quiz"}</h1>
+      <p>{quiz?.status==="live"?"Both players receive the same three sealed questions. The server checks each answer.":
+        quiz?.status==="completed"?"The server has finalized the score. Review the sealed result below.":
+        quiz?.status==="cancelled"?"No credits were reserved or transferred.":
+        "Speak, invite, then answer three sealed questions. A server receipt confirms the outcome."}</p>
+      <strong>Free challenge · 0 credits at stake</strong>
+    </section>
     {status==="loading"?<p role="status">Checking account…</p>:
       status!=="authenticated"?<AuthInvitation
         title="Sign in to play a real Quiz"

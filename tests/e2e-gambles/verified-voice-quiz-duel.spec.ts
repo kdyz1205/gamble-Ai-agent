@@ -1,5 +1,6 @@
 import "dotenv/config";
 import {randomUUID} from "node:crypto";
+import {mkdirSync} from "node:fs";
 import {Pool} from "pg";
 import {expect,test,type BrowserContext} from "@playwright/test";
 import {revealQuizAnswers,answerCommitment}
@@ -135,6 +136,17 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await a.reload();
     await expect(a.locator(".ios-quiz-question")).toHaveCount(3,{timeout:15_000});
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","live");
+    await a.getByTestId("toggle-pico-3d").click();
+    const live3D=a.getByTestId("pico-3d-canvas");
+    await expect(live3D).toHaveAttribute("data-vfx-phase","live",{timeout:20_000});
+    await expect(live3D).toHaveAttribute("data-vfx-winner","none");
+    await expect(live3D).toHaveAttribute("data-vfx-meshes",/^[1-9][0-9]*$/);
+    mkdirSync("output/ios-full-app",{recursive:true});
+    await a.emulateMedia({reducedMotion:"no-preference"});
+    await expect(live3D).toHaveAttribute("data-animating","true");
+    await a.screenshot({path:"output/ios-full-app/pico-live-mutual-charge-3d.png",
+      fullPage:true});
+    await a.emulateMedia({reducedMotion:"reduce"});
     const aView=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     const bView=(await (await friendCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     expect(aView.status).toBe("live");
@@ -173,6 +185,15 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","completed");
     await expect(a.getByTestId("ios-quiz-arena")).toContainText("Verified victory");
     await expect(a.getByTestId("ios-quiz-arena").getByText("WINNER",{exact:true})).toBeVisible();
+    await a.getByTestId("toggle-pico-3d").click();
+    const verified3D=a.getByTestId("pico-3d-canvas");
+    await expect(verified3D).toHaveAttribute("data-vfx-phase","completed",{timeout:20_000});
+    await expect(verified3D).toHaveAttribute("data-vfx-winner","creator");
+    await a.emulateMedia({reducedMotion:"no-preference"});
+    await expect(verified3D).toHaveAttribute("data-animating","true");
+    await a.screenshot({path:"output/ios-full-app/pico-server-verified-winner-3d.png",
+      fullPage:true});
+    await a.emulateMedia({reducedMotion:"reduce"});
     await a.screenshot({path:testInfo.outputPath("verified-quiz-result.png"),fullPage:true});
 
     const final=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
@@ -258,7 +279,7 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
 });
 
 
-test("cinematic particle canvas pauses when offscreen or motion is reduced",async({browser})=>{
+test("cinematic game-first HUD pauses offscreen and honors motion settings",async({browser},testInfo)=>{
   const context=await browser.newContext({
     viewport:{width:390,height:360},reducedMotion:"no-preference",
   });
@@ -266,13 +287,25 @@ test("cinematic particle canvas pauses when offscreen or motion is reduced",asyn
     const page=await context.newPage();
     await page.goto(BASE+"/app/quiz");
     const arena=page.getByTestId("ios-quiz-arena");
+    const hud=page.getByTestId("ios-duel-hud");
     await expect(arena).toBeVisible({timeout:30_000});
     await expect(page.getByTestId("ios-quiz-arena-vfx")).toHaveCount(1);
-    // The scene begins below this short mobile viewport.
+    await expect(hud).toContainText("Free challenge · 0 credits at stake");
+    const order=await page.evaluate(()=>{
+      const stage=document.querySelector('[data-testid="ios-quiz-arena"]');
+      const controls=document.querySelector('[data-testid="ios-duel-hud"]');
+      return !!stage&&!!controls&&Boolean(
+        stage.compareDocumentPosition(controls)&Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(order).toBe(true);
+    // The arena leads the mobile viewport, with the controls below it.
+    await expect(arena).toHaveAttribute("data-vfx","canvas",{timeout:15_000});
+    await expect(arena).toHaveAttribute("data-vfx-quality",/^(balanced|adaptive)$/);
+    await page.screenshot({path:testInfo.outputPath("game-first-duel-mobile.png"),fullPage:true});
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
     await expect(arena).toHaveAttribute("data-vfx","static",{timeout:15_000});
     await arena.scrollIntoViewIfNeeded();
     await expect(arena).toHaveAttribute("data-vfx","canvas",{timeout:15_000});
-    await expect(arena).toHaveAttribute("data-vfx-quality",/^(balanced|adaptive)$/);
 
     await page.emulateMedia({reducedMotion:"reduce"});
     await expect(arena).toHaveAttribute("data-vfx","static");
@@ -288,9 +321,86 @@ test("cinematic particle canvas pauses when offscreen or motion is reduced",asyn
       window.dispatchEvent(new Event("sum-ios-preferences-changed"));
     });
     await expect(arena).toHaveAttribute("data-vfx","canvas");
-    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
     await expect(arena).toHaveAttribute("data-vfx","static");
   }finally{
     await context.close();
+  }
+});
+
+
+test("optional true Pico 3D meshes render and obey motion controls",async({browser},testInfo)=>{
+  const ctx=await browser.newContext({
+    viewport:{width:390,height:844},
+    reducedMotion:"no-preference",
+  });
+  try{
+    const page=await ctx.newPage();
+    await page.goto(BASE+"/app/quiz");
+    const arena=page.getByTestId("ios-quiz-arena");
+    const mode=page.getByTestId("toggle-pico-3d");
+    await expect(arena).toBeVisible();
+    await expect(mode).toHaveAttribute("aria-pressed","false");
+    const webgl=await page.evaluate(()=>{
+      try{
+        const testCanvas=document.createElement("canvas");
+        const ctx=testCanvas.getContext("webgl2")||testCanvas.getContext("webgl");
+        return Boolean(ctx);
+      }catch{return false;}
+    });
+    await mode.click();
+    const mesh=page.getByTestId("pico-3d-canvas");
+    if(!webgl){
+      await expect(mode).toHaveAttribute("aria-pressed","false",{timeout:20_000});
+      await expect(arena.locator(".ios-quiz-arena__fallback")).toBeVisible();
+      await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+      return;
+    }
+    await expect(mesh).toHaveAttribute("data-meshes",/^\d+$/,{timeout:30_000});
+    const meshes=Number(await mesh.getAttribute("data-meshes"));
+    const triangles=Number(await mesh.getAttribute("data-triangles"));
+    expect(meshes).toBeGreaterThan(70);
+    expect(triangles).toBeGreaterThan(50_000);
+    await expect(mode).toHaveAttribute("aria-pressed","true");
+    await expect(arena).toHaveClass(/ios-quiz-arena--3d/);
+    await expect(arena.locator(".ios-quiz-arena__prototype-note")).toBeVisible();
+    await page.screenshot({path:testInfo.outputPath("actual-pico-3d-meshes-390.png"),fullPage:true});
+    await page.emulateMedia({reducedMotion:"reduce"});
+    await expect(mesh).toHaveAttribute("data-animating","false");
+    await page.emulateMedia({reducedMotion:"no-preference"});
+    await expect(mesh).toHaveAttribute("data-animating","true");
+    await mode.click();
+    await expect(mode).toHaveAttribute("aria-pressed","false");
+    await expect(mesh).toHaveCount(0);
+    await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+    // 2D and 3D are visual options; both keep the same zero-credit Quiz server.
+    await expect(arena).toHaveAttribute("data-phase","preview");
+  }finally{
+    await ctx.close();
+  }
+});
+
+test("Pico 3D mode safely falls back when WebGL is disabled",async({browser})=>{
+  const ctx=await browser.newContext({viewport:{width:390,height:844}});
+  try{
+    const page=await ctx.newPage();
+    await page.addInitScript(()=>{
+      const original=HTMLCanvasElement.prototype.getContext;
+      Object.defineProperty(HTMLCanvasElement.prototype,"getContext",{configurable:true,
+        value:function(this:HTMLCanvasElement,type:string,...args:unknown[]){
+        if(type==="webgl"||type==="webgl2"||type==="experimental-webgl")return null;
+        return Reflect.apply(original,this,[type,...args]);
+      }});
+    });
+    await page.goto(BASE+"/app/quiz");
+    const arena=page.getByTestId("ios-quiz-arena");
+    const toggle=page.getByTestId("toggle-pico-3d");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed","false",{timeout:20_000});
+    await expect(arena.locator(".ios-quiz-arena__fallback")).toBeVisible();
+    await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+    await expect(arena).toHaveAttribute("data-phase","preview");
+  }finally{
+    await ctx.close();
   }
 });
