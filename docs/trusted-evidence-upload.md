@@ -89,9 +89,15 @@ private-upload migration has not yet run.
   are required before higher-traffic release.
 - File type sniffing does not replace strict codec/decoder validation,
   visual integrity review or maximum-video-duration enforcement.
-- No real video victory, credit settlement or paid-provider acceptance test
-  is implied by a successful MinIO smoke test. Live system/provider and
-  mobile device verification must be separately conducted.
+- Local controlled-provider CI has verified the winner-recommendation,
+  two-player consent and zero-stake settlement path. This **does not validate
+  live model accuracy**. A separate one-off synthetic badminton test uses
+  `tsx scripts/test-scored-match-judge.ts --live`; it now refuses to run
+  without an accessible isolated `summoner_verification` PostgreSQL database
+  and `AI_REQUEST_CALL_LIMIT=2`. Do not bypass the AI usage reservation
+  audit or use production database credentials for a provider experiment.
+- Live system/provider accuracy, real phone capture and outdoor game footage
+  still require explicit device/provider testing before payout or XP issuance.
 - Automatic profession XP, free-ticket issuance, owned Familiar draw and
   evolution **remain disabled**, subject to anti-farming/collusion and
   reversal/dispute policy reviews.
