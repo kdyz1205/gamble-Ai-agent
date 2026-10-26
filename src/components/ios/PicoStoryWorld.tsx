@@ -182,8 +182,8 @@ export default function PicoStoryWorld({phase,onReady,onUnavailable}:Props){
     function applyFrame(time:number,animate:boolean){
       const current=phaseRef.current;
       const actual=Math.max(0,time-startedAt.current);
-      const snapshot=!animate&&(current==="summoning"?SUMMON_MS:
-        current==="casting"?CAST_MS:0);
+      const snapshot=current==="summoning"?SUMMON_MS:
+        current==="casting"?CAST_MS:0;
       const sample=samplePicoStory(current,animate?actual:snapshot,!animate);
       const seconds=time/1000;
       pico.animate(animate?seconds:0,false);
@@ -193,10 +193,10 @@ export default function PicoStoryWorld({phase,onReady,onUnavailable}:Props){
       if(current==="casting"){
         const gather=sample.cue==="gather",released=sample.cue==="release"||
           sample.cue==="impact";
-        pico.arms[0].rotation.z+=(gather?-.25:released?.4:0);
-        pico.arms[1].rotation.z+=(gather?.25:released?-.4:0);
-        pico.ears[0].rotation.z+=(released?.08:0);
-        pico.ears[1].rotation.z+=(released?-.08:0);
+        pico.arms[0].rotation.z+=(gather ? -.25 : released ? .4 : 0);
+        pico.arms[1].rotation.z+=(gather ? .25 : released ? -.4 : 0);
+        pico.ears[0].rotation.z+=(released ? .08 : 0);
+        pico.ears[1].rotation.z+=(released ? -.08 : 0);
       }
       camera.position.z=sample.cameraZ;
       camera.position.x=animate&&sample.cue==="impact"?
