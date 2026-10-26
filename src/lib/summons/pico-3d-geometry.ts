@@ -27,7 +27,8 @@ export type PicoCharacter={
   arms:[THREE.Group,THREE.Group];
   eyes:[THREE.Group,THREE.Group];
   /* Time in seconds. Cosmetic animation only. */
-  animate:(seconds:number,active:boolean,phaseOffset?:number)=>void;
+  animate:(seconds:number,active:boolean,phaseOffset?:number,
+    celebrating?:boolean)=>void;
 };
 
 export function createPicoMeshResources():PicoMeshResources{
@@ -168,15 +169,19 @@ export function createPicoCharacter(res:PicoMeshResources):PicoCharacter{
   root.userData.artState="original-procedural-3d-prototype";
   root.userData.isRigged=false;
 
-  const animate=(seconds:number,active:boolean,phaseOffset=0)=>{
+  const animate=(seconds:number,active:boolean,phaseOffset=0,
+    celebrating=false)=>{
     const t=seconds+phaseOffset;
     const pace=active?1.7:1;
-    root.position.y=Math.sin(t*1.8*pace)*.055;
-    head.rotation.z=Math.sin(t*.94*pace)*.026;
+    root.position.y=Math.sin(t*1.8*pace)*.055+
+      (celebrating?Math.max(0,Math.sin(t*3.6))*.075:0);
+    head.rotation.z=Math.sin(t*.94*pace)*.026+(celebrating ? .055 : 0);
     ears[0].rotation.z=.30+Math.sin(t*2.1)*.06;
     ears[1].rotation.z=-.30-Math.sin(t*2.1+1.2)*.06;
-    arms[0].rotation.z=-.16+Math.sin(t*2.5*pace)*.16;
-    arms[1].rotation.z=.16-Math.sin(t*2.5*pace+1)*.16;
+    arms[0].rotation.z=-.16+Math.sin(t*2.5*pace)*.16+
+      (celebrating?-.24-.11*Math.sin(t*5.1):0);
+    arms[1].rotation.z=.16-Math.sin(t*2.5*pace+1)*.16+
+      (celebrating ? .24+.11*Math.sin(t*5.1+1.2) : 0);
     tail.rotation.y=Math.sin(t*2)*.12;
     const blink=(t%5.7+5.7)%5.7;
     const lid=(blink>5.30&&blink<5.49)?Math.max(.1,Math.abs(blink-5.395)/.095):1;

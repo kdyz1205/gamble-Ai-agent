@@ -35,6 +35,13 @@ test("real mesh Pico is opt-in, animated and safely returns to artwork",
     expect(metrics.height).toBeGreaterThan(100);
     expect(metrics.width*metrics.height).toBeLessThanOrEqual(800_000);
     expect(metrics.animating).toBe("true");
+    await expect(canvas).toHaveAttribute("data-vfx-phase","preview");
+    await expect(canvas).toHaveAttribute("data-vfx-winner","none");
+    const effectCount=Number(await canvas.getAttribute("data-vfx-meshes"));
+    const effectTriangles=Number(await canvas.getAttribute("data-vfx-triangles"));
+    expect(effectCount).toBeGreaterThanOrEqual(7);
+    expect(effectCount).toBeLessThanOrEqual(12);
+    expect(effectTriangles).toBeLessThan(3000);
 
     mkdirSync("output/ios-full-app",{recursive:true});
     await page.screenshot({
