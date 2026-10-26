@@ -10,6 +10,7 @@ import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,visuals} from "./IOSAppUI";
 import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import IOSQuestJudgment from "./IOSQuestJudgment";
+import IOSQuestXpStatus from "./IOSQuestXpStatus";
 import EvidenceUploader from "@/components/EvidenceUploader";
 
 export function CreateScreen({seed}: {seed?:string}) {
@@ -203,7 +204,9 @@ export function QuestCompleteScreen({id}:{id?:string}) {
             <p>{quest.judgments[0].reasoning||translated(language,"The result was recorded without a public explanation.","结果已记录，但没有公开说明。")}</p>
           </> : <p><SumText en="No detailed judgment was returned with this record." zh="该记录没有返回详细判定信息。"/></p>}
         </section>
+        <IOSQuestXpStatus challengeId={quest.id}/>
         <IosAction href={"/app/quest?id="+encodeURIComponent(quest.id)}><SumText en="View result receipt" zh="查看结果记录"/></IosAction>
+        <IosAction href="/app/picos" secondary><SumText en="Check Familiars & tickets" zh="查看召唤兽与召唤券"/></IosAction>
         <IosAction href="/app/create" secondary><SumText en="Create another Quest" zh="再创建一个 Quest"/></IosAction>
       </>}
   </IosFrame>;

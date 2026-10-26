@@ -43,6 +43,10 @@ jobs:
 
       - run: npm run lint
 
+      - run: npm run test:trusted-evidence:smoke
+
+      - run: npx tsx scripts/test-preview-migration-compat.ts
+
       - run: npx tsc --noEmit
 
       - run: node scripts/test-ios-clean-art.cjs
@@ -58,6 +62,9 @@ jobs:
       - run: npx next build
 
       - run: npx playwright install --with-deps chromium
+
+      - name: Verify mobile free-ticket draw confirmation and safe retry
+        run: node scripts/qa-free-summon-draw-mobile.cjs
 
       - name: Verify real browser creation and cancellation against production build
         env:
@@ -84,3 +91,87 @@ jobs:
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
           if-no-files-found: ignore
+
+  trusted-storage:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: summoner_verification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 4s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/summoner_verification?schema=public
+      NEXTAUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      TEST_BASE_URL: http://127.0.0.1:3000
+      ENABLE_TRUSTED_EVIDENCE_UPLOADS: "true"
+      TRUSTED_EVIDENCE_REQUIRED_FOR_MEDIA: "true"
+      AI_ENABLED: "false"
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      S3_TRUSTED_EVIDENCE_BUCKET: ci-private-evidence
+      S3_EVIDENCE_BUCKET: legacy-public-evidence
+      S3_TRUSTED_EVIDENCE_ENDPOINT: http://127.0.0.1:9000
+      S3_TRUSTED_EVIDENCE_FORCE_PATH_STYLE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - name: Start ephemeral S3-compatible bucket
+        run: |
+          docker run -d --rm --name trusted-storage-ci -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            pgsty/silo:RELEASE.2026-10-18T00-00-00Z server /data
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs trusted-storage-ci
+          exit 1
+      - name: Signed private upload and server-side digest
+        run: npx tsx scripts/e2e-trusted-evidence-storage.ts
+
+      - name: Install disposable PostgreSQL schema
+        run: npx prisma migrate deploy
+
+      - name: Install Chromium for authenticated mobile Web App draw
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise private MP4 submission from two authenticated accounts
+        run: |
+          node -e 'const f=require("ffmpeg-static");if(!f || !require("fs").existsSync(f)) process.exit(1)'
+          npm run build > /tmp/summoner-trusted-build.log 2>&1 || {
+            tail -n 120 /tmp/summoner-trusted-build.log
+            exit 1
+          }
+          # Test-only server process: disposable PostgreSQL fixture is isolated;
+          # these flags never reach the Vercel preview or production.
+          SUMMON_PERSISTENCE_ENABLED=true SUMMON_XP_MANUAL_REVIEW_ENABLED=true SUMMON_TICKETS_ENABLED=true SUMMON_DRAWS_ENABLED=true npm run start > /tmp/summoner-trusted-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node -e 'let n=0;(async function ready(){try{const r=await fetch("http://127.0.0.1:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=90)process.exit(1);setTimeout(ready,1000)})()'
+          npx tsx scripts/e2e-trusted-evidence-journey.ts || {
+            tail -n 120 /tmp/summoner-trusted-server.log
+            exit 1
+          }
+          # In-process local vision HTTP mock: real S3 MP4s and decoder frames,
+          # but zero paid AI provider calls and no reward issuance.
+          npx tsx scripts/e2e-private-video-referee-consent.ts || {
+            tail -n 120 /tmp/summoner-trusted-server.log
+            exit 1
+          }

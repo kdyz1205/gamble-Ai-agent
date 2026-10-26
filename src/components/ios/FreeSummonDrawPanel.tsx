@@ -1,6 +1,6 @@
 "use client";
 
-import {useState} from "react";
+import {useRef,useState} from "react";
 import {PROFESSIONS,RARITY_ODDS} from "@/lib/summons/profession-system";
 import type {AccountFreeTicketSummary} from "@/lib/summons/ticket-read-contract";
 
@@ -23,6 +23,9 @@ export default function FreeSummonDrawPanel({
   const [occupation,setOccupation]=useState("");
   const [confirm,setConfirm]=useState(false);
   const [busy,setBusy]=useState(false);
+  // Synchronous lock: two taps in one JavaScript task can run before React
+  // commits disabled={busy}. Never produce two distinct spendable keys.
+  const drawInFlight=useRef(false);
   const [request,setRequest]=useState<RequestDetails|null>(null);
   const [error,setError]=useState("");
   const [result,setResult]=useState<DrawResponse|null>(null);
@@ -34,11 +37,12 @@ export default function FreeSummonDrawPanel({
     profession?.specialties[0]?.id??"";
 
   const commit=async()=>{
-    if(!chosen||!specialization||busy||!confirm)return;
+    if(drawInFlight.current||!chosen||!specialization||busy||!confirm)return;
     const stable=request??{
       professionId:chosen,occupationId:specialization,
       requestKey:crypto.randomUUID(),
     };
+    drawInFlight.current=true;
     setRequest(stable);setBusy(true);setError("");
     try{
       const response=await fetch("/api/summons/free-draw",{
@@ -59,7 +63,7 @@ export default function FreeSummonDrawPanel({
       // Uncertain network responses keep the SAME request key on retry.
       // We must never silently submit a second, spendable draw after a timeout.
       setError(err instanceof Error?err.message:"Summon receipt could not be verified");
-    }finally{setBusy(false);}
+    }finally{drawInFlight.current=false;setBusy(false);}
   };
 
   if(!tickets||!enabled)

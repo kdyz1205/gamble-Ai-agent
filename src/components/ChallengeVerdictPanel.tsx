@@ -157,7 +157,7 @@ export default function ChallengeVerdictPanel({
   const bothHaveProofRows = hasAcceptedOpponent && players.every(p => evidenceByUser.has(p.user.id));
   const bothHaveValidProof = bothHaveProofRows && players.every(p => {
     const proof = evidenceByUser.get(p.user.id);
-    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && !!proof.url?.trim();
+    if (challenge.evidenceType === "video" || challenge.evidenceType === "photo") return proof.type === challenge.evidenceType && (!!proof.url?.trim() || !!proof.trustedUploadId);
     return !!proof.description?.trim();
   });
   const readyForReview = !proofRestricted && hasAcceptedOpponent && (bothHaveValidProof || deadlineExpired)

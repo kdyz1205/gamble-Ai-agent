@@ -1,5 +1,9 @@
 import { mediaTimeBudget } from "./media-budget";
-import { stageEvidenceVideo } from "./local-evidence-video";
+import { stageEvidenceVideo, type VideoEvidenceSource } from "./local-evidence-video";
+import {
+  stageTrustedEvidenceObject,
+  type TrustedEvidenceSource,
+} from "./trusted-evidence-storage";
 /**
  * Turn evidence URLs into JPEG tiles the vision models can actually see.
  * Video: duration-based frame budget via ffmpeg; image: fetch + sharp normalize.
@@ -76,10 +80,25 @@ function sniffIsMp4(buf: Buffer): boolean {
   return buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70;
 }
 
+/** Never copy private S3 bearer capabilities into model-facing extraction notes. */
+export function redactVideoTransportError(error: unknown, privateMedia: boolean): string {
+  if (privateMedia) return "Server-verified private media was not readable.";
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function mediaSourceNote(
+  url: string | null | undefined,
+  privateMedia: boolean,
+): string | null {
+  if (privateMedia) return "source=server-verified private object";
+  return url?.trim() ? `url=${url}` : null;
+}
+
 async function runVideoPipeline(
   participantLabel: string,
-  url: string,
+  source: VideoEvidenceSource,
   preambleLines: string[],
+  privateMedia = false,
 ): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
   const visuals: JudgeVisionImage[] = [];
   if (!ffmpegAvailable()) {
@@ -94,7 +113,7 @@ async function runVideoPipeline(
   const tmp = await mkdtemp(join(tmpdir(), "evidence-vid-"));
   try {
     const remaining = mediaTimeBudget(150_000);
-    const { path: localVideo, duration, plan } = await stageEvidenceVideo(url, tmp, remaining);
+    const { path: localVideo, duration, plan } = await stageEvidenceVideo(source, tmp, remaining);
     preambleLines.push(`  Video: ${plan.label}; bounded download, local decoding.`);
     let paths: string[];
     let extractionLabel: string;
@@ -124,7 +143,7 @@ async function runVideoPipeline(
       if (img) visuals.push(img);
     }
   } catch (e) {
-    preambleLines.push(`  → Video frame extraction failed: ${e instanceof Error ? e.message : String(e)}`);
+    preambleLines.push(`  → Video frame extraction failed: ${redactVideoTransportError(e, privateMedia)}`);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -134,7 +153,10 @@ async function runVideoPipeline(
 
 export async function prepareParticipantVisuals(
   participantLabel: string,
-  evidence: EvidencePayload | null,
+  evidence: (EvidencePayload & {
+    privateMedia?: boolean;
+    trustedSource?: TrustedEvidenceSource;
+  }) | null,
 ): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
   const preambleLines: string[] = [];
   const visuals: JudgeVisionImage[] = [];
@@ -147,9 +169,43 @@ export async function prepareParticipantVisuals(
   const meta = [
     `type=${evidence.type}`,
     evidence.description ? `description=${evidence.description}` : null,
-    evidence.url ? `url=${evidence.url}` : null,
+    mediaSourceNote(evidence.url, evidence.privateMedia === true),
   ].filter(Boolean);
   preambleLines.push(`${participantLabel}: ${meta.join(" | ")}`);
+
+  // Trusted proof is decoded directly from the bucket via authenticated SDK.
+  // Never fetch a signed GET URL or allow it to appear in prompt diagnostics.
+  if (evidence.privateMedia) {
+    const source = evidence.trustedSource;
+    if (!source) {
+      preambleLines.push("Private media source is missing; review is required.");
+      return { preambleLines, visuals };
+    }
+    try {
+      if (evidence.type === "video") {
+        return await runVideoPipeline(participantLabel, source, preambleLines, true);
+      }
+      if (evidence.type === "photo") {
+        const directory = await mkdtemp(join(tmpdir(), "private-photo-"));
+        try {
+          const name = join(directory, "source-image");
+          await stageTrustedEvidenceObject(source, name);
+          const buffer = await readFile(name);
+          const img = await bufferToVisionImage(
+            buffer, participantLabel + " - authenticated private photo",
+          );
+          if (img) visuals.push(img);
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+        return { preambleLines, visuals };
+      }
+    } catch {
+      preambleLines.push("Private media could not be read; review is required.");
+      return { preambleLines, visuals };
+    }
+    return { preambleLines, visuals };
+  }
 
   const url = evidence.url?.trim();
   if (!url) return { preambleLines, visuals };
@@ -176,7 +232,7 @@ export async function prepareParticipantVisuals(
     }
 
     if (isVideoType(evidence) || looksLikeVideoMime(null, url)) {
-      return await runVideoPipeline(participantLabel, url, preambleLines);
+      return await runVideoPipeline(participantLabel, url, preambleLines, false);
     }
 
     // Ambiguous (e.g. text evidence with attachment URL): sniff body
@@ -189,13 +245,13 @@ export async function prepareParticipantVisuals(
     }
 
     if (looksLikeVideoMime(contentType, url) || sniffIsMp4(buffer)) {
-      return await runVideoPipeline(participantLabel, url, preambleLines);
+      return await runVideoPipeline(participantLabel, url, preambleLines, false);
     }
 
     preambleLines.push(`  → URL is not a recognized image/video stream for auto vision.`);
     return { preambleLines, visuals };
   } catch (e) {
-    preambleLines.push(`  → Media fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+    preambleLines.push(`  → Media fetch failed: ${redactVideoTransportError(e, false)}`);
     return { preambleLines, visuals };
   }
 }
