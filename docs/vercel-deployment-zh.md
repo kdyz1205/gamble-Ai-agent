@@ -10,9 +10,9 @@
 
 ### 本地 CLI 项目与 GitHub 自动部署目标必须一致
 
-2026-10-25 的核验发现：GitHub 的成功 Vercel 检查指向项目 **`stubborn`**，但部分 Windows 工作区的本地 `.vercel/project.json` 绑定项目名是 **`gamble-ai-agent`**。两者不能混用；错误绑定会将 `vercel deploy` 发往其他项目，使 Dashboard 看起来不断失败或看不到刚完成的部署。
+2026-10-25 的核验发现：GitHub 的成功 Vercel 检查指向项目 **`stubborn`**，但部分 Windows 工作区的本地 `.vercel/project.json` 仍显示 **`gamble-ai-agent`**。这可能是**同一个项目改名后的旧名称**，也可能是两个不同项目；因为未取得 Vercel 当前项目 ID 的权威验证，不能仅凭名称认定是哪一种。部署前需要核对 Dashboard 中的实际 `projectId` 和团队，否则 CLI 可能部署到预期之外的目标。
 
-部署前先运行 `npm run vercel:preflight`。如果显示 `VERCEL_PROJECT_MISMATCH`，停止部署；打开 Vercel 对应团队的项目设置，确认目标项目及账号权限，再通过官方 `vercel link --project stubborn --scope kdyz1205s-projects` 重新授权/连接，**不要手改 projectId**。重新运行检查通过后，才能手动部署。此检查只读，不会调用网络或修改账号。
+部署前先运行 `npm run vercel:preflight`。如果显示 `VERCEL_PROJECT_MISMATCH`，停止部署并打开 Vercel 对应团队的项目设置，确认**实际项目 ID 与账号权限**。若只是重命名造成旧名称，可用官方 `vercel link --project stubborn --scope kdyz1205s-projects` 刷新连接；若两个 ID 不同，应先确认你真正要部署的项目再连接，**不要直接手改 projectId 或默认覆盖线上项目**。重新运行检查通过后，才能手动部署。此检查只读，不会调用网络或修改账号。
 
 本地 `.vercel/project.json` 被 Git 忽略，不会随 GitHub PR 同步，因此本地 CLI 绑定不等于线上 GitHub 自动部署绑定。预览显示 Ready 也不意味着生产发布或数据库迁移已完成。
 

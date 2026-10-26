@@ -23,9 +23,11 @@ function verifyVercelTarget(root,expected=ACTIVE_GITHUB_VERCEL_PROJECT){
      !/^team_[a-zA-Z0-9]+$/.test(link.orgId||""))
     throw Error("VERCEL_LINK_INVALID: missing verifiable project/team identity");
   if(link.projectName!==expected)
-    throw Error("VERCEL_PROJECT_MISMATCH: local CLI is linked to '"+link.projectName+
-      "', but GitHub deploys this repository to '"+expected+
-      "'. Stop; relink the correct team/project with official 'vercel link' and rerun preflight.");
+    throw Error("VERCEL_PROJECT_MISMATCH: local CLI project name is '"+link.projectName+
+      "', but GitHub auto-deploys under '"+expected+
+      "'. This might be a stale name after a rename OR a different project. "+
+      "Stop and verify the real projectId/team in Vercel Dashboard before relinking; "+
+      "never hand-edit local projectId.");
   return {verified:true,project:link.projectName};
 }
 if(require.main===module){
