@@ -285,6 +285,23 @@ async function main() {
     assert.equal(audit.ticketsGranted, 0);
     assert.equal(audit.ownedSummonsGranted, 0);
 
+    // Even a settled record must never enter an XP review queue while an
+    // appeal/review is open. Simulate a recovery boundary without awarding.
+    await prisma.reviewCase.create({ data: {
+      challengeId: quest.id,
+      requestedByUserId: opponent.id,
+      originalJudgmentId: verdict.judgment.id,
+      reason: "CI pending appeal should block all progression",
+      status: "pending",
+      expiresAt: new Date(Date.now() + 3600_000),
+    } });
+    const pendingAudit = await assessTrustedQuestXpForManualReview({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(pendingAudit.admittedForManualReview, false);
+    assert.ok(pendingAudit.blockers.includes("unresolved_review_case"));
+    await prisma.reviewCase.delete({ where: { challengeId: quest.id } });
+
     // An attacker cannot replay the same video into another Quest to farm
     // multiple profession receipts. Query the REAL private-upload database.
     const replayQuest = await prisma.challenge.create({ data: {
@@ -355,6 +372,7 @@ async function main() {
       xpAwards: 0,
       trustedXpAdmission: "review_candidate_only",
       replayedVideoBlockedFromXp: true,
+      pendingAppealBlockedFromXp: true,
       ownedSummons: 0,
       modelAccuracyClaim: false,
     }));

@@ -39,6 +39,7 @@ const claim: TrustedXpClaim = {
   judgmentId: "judge-receipt-A",
   confidence: 0.96,
   reviewResolved: false,
+  reviewPending: false,
   acceptedVerdictUserIds: ["creator-A", "opponent-B"],
   pastSamePairXpAwards: 0,
   reusedMediaHashesInOtherQuests: 0,
@@ -63,6 +64,7 @@ function main() {
   blocked("no final receipt", { judgmentId: null }, "missing_final_winner_receipt");
   blocked("unverified winner", { winningUserId: "outsider" }, "missing_final_winner_receipt");
   blocked("low confidence", { confidence: 0.62 }, "low_confidence_without_resolved_review");
+  blocked("unresolved appeal", { reviewPending: true }, "unresolved_review_case");
   blocked("missing consent", { acceptedVerdictUserIds: ["creator-A"] }, "missing_two_player_consent");
   blocked("duplicate acceptance", { acceptedVerdictUserIds: ["creator-A", "creator-A"] }, "missing_two_player_consent");
   blocked("wrong participant", { players: [{ userId: "creator-A", role: "creator", status: "accepted" }] },
@@ -94,6 +96,6 @@ function main() {
     acceptedVerdictUserIds: [] };
   assert.equal(evaluateTrustedXpAdmission(humanResolved).admittedForManualReview, true,
     "A verified, resolved manual review may replace high AI confidence and double consent");
-  console.log("PASS trusted Quest XP admission: 19 anti-replay, provenance, consent, membership and abuse cases");
+  console.log("PASS trusted Quest XP admission: provenance, pending appeal, anti-replay, consent, membership and abuse cases");
 }
 main();

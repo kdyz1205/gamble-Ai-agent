@@ -141,6 +141,7 @@ export async function assessTrustedQuestXpForManualReview(input: {
       judgmentId: validWinner ? receipt.id : null,
       confidence: receipt?.confidence ?? null,
       reviewResolved: Boolean(reviewResolved),
+      reviewPending: Boolean(review && !reviewResolved),
       acceptedVerdictUserIds: quest.verdictResponses
         .filter(row => row.decision === "accepted").map(row => row.userId),
       pastSamePairXpAwards: historicPairCount,

@@ -48,6 +48,7 @@ export type TrustedXpClaim = {
   confidence: number | null;
   // A resolved manual review is an alternate trusted source of finality.
   reviewResolved: boolean;
+  reviewPending: boolean;
   acceptedVerdictUserIds: readonly string[];
   pastSamePairXpAwards: number;
   reusedMediaHashesInOtherQuests: number;
@@ -79,6 +80,7 @@ export function evaluateTrustedXpAdmission(c: TrustedXpClaim): TrustedXpAdmissio
   if (!c.winningUserId || !ids.has(c.winningUserId) || !c.judgmentId) {
     blockers.push("missing_final_winner_receipt");
   }
+  if (c.reviewPending) blockers.push("unresolved_review_case");
   if (!c.reviewResolved &&
       (!Number.isFinite(c.confidence) || (c.confidence ?? 0) < 0.9)) {
     blockers.push("low_confidence_without_resolved_review");
