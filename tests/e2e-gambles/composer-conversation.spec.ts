@@ -26,7 +26,7 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     await page.getByRole("button", { name: "Summon", exact: true }).click();
     expect((await beforeLogin).status()).toBe(401);
     const portal = page.locator(".auth-portal");
-    await expect(portal.getByText("Join Summoner.world", { exact: true })).toBeVisible();
+    await expect(portal.getByText("Join Summoners World", { exact: true })).toBeVisible();
     await portal.getByPlaceholder("you@email.com").fill(`qa_conversation_${run}@example.invalid`);
     await portal.getByPlaceholder("What should we call you?").fill(`qa_ui_${run}`);
     await portal.getByPlaceholder("At least 6 characters").fill(randomUUID());

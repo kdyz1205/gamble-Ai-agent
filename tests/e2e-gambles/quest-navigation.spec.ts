@@ -20,7 +20,7 @@ test("primary navigation opens actual owned quests, proof and results with recov
     await expect(page.getByRole("heading", { name: "Sign in to see your quests" })).toBeVisible();
     expect(mineRequests).toBe(0);
     await page.getByRole("button", { name: "Sign in", exact: true }).press("Enter");
-    await expect(page.getByText("Join Summoner.world", { exact: true })).toBeVisible();
+    await expect(page.getByText("Join Summoners World", { exact: true })).toBeVisible();
   } finally { await anonymous.close(); }
 
   const context = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 390, height: 844 } });
