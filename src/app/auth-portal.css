@@ -1,0 +1,101 @@
+/* Auth is a scene in Summoners World, not a separate product theme. */
+.auth-portal {
+  isolation: isolate;
+  color: var(--sum-ink);
+  background:
+    radial-gradient(circle at 92% 7%, rgba(234, 216, 250, .42), transparent 39%),
+    radial-gradient(circle at 8% 94%, rgba(184, 231, 198, .48), transparent 37%),
+    linear-gradient(165deg, #fffefa, #fff9f6 58%, #f4faf7);
+  border: 1.5px solid rgba(110, 132, 111, .25);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+.auth-portal .sum-auth-close {
+  position: absolute;
+  z-index: 30;
+  top: -6px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 132, 111, .22);
+  background: rgba(255, 255, 255, .76);
+  color: var(--storybook-forest);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.auth-portal .sum-auth-close:hover { background: #f0f8f1; }
+.auth-portal :where(input, button):focus-visible {
+  outline: 3px solid #627cbf;
+  outline-offset: 3px;
+}
+.sum-auth-screen {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: max(28px, env(safe-area-inset-top)) 18px max(48px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(ellipse 58% 44% at 80% 11%, rgba(234, 216, 250, .55), transparent),
+    radial-gradient(ellipse 50% 48% at 4% 88%, rgba(184, 231, 198, .53), transparent),
+    linear-gradient(180deg, #fffaf7, #f4faf7 75%, #fff8f5);
+  color: var(--sum-ink);
+}
+.sum-auth-background-glow {
+  position: absolute;
+  z-index: -1;
+  width: min(65vw, 580px);
+  height: min(65vw, 580px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(246, 198, 201, .28), transparent 65%);
+  pointer-events: none;
+}
+.sum-auth-recovery {
+  width: min(100%, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px clamp(18px, 5vw, 48px) 30px;
+  border: 1px solid rgba(120, 155, 131, .27);
+  border-radius: 30px;
+  background: rgba(255, 253, 250, .9);
+  box-shadow: var(--storybook-shadow);
+  backdrop-filter: blur(14px);
+}
+.sum-auth-brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  align-self: flex-start;
+  color: var(--sum-ink);
+  text-decoration: none;
+  text-align: left;
+}
+.sum-auth-brand strong { display: block; font-size: 16px; font-weight: 800; letter-spacing: -.04em; }
+.sum-auth-brand small { display: block; font-size: 9px; color: var(--sum-muted); font-weight: 800; letter-spacing: .17em; }
+.sum-auth-recovery__pico { margin-top: 24px; filter: drop-shadow(0 14px 15px rgba(77, 113, 100, .12)); }
+.sum-auth-recovery__eyebrow { display: block; margin-top: 12px; font-size: 10px; letter-spacing: .2em; color: #507c67; font-weight: 800; }
+.sum-auth-recovery h1 { font-family: "Fraunces", Georgia, serif; margin: 12px 0 0; font-size: clamp(27px, 5vw, 38px); letter-spacing: -.045em; line-height: 1.15; }
+.sum-auth-recovery > p:not(.sum-auth-help) { margin: 14px 0 16px; font-size: 14px; line-height: 1.75; color: var(--sum-muted); }
+.sum-auth-primary-action, .sum-auth-secondary-action {
+  width: 100%; display: grid; place-items: center; text-align: center;
+  min-height: 48px; padding: 12px 18px; border-radius: 9999px;
+  font-size: 13px; font-weight: 800; text-decoration: none; cursor: pointer;
+}
+.sum-auth-primary-action { border: 1px solid #315e52; color: #fff; background: linear-gradient(120deg,#315e52,#467b65); box-shadow: 0 10px 24px rgba(49,94,82,.18); }
+.sum-auth-primary-action:hover { background: #274d43; }
+.sum-auth-secondary-action { margin-top: 8px; border: 1px solid rgba(110,132,111,.26); background: #fffdfa; color: #315e52; }
+.sum-auth-secondary-action:hover { background: #f0f7f1; }
+.sum-auth-help { margin: 16px 0 0; color: var(--sum-muted); font-size: 11px; line-height: 1.65; }
+@media (max-width: 430px) {
+  .sum-auth-recovery { padding: 23px 18px 25px; border-radius: 23px; }
+  .sum-auth-recovery__pico { margin-top: 8px; }
+  .auth-portal .sum-auth-close { top: -6px; right: -4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-portal *, .sum-auth-screen * { scroll-behavior: auto !important; }
+}

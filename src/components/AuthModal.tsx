@@ -11,23 +11,25 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
   onBeforeRedirect?: () => void;
+  initialMode?: "login" | "register";
+  returnTo?: string;
 }
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
-const NAVY = "#1E293B";
-const NAVY_DIM = "#64748B";
-const NAVY_FAINT = "#E2E8F0";
-const PEACH = "#FED7AA";        // orange-200 CTA
-const PEACH_HOVER = "#FDBA74";  // orange-300
-const PEACH_TEXT = "#7C2D12";   // orange-900
-const MINT = "#A7F3D0";
-const MINT_TEXT = "#065F46";
-const PINK = "#FFD1DC";
-const ROSE_BG = "#FECACA";
-const ROSE_TEXT = "#991B1B";
+// Shared Summoners World storybook palette — also used by /enter and /app.
+const NAVY = "var(--sum-ink)";
+const NAVY_DIM = "var(--sum-muted)";
+const NAVY_FAINT = "var(--sum-border)";
+const PEACH = "var(--storybook-forest)";
+const PEACH_HOVER = "#467b65";
+const PEACH_TEXT = "#FFFFFF";
+const MINT = "var(--sum-mint)";
+const MINT_TEXT = "var(--storybook-forest)";
+const PINK = "var(--storybook-blush)";
+const ROSE_BG = "#fff0ed";
+const ROSE_TEXT = "#94473E";
 
-export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }: Props) {
-  const [mode, setMode] = useState<"login" | "register">("register");
+export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, initialMode = "register", returnTo }: Props) {
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -43,8 +45,19 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
       setError("");
       setLoading(false);
       setSuccess(false);
+      setWebviewWarning(false);
+      setWebviewCopyNotice("");
+    } else {
+      setMode(initialMode);
     }
-  }, [open]);
+  }, [open, initialMode]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [open, onClose]);
 
   /**
    * Detect in-app webviews where Google blocks OAuth ("disallowed_useragent"
@@ -68,6 +81,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
   };
 
   const [webviewWarning, setWebviewWarning] = useState(false);
+  const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
 
   const handleGoogleLogin = () => {
     // Guard: in-app webview → Google will reject with "disallowed_useragent".
@@ -94,15 +108,19 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     }
     onBeforeRedirect?.();
-    signIn("google", { callbackUrl: `${window.location.pathname}${window.location.search}` }, { prompt: "select_account" });
+    const fromAuthPage = window.location.pathname.startsWith("/auth/");
+    const fallback = fromAuthPage ? "/app/today" : `${window.location.pathname}${window.location.search}`;
+    const callbackUrl = returnTo?.startsWith("/") && !returnTo.startsWith("//") && !returnTo.includes("\\")
+      ? returnTo : fallback;
+    signIn("google", { callbackUrl }, { prompt: "select_account" });
   };
 
   const copySiteLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      alert("Link copied. Open Safari or Chrome and paste it — Google sign-in works there.");
+      setWebviewCopyNotice("Link copied. Open it in Safari or Chrome.");
     } catch {
-      // no-op
+      setWebviewCopyNotice("Copy this URL and open it in Safari or Chrome.");
     }
   };
 
@@ -153,9 +171,9 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
         <>
           {/* Backdrop — soft sky blur, not dark tribunal */}
           <motion.div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[1000]"
             style={{
-              background: "rgba(15, 23, 42, 0.25)",
+              background: "rgba(39, 60, 56, 0.34)",
               backdropFilter: "blur(10px)",
               WebkitBackdropFilter: "blur(10px)",
             }}
@@ -166,22 +184,26 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
           />
 
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto p-3 py-5 sm:p-6"
+            onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="auth-portal relative w-full max-w-sm overflow-hidden"
+              className="auth-portal relative w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
               style={{
                 borderRadius: "28px",
-                boxShadow: "0 20px 60px rgba(15,23,42,0.12), 0 4px 14px 0 rgba(251,146,60,0.18)",
+                boxShadow: "0 25px 70px rgba(49,94,82,0.16), 0 4px 18px rgba(165,127,163,0.13)",
               }}
               initial={{ scale: 0.92, y: 24, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.92, y: 24, opacity: 0 }}
               transition={{ type: "spring", damping: 22, stiffness: 400 }}
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="summon-auth-title"
             >
               {/* Floating candy orbs in card bg */}
               <div
@@ -193,14 +215,15 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 style={{ background: PEACH, filter: "blur(26px)" }}
               />
 
-              <div className="relative p-7">
+              <div className="relative p-6 sm:p-7">
+                <button type="button" className="sum-auth-close" aria-label="Close sign-in" onClick={onClose}>×</button>
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
                     <motion.div
                       className="absolute inset-0 z-10 flex flex-col items-center justify-center"
                       style={{
-                        background: "rgba(255,255,255,0.92)",
+                        background: "rgba(255,253,250,0.96)",
                         backdropFilter: "blur(8px)",
                         borderRadius: "28px",
                       }}
@@ -212,7 +235,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                         className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
                         style={{
                           background: MINT,
-                          boxShadow: "0 4px 14px 0 rgba(110,231,183,0.40)",
+                          boxShadow: "0 8px 24px rgba(49,94,82,0.14)",
                         }}
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
@@ -252,13 +275,13 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join Summoner.world" : "Welcome back"}
+                      <h2 id="summon-auth-title" className="text-2xl font-bold" style={{ color: NAVY }}>
+                        {mode === "register" ? "Join Summoners World" : "Welcome back, Summoner"}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Let's summon your first quest"
-                          : "Good to see you again"}
+                          ? "Make your first quest a reality"
+                          : "Pick up your next quest"}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -278,8 +301,9 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                       onClick={copySiteLink}
                       className="px-3 py-1.5 text-[11px] font-black rounded-full active:scale-95 transition-transform"
                       style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}>
-                      📋 Copy link
+                      Copy link
                     </button>
+                    {webviewCopyNotice && <p className="mt-2 text-xs">{webviewCopyNotice}</p>}
                   </div>
                 )}
 
@@ -287,7 +311,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
-                  whileHover={{ scale: 1.02, background: "#F8FAFC" }}
+                  whileHover={{ scale: 1.02, background: "#F8FCF8" }}
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 400, damping: 22 }}
                   className="w-full flex items-center justify-center gap-3 py-3 text-sm font-semibold mb-4"
