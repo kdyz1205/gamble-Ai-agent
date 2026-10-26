@@ -15,7 +15,7 @@ export default function SignInPortal() {
     <main className="sum-auth-screen" data-testid="sum-auth-signin">
       <div className="sum-auth-background-glow" aria-hidden="true" />
       <div className="sum-auth-recovery">
-        <Link href="/enter" className="sum-auth-brand" aria-label="Summoners World home">
+        <Link href="/" className="sum-auth-brand" aria-label="Summoners World home">
           <PicoFamiliar className="h-11 w-11" mood="guide" />
           <span><strong>Summoner.world</strong><small>SUMMONERS WORLD</small></span>
         </Link>
@@ -24,13 +24,13 @@ export default function SignInPortal() {
         <h1>Welcome to your quest world.</h1>
         <p>Sign in to keep your Familiars, quests and progress together.</p>
         <button className="sum-auth-primary-action" type="button" onClick={() => setOpen(true)}>Open sign-in portal</button>
-        <Link className="sum-auth-secondary-action" href="/enter">Explore the world</Link>
+        <Link className="sum-auth-secondary-action" href="/">Explore the world</Link>
       </div>
       <AuthModal
         open={open}
         initialMode="login"
         returnTo="/app/today"
-        onClose={() => { setOpen(false); if (!signedIn.current) router.replace("/enter"); }}
+        onClose={() => { setOpen(false); if (!signedIn.current) router.replace("/"); }}
         onSuccess={() => { signedIn.current = true; router.replace("/app/today"); }}
       />
     </main>
