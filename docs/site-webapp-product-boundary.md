@@ -34,7 +34,7 @@
 - Persist language preference as `sum-language=en|zh` in browser localStorage. Same preference on the site and the app; browser language helps initial selection.
 - Keep backend status enums, endpoints, IDs and financial terms unchanged. Translation must not introduce a different verdict or entitlement.
 - Product UX language should not call the public landing a 'game', 'wallet', or 'booking/reservation system'. No appointment/reservation feature is present.
-- The first bilingual release covers the public website, global client navigation and high-traffic game entrances (Home, Story, Quiz, Create, Discover, Pico). Existing specialized account/legal and long-form challenge/evidence screens require review before claiming complete linguistic localization.
+- The first bilingual release covers the public website, global client navigation and high-traffic game entrances (Home, Story, Quiz, Create, Discover, Pico). The follow-up also localizes the real Quest invitation/consent, detail, proof-submission, created and settled-result shells while preserving server-generated titles, rules, and verdict reasoning verbatim. The subsequent profile/achievements/evidence gallery/activity statistics/settings pass localizes player-facing page copy and local-only display controls; profile account names, user-authored evidence/Quest text, credit balances, and server errors remain authoritative and untranslated. Specialized legal, external-upload widgets and long-form AI adjudication screens still require review before claiming complete linguistic localization.
 - All user-controlled strings and server messages stay unmodified. No language selection can submit a Quest, accept a challenge, credit XP or change an account.
 
 ## Acceptance
@@ -44,3 +44,10 @@
 3. In both languages, the marketing CTA opens `/app`; the app includes exactly one game dock, never a marketing dock.
 4. The selected language persists across site to app, reload, story and back. Switching must not change route destinations.
 5. English app tests, business/integration tests, and iOS native smoke remain green.
+
+## Read-only account-language follow-up
+
+- The shared EN / 简体中文 selection also changes account navigation, unsigned-user prompts, earned/locked badge descriptions, the evidence-category filter, weekly activity captions, and settings labels.
+- Display mode and reduced-motion preference keep their original device-local keys and values. Translation must not send mutations or turn on push notifications; notification delivery remains explicitly not configured.
+- CI checks the five account routes as a guest in both languages, persists local-only settings across reload, and checks there are no app API write requests. Screenshot capture scrolls to the lazily loaded Pico companion art, verifies image decode, then captures the full marketing page; an unloaded image is a test failure, not an empty placeholder in visual evidence.
+- This is stacked on the validated Quest-localization branch and not a change to account identity, XP, proofs, credits, adjudication or production settings.

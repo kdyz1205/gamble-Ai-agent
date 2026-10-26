@@ -74,6 +74,14 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     await invitation.goto(base + "/app/join?id=" + proofQuest);
     await expect(invitation.getByTestId("ios-quest-invite")).toBeVisible();
     await expect(invitation.getByTestId("ios-accept-quest")).toBeDisabled();
+    // Translate the REAL server-bound acceptance screen, not a mock fixture.
+    await invitation.evaluate(()=>{
+      localStorage.setItem("sum-language","zh");
+      window.dispatchEvent(new Event("sum-language-changed"));
+    });
+    await expect(invitation.getByText("我已阅读并同意本 Quest 的规则与证据要求。")).toBeVisible();
+    await expect(invitation.getByTestId("ios-accept-quest")).toHaveText("确认规则并加入 Quest");
+    await expect(invitation.getByTestId("ios-accept-quest")).toBeDisabled();
     await invitation.getByTestId("ios-accept-rules").check();
     const accepted = invitation.waitForResponse(res =>
       res.url().endsWith("/api/challenges/" + proofQuest + "/accept") &&
@@ -86,12 +94,16 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     for (const [participant, note] of [[creator, "Creator wrote own observation"], [friend, "Friend wrote own observation"]] as const) {
       const page = await participant.context.newPage();
       await page.goto(base + "/app/quest?id=" + proofQuest);
-      await expect(page.getByRole("link", { name: "Submit your proof" })).toBeVisible();
-      await page.getByRole("link", { name: "Submit your proof" }).click();
+      const chinese=participant.id===friend.id;
+      const proofLink=page.getByRole("link", {name:chinese?"提交证据":"Submit your proof"});
+      await expect(proofLink).toBeVisible();
+      await proofLink.click();
       await expect(page).toHaveURL(/\/app\/evidence-add\?id=/);
       await page.locator("#ios-proof-note").fill(note + " " + tag);
-      await page.getByRole("button", { name: "Save written evidence" }).click();
-      await expect(page.getByText("Your proof was saved.")).toBeVisible();
+      await page.getByRole("button", {
+        name:chinese?"保存书面证据":"Save written evidence",
+      }).click();
+      await expect(page.getByText(chinese?"你的证据已保存。":"Your proof was saved.")).toBeVisible();
       await page.close();
     }
 

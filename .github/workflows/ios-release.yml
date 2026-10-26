@@ -130,7 +130,7 @@ jobs:
           node scripts/test-ios-xcodeproj-integrity.cjs
           if [[ "$SUM_IOS_TARGET" == 'preview' ]]; then
             PREVIEW_HOST=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
-            /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $PREVIEW_HOST" ios/App/App/Info.plist
+            /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string $PREVIEW_HOST" ios/App/App/Info.plist
           fi
           npm run ios:sync
           node -e 'const x=require("./ios/App/App/capacitor.config.json");if(x.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
@@ -221,7 +221,18 @@ jobs:
           if not ios:
               print("NO_AVAILABLE_IPHONE_SIMULATOR",file=sys.stderr)
               sys.exit(1)
-          runtime,device=ios[-1]
+          # Selecting ios[-1] picked the iOS 26.2 iPhone SE (3rd gen)
+          # in the failing black-screen receipt. Prefer a current iPhone Pro
+          # and the latest available runtime, deterministically.
+          import re
+          preferred={"iPhone 17 Pro":0,"iPhone 16 Pro":1,
+                     "iPhone 17":2,"iPhone 16":3,"iPhone 15 Pro":4}
+          def choose(entry):
+              runtime,device=entry
+              versions=[int(x) for x in re.findall(r"\d+",runtime.split("iOS-")[-1])]
+              major,minor=(versions+[0,0])[:2]
+              return (preferred.get(device["name"],99),-major,-minor,device["name"])
+          runtime,device=min(ios,key=choose)
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as out:
               out.write("IOS_SIMULATOR_UDID="+device["udid"]+"\n")
           print("SELECTED_SIMULATOR",runtime,device["name"],device["udid"])
@@ -231,7 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           preview_host=$(node -p 'new URL(process.env.SUM_IOS_APP_URL).hostname')
-          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string $preview_host" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string $preview_host" ios/App/App/Info.plist
           npm run ios:sync
           node -e 'const c=require("./ios/App/App/capacitor.config.json");if(c.server?.url!==process.env.SUM_IOS_APP_URL)process.exit(1)'
           mkdir -p ios/build/simulator-evidence
@@ -266,11 +277,33 @@ jobs:
           bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           test "$bundle" = "com.summonworld.app"
           xcrun simctl launch "$sim" "$bundle" | tee ios/build/simulator-evidence/launch.log
-          sleep 15
-          xcrun simctl io "$sim" screenshot ios/build/simulator-evidence/iphone-app.png
-          sips -g pixelWidth -g pixelHeight ios/build/simulator-evidence/iphone-app.png
-          test -s ios/build/simulator-evidence/iphone-app.png
-          echo "IOS_SIMULATOR_NATIVE_LAUNCH_AND_SCREENSHOT_VERIFIED"
+          node scripts/test-ios-simulator-screen.cjs --self-test
+          # Boot/launch alone is not a rendering assertion. Cold iOS simulators
+          # have previously returned an all-black screenshot with only a
+          # status bar, falsely marked as a successful app smoke.
+          screenshot="ios/build/simulator-evidence/iphone-app.png"
+          rendered=0
+          for attempt in $(seq 1 8); do
+            sleep 10
+            xcrun simctl io "$sim" screenshot "$screenshot"
+            if node scripts/test-ios-simulator-screen.cjs "$screenshot"; then
+              rendered=1
+              echo "IOS_SIMULATOR_RENDERED_VIEWPORT_AT_ATTEMPT=$attempt"
+              break
+            fi
+            echo "IOS_SIMULATOR_BLANK_VIEWPORT_ATTEMPT=$attempt"
+          done
+          if [[ "$rendered" != "1" ]]; then
+            echo "IOS_SIMULATOR_BLANK_VIEWPORT: native launch succeeded but no real UI was painted" >&2
+            # Keep diagnostics even when this step fails (artifact has if: always).
+            xcrun simctl spawn "$sim" log show --last 3m --style compact \
+              --predicate 'process == "App"' \
+              > ios/build/simulator-evidence/native-app-log.txt 2>&1 || true
+            exit 1
+          fi
+          sips -g pixelWidth -g pixelHeight "$screenshot"
+          test -s "$screenshot"
+          echo "IOS_SIMULATOR_NATIVE_LAUNCH_AND_RENDERED_SCREENSHOT_VERIFIED"
       - name: Keep the actual simulator evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4

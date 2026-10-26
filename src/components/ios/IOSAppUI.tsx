@@ -80,9 +80,12 @@ const appTitles:Record<string,string>={
   "Quest HQ":"Quest 大厅","Discover":"发现挑战",
   "Quest Forge":"创建 Quest","Familiars":"召唤兽",
   "Voice Quiz Duel":"双人 Quiz","Pico · Chapter One":"Pico · 第一章",
-  "Quest Detail":"Quest 详情","Profile":"个人主页",
+  "Quest Detail":"Quest 详情","Quest Invitation":"Quest 邀请",
+  "Add Evidence":"提交证据","Quest Result":"Quest 结果",
+  "New Quest":"新建 Quest","Profile":"个人主页",
   "Achievements":"成就","Stats":"统计","Evidence":"证据",
   "Settings":"设置","Community":"社区",
+  "My Evidence":"我的证据","Your Journey":"我的历程",
   "Quest Created":"Quest 创建成功","Quest Complete":"Quest 已完成",
 };
 const appEyebrows:Record<string,string>={
@@ -93,6 +96,15 @@ const appEyebrows:Record<string,string>={
   "VERIFIED · FRIEND VS FRIEND":"双人对决 · 结果可核查",
   "ONE STORY · ONE MOVE":"一段剧情 · 一个技能",
   "YOUR REAL ADVENTURE":"你的真实冒险",
+  "READ · AGREE · ENTER":"阅读 · 同意 · 加入",
+  "THE PROOF CHAPTER":"证据提交",
+  "THE STORY YOU MADE":"你的结果记录",
+  "A NEW ADVENTURE":"新的冒险",
+  "YOUR OWN LITTLE WORLD":"你的 Quest 世界",
+  "MILESTONES":"成长里程碑",
+  "YOUR PRIVATE PROOF GALLERY":"你的私人证据库",
+  "REAL QUEST ACTIVITY":"真实 Quest 活动",
+  "MAKE IT YOUR OWN":"个性化设置",
 };
 
 export function IosBottomNav() {
