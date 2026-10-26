@@ -35,6 +35,14 @@ test("Public website and SUM client are distinct products with a shared language
     await expect(page.getByTestId("world-summon-cta")).toContainText("进入 SUM 客户端");
     await expect(lang.getByTestId("sum-lang-zh")).toHaveAttribute("aria-pressed","true");
     expect(await page.evaluate(()=>document.documentElement.lang)).toBe("zh-CN");
+    // Full-page screenshots can skip far-below-fold Next.js lazy images.
+    // Exercise the same scroll that a real visitor uses, and prove the
+    // featured original Pico artwork is fully decoded before capturing.
+    const companion=page.locator(".sum-storybook-companion-img");
+    await companion.scrollIntoViewIfNeeded();
+    await expect.poll(async()=>companion.evaluate((image:HTMLImageElement)=>
+      image.complete&&image.naturalWidth>0),{timeout:15000}).toBe(true);
+    await page.evaluate(()=>scrollTo(0,0));
     mkdirSync("output/ios-full-app",{recursive:true});
     await page.screenshot({path:"output/ios-full-app/summoner-site-zh-390.png",fullPage:true});
 
@@ -120,6 +128,11 @@ test("Desktop SUM is a responsive Web App, not a phone mock or landing page",
     await page.goto(BASE+"/");
     await expect(page.getByTestId("sum-marketing-site")).toBeVisible();
     await expect(page.getByTestId("ios-tabbar")).toHaveCount(0);
+    const desktopPico=page.locator(".sum-storybook-companion-img");
+    await desktopPico.scrollIntoViewIfNeeded();
+    await expect.poll(async()=>desktopPico.evaluate((image:HTMLImageElement)=>
+      image.complete&&image.naturalWidth>0),{timeout:15000}).toBe(true);
+    await page.evaluate(()=>scrollTo(0,0));
     mkdirSync("output/ios-full-app",{recursive:true});
     await page.screenshot({
       path:"output/ios-full-app/summoner-website-desktop-1280.png",
@@ -199,4 +212,61 @@ test("Chinese Quest invitation and evidence routes keep product semantics and re
     await expect(page.getByText("Invitation link missing.")).toBeVisible();
     await expect(page.getByTestId("sum-lang-en")).toHaveAttribute("aria-pressed","true");
     await expect(page.getByTestId("ios-accept-quest")).toHaveCount(0);
+  });
+
+test("Account, achievements, evidence, statistics and settings respect the same language and device-only preferences",
+  async({page})=>{
+    const writes:string[]=[];
+    page.on("request",request=>{
+      if(request.url().includes("/api/")&&!["GET","HEAD","OPTIONS"].includes(request.method())){
+        writes.push(request.method()+" "+request.url());
+      }
+    });
+    await page.goto(BASE+"/app/profile");
+    await page.getByTestId("sum-lang-zh").click();
+    await expect(page.getByTestId("sum-lang-zh")).toHaveAttribute("aria-pressed","true");
+    await expect(page.getByRole("link",{name:"我的证据"})).toHaveAttribute("href","/app/evidence");
+    await expect(page.getByRole("link",{name:"我的历程"})).toHaveAttribute("href","/app/stats");
+    await expect(page.getByText("进度仅根据真实的 Quest 历史记录计算，不使用模拟成就。")).toBeVisible();
+    await page.screenshot({path:"output/ios-full-app/profile-zh-390.png",fullPage:true});
+
+    await page.getByRole("link",{name:"设置"}).click();
+    await expect(page).toHaveURL(/\/app\/settings$/);
+    await expect(page.getByRole("heading",{name:"外观设置"})).toBeVisible();
+    await expect(page.getByText("尚未配置")).toBeVisible();
+    const theme=page.getByRole("combobox",{name:"应用主题"});
+    await theme.selectOption("night");
+    await expect(theme).toHaveValue("night");
+    await page.getByRole("checkbox",{name:"减少动画"}).check();
+    await page.reload();
+    await expect(page.getByTestId("sum-lang-zh")).toHaveAttribute("aria-pressed","true");
+    await expect(page.getByRole("combobox",{name:"应用主题"})).toHaveValue("night");
+    await expect(page.getByRole("checkbox",{name:"减少动画"})).toBeChecked();
+    await page.screenshot({path:"output/ios-full-app/settings-zh-390.png",fullPage:true});
+
+    await page.goto(BASE+"/app/achievements");
+    await expect(page.getByRole("heading",{name:"首次启程"})).toBeVisible();
+    await expect(page.getByText("未解锁 · 请先登录").first()).toBeVisible();
+    await expect(page.getByText("以下仅为成就目标。只有真实的个人 Quest 记录才能解锁。")).toBeVisible();
+
+    await page.goto(BASE+"/app/evidence");
+    await expect(page.getByText("我的证据",{exact:true})).toBeVisible();
+    await expect(page.getByText("以下图片仅为示意，并非用户提交的证据。",{exact:false})).toBeVisible();
+    const photo=page.getByTestId("ios-evidence-filter-photo");
+    await expect(photo).toHaveText("照片");
+    await photo.click();
+    await expect(photo).toHaveAttribute("aria-pressed","true");
+    await expect(page.getByTestId("ios-evidence-filter-all")).toHaveAttribute("aria-pressed","false");
+    await expect(page.getByText("示意插画 · 非用户证据")).toHaveCount(4);
+
+    await page.goto(BASE+"/app/stats");
+    await expect(page.getByText("我的历程",{exact:true})).toBeVisible();
+    await expect(page.getByText("看看你走过的路。")).toBeVisible();
+    await page.getByTestId("sum-lang-en").click();
+    await expect(page.getByText("See how far you've come.")).toBeVisible();
+    await page.goto(BASE+"/app/settings");
+    await expect(page.getByRole("heading",{name:"Appearance"})).toBeVisible();
+    await expect(page.getByRole("combobox",{name:"App theme"})).toHaveValue("night");
+    await expect(page.getByRole("checkbox",{name:"Reduce motion"})).toBeChecked();
+    expect(writes).toEqual([]);
   });
