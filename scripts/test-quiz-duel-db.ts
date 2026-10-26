@@ -12,6 +12,7 @@ import {
   getQuizDuelView,finalizeExpiredQuiz,sweepExpiredQuizDuels,QuizDuelError,
 } from "../src/lib/quiz/quiz-duel";
 import {answerCommitment,revealQuizAnswers} from "../src/lib/quiz/quiz-bank";
+import {getVerifiedQuizHistory} from "../src/lib/quiz/quiz-history";
 import {acceptChallengeAtomic} from "../src/lib/challenge-acceptance";
 import {executeChallengeJudgment} from "../src/lib/challenge-judgment";
 import {cancelChallengeAtomic} from "../src/lib/challenge-cancellation";
@@ -164,6 +165,20 @@ async function main(){
     "Exactly two immutable answer receipts");
   eq(await prisma.judgment.count({where:{challengeId:first.challengeId}}),1,
     "One final objective verdict, never duplicate");
+  const aliceHistory=await getVerifiedQuizHistory(alice.id);
+  const bobHistory=await getVerifiedQuizHistory(bob.id);
+  eq(aliceHistory.items.find(r=>r.challengeId===first.challengeId)?.outcome,
+    "won","Authenticated creator history records the real committed win");
+  eq(bobHistory.items.find(r=>r.challengeId===first.challengeId)?.outcome,
+    "lost","Opponent history reverses the same committed result");
+  eq(aliceHistory.stats.won,1,"One verified win appears, never a preview victory");
+  eq(bobHistory.stats.lost,1,"One verified loss for opposite player perspective");
+  eq((await getVerifiedQuizHistory(outsider.id)).items.length,0,
+    "Authenticated outsider gets no private match history");
+  eq(aliceHistory.items.find(r=>r.challengeId===first.challengeId)?.creditedCareerXp,
+    0,"Fixed published Quiz answers cannot mint career XP");
+  eq(aliceHistory.items.find(r=>r.challengeId===first.challengeId)?.creditedSummonTickets,
+    0,"Quiz record cannot issue Summon tickets");
   const originalFinal=await prisma.quizDuel.findUniqueOrThrow({
     where:{challengeId:first.challengeId},select:{resultJson:true},
   });
@@ -175,6 +190,10 @@ async function main(){
   await assert.rejects(()=>getQuizDuelView(first.challengeId,alice.id),
     /Final Quiz receipt digest failed verification/,
     "Tampered final receipt must not display a false winner");
+  checks++;
+  await assert.rejects(()=>getVerifiedQuizHistory(alice.id),
+    /Final Quiz receipt digest failed verification/,
+    "Forged winner cannot appear as a verified history row");
   checks++;
   await prisma.quizDuel.update({where:{challengeId:first.challengeId},
     data:{resultJson:originalFinal.resultJson}});
@@ -200,6 +219,9 @@ async function main(){
   eq((tied.result as {outcome:string}).outcome,"tie","Equal score is an explicit draw");
   eq((tied.result as {winnerId:string|null}).winnerId,null,
     "Draw never invents a winning user");
+  eq((await getVerifiedQuizHistory(alice.id)).items.find(r=>
+    r.challengeId===tie.challengeId)?.outcome,"tie",
+    "Completed equal-score Quiz appears as tie, never reward winner");
 
   const expire=await createQuizDuel(alice.id,{topic:"general",requestKey:key()});
   createdChallenges.push(expire.challengeId);
@@ -216,6 +238,9 @@ async function main(){
     "No-show does not produce a fraudulent free winner");
   eq((voided.result as {winnerId:string|null}).winnerId,null,
     "Timeout remains no-winner");
+  eq((await getVerifiedQuizHistory(alice.id)).items.find(r=>
+    r.challengeId===expire.challengeId)?.outcome,"void_timeout",
+    "Partial-answer timeout remains a no-win history record");
   const voidRetry=await finalizeExpiredQuiz(expire.challengeId,bob.id);
   eq(voidRetry.status,"completed","Expired finalization is idempotent");
 
@@ -260,6 +285,9 @@ async function main(){
   eq(cancelOne.ok,true,"Free unopened Quiz may be cancelled atomically");
   eq((await getQuizDuelView(cancelled.challengeId,alice.id)).status,"cancelled",
     "Quiz and Challenge status must stay synchronized on cancellation");
+  ok(!(await getVerifiedQuizHistory(alice.id)).items.some(r=>
+    r.challengeId===cancelled.challengeId),
+    "Cancelled pre-join challenge cannot masquerade as completed battle");
   const cancelReplay=await cancelChallengeAtomic(cancelled.challengeId,alice.id);
   eq(cancelReplay.ok,true,"Cancellation retry is idempotent");
   await rej(()=>acceptQuizDuel(cancelled.challengeId,bob.id),409,

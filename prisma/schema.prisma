@@ -99,6 +99,9 @@ model User {
   summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
   summonEvolutionReceipts SummonEvolutionReceipt[] @relation("SummonEvolutionOwner")
   quizAttempts          QuizAttempt[]
+  privateRoundsCreated QuizPrivateRound[] @relation("PrivateRoundCreator")
+  privateRoundsJoined  QuizPrivateRound[] @relation("PrivateRoundOpponent")
+  privateQuestionExposures QuizPrivateExposure[] @relation("PrivateExposureUser")
 }
 
 // ═══════════════════════════════════════
@@ -560,6 +563,66 @@ model SummonEvolutionReceipt {
 
   @@unique([instanceId, toForm])
   @@index([ownerId, createdAt])
+}
+
+// Optional server-private, independently reviewed question source.
+// No client routes expose answers or reviewer attestation material.
+model QuizProtectedQuestion {
+  id              String   @id
+  bankVersion     String
+  topic           String
+  prompt          String
+  choicesJson     String
+  answerIndex     Int
+  reviewSignature String
+  reviewedAt      DateTime
+  retiredAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  exposures QuizPrivateExposure[]
+
+  @@index([bankVersion, topic, retiredAt])
+}
+
+// Server-only locked selection. Does NOT belong to the public QuizDuel bank.
+// Secret nonce and pinned IDs must never appear in a client/API response.
+model QuizPrivateRound {
+  id               String   @id @default(cuid())
+  requestKey       String   @unique
+  creatorId        String
+  opponentId       String
+  bankVersion      String
+  topic            String
+  questionIdsJson  String
+  answerCommitment String
+  serverNonce      String
+  status           String   @default("reserved")
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  creator  User @relation("PrivateRoundCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  opponent User @relation("PrivateRoundOpponent", fields: [opponentId], references: [id], onDelete: Restrict)
+  exposures QuizPrivateExposure[]
+
+  @@index([creatorId, createdAt])
+  @@index([opponentId, createdAt])
+}
+
+model QuizPrivateExposure {
+  id          String @id @default(cuid())
+  roundId     String
+  userId      String
+  questionId  String
+  bankVersion String
+  createdAt   DateTime @default(now())
+
+  round    QuizPrivateRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  player   User @relation("PrivateExposureUser", fields: [userId], references: [id], onDelete: Restrict)
+  question QuizProtectedQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, bankVersion, questionId])
+  @@unique([roundId, userId, questionId])
+  @@index([roundId])
 }
 
 // DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)
