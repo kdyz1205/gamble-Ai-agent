@@ -266,11 +266,33 @@ jobs:
           bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           test "$bundle" = "com.summonworld.app"
           xcrun simctl launch "$sim" "$bundle" | tee ios/build/simulator-evidence/launch.log
-          sleep 15
-          xcrun simctl io "$sim" screenshot ios/build/simulator-evidence/iphone-app.png
-          sips -g pixelWidth -g pixelHeight ios/build/simulator-evidence/iphone-app.png
-          test -s ios/build/simulator-evidence/iphone-app.png
-          echo "IOS_SIMULATOR_NATIVE_LAUNCH_AND_SCREENSHOT_VERIFIED"
+          node scripts/test-ios-simulator-screen.cjs --self-test
+          # Boot/launch alone is not a rendering assertion. Cold iOS simulators
+          # have previously returned an all-black screenshot with only a
+          # status bar, falsely marked as a successful app smoke.
+          screenshot="ios/build/simulator-evidence/iphone-app.png"
+          rendered=0
+          for attempt in $(seq 1 8); do
+            sleep 10
+            xcrun simctl io "$sim" screenshot "$screenshot"
+            if node scripts/test-ios-simulator-screen.cjs "$screenshot"; then
+              rendered=1
+              echo "IOS_SIMULATOR_RENDERED_VIEWPORT_AT_ATTEMPT=$attempt"
+              break
+            fi
+            echo "IOS_SIMULATOR_BLANK_VIEWPORT_ATTEMPT=$attempt"
+          done
+          if [[ "$rendered" != "1" ]]; then
+            echo "IOS_SIMULATOR_BLANK_VIEWPORT: native launch succeeded but no real UI was painted" >&2
+            # Keep diagnostics even when this step fails (artifact has if: always).
+            xcrun simctl spawn "$sim" log show --last 3m --style compact \
+              --predicate 'process == "App"' \
+              > ios/build/simulator-evidence/native-app-log.txt 2>&1 || true
+            exit 1
+          fi
+          sips -g pixelWidth -g pixelHeight "$screenshot"
+          test -s "$screenshot"
+          echo "IOS_SIMULATOR_NATIVE_LAUNCH_AND_RENDERED_SCREENSHOT_VERIFIED"
       - name: Keep the actual simulator evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
