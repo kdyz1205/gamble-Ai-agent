@@ -1,5 +1,6 @@
 import "dotenv/config";
 import {randomUUID} from "node:crypto";
+import {mkdirSync} from "node:fs";
 import {Pool} from "pg";
 import {expect,test,type BrowserContext} from "@playwright/test";
 import {revealQuizAnswers,answerCommitment}
@@ -140,8 +141,12 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(live3D).toHaveAttribute("data-vfx-phase","live",{timeout:20_000});
     await expect(live3D).toHaveAttribute("data-vfx-winner","none");
     await expect(live3D).toHaveAttribute("data-vfx-meshes",/^[1-9][0-9]*$/);
-    await a.screenshot({path:testInfo.outputPath("pico-live-mutual-charge-3d.png"),
+    mkdirSync("output/ios-full-app",{recursive:true});
+    await a.emulateMedia({reducedMotion:"no-preference"});
+    await expect(live3D).toHaveAttribute("data-animating","true");
+    await a.screenshot({path:"output/ios-full-app/pico-live-mutual-charge-3d.png",
       fullPage:true});
+    await a.emulateMedia({reducedMotion:"reduce"});
     const aView=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     const bView=(await (await friendCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     expect(aView.status).toBe("live");
@@ -184,8 +189,11 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     const verified3D=a.getByTestId("pico-3d-canvas");
     await expect(verified3D).toHaveAttribute("data-vfx-phase","completed",{timeout:20_000});
     await expect(verified3D).toHaveAttribute("data-vfx-winner","creator");
-    await a.screenshot({path:testInfo.outputPath("pico-server-verified-winner-3d.png"),
+    await a.emulateMedia({reducedMotion:"no-preference"});
+    await expect(verified3D).toHaveAttribute("data-animating","true");
+    await a.screenshot({path:"output/ios-full-app/pico-server-verified-winner-3d.png",
       fullPage:true});
+    await a.emulateMedia({reducedMotion:"reduce"});
     await a.screenshot({path:testInfo.outputPath("verified-quiz-result.png"),fullPage:true});
 
     const final=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
