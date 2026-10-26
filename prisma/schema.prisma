@@ -79,6 +79,7 @@ model User {
   challengesCreated    Challenge[]       @relation("ChallengeCreator")
   participations       Participant[]
   evidenceSubmissions  Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   judgmentsGiven       Judgment[]        @relation("JudgeUser")
   judgmentsWon         Judgment[]        @relation("WinnerUser")
   transactions         CreditTx[]
@@ -92,6 +93,8 @@ model User {
   reviewCasesWon       ReviewCase[]      @relation("ReviewWinner")
   summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
   professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
+  xpApprovalsOwned       VerifiedXpApproval[] @relation("XpApprovalOwner")
+  xpApprovalsReviewed    VerifiedXpApproval[] @relation("XpApprovalReviewer")
   summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
   summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
   summonEvolutionReceipts SummonEvolutionReceipt[] @relation("SummonEvolutionOwner")
@@ -188,6 +191,7 @@ model Challenge {
   creator          User              @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   participants     Participant[]
   evidence         Evidence[]
+  trustedEvidenceUploads TrustedEvidenceUpload[]
   judgments        Judgment[]
   creditTxs        CreditTx[]
   activityEvents   ActivityEvent[]
@@ -196,6 +200,7 @@ model Challenge {
   verdictResponses VerdictResponse[]
   reviewCase       ReviewCase?
   professionXpEvents ProfessionXpEvent[]
+  xpApprovals VerifiedXpApproval[]
   quizDuel         QuizDuel?
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
@@ -225,6 +230,31 @@ model Participant {
 // EVIDENCE & JUDGMENT
 // ═══════════════════════════════════════
 
+/** Private S3 evidence intake, feature gated; this table is NOT a verdict or award. */
+model TrustedEvidenceUpload {
+  id                String    @id
+  challengeId       String
+  userId            String
+  objectKey         String    @unique
+  contentType       String
+  expectedSizeBytes Int
+  evidenceId        String?   @unique // FK lives ONLY in opt-in upload table
+  status            String    @default("issued") // issued | verified | consumed | revoked
+  sha256            String?
+  observedSizeBytes Int?
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence Evidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([challengeId,userId,status])
+  @@index([expiresAt,status])
+}
+
 model Evidence {
   id          String   @id @default(cuid())
   challengeId String
@@ -244,6 +274,7 @@ model Evidence {
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trustedUpload TrustedEvidenceUpload? // relation virtual: zero new Evidence columns
 
   // One evidence row per (challenge, user). Prevents double-submit from
   // flooding the judge with N rows per player where only the first is read.
@@ -416,6 +447,33 @@ model SummonInstance {
 
   @@index([ownerId, status, createdAt])
   @@index([speciesId, rarity])
+}
+
+/**
+ * Opt-in, reviewer-authorized progression clearance. This is NOT XP,
+ * a free ticket, a grant or a settlement. The approving reviewer must be
+ * independent of the Quest participants. Reconciliation rechecks the source.
+ */
+model VerifiedXpApproval {
+  id                String   @id @default(cuid())
+  challengeId       String
+  ownerId           String
+  reviewerUserId    String
+  finalJudgmentId   String
+  sourceFingerprint String
+  policyVersion     String   @default("private-proof-manual-xp-v1")
+  status            String   @default("approved") // approved | revoked
+  reason            String
+  approvedAt        DateTime @default(now())
+  revokedAt         DateTime?
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  owner User @relation("XpApprovalOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  reviewer User @relation("XpApprovalReviewer", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([challengeId, ownerId])
+  @@index([reviewerUserId, approvedAt])
+  @@index([status, approvedAt])
 }
 
 model ProfessionXpEvent {

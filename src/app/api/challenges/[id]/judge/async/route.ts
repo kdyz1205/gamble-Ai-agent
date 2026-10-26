@@ -47,7 +47,8 @@ export async function POST(
     where: { id },
     select: { creatorId: true, status: true, title: true, stake: true, evidenceType: true,arbiter:true,
       participants: { where: { status: "accepted", role: { in: ["creator", "opponent"] } }, select: { userId: true, role: true } },
-      evidence: { select: { userId: true, type: true, url: true, description: true } } },
+      evidence: { select: { id: true, userId: true, type: true,
+        url: true, description: true } } },
   });
 
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
@@ -66,12 +67,35 @@ export async function POST(
       { status: 400 },
     );
   }
+  // An unloaded private-upload table cannot break the legacy app preview.
+  // Query it only when the feature is explicitly enabled.
+  const linkedRows = process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS === "true"
+    && ["video", "photo"].includes(challenge.evidenceType)
+    ? await prisma.trustedEvidenceUpload.findMany({
+      where: { challengeId: id, evidenceId: {
+        in: challenge.evidence.map(row => row.id),
+      } },
+      select: { id: true, evidenceId: true, status: true, userId: true,
+        challengeId: true, sha256: true, contentType: true },
+    })
+    : [];
+  const linkedByEvidence = new Map(linkedRows.filter(row => row.evidenceId)
+    .map(row => [row.evidenceId!, row] as const));
   const players = challenge.participants;
   const complete = players.length === 2 && players.some((p) => p.role === "creator" && p.userId === challenge.creatorId)
     && players.some((p) => p.role === "opponent") && players.every((p) => {
       const proof = challenge.evidence.find((e) => e.userId === p.userId);
       if (!proof) return false;
-      if (["photo", "video"].includes(challenge.evidenceType)) return proof.type === challenge.evidenceType && !!proof.url?.trim();
+      if (["photo", "video"].includes(challenge.evidenceType)) {
+        const receipt = linkedByEvidence.get(proof.id);
+        const trusted = Boolean(receipt &&
+          receipt.status === "consumed" && receipt.userId === proof.userId &&
+          receipt.challengeId === id && /^[a-f0-9]{64}$/i.test(receipt.sha256 ?? "") &&
+          (proof.type === "video" ? receipt.contentType.startsWith("video/") :
+            receipt.contentType.startsWith("image/")));
+        if (process.env.TRUSTED_EVIDENCE_REQUIRED_FOR_MEDIA === "true") return trusted;
+        return proof.type === challenge.evidenceType && (trusted || !!proof.url?.trim());
+      }
       return !!proof.description?.trim();
     });
   if (!complete) return Response.json({ error: "Background review needs valid proof from both players. Use the deadline-rule review when proof is missing." }, { status: 409 });

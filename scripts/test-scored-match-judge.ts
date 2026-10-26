@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import { del, put } from "@vercel/blob";
 import sharp from "sharp";
+import prisma from "../src/lib/db";
 import { judgeChallenge } from "../src/lib/ai-engine";
 import { judgeShortScoredMatch } from "../src/lib/scored-match-judge";
 import { getProviderById } from "../src/lib/llm-providers";
@@ -248,6 +249,20 @@ async function createSyntheticMatchVideo(directory: string): Promise<string> {
 }
 
 async function runLiveVideoPath(mediaOnly = false) {
+  // A paid model QA run MUST reserve and receipt usage in an isolated local
+  // PostgreSQL before uploading any synthetic fixture, and never contact a
+  // real user's wallet or production Quest ledger.
+  if (!mediaOnly) {
+    const raw = process.env.DATABASE_URL;
+    assert.ok(raw, "Live vision QA requires isolated local PostgreSQL");
+    const db = new URL(raw);
+    assert.ok(["localhost", "127.0.0.1"].includes(db.hostname) &&
+      db.pathname === "/summoner_verification",
+      "Live QA refuses production or non-disposable PostgreSQL");
+    await prisma.$queryRaw`SELECT 1`;
+    assert.equal(process.env.AI_REQUEST_CALL_LIMIT, "2",
+      "Live QA must set a maximum of two model calls");
+  }
   assert.ok(process.env.BLOB_READ_WRITE_TOKEN, "BLOB_READ_WRITE_TOKEN is required for --live");
   assert.ok(process.env.OPENAI_API_KEY, "OPENAI_API_KEY is required for --live");
   const directory = await mkdtemp(join(tmpdir(), "scored-match-live-"));
@@ -320,5 +335,5 @@ async function main() {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.stack : error);
-  process.exit(1);
-});
+  process.exitCode = 1;
+}).finally(() => prisma.$disconnect());

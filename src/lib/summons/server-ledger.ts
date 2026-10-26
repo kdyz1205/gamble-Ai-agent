@@ -6,6 +6,7 @@
 import prisma from "@/lib/db";
 import type {Prisma} from "@/generated/prisma/client";
 import {STARTER,PROFESSIONS,type ProfessionId} from "./profession-system";
+import { lockManualXpReview, requireCurrentTrustedXpApprovalForAward } from "./manual-xp-approval";
 
 const STARTER_VERSION="pico-universal-v1";
 export const XP_LEDGER_VERSION="verified-quest-skill-v1";
@@ -118,7 +119,7 @@ export async function accountSummonLedger(userId:string){
   };
 }
 
-const professionByQuestType:Record<string,ProfessionId>={
+export const professionByQuestType:Record<string,ProfessionId>={
   Coding:"software",Fitness:"athletics",Cooking:"culinary",
 };
 export class ProgressSourceNotFinalError extends Error {
@@ -189,6 +190,17 @@ export async function reconcileVerifiedQuestProfessionXp(input:{
        (resolved&&quest.reviewCase?.resolvedWinnerId&&
         quest.reviewCase.resolvedWinnerId!==receipt.winnerId))
       throw new ProgressSourceNotFinalError("Trusted final winner receipt required");
+    // Video/photo rewards require a *separate* independent human approval,
+    // bound to the final judgment + both private object receipts. An ordinary
+    // settled status alone can never authorize spendable XP or Summon tickets.
+    if (["video", "photo"].includes(quest.evidenceType)) {
+      await lockManualXpReview(tx, quest.id, input.userId);
+      await requireCurrentTrustedXpApprovalForAward(tx, {
+        challengeId: quest.id,
+        ownerId: input.userId,
+        judgmentId: receipt.id,
+      });
+    }
     const outcome=receipt.winnerId===input.userId?"win":"loss";
     const amount=outcome==="win"?100:80;
     const eventKey="quest-xp:"+XP_LEDGER_VERSION+":"+quest.id+":"+
