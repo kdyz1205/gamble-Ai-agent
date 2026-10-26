@@ -161,3 +161,9 @@ jobs:
             tail -n 120 /tmp/summoner-trusted-server.log
             exit 1
           }
+          # In-process local vision HTTP mock: real S3 MP4s and decoder frames,
+          # but zero paid AI provider calls and no reward issuance.
+          npx tsx scripts/e2e-private-video-referee-consent.ts || {
+            tail -n 120 /tmp/summoner-trusted-server.log
+            exit 1
+          }
