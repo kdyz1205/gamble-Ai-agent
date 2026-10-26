@@ -217,6 +217,8 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     await expect(receiptPage.getByText("No winner recorded")).toBeVisible();
     const xpCard = receiptPage.getByTestId("ios-real-xp-status");
     await expect(xpCard).toBeVisible();
+    await expect(receiptPage.getByRole("link", { name: "Check Familiars & tickets" }))
+      .toHaveAttribute("href", "/app/picos");
     await expect(xpCard).toContainText("Career XP rewards are not enabled");
     await expect(xpCard).not.toContainText("+100 XP");
     const readOnlyStatus = await creator.context.request.get(
@@ -227,8 +229,7 @@ test("App: two-player proof, guarded referee, consented deadline verdict, no cou
     expect((await db.query(
       'SELECT COUNT(*)::int AS n FROM "ProfessionXpEvent" WHERE "challengeId"=$1',
       [deadlineQuest],
-    )).rows[0].n).toBe(0,
-      "Opening result and reading reward status must never issue XP");
+    )).rows[0].n, "Opening result and reading reward status must never issue XP").toBe(0);
     await receiptPage.close();
 
     const balancesAfter = (await db.query(

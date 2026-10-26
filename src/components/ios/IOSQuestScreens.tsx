@@ -192,6 +192,7 @@ export function QuestCompleteScreen({id}:{id?:string}) {
           </> : <p>No detailed judgment was returned with this record.</p>}
         </section>
         <IOSQuestXpStatus challengeId={quest.id}/>
+        <IosAction href="/app/picos" secondary>Check Familiars &amp; tickets</IosAction>
         <IosAction href={"/app/quest?id="+encodeURIComponent(quest.id)}>View result receipt</IosAction>
         <IosAction href="/app/create" secondary>Create another Quest</IosAction>
       </>}
