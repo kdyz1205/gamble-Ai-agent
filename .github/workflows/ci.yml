@@ -63,6 +63,9 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
+      - name: Verify mobile free-ticket draw confirmation and safe retry
+        run: node scripts/qa-free-summon-draw-mobile.cjs
+
       - name: Verify real browser creation and cancellation against production build
         env:
           AI_ENABLED: "false"

@@ -168,6 +168,14 @@ review status and resolved winner.
   ticket → **separate explicit user draw** → one owned Familiar. It also
   tests duplicate/reused keys and refuses a second ticket spend. No real
   user XP, paid AI model, wager, production grant or silent draw occurs.
+- `node scripts/qa-free-summon-draw-mobile.cjs` separately mounts the real
+  FreeSummonDrawPanel in a 390px Chromium browser against an isolated HTTP
+  fixture. Viewing tickets, selecting a career and reviewing consent cause
+  **zero POST requests**. An explicit Confirm triggers the POST. A simulated
+  network timeout retains the exact same request key for safe retry; the
+  accepted server receipt refreshes the display, and a disabled feature
+  shows no active draw button. The UI test complements rather than replaces
+  the real S3/PostgreSQL RNG, ticket and owned-inventory E2E test.
 - Source review approvals use a separate new table; **no legacy Evidence,
   Challenge or User columns are modified** in this migration. Preview builds
   keep all read/write calls behind the disabled feature flag.
