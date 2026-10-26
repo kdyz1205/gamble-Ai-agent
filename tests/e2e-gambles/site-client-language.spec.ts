@@ -169,3 +169,34 @@ test("Desktop SUM is a responsive Web App, not a phone mock or landing page",
       .toBeLessThanOrEqual(1);
   },
 );
+
+
+test("Chinese Quest invitation and evidence routes keep product semantics and require actual records",
+  async({page})=>{
+    await page.goto(BASE+"/app/join");
+    await page.getByTestId("sum-lang-zh").click();
+    await expect(page.getByTestId("sum-lang-zh")).toHaveAttribute("aria-pressed","true");
+    await expect(page.getByText("邀请链接缺失。")).toBeVisible();
+    await expect(page.getByTestId("ios-accept-quest")).toHaveCount(0);
+    await expect(page.getByRole("link",{name:"发现 Quest"}))
+      .toHaveAttribute("href","/app/discover");
+
+    await page.goto(BASE+"/app/quest");
+    await expect(page.getByText("Quest 详情")).toBeVisible();
+    await expect(page.getByText("请选择一个真实 Quest。")).toBeVisible();
+    await page.goto(BASE+"/app/evidence-add");
+    await expect(page.getByText("提交证据")).toBeVisible();
+    await expect(page.locator("#ios-proof-note")).toHaveCount(0);
+    await page.goto(BASE+"/app/quest-complete");
+    await expect(page.getByText("Quest 结果")).toBeVisible();
+    await expect(page.getByText("请选择一个真实 Quest。")).toBeVisible();
+    await page.goto(BASE+"/app/quest-created");
+    await expect(page.getByText("新建 Quest")).toBeVisible();
+    await expect(page.getByTestId("sum-lang-zh")).toHaveAttribute("aria-pressed","true");
+
+    await page.goto(BASE+"/app/join");
+    await page.getByTestId("sum-lang-en").click();
+    await expect(page.getByText("Invitation link missing.")).toBeVisible();
+    await expect(page.getByTestId("sum-lang-en")).toHaveAttribute("aria-pressed","true");
+    await expect(page.getByTestId("ios-accept-quest")).toHaveCount(0);
+  });

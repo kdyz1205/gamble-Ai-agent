@@ -34,7 +34,7 @@
 - Persist language preference as `sum-language=en|zh` in browser localStorage. Same preference on the site and the app; browser language helps initial selection.
 - Keep backend status enums, endpoints, IDs and financial terms unchanged. Translation must not introduce a different verdict or entitlement.
 - Product UX language should not call the public landing a 'game', 'wallet', or 'booking/reservation system'. No appointment/reservation feature is present.
-- The first bilingual release covers the public website, global client navigation and high-traffic game entrances (Home, Story, Quiz, Create, Discover, Pico). Existing specialized account/legal and long-form challenge/evidence screens require review before claiming complete linguistic localization.
+- The first bilingual release covers the public website, global client navigation and high-traffic game entrances (Home, Story, Quiz, Create, Discover, Pico). The follow-up also localizes the real Quest invitation/consent, detail, proof-submission, created and settled-result shells while preserving server-generated titles, rules, and verdict reasoning verbatim. Specialized account/legal, external upload widgets and long-form adjudication screens still require review before claiming complete linguistic localization.
 - All user-controlled strings and server messages stay unmodified. No language selection can submit a Quest, accept a challenge, credit XP or change an account.
 
 ## Acceptance
