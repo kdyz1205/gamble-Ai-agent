@@ -7,7 +7,10 @@ test.use({viewport:{width:390,height:844},video:"off"});
 test("Public website and SUM client are distinct products with a shared language",
   async({page,context})=>{
     await page.addInitScript(()=>{
-      window.localStorage.setItem("sum-language","en");
+      if(!sessionStorage.getItem("sum-language-test-seeded")){
+        localStorage.setItem("sum-language","en");
+        sessionStorage.setItem("sum-language-test-seeded","yes");
+      }
     });
     const website=await page.goto(BASE+"/");
     expect(website?.status()).toBe(200);
@@ -107,7 +110,12 @@ test("English and Chinese site copy changes without changing navigation destinat
 
 test("Desktop SUM is a responsive Web App, not a phone mock or landing page",
   async({page})=>{
-    await page.addInitScript(()=>localStorage.setItem("sum-language","en"));
+    await page.addInitScript(()=>{
+      if(!sessionStorage.getItem("sum-language-test-seeded")){
+        localStorage.setItem("sum-language","en");
+        sessionStorage.setItem("sum-language-test-seeded","yes");
+      }
+    });
     await page.setViewportSize({width:1280,height:900});
     await page.goto(BASE+"/");
     await expect(page.getByTestId("sum-marketing-site")).toBeVisible();
