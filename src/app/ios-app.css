@@ -1254,3 +1254,102 @@
 }
 .ios-app[data-reduce-motion="true"] .ios-main > .ios-quiz-arena {animation:none}
 .ios-app[data-reduce-motion="true"] .ios-quiz-arena__rift span {animation:none!important}
+
+
+/* Optional true mesh-based Pico prototype inside the existing audited Quiz UI.
+   Default remains original 2D concept art. No gameplay state changes. */
+.ios-quiz-arena__top-actions{
+  display:flex;align-items:center;justify-content:flex-end;
+  min-width:0;gap:7px;flex-wrap:nowrap;
+}
+.ios-quiz-arena__mode{
+  position:relative;z-index:8;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:34px;min-width:69px;
+  padding:5px 9px;border-radius:999px;
+  border:1px solid #d5e8ff98;
+  color:#f5faff;background:#304f95a6;
+  font-size:9px;font-weight:900;letter-spacing:.06em;
+  cursor:pointer;white-space:nowrap;
+  transition:background .18s ease,border-color .18s ease;
+}
+.ios-quiz-arena__mode:hover,
+.ios-quiz-arena__mode[aria-pressed="true"]{
+  border-color:#c3f8ff;
+  color:#f0ffff;background:#2d7f9ca6;
+}
+.ios-quiz-arena__mode:focus-visible{
+  outline:3px solid #faf8c6;outline-offset:3px;
+}
+.ios-quiz-arena__3d-canvas{
+  position:absolute;inset:0;z-index:2;
+  width:100%;height:100%;
+  display:block;min-width:0;
+  background:transparent;
+  cursor:grab;touch-action:pan-y;
+}
+.ios-quiz-arena__3d-canvas:active{cursor:grabbing}
+.ios-quiz-arena--3d .ios-quiz-arena__pico{
+  visibility:hidden;animation:none;
+}
+.ios-quiz-arena--3d .ios-quiz-arena__aura{
+  opacity:.2;animation:none;
+}
+.ios-quiz-arena--3d .ios-quiz-arena__fighter-label{
+  z-index:5;
+}
+.ios-quiz-arena--3d .ios-quiz-arena__versus{
+  z-index:6;
+}
+.ios-quiz-arena__prototype-note{
+  position:absolute;bottom:59px;left:12px;right:12px;z-index:7;
+  width:max-content;max-width:calc(100% - 24px);
+  margin:0 auto;
+  border-radius:999px;
+  background:#0a173c9c;border:1px solid #a2dbff40;
+  color:#def5ff;font-size:9px;line-height:1.3;
+  padding:4px 10px;
+  text-align:center;pointer-events:none;
+}
+.ios-quiz-arena__fallback{
+  position:absolute;bottom:58px;left:9px;right:9px;z-index:7;
+  margin:0 auto;text-align:center;
+  border-radius:9px;
+  background:#10264eeb;
+  color:#e3f8ff!important;
+  padding:6px 8px;font-size:10px!important;
+}
+@media(max-width:385px){
+  .ios-quiz-arena__top{gap:4px;padding-inline:10px}
+  .ios-quiz-arena__eyebrow{font-size:8px;letter-spacing:.10em}
+  .ios-quiz-arena__top-actions{gap:4px}
+  .ios-quiz-arena__mode{min-width:60px;min-height:30px;padding:4px 6px;font-size:8px}
+  .ios-quiz-arena__free{padding:5px 6px;font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .ios-quiz-arena__mode{transition:none}
+}
+.ios-app[data-reduce-motion="true"] .ios-quiz-arena__mode{transition:none}
+
+
+/* Real 3D meshes extend below the original portrait box; keep the two
+   player names legible instead of painting text over their paws. */
+.ios-quiz-arena--3d .ios-quiz-arena__fighter-label {
+  transform:translateY(12px);
+  text-shadow:0 2px 7px #041029f2;
+}
+.ios-quiz-arena--3d .ios-quiz-arena__fighter-label small {
+  padding:2px 6px;
+  border-radius:6px;
+  background:#0b234c91;
+}
+.ios-quiz-arena--3d .ios-quiz-arena__fighter-label strong {
+  background:#0b234c88;
+  border-radius:7px;
+  padding:1px 7px;
+}
+@media(max-width:345px){
+  .ios-quiz-arena--3d .ios-quiz-arena__fighter-label {
+    transform:translateY(7px);
+  }
+}

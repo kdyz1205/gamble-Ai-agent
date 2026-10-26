@@ -40,7 +40,7 @@ function createSprite(color:string){
  * The canvas pauses when offscreen, hidden, motion-reduced or data-saving.
  * A static CSS-star fallback remains visible whenever animation is paused.
  */
-export default function QuizArenaParticles({phase}:{phase:Phase}){
+export default function QuizArenaParticles({phase,paused=false}:{phase:Phase;paused?:boolean}){
   const canvasRef=useRef<HTMLCanvasElement>(null);
   useEffect(()=>{
     const canvas=canvasRef.current;
@@ -74,7 +74,7 @@ export default function QuizArenaParticles({phase}:{phase:Phase}){
       if(timerId){window.clearTimeout(timerId);timerId=0;}
     }
     function allowed(){
-      return !disposed&&visible&&!document.hidden&&!reduced()&&!saveData&&
+      return !disposed&&!paused&&visible&&!document.hidden&&!reduced()&&!saveData&&
         width>=30&&height>=30;
     }
     function measure(){
@@ -178,7 +178,7 @@ export default function QuizArenaParticles({phase}:{phase:Phase}){
       if(arena.dataset.vfx)delete arena.dataset.vfx;
       if(arena.dataset.vfxQuality)delete arena.dataset.vfxQuality;
     };
-  },[phase]);
+  },[phase,paused]);
   return <canvas ref={canvasRef} className="ios-quiz-arena__vfx"
     aria-hidden="true" data-testid="ios-quiz-arena-vfx"/>;
 }

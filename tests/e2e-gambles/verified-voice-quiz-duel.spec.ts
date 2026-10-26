@@ -306,3 +306,80 @@ test("cinematic game-first HUD pauses offscreen and honors motion settings",asyn
     await context.close();
   }
 });
+
+
+test("optional true Pico 3D meshes render and obey motion controls",async({browser},testInfo)=>{
+  const ctx=await browser.newContext({
+    viewport:{width:390,height:844},
+    reducedMotion:"no-preference",
+  });
+  try{
+    const page=await ctx.newPage();
+    await page.goto(BASE+"/app/quiz");
+    const arena=page.getByTestId("ios-quiz-arena");
+    const mode=page.getByTestId("toggle-pico-3d");
+    await expect(arena).toBeVisible();
+    await expect(mode).toHaveAttribute("aria-pressed","false");
+    const webgl=await page.evaluate(()=>{
+      try{
+        const testCanvas=document.createElement("canvas");
+        const ctx=testCanvas.getContext("webgl2")||testCanvas.getContext("webgl");
+        return Boolean(ctx);
+      }catch{return false;}
+    });
+    await mode.click();
+    const mesh=page.getByTestId("pico-3d-canvas");
+    if(!webgl){
+      await expect(mode).toHaveAttribute("aria-pressed","false",{timeout:20_000});
+      await expect(arena.locator(".ios-quiz-arena__fallback")).toBeVisible();
+      await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+      return;
+    }
+    await expect(mesh).toHaveAttribute("data-meshes",/^\d+$/,{timeout:30_000});
+    const meshes=Number(await mesh.getAttribute("data-meshes"));
+    const triangles=Number(await mesh.getAttribute("data-triangles"));
+    expect(meshes).toBeGreaterThan(70);
+    expect(triangles).toBeGreaterThan(50_000);
+    await expect(mode).toHaveAttribute("aria-pressed","true");
+    await expect(arena).toHaveClass(/ios-quiz-arena--3d/);
+    await expect(arena.locator(".ios-quiz-arena__prototype-note")).toBeVisible();
+    await page.screenshot({path:testInfo.outputPath("actual-pico-3d-meshes-390.png"),fullPage:true});
+    await page.emulateMedia({reducedMotion:"reduce"});
+    await expect(mesh).toHaveAttribute("data-animating","false");
+    await page.emulateMedia({reducedMotion:"no-preference"});
+    await expect(mesh).toHaveAttribute("data-animating","true");
+    await mode.click();
+    await expect(mode).toHaveAttribute("aria-pressed","false");
+    await expect(mesh).toHaveCount(0);
+    await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+    // 2D and 3D are visual options; both keep the same zero-credit Quiz server.
+    await expect(arena).toHaveAttribute("data-phase","preview");
+  }finally{
+    await ctx.close();
+  }
+});
+
+test("Pico 3D mode safely falls back when WebGL is disabled",async({browser})=>{
+  const ctx=await browser.newContext({viewport:{width:390,height:844}});
+  try{
+    const page=await ctx.newPage();
+    await page.addInitScript(()=>{
+      const original=HTMLCanvasElement.prototype.getContext;
+      Object.defineProperty(HTMLCanvasElement.prototype,"getContext",{configurable:true,
+        value:function(this:HTMLCanvasElement,type:string,...args:unknown[]){
+        if(type==="webgl"||type==="webgl2"||type==="experimental-webgl")return null;
+        return Reflect.apply(original,this,[type,...args]);
+      }});
+    });
+    await page.goto(BASE+"/app/quiz");
+    const arena=page.getByTestId("ios-quiz-arena");
+    const toggle=page.getByTestId("toggle-pico-3d");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed","false",{timeout:20_000});
+    await expect(arena.locator(".ios-quiz-arena__fallback")).toBeVisible();
+    await expect(arena.locator(".ios-quiz-arena__pico").first()).toBeVisible();
+    await expect(arena).toHaveAttribute("data-phase","preview");
+  }finally{
+    await ctx.close();
+  }
+});
