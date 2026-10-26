@@ -108,7 +108,7 @@ export default function PicoStoryChapter(){
       <div className="pico-story__dialogue" aria-live="polite"
         data-testid="pico-story-dialogue">
         <span className="pico-story__speaker">
-          <span className="pico-story__speaker-dot" aria-hidden="true"/> PICO'S CHRONICLE
+          <span className="pico-story__speaker-dot" aria-hidden="true"/> PICO&rsquo;S CHRONICLE
         </span>
         <p className="pico-story__kicker">{copy.kicker}</p>
         <h1>{copy.title}</h1>
