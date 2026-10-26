@@ -221,12 +221,12 @@ jobs:
           if not ios:
               print("NO_AVAILABLE_IPHONE_SIMULATOR",file=sys.stderr)
               sys.exit(1)
-          # Selecting ios[-1] picked the iOS 26.2 iPhone SE (3rd gen)
-          # in the failing black-screen receipt. Prefer a current iPhone Pro
-          # and the latest available runtime, deterministically.
+          # Compatibility-only audit: deliberately retest the iOS 26.2
+          # iPhone SE (3rd generation) that previously showed a black screen.
+          # This is NOT the general release's modern-Pro simulator preference.
           import re
-          preferred={"iPhone 17 Pro":0,"iPhone 16 Pro":1,
-                     "iPhone 17":2,"iPhone 16":3,"iPhone 15 Pro":4}
+          preferred={"iPhone SE (3rd generation)":0,"iPhone 17 Pro":1,
+                     "iPhone 16 Pro":2,"iPhone 17":3,"iPhone 16":4}
           def choose(entry):
               runtime,device=entry
               versions=[int(x) for x in re.findall(r"\d+",runtime.split("iOS-")[-1])]
