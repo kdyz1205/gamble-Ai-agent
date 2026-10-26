@@ -43,7 +43,7 @@ type RoundWithExposures={
   questionIdsJson:string;answerCommitment:string;serverNonce:string;
   exposures:{userId:string;questionId:string;bankVersion:string}[];
 };
-async function verifiedPublic(
+export async function verifiedPublic(
   tx:Prisma.TransactionClient,row:RoundWithExposures,reused:boolean,
 ){
   let ids:unknown;

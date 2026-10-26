@@ -99,6 +99,7 @@ model User {
   privateRoundsCreated QuizPrivateRound[] @relation("PrivateRoundCreator")
   privateRoundsJoined  QuizPrivateRound[] @relation("PrivateRoundOpponent")
   privateQuestionExposures QuizPrivateExposure[] @relation("PrivateExposureUser")
+  privateQuizAttempts QuizPrivateAttempt[] @relation("PrivateQuizAttemptUser")
 }
 
 // ═══════════════════════════════════════
@@ -539,12 +540,16 @@ model QuizPrivateRound {
   answerCommitment String
   serverNonce      String
   status           String   @default("reserved")
+  resultJson       String?
+  resultHash       String?
+  finalizedAt      DateTime?
   expiresAt        DateTime
   createdAt        DateTime @default(now())
 
   creator  User @relation("PrivateRoundCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   opponent User @relation("PrivateRoundOpponent", fields: [opponentId], references: [id], onDelete: Restrict)
   exposures QuizPrivateExposure[]
+  attempts QuizPrivateAttempt[]
 
   @@index([creatorId, createdAt])
   @@index([opponentId, createdAt])
@@ -565,6 +570,23 @@ model QuizPrivateExposure {
   @@unique([userId, bankVersion, questionId])
   @@unique([roundId, userId, questionId])
   @@index([roundId])
+}
+
+// Sealed choices and objective scores for a server-only, zero-reward round.
+model QuizPrivateAttempt {
+  id          String   @id @default(cuid())
+  roundId     String
+  userId      String
+  answersJson String
+  answerHash  String
+  score       Int
+  createdAt   DateTime @default(now())
+
+  round QuizPrivateRound @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  user  User @relation("PrivateQuizAttemptUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, userId])
+  @@index([userId, createdAt])
 }
 
 // DETERMINISTIC FREE QUIZ DUELS (ISOLATED FROM MONEY/ESCROW)

@@ -19,8 +19,9 @@ const FREE_DRAW = "20261024200500_free_summon_draw_receipts";
 const EVOLUTION = "20261025100000_audited_free_summon_evolution";
 const PROTECTED_BANK = "20261025233000_protected_quiz_bank";
 const PROTECTED_ROUND = "20261026061500_private_quiz_round_exposure";
+const PROTECTED_ANSWERS = "20261026075000_private_quiz_answer_receipts";
 const SUMMON_TABLES = ["ProfessionXpEvent", "SummonDrawReceipt", "SummonEvolutionReceipt", "SummonInstance", "SummonTicket"];
-const QUIZ_TABLES = ["QuizAttempt","QuizDuel","QuizPrivateExposure","QuizPrivateRound","QuizProtectedQuestion"];
+const QUIZ_TABLES = ["QuizAttempt","QuizDuel","QuizPrivateAttempt","QuizPrivateExposure","QuizPrivateRound","QuizProtectedQuestion"];
 const addedColumns: Record<string, string[]> = {
   Challenge: ["arbiter", "disputeWindow", "eventTime", "evidenceHash", "fallbackRule", "joinWindow", "marketType", "paramsHash", "proofSource", "proofWindow", "proposition", "resolutionHash", "settlementMode", "stakeToken", "visibility"],
   Evidence: ["prepareError", "preparedAt", "preparedDurationSec", "preparedFrames", "preparedMode"],
@@ -81,12 +82,14 @@ async function main() {
     assert(migrationFolders.includes(EVOLUTION), "Verified evolution migration must be present");
     assert(migrationFolders.includes(PROTECTED_BANK), "Protected Quiz bank migration must be present");
     assert(migrationFolders.includes(PROTECTED_ROUND), "Private Quiz round/exposure migration must be present");
+    assert(migrationFolders.includes(PROTECTED_ANSWERS), "Protected private Quiz answer migration must be present");
+    assert(PROTECTED_ANSWERS > PROTECTED_ROUND, "Answer receipt foreign keys require reserved private rounds");
     assert(PROTECTED_ROUND > PROTECTED_BANK, "Private Quiz rounds require prior reviewed question foundations");
     assert(PROTECTED_BANK > QUIZ_DUELS, "Private questions must not precede base Quiz schema");
     assert(EVOLUTION > FREE_DRAW, "Evolution FKs require free draw item foundations first");
     assert(FREE_DRAW > SUMMON_LEDGER && FREE_DRAW > QUIZ_DUELS,
       "Free draw foreign keys require the existing ticket and Quiz migration order");
-    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER, QUIZ_DUELS, FREE_DRAW, EVOLUTION, PROTECTED_BANK, PROTECTED_ROUND].includes(entry.name))
+    for (const entry of entries) if (![ADDITIVE, PROTECT, SUMMON_LEDGER, QUIZ_DUELS, FREE_DRAW, EVOLUTION, PROTECTED_BANK, PROTECTED_ROUND, PROTECTED_ANSWERS].includes(entry.name))
       await cp(join(allMigrations, entry.name), join(baseline, entry.name), { recursive: true });
     const freshConfig = await config("fresh", allMigrations); const legacyConfig = await config("legacy", baseline);
     const additive = await readFile(join(allMigrations, ADDITIVE, "migration.sql"), "utf8");
@@ -97,6 +100,9 @@ async function main() {
     const evolutionMigration = await readFile(join(allMigrations, EVOLUTION, "migration.sql"), "utf8");
     const protectedBankMigration=await readFile(join(allMigrations,PROTECTED_BANK,"migration.sql"),"utf8");
     const protectedRoundMigration=await readFile(join(allMigrations,PROTECTED_ROUND,"migration.sql"),"utf8");
+    const privateAnswersMigration=await readFile(join(allMigrations,PROTECTED_ANSWERS,"migration.sql"),"utf8");
+    assert.doesNotMatch(privateAnswersMigration.replace(/--[^\n]*/g,""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
+    assert.doesNotMatch(privateAnswersMigration, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|QuizDuel|QuizAttempt)"/i);
     assert.doesNotMatch(protectedRoundMigration.replace(/--[^\n]*/g,""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
     assert.doesNotMatch(protectedRoundMigration, /ALTER\s+TABLE\s+"(?:CreditTx|Challenge|User|Judgment|QuizDuel|QuizAttempt)"/i);
     assert.doesNotMatch(protectedBankMigration.replace(/--[^\n]*/g,""), /\bDROP\b|\bDELETE\s+FROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+"/i);
@@ -118,7 +124,7 @@ async function main() {
     assert.deepEqual(await readSummonTables(fresh), SUMMON_TABLES);
     const readQuizTables = async (db: pg.Client) => (await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1::text[]) ORDER BY table_name`, [QUIZ_TABLES])).rows.map((row: {table_name:string}) => row.table_name);
     assert.deepEqual(await readQuizTables(fresh), QUIZ_TABLES);
-    console.log("PASS additive Summon, free draw, evolution, public/private Quiz and exposure tables exist after migrations");
+    console.log("PASS additive Summon, free draw, evolution, public/private Quiz, exposure and sealed-answer tables exist after migrations");
     await command(databases[0], ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     await command(databases[0], ["migrate", "diff", "--from-migrations", "prisma/migrations", "--to-schema", "prisma/schema.prisma", "--exit-code"], freshConfig);
     console.log("PASS fresh migrate deploy and independent shadow replay exactly match canonical columns, types, defaults, indexes and constraints");

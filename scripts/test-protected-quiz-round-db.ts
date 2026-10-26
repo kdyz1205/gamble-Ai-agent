@@ -8,6 +8,10 @@ import {
 import {
   reserveProtectedQuizRound,getProtectedQuizRoundForPlayer,
 } from "../src/lib/quiz/protected-quiz-round";
+import {
+  submitProtectedQuizAnswers,getProtectedQuizAnswerView,
+  expireProtectedQuizRound,
+} from "../src/lib/quiz/protected-quiz-answers";
 
 const uri=new URL(process.env.DATABASE_URL||"postgresql://missing");
 if(!["localhost","127.0.0.1"].includes(uri.hostname)||
@@ -139,6 +143,110 @@ async function suite(){
   eq(await prisma.quizPrivateExposure.count({where:{roundId:crossPair.id}}),6,
     "Cross-opponent round records both players' protected exposure");
 
+  // Real server-only answer path: six concurrent retries still seal one
+  // immutable answer per player, with NO reward or client-exposed answer key.
+  const beforeAnswer=await getProtectedQuizAnswerView({
+    roundId:first.id,userId:creator.id,
+  });
+  eq(beforeAnswer.result,null,"Round cannot reveal answers before both players finish");
+  eq(beforeAnswer.ownSubmitted,false,"Never invent a submitted answer");
+  const correct=first.questions.map(q=>specs.find(s=>s.id===q.id)!.answerIndex);
+  const wrong=correct.map(index=>(index+1)%4);
+  await denied(()=>getProtectedQuizAnswerView({
+    roundId:first.id,userId:outsider.id,
+  }),"PLAYER_FORBIDDEN","A stranger cannot read protected round answers");
+  await denied(()=>submitProtectedQuizAnswers({
+    roundId:first.id,userId:creator.id,choices:[0,1,2,4],
+  }),"ANSWERS_INVALID","No invalid fourth answer index can be submitted");
+  const six=await Promise.all(Array.from({length:6},
+    ()=>submitProtectedQuizAnswers({
+      roundId:first.id,userId:creator.id,choices:correct,
+    })));
+  eq(six.every(r=>r.result===null),true,
+    "First submitted player never sees premature score or secret nonce");
+  eq(await prisma.quizPrivateAttempt.count({where:{roundId:first.id}}),1,
+    "Six concurrent retries seal one real database answer");
+  eq(six[0].ownSubmitted,true,"Player receives a verified submitted flag");
+  await denied(()=>submitProtectedQuizAnswers({
+    roundId:first.id,userId:creator.id,choices:wrong,
+  }),"ANSWERS_SEALED","Conflicting answer retry is rejected");
+  const verdict=await submitProtectedQuizAnswers({
+    roundId:first.id,userId:opponent.id,choices:wrong,
+  });
+  eq(verdict.result?.outcome,"win","Objective signature-backed 3-0 score is a win");
+  eq(verdict.result?.winnerId,creator.id,"Winner matches exact real creator account");
+  eq(verdict.result?.scores.find(s=>s.userId===creator.id)?.score,3,
+    "Server scoring independently confirms creator's three answers");
+  eq(verdict.result?.scores.find(s=>s.userId===opponent.id)?.score,0,
+    "Wrong answers remain zero points for the opponent");
+  eq(verdict.result?.creditsTransferred,0,"Completed protected practice transfers no credit");
+  eq(verdict.result?.careerXp,0,"Protected practice doesn't mint redeemable career XP");
+  eq(verdict.result?.freeSummonTickets,0,
+    "Protected practice doesn't grant free summon tickets");
+  ok(/^[0-9a-f]{64}$/.test(verdict.result!.serverNonce),
+    "Server nonce is revealed only when both sealed answers resolve");
+  const replay=await submitProtectedQuizAnswers({
+    roundId:first.id,userId:creator.id,choices:correct,
+  });
+  eq(replay.resolutionHash,verdict.resolutionHash,
+    "Exact replay returns same immutable final receipt");
+  const opponentRead=await getProtectedQuizAnswerView({
+    roundId:first.id,userId:opponent.id,
+  });
+  eq(opponentRead.result?.winnerId,creator.id,
+    "Opponent independently reads the same server-finalized verdict");
+  await denied(()=>submitProtectedQuizAnswers({
+    roundId:first.id,userId:outsider.id,choices:correct,
+  }),"PLAYER_FORBIDDEN","Foreign account cannot place an answer");
+  const originalAttempt=await prisma.quizPrivateAttempt.findFirstOrThrow({
+    where:{roundId:first.id,userId:creator.id},
+  });
+  await prisma.quizPrivateAttempt.update({where:{id:originalAttempt.id},
+    data:{score:0}});
+  await denied(()=>getProtectedQuizAnswerView({
+    roundId:first.id,userId:creator.id,
+  }),"ATTEMPT_TAMPERED","Mutating stored score breaks the signed answer replay");
+  await prisma.quizPrivateAttempt.update({where:{id:originalAttempt.id},
+    data:{score:originalAttempt.score}});
+  const finalRow=await prisma.quizPrivateRound.findUniqueOrThrow({
+    where:{id:first.id},
+  });
+  await prisma.quizPrivateRound.update({where:{id:first.id},
+    data:{resultHash:"f".repeat(64)}});
+  await denied(()=>getProtectedQuizAnswerView({
+    roundId:first.id,userId:creator.id,
+  }),"VERDICT_TAMPERED","Mutated final receipt hash cannot pass validation");
+  await prisma.quizPrivateRound.update({where:{id:first.id},
+    data:{resultHash:finalRow.resultHash}});
+  eq((await getProtectedQuizAnswerView({
+    roundId:first.id,userId:creator.id,
+  })).result?.winnerId,creator.id,
+  "Repaired DB tamper fixture reproduces original verified result");
+
+  await denied(()=>expireProtectedQuizRound({
+    roundId:second.id,userId:creator.id,
+  }),"ROUND_NOT_EXPIRED","A live round cannot be voided early");
+  await submitProtectedQuizAnswers({
+    roundId:second.id,userId:creator.id,choices:[0,0,0],
+  });
+  await prisma.quizPrivateRound.update({where:{id:second.id},
+    data:{expiresAt:new Date(Date.now()-1000)}});
+  const voided=await expireProtectedQuizRound({
+    roundId:second.id,userId:opponent.id,
+  });
+  eq(voided.result?.outcome,"void_timeout","One-sided timeout has no winner");
+  eq(voided.result?.winnerId,null,
+    "No-show must not declare the only answering player a winner");
+  await denied(()=>submitProtectedQuizAnswers({
+    roundId:second.id,userId:opponent.id,choices:[0,0,0],
+  }),"ROUND_CLOSED","Late opponent submission cannot resurrect a void match");
+  eq((await expireProtectedQuizRound({
+    roundId:second.id,userId:creator.id,
+  })).result?.outcome,"void_timeout",
+    "Repeated expiry does not issue a second verdict");
+  eq(await prisma.quizPrivateAttempt.count({where:{roundId:{in:rounds}}}),3,
+    "Two answered in match one, one in timed-out match two");
+
   const row=await prisma.quizPrivateRound.findUniqueOrThrow({
     where:{id:first.id},
   });
@@ -219,10 +327,22 @@ async function run(){
         select:{id:true},
       });
       const ids=stored.map(row=>row.id);
+      await prisma.quizPrivateAttempt.deleteMany({where:{roundId:{in:ids}}});
       await prisma.quizPrivateExposure.deleteMany({where:{roundId:{in:ids}}});
       await prisma.quizPrivateRound.deleteMany({where:{id:{in:ids}}});
+      // Completed round audit events have a null actor. Limit cleanup to the
+      // exact synthetic round IDs, never global action-based deletion.
+      const finals=await prisma.auditLog.findMany({
+        where:{action:"quiz.private-round.finalized"},
+        select:{id:true,payload:true},
+      });
+      const finalIDs=finals.filter(a=>{
+        try{return ids.includes((JSON.parse(a.payload??"{}") as {roundId?:string}).roundId??"");}
+        catch{return false;}
+      }).map(a=>a.id);
+      await prisma.auditLog.deleteMany({where:{id:{in:finalIDs}}});
       await prisma.auditLog.deleteMany({where:{actorUserId:{in:users},
-        action:"quiz.private-round.reserved"}});
+        action:{in:["quiz.private-round.reserved","quiz.private-answers.sealed"]}}});
       await prisma.quizProtectedQuestion.deleteMany({where:{id:{in:questions}}});
       await prisma.user.deleteMany({where:{id:{in:users}}});
     }finally{
