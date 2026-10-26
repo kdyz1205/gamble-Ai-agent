@@ -6,6 +6,7 @@ import {
   createPicoMeshResources,createPicoCharacter,disposePicoMeshResources,
   picoMeshDiagnostics,
 } from "@/lib/summons/pico-3d-geometry";
+import {createPicoArenaVfx} from "@/lib/summons/pico-arena-vfx";
 
 type Phase="preview"|"open"|"live"|"completed"|"cancelled";
 
@@ -67,6 +68,14 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     const rightDiagnostic=picoMeshDiagnostics(right);
     canvas.dataset.meshes=String(leftDiagnostic.meshCount+rightDiagnostic.meshCount);
     canvas.dataset.triangles=String(leftDiagnostic.triangles+rightDiagnostic.triangles);
+
+    const vfx=createPicoArenaVfx();
+    scene.add(vfx.root);
+    const effectBudget=vfx.diagnostics();
+    canvas.dataset.vfxMeshes=String(effectBudget.meshes);
+    canvas.dataset.vfxTriangles=String(effectBudget.triangles);
+    canvas.dataset.vfxPhase=phase;
+    canvas.dataset.vfxWinner=phase==="completed"?(winnerSide||"none"):"none";
 
     // Stable static sprite-free 3D starfield; movement is a cheap single-group rotation.
     const starPosition=new Float32Array(80*3);
@@ -156,8 +165,11 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
       // 30 FPS maximum on touch devices; 45 on desktop.
       if(time-lastDraw>=1000/(coarse?30:45)){
         const t=time*.001;
-        left.animate(t,phase==="live");
-        right.animate(t,phase==="live",1.3);
+        left.animate(t,phase==="live",0,
+          phase==="completed"&&winnerSide==="creator");
+        right.animate(t,phase==="live",1.3,
+          phase==="completed"&&winnerSide==="opponent");
+        vfx.update(t,phase,winnerSide,true);
         left.root.position.x=-1.18;right.root.position.x=1.18;
         left.root.rotation.y=.24+rotationDelta;
         right.root.rotation.y=-.24+rotationDelta;
@@ -178,6 +190,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     function sync(){
       stop();resize();
       left.animate(0,false);right.animate(0,false,.8);
+      vfx.update(0,phase,winnerSide,false);
       canvas!.dataset.animating=eligible()?"true":"false";
       render();
       if(eligible())raf=requestAnimationFrame(animate);
@@ -243,13 +256,18 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
       canvas.removeEventListener("pointermove",onPointerMove);
       canvas.removeEventListener("pointerup",onPointerEnd);
       canvas.removeEventListener("pointercancel",onPointerEnd);
-      scene.remove(left.root,right.root,stars,...shadows);
+      scene.remove(left.root,right.root,stars,vfx.root,...shadows);
+      vfx.dispose();
       disposePicoMeshResources(resources);
       starGeometry.dispose();starMaterial.dispose();
       shadowGeometry.dispose();shadowMaterial.dispose();shadowTexture.dispose();
       engine.dispose();
       canvas.removeAttribute("data-meshes");
       canvas.removeAttribute("data-triangles");
+      canvas.removeAttribute("data-vfx-meshes");
+      canvas.removeAttribute("data-vfx-triangles");
+      canvas.removeAttribute("data-vfx-phase");
+      canvas.removeAttribute("data-vfx-winner");
     };
     try{
       resize();

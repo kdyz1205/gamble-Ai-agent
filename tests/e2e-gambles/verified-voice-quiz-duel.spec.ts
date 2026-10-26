@@ -135,6 +135,13 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await a.reload();
     await expect(a.locator(".ios-quiz-question")).toHaveCount(3,{timeout:15_000});
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","live");
+    await a.getByTestId("toggle-pico-3d").click();
+    const live3D=a.getByTestId("pico-3d-canvas");
+    await expect(live3D).toHaveAttribute("data-vfx-phase","live",{timeout:20_000});
+    await expect(live3D).toHaveAttribute("data-vfx-winner","none");
+    await expect(live3D).toHaveAttribute("data-vfx-meshes",/^[1-9][0-9]*$/);
+    await a.screenshot({path:testInfo.outputPath("pico-live-mutual-charge-3d.png"),
+      fullPage:true});
     const aView=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     const bView=(await (await friendCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
     expect(aView.status).toBe("live");
@@ -173,6 +180,12 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     await expect(a.getByTestId("ios-quiz-arena")).toHaveAttribute("data-phase","completed");
     await expect(a.getByTestId("ios-quiz-arena")).toContainText("Verified victory");
     await expect(a.getByTestId("ios-quiz-arena").getByText("WINNER",{exact:true})).toBeVisible();
+    await a.getByTestId("toggle-pico-3d").click();
+    const verified3D=a.getByTestId("pico-3d-canvas");
+    await expect(verified3D).toHaveAttribute("data-vfx-phase","completed",{timeout:20_000});
+    await expect(verified3D).toHaveAttribute("data-vfx-winner","creator");
+    await a.screenshot({path:testInfo.outputPath("pico-server-verified-winner-3d.png"),
+      fullPage:true});
     await a.screenshot({path:testInfo.outputPath("verified-quiz-result.png"),fullPage:true});
 
     const final=(await (await creatorCtx.request.get(BASE+"/api/quiz/"+id)).json()).quiz;
