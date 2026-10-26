@@ -32,7 +32,7 @@
     "test:production:integration": "npm run test:ai:integration && npm run test:production:recovery && tsx scripts/test-summon-ledger-db.ts && tsx scripts/test-free-summon-draw-db.ts && tsx scripts/test-summon-evolution-db.ts && tsx scripts/test-quiz-duel-db.ts",
     "test:production:http": "tsx scripts/test-internal-credit-boundary.ts && tsx scripts/test-private-proof-access.ts",
     "test:production:recovery": "tsx scripts/test-challenge-cancellation.ts && tsx scripts/test-consent-recovery.ts && tsx scripts/test-judge-job-committed-recovery.ts && tsx scripts/test-judgment-participants.ts && tsx scripts/test-vision-routing.ts && tsx scripts/test-evidence-upload-policy.ts && tsx scripts/test-evidence-cache-race.ts && tsx scripts/test-judgment-lock-storage.ts && tsx scripts/test-oauth-identity-guard.ts && tsx scripts/test-fresh-migrations.ts",
-    "test:trusted-evidence:smoke": "tsx --test scripts/smoke-evidence-admission.ts scripts/smoke-upload-session-policy.ts scripts/smoke-trusted-evidence-intake.ts && tsx scripts/test-private-video-prompt-redaction.ts && tsx scripts/test-trusted-browser-put.ts"
+    "test:trusted-evidence:smoke": "tsx --test scripts/smoke-evidence-admission.ts scripts/smoke-upload-session-policy.ts scripts/smoke-trusted-evidence-intake.ts && tsx scripts/test-private-video-prompt-redaction.ts && tsx scripts/test-trusted-browser-put.ts && tsx scripts/test-trusted-xp-admission.ts"
   },
   "repository": {
     "type": "git",

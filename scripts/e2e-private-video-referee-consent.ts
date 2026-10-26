@@ -25,6 +25,7 @@ import { getProviderById } from "../src/lib/llm-providers";
 import { executeChallengeJudgment } from "../src/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "../src/lib/verdict-review";
 import { reconcileVerifiedQuestProfessionXp } from "../src/lib/summons/server-ledger";
+import { assessTrustedQuestXpForManualReview } from "../src/lib/summons/trusted-xp-audit";
 import { AI_RECEIPT_ACTION, AI_RESERVATION_ACTION } from "../src/lib/ai-governance";
 
 function assertIsolated() {
@@ -274,6 +275,14 @@ async function main() {
 
     // Settled does NOT authorize XP or a creature until an independent
     // anti-farming gate is reviewed and feature flags deliberately enabled.
+    const audit = await assessTrustedQuestXpForManualReview({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(audit.admittedForManualReview, true, audit.blockers.join(","));
+    assert.equal(audit.xpGranted, false,
+      "A read-only eligibility report must never grant XP");
+    assert.equal(audit.ticketsGranted, 0);
+    assert.equal(audit.ownedSummonsGranted, 0);
     await assert.rejects(
       () => reconcileVerifiedQuestProfessionXp({ challengeId: quest.id, userId: creator.id }),
       /disabled/i,
@@ -294,6 +303,7 @@ async function main() {
       duplicatedJudgments: 0,
       creditMovement: 0,
       xpAwards: 0,
+      trustedXpAdmission: "review_candidate_only",
       ownedSummons: 0,
       modelAccuracyClaim: false,
     }));

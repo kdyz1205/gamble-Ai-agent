@@ -96,6 +96,28 @@ private-upload migration has not yet run.
   evolution **remain disabled**, subject to anti-farming/collusion and
   reversal/dispute policy reviews.
 
+## XP / Familiar award admission — not automatic issuance
+
+- A winning AI recommendation and both players clicking Accept are **not enough**
+  to automatically issue spendable XP, draws or an owned Familiar.
+- `evaluateTrustedXpAdmission` is a pure read-only rule and
+  `assessTrustedQuestXpForManualReview` uses a read-only PostgreSQL snapshot.
+  Both return **manual-review candidates only**, never XP values or grants.
+- The policy requires a final settled winner and two accepted players, two
+  participant-owned consumed private media receipts (exact size, MIME, SHA,
+  verified and consumed timestamps), a high-confidence outcome or a resolved
+  manual review, and final consent where no review overrides it.
+- It rejects reusing a media SHA-256 from another Quest and blocks additional
+  same-opponent XP candidates after two previously credited matches within a
+  seven-day window. Shared-camera video in the **same** Quest is allowed.
+- This is only an initial anti-replay/collusion barrier. Distinct users may
+  still collude, splice/edit video, or intentionally lose. A future separate
+  moderator/anti-farm approval and durable award outbox are required before
+  allowing automatic XP issuance. The existing internal reconciler remains
+  **disabled in production**, and no settlement hook grants XP.
+- Controlled local mock-video winner tests prove engineering wiring but not
+  real model accuracy or verified human performance.
+
 ## Isolated CI gates
 
 - `npm run test:trusted-evidence:smoke`: pure safe admission, policy,
