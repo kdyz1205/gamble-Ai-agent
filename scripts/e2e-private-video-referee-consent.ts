@@ -26,6 +26,7 @@ import { executeChallengeJudgment } from "../src/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "../src/lib/verdict-review";
 import { reconcileVerifiedQuestProfessionXp } from "../src/lib/summons/server-ledger";
 import { reconcileFreeCareerTickets } from "../src/lib/summons/free-ticket-ledger";
+import { redeemFreeSummonTicket, readOwnedFreeDrawInventory } from "../src/lib/summons/free-draw-ledger";
 import {
   approveTrustedQuestXpForReview,
   revokeTrustedQuestXpReview,
@@ -81,6 +82,7 @@ async function main() {
   const priorPersistence = process.env.SUMMON_PERSISTENCE_ENABLED;
   const priorManualReview = process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED;
   const priorTicketFlag = process.env.SUMMON_TICKETS_ENABLED;
+  const priorDrawFlag = process.env.SUMMON_DRAWS_ENABLED;
   const provider = getProviderById("openai");
   assert.ok(provider && provider.kind === "openai_compat");
   const originalBase = provider.baseUrl;
@@ -609,6 +611,90 @@ async function main() {
       freeTicketsSpent: 0, ownedSummonsMinted: 0,
       realPlayerRewards: 0,
     }));
+
+    // Deliberate, user-initiated free Summon draw. Until the separate draw
+    // feature is ON, earned tickets are INERT and cannot be consumed.
+    const drawRequestKey = randomUUID();
+    await assert.rejects(
+      () => redeemFreeSummonTicket({
+        ownerId: creator.id, professionId: "athletics",
+        occupationId: "badminton", requestKey: drawRequestKey,
+      }),
+      /not enabled/i,
+    );
+    assert.equal(await prisma.summonDrawReceipt.count({
+      where: { ownerId: creator.id },
+    }), 0);
+    process.env.SUMMON_DRAWS_ENABLED = "true";
+
+    const beforeDrawBalances = await prisma.user.findMany({
+      where: { id: { in: people } },
+      select: { id: true, credits: true }, orderBy: { id: "asc" },
+    });
+    const drawn = await redeemFreeSummonTicket({
+      ownerId: creator.id, professionId: "athletics",
+      occupationId: "badminton", requestKey: drawRequestKey,
+    });
+    assert.equal(drawn.reused, false);
+    assert.equal(drawn.creditsTransferred, 0);
+    assert.ok(drawn.receiptId && drawn.instanceId);
+    assert.ok(drawn.speciesId.startsWith("athletics-badminton-"));
+    assert.ok(["common","uncommon","rare","epic","legendary"].includes(drawn.rarity));
+    assert.equal(drawn.ordinal, 1);
+
+    // Network retries reuse the same client-generated key. Neither a duplicate
+    // database creature nor another free ticket may be consumed on retry.
+    const replayedDraw = await redeemFreeSummonTicket({
+      ownerId: creator.id, professionId: "athletics",
+      occupationId: "badminton", requestKey: drawRequestKey,
+    });
+    assert.equal(replayedDraw.reused, true);
+    assert.equal(replayedDraw.receiptId, drawn.receiptId);
+    assert.equal(replayedDraw.instanceId, drawn.instanceId);
+    await assert.rejects(() => redeemFreeSummonTicket({
+      ownerId: creator.id, professionId: "athletics",
+      occupationId: "coaching", requestKey: drawRequestKey,
+    }), /conflicts with an earlier free draw/i);
+    await assert.rejects(() => redeemFreeSummonTicket({
+      ownerId: creator.id, professionId: "athletics",
+      occupationId: "badminton", requestKey: randomUUID(),
+    }), /No issued, unused free ticket/i);
+
+    const afterDrawInventory = await readOwnedFreeDrawInventory(creator.id);
+    assert.ok(afterDrawInventory);
+    assert.equal(afterDrawInventory.items.length, 1);
+    assert.equal(afterDrawInventory.items[0].id, drawn.instanceId);
+    assert.equal(afterDrawInventory.items[0].speciesId, drawn.speciesId);
+    assert.equal(await prisma.summonDrawReceipt.count({
+      where: { ownerId: creator.id },
+    }), 1);
+    assert.equal(await prisma.summonInstance.count({
+      where: { ownerId: creator.id },
+    }), 1);
+    const afterDrawTicket = await prisma.summonTicket.findUniqueOrThrow({
+      where: { id: earned.grantIds[0] },
+      select: { status: true, spentByGrant: true },
+    });
+    assert.equal(afterDrawTicket.status, "spent");
+    assert.ok(afterDrawTicket.spentByGrant);
+    const afterDrawBalances = await prisma.user.findMany({
+      where: { id: { in: people } },
+      select: { id: true, credits: true }, orderBy: { id: "asc" },
+    });
+    assert.deepEqual(afterDrawBalances, beforeDrawBalances);
+    console.log(JSON.stringify({
+      result: "PASS", phase: "explicit_free_draw_creates_one_owned_familiar",
+      independentlyApprovedXp: 100,
+      verifiedFreeTicketsIssued: 1,
+      freeTicketsSpent: 1,
+      ownedFamiliars: 1,
+      serverSelectedRarity: drawn.rarity,
+      duplicateDrawRequests: 0,
+      duplicateOwnedInstances: 0,
+      creditMovement: 0,
+      liveUserRewards: 0,
+      liveModelAccuracyClaim: false,
+    }));
   } finally {
     process.env.AI_ENABLED = previousAi;
     if (priorPersistence === undefined) delete process.env.SUMMON_PERSISTENCE_ENABLED;
@@ -617,6 +703,8 @@ async function main() {
     else process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED = priorManualReview;
     if (priorTicketFlag === undefined) delete process.env.SUMMON_TICKETS_ENABLED;
     else process.env.SUMMON_TICKETS_ENABLED = priorTicketFlag;
+    if (priorDrawFlag === undefined) delete process.env.SUMMON_DRAWS_ENABLED;
+    else process.env.SUMMON_DRAWS_ENABLED = priorDrawFlag;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
     provider.baseUrl = originalBase;
@@ -635,6 +723,14 @@ async function main() {
     if (challengeId) {
       // Manual reviewer approval is RESTRICT to retain forensic history in
       // production; the disposable fixture must explicitly drop its own rows.
+      // Reverse creation order to respect RESTRICT FKs: draw receipts
+      // reference both the spent ticket and the owned Familiar.
+      await prisma.summonDrawReceipt.deleteMany({
+        where: { ownerId: { in: people } },
+      }).catch(() => {});
+      await prisma.summonInstance.deleteMany({
+        where: { ownerId: { in: people } },
+      }).catch(() => {});
       await prisma.summonTicket.deleteMany({
         where: { ownerId: { in: people } },
       }).catch(() => {});

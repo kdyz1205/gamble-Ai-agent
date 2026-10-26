@@ -155,8 +155,19 @@ review status and resolved winner.
   A failure returns **XP committed / tickets pending reconciliation**, not
   a false success or a second XP grant; the same action is safe to retry.
 - A free ticket is **not an owned Summon**. The player must separately
-  confirm a free-ticket draw. Draws and Familiar evolution have their own
-  independent feature flags; issuing XP alone never auto-mints a creature.
+  confirm a free-ticket draw behind `SUMMON_DRAWS_ENABLED=true`. That
+  server-owned transaction spends exactly one audited free ticket, uses
+  cryptographic randomness and stores the pity/RNG/rarity receipt alongside
+  one account-owned Familiar instance. A repeated client request key
+  replays that original receipt **without consuming another ticket**.
+  Draws and Familiar evolution have distinct opt-in flags; issuing XP
+  alone never auto-mints a creature.
+- The isolated CI E2E now verifies the complete synthetic route:
+  two private MP4 proofs → mock referee outcome → double consent →
+  independent moderator → exactly one 100-XP receipt → one free milestone
+  ticket → **separate explicit user draw** → one owned Familiar. It also
+  tests duplicate/reused keys and refuses a second ticket spend. No real
+  user XP, paid AI model, wager, production grant or silent draw occurs.
 - Source review approvals use a separate new table; **no legacy Evidence,
   Challenge or User columns are modified** in this migration. Preview builds
   keep all read/write calls behind the disabled feature flag.
