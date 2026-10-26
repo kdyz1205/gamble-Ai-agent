@@ -8,6 +8,7 @@ import {AuthInvitation} from "./IOSPersonalScreens";
 import {QuizVoiceInput} from "./QuizVoiceInput";
 import QuizArenaStage from "./QuizArenaStage";
 import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
+import QuizMatchHistoryPanel from "./QuizMatchHistoryPanel";
 
 const TOPICS=[
   {id:"general",label:"General knowledge / 常识"},
@@ -69,7 +70,7 @@ const mutation={method:"POST",headers:{"Content-Type":"application/json"}} as co
 
 export default function QuizDuelScreen({id}:{id?:string}){
   const language=useSumLanguage();
-  const {status}=useSession();
+  const {status,data:session}=useSession();
   const router=useRouter();
   const [topic,setTopic]=useState<Topic>("general");
   const [description,setDescription]=useState("");
@@ -389,6 +390,8 @@ export default function QuizDuelScreen({id}:{id?:string}){
             </button>
           </div>:<p>Quiz unavailable.</p>}
       </section>}
+    {!id&&status==="authenticated"&&pilotEnabled&&
+      <QuizMatchHistoryPanel enabled userId={session?.user?.id??null}/>}
     {error&&<p className="ios-message ios-message--error" role="alert">{error}</p>}
     {status==="authenticated"&&<section className="ios-quiz-runtime"
       aria-label="AI provider routing">
