@@ -134,6 +134,6 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  pages: { signIn: "/" },
+  pages: { signIn: "/auth/signin", error: "/auth/error" },
   secret: process.env.NEXTAUTH_SECRET,
 };

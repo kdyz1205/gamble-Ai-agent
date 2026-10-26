@@ -36,7 +36,7 @@ function NavIcon({ kind }: { kind: IconKind }) {
 export default function QuestAppNav({ scene = false }: { scene?: boolean }) {
   const pathname = usePathname() ?? "";
   // The native-style app provides its own complete five-tab navigation.
-  if (pathname === "/enter" || pathname === "/app" || pathname.startsWith("/app/")) return null;
+  if (pathname === "/enter" || pathname === "/auth" || pathname.startsWith("/auth/") || pathname === "/app" || pathname.startsWith("/app/")) return null;
   const sceneRoute = ["/summons", "/contracts/bind", "/duel/demo", "/rituals", "/judgment/demo"].includes(pathname);
   // SceneShell owns its dock; other pages share the same destination set without duplication.
   if (scene !== sceneRoute) return null;
