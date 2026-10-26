@@ -48,6 +48,26 @@ export function TodayScreen() {
       </Link>
     </section>
 
+    <section className="ios-pico-story-entry" aria-label="Play the first Pico chapter"
+      data-testid="pico-story-home-entry">
+      <div className="ios-pico-story-entry__chapter">
+        <span>PLAYABLE CHAPTER / PICO 001</span>
+        <small>01 · FIRST STAR</small>
+      </div>
+      <div className="ios-pico-story-entry__body">
+        <div>
+          <h2>Before the first star</h2>
+          <p>Meet Pico. Perform one spell. See where your story begins.</p>
+        </div>
+        <Link href="/app/story" data-testid="pico-story-open">
+          Play chapter <IosIcon name="arrow" size={15}/>
+        </Link>
+      </div>
+      <small className="ios-pico-story-entry__note">
+        A local story preview · No XP, credits, tickets or inventory changes
+      </small>
+    </section>
+
     <nav className="ios-command-modes" aria-label="Choose a game mode">
       <Link href="/app/quiz" className="ios-command-mode">
         <span className="ios-command-mode__icon"><IosIcon name="trophy"/></span>

@@ -8,7 +8,7 @@ const assert=require("node:assert/strict");
 const base=process.env.SUM_IOS_URL||"http://127.0.0.1:3091";
 const out=process.env.SUM_IOS_OUTPUT||path.resolve("output","ios-full-app");
 const pages=process.env.SUM_IOS_WORKFLOW_ONLY?[]:["splash","onboarding","today","discover","create","quest-created","quest",
-  "evidence-add","quest-complete","picos","profile","achievements","evidence","stats","community","settings"];
+  "evidence-add","quest-complete","picos","story","profile","achievements","evidence","stats","community","settings"];
 const widths=process.env.SUM_IOS_WORKFLOW_ONLY?[390]:process.env.SUM_IOS_QUICK?[390,1440]:[320,390,768,1440];
 fs.mkdirSync(out,{recursive:true});
 const evidence={base,pages,widths,runAt:new Date().toISOString(),results:[]};

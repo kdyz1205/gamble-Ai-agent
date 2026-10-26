@@ -1,0 +1,282 @@
+/* Pico's original illustrated 3D prologue: a small playable chapter,
+   not a marketing page, account reward screen, or derivative game asset. */
+.ios-pico-story{--story-ink:#202641;--story-gold:#e9c995;--story-violet:#8e87c6;}
+.ios-pico-story .ios-main{padding-inline:14px;padding-bottom:105px;}
+.pico-story{display:grid;gap:0;isolation:isolate;max-width:650px;margin:auto;}
+.pico-story__caption{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;margin:0 2px 10px;
+  color:#555377;font-weight:900;font-size:9px;letter-spacing:.15em;
+}
+.pico-story__caption b{padding:0 5px;color:#b9a0b7;font-weight:500;}
+.pico-story__demo{
+  border:1px solid #ceb988;border-radius:999px;
+  padding:5px 9px;background:#fff7e9;color:#8d6936;
+  white-space:nowrap;font-size:8px;letter-spacing:.06em;
+}
+.pico-story__theater{
+  position:relative;isolation:isolate;overflow:hidden;width:100%;
+  height:clamp(300px,43vh,425px);
+  border-radius:24px 24px 15px 15px;
+  border:1px solid #9887bd7d;
+  background:
+    radial-gradient(ellipse at 52% 31%,#e5e1faed 0%,#b6b3dfc4 22%,
+      transparent 55%),
+    linear-gradient(180deg,#373e69 0%,#66638f 38%,#a4a4b6 65%,
+      #b8a3a6 81%,#463956 100%);
+  box-shadow:0 20px 38px #3634563a,inset 0 0 25px #191e3a35;
+  contain:layout paint;
+}
+.pico-story__theater::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    repeating-linear-gradient(113deg,transparent 0 32px,#d8cfe312 34px 35px,
+      transparent 38px 87px),
+    radial-gradient(ellipse at 85% 75%,#f0c2ca7a,transparent 55%);
+  opacity:.65;
+}
+.pico-story__theater::after{
+  content:"";position:absolute;inset:0;z-index:8;pointer-events:none;
+  box-shadow:inset 0 0 60px #24213f91,inset 0 2px #ffffff59;
+  border-radius:inherit;
+}
+.pico-story__ink{
+  position:absolute;inset:-30px;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 4% 45%,#202c54a1 0%,transparent 36%),
+    radial-gradient(ellipse at 97% 60%,#343353a8 0%,transparent 35%),
+    radial-gradient(ellipse at 50% 106%,#1b284ea8 0%,transparent 41%);
+}
+.pico-story__mist{
+  position:absolute;z-index:2;bottom:-22%;left:-45%;
+  width:180%;height:65%;pointer-events:none;
+  background:radial-gradient(ellipse,#dde4f8ae,transparent 68%);
+  filter:blur(15px);
+  transform:translate3d(0,0,0);
+  animation:pico-story-drift 16s ease-in-out infinite alternate;
+}
+.pico-story__moon{
+  position:absolute;z-index:2;left:50%;top:17%;
+  width:min(58%,220px);aspect-ratio:1;border-radius:50%;
+  transform:translateX(-50%);
+  border:1px solid #fef7edb9;
+  background:radial-gradient(circle at 42% 37%,
+    #fffaf7 0%,#f9eff7 35%,#dfd8eea3 60%,#d2d4f26b 72%,transparent 74%);
+  box-shadow:0 0 90px 18px #f5e5fd91,0 0 22px #f8f4ff;
+  opacity:.57;
+}
+.pico-story__silhouette{
+  position:absolute;z-index:2;bottom:-5%;height:55%;width:47%;
+  background:linear-gradient(180deg,#59637b9c,#24304fe8);
+  filter:blur(.4px);pointer-events:none;
+  clip-path:polygon(0% 100%,0 41%,12% 48%,19% 8%,25% 56%,36% 48%,
+    42% 25%,49% 62%,61% 46%,75% 66%,85% 50%,100% 100%);
+}
+.pico-story__silhouette--left{left:-12%;}
+.pico-story__silhouette--right{right:-12%;transform:scaleX(-1);opacity:.8;}
+.pico-story__canvas{
+  display:block;position:absolute;z-index:5;inset:0;
+  width:100%;height:100%;pointer-events:none;
+  background:transparent;
+}
+.pico-story__illustration{
+  position:absolute;z-index:4;inset:14% 14% 8%;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
+  opacity:1;transition:opacity .3s ease;
+}
+.pico-story__illustration img{
+  display:block;width:100%;max-width:320px;height:auto;object-fit:contain;
+  filter:drop-shadow(0 16px 22px #3932519e);
+}
+.pico-story__illustration--hidden{visibility:hidden;opacity:0;}
+.pico-story--summoning .pico-story__illustration:not(.pico-story__illustration--hidden){
+  animation:pico-story-arrival 1.4s cubic-bezier(.16,.84,.31,1) both;
+}
+.pico-story--casting .pico-story__illustration:not(.pico-story__illustration--hidden){
+  animation:pico-story-cast 1.2s ease-in-out both;
+}
+.pico-story__paper-stars{position:absolute;inset:0;z-index:4;pointer-events:none;}
+.pico-story__paper-stars span{
+  position:absolute;width:7px;height:11px;border-radius:80% 8% 80% 20%;
+  background:#ffe6e6;opacity:.64;transform:rotate(30deg);
+  box-shadow:0 0 8px #e9bfff66;
+  animation:pico-story-petal 8s ease-in-out infinite;
+}
+.pico-story__paper-stars span:nth-child(1){left:10%;top:22%;animation-delay:-.6s;}
+.pico-story__paper-stars span:nth-child(2){left:88%;top:34%;animation-delay:-2.4s;}
+.pico-story__paper-stars span:nth-child(3){left:25%;top:68%;animation-delay:-3.3s;}
+.pico-story__paper-stars span:nth-child(4){left:73%;top:12%;animation-delay:-1.6s;}
+.pico-story__paper-stars span:nth-child(5){left:7%;top:70%;animation-delay:-4.7s;}
+.pico-story__paper-stars span:nth-child(6){left:92%;top:76%;animation-delay:-5.8s;}
+.pico-story__target{
+  position:absolute;top:53%;right:9%;z-index:3;pointer-events:none;
+  width:48px;height:48px;border-radius:50%;display:grid;place-content:center;
+  font-size:16px;color:#e9d3ff;
+  border:1px solid #f1ddff87;
+  background:radial-gradient(circle,#c9b2e368,#635b9a3a 55%,transparent 75%);
+  box-shadow:0 0 25px #c7adf58a;
+}
+.pico-story--casting .pico-story__target{
+  animation:pico-story-flare 1.1s ease-out 1s both;
+}
+.pico-story__rim{
+  position:absolute;z-index:7;left:-10%;right:-10%;bottom:12px;height:37px;
+  pointer-events:none;border-radius:50%;
+  border-top:2px solid #ecddffd1;
+  background:radial-gradient(ellipse,#b5cef857,transparent 74%);
+  transform:perspective(180px) rotateX(66deg);
+}
+.pico-story__chapter-stamp{
+  position:absolute;z-index:9;left:14px;bottom:11px;
+  color:#ffffffed;font-size:9px;font-weight:850;letter-spacing:.15em;
+  text-shadow:0 2px 6px #10172e;
+}
+.pico-story__dialogue{
+  position:relative;z-index:10;display:grid;gap:6px;
+  margin:-19px 9px 0;padding:19px 19px 17px;
+  border-radius:18px 18px 16px 16px;
+  border:1px solid #ffffffd6;
+  background:linear-gradient(160deg,#fff9f1,#f8f2fa 68%,#f3ebf7);
+  box-shadow:0 9px 26px #41355a23;
+}
+.pico-story__speaker{display:flex;gap:8px;align-items:center;
+  font-size:9px;letter-spacing:.12em;font-weight:900;color:#7870a2;}
+.pico-story__speaker-dot{width:7px;height:7px;background:#cdad78;border-radius:50%;}
+.pico-story__kicker{
+  color:#9c755c;font-size:9px;font-weight:850;letter-spacing:.15em;
+}
+.pico-story__dialogue h1{
+  font-family:"Fraunces",Georgia,serif;font-size:clamp(23px,5.6vw,32px);
+  letter-spacing:-.035em;line-height:1.12;color:#313452;margin:0;
+}
+.pico-story__text{font-size:12px;color:#606078;line-height:1.58;max-width:52ch;}
+.pico-story__beats{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;
+  padding:17px 4px 13px;max-width:100%;overflow:hidden;
+}
+.pico-story__beats span{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  color:#9691a5;font-size:9px;white-space:nowrap;min-width:0;
+  letter-spacing:-.03em;
+}
+.pico-story__beats small{font-family:Georgia,serif;font-style:italic;font-size:12px;}
+.pico-story__beats .is-reached{color:#66577b;font-weight:850;}
+.pico-story__beats span[aria-current=step]{color:#8c6e3f;}
+.pico-story__actions{display:grid;gap:9px;padding:0 8px;}
+.pico-story__action{
+  display:flex;align-items:center;justify-content:center;gap:16px;
+  width:100%;min-height:55px;border:1px solid #d1a96c;border-radius:17px;
+  background:linear-gradient(110deg,#3e3a65,#62527c 45%,#99718d);
+  box-shadow:0 9px 21px #4a426153,inset 0 2px 1px #ffffff36;
+  color:#fff8ec;font-weight:900;font-size:14px;
+  letter-spacing:.02em;cursor:pointer;
+  transition:transform .14s ease,filter .14s ease;
+}
+.pico-story__action:not(:disabled):active{transform:scale(.982);}
+.pico-story__action:not(:disabled):hover{filter:brightness(1.08);}
+.pico-story__action:focus-visible,.pico-story__secondary:focus-visible{
+  outline:3px solid #a9884b;outline-offset:3px;
+}
+.pico-story__action span:last-child{font-size:20px;font-weight:400;color:#ffdfa7;}
+.pico-story__action:disabled{cursor:progress;opacity:.72;}
+.pico-story__secondary{
+  display:block;text-align:center;padding:13px;
+  color:#655e84;font-weight:800;text-decoration:none;font-size:12px;
+  background:#f6f1f8;border-radius:13px;border:1px solid #e8dcf3;
+}
+.pico-story__disclaimer{
+  padding:12px 18px 20px;text-align:center;
+  font-size:10px;color:#888198;line-height:1.7;
+}
+@keyframes pico-story-drift{
+  from{transform:translate3d(-4%,0,0);}
+  to{transform:translate3d(4%,-8%,0);}
+}
+@keyframes pico-story-petal{
+  0%,100%{transform:translate3d(-5px,6px,0) rotate(24deg);opacity:.22;}
+  50%{transform:translate3d(16px,-18px,0) rotate(140deg);opacity:.82;}
+}
+@keyframes pico-story-arrival{
+  0%{transform:translateY(42px) scale(.44);opacity:.1;}
+  75%{transform:translateY(-7px) scale(1.05);opacity:1;}
+  100%{transform:translateY(0) scale(1);opacity:1;}
+}
+@keyframes pico-story-cast{
+  0%,100%{transform:translateX(0) scale(1);}
+  56%{transform:translateX(-8px) scale(.96);}
+  80%{transform:translateX(11px) scale(1.06);}
+}
+@keyframes pico-story-flare{
+  0%{box-shadow:0 0 14px #d6b5e57a;transform:scale(.8);}
+  46%{box-shadow:0 0 42px 13px #fff2c2ec;transform:scale(1.5);}
+  100%{box-shadow:0 0 24px #d6b5e57a;transform:scale(1);}
+}
+@media(max-width:350px){
+  .ios-pico-story .ios-main{padding-inline:9px;}
+  .pico-story__theater{height:300px;}
+  .pico-story__dialogue{padding:15px;margin-inline:5px;}
+  .pico-story__beats span{font-size:8px;}
+  .pico-story__beats small{font-size:10px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .pico-story__mist,.pico-story__paper-stars span,
+  .pico-story__target,.pico-story__illustration,
+  .pico-story__action{animation:none!important;transition:none!important;}
+}
+.ios-app[data-reduce-motion="true"] .pico-story__mist,
+.ios-app[data-reduce-motion="true"] .pico-story__paper-stars span,
+.ios-app[data-reduce-motion="true"] .pico-story__target,
+.ios-app[data-reduce-motion="true"] .pico-story__illustration,
+.ios-app[data-reduce-motion="true"] .pico-story__action{
+  animation:none!important;transition:none!important;
+}
+
+/* One playable content card leads the home experience without disrupting the
+   existing verified Quest navigation and account-based reward ledger. */
+.ios-pico-story-entry{
+  display:grid;gap:11px;margin:13px 0 17px;padding:14px 14px 12px;
+  border-radius:19px;border:1px solid #c6b6ce;
+  background:
+    radial-gradient(circle at 90% 0%,#f9def2ac,transparent 48%),
+    linear-gradient(135deg,#fbf5e9,#f1ecf8 72%,#eeeaf8);
+  box-shadow:0 9px 22px #72638a14;
+}
+.ios-pico-story-entry__chapter{
+  display:flex;justify-content:space-between;gap:8px;align-items:center;
+  color:#8c7090;font-size:9px;letter-spacing:.12em;font-weight:900;
+}
+.ios-pico-story-entry__chapter small{
+  border:1px solid #c5ad8a;border-radius:20px;padding:4px 7px;
+  color:#8b7148;font-size:8px;background:#fdf8ed;
+}
+.ios-pico-story-entry__body{
+  display:flex;align-items:end;justify-content:space-between;gap:12px;
+}
+.ios-pico-story-entry__body>div{min-width:0;display:grid;gap:4px;}
+.ios-pico-story-entry h2{
+  font-family:"Fraunces",Georgia,serif;
+  color:#343656;font-size:20px;line-height:1.15;
+  letter-spacing:-.04em;
+}
+.ios-pico-story-entry p{font-size:11px;line-height:1.48;color:#656780;}
+.ios-pico-story-entry__body>a{
+  display:inline-flex;align-items:center;gap:4px;justify-content:center;
+  flex:none;border-radius:12px;padding:10px 11px;
+  background:#4a486f;color:#fffaf1;font-size:10px;font-weight:900;
+  white-space:nowrap;text-decoration:none;
+}
+.ios-pico-story-entry__body>a:focus-visible{
+  outline:3px solid #bd8a51;outline-offset:3px;
+}
+.ios-pico-story-entry__note{font-size:9px;line-height:1.5;color:#878294;}
+.ios-app--night .ios-pico-story-entry{
+  background:linear-gradient(130deg,#383654,#303d5d);
+  border-color:#686585;
+}
+.ios-app--night .ios-pico-story-entry h2,
+.ios-app--night .ios-pico-story-entry p{color:#f4efff;}
+@media(max-width:355px){
+  .ios-pico-story-entry__body{flex-wrap:wrap;}
+  .ios-pico-story-entry__body>a{width:100%;}
+}
