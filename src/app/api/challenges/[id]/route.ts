@@ -64,7 +64,25 @@ export async function GET(
   // Publishing the older recommendation then would show a different winner
   // from the credit ledger. Keep the result unavailable until recovery ends.
   const awaitingReviewCompletion = challenge.status === "settled" && challenge.reviewCase?.status === "processing";
-  return Response.json({ challenge: awaitingReviewCompletion ? { ...challenge, judgments: [] } : challenge }, { headers: { "Cache-Control": "private, no-store" } });
+  const linkedUploads = process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS === "true"
+    ? await prisma.trustedEvidenceUpload.findMany({
+      where: { challengeId: id, status: "consumed", evidenceId: {
+        in: challenge.evidence.map(row => row.id),
+      } },
+      select: { id: true, evidenceId: true },
+    })
+    : [];
+  const links = new Map(linkedUploads.filter(row => row.evidenceId)
+    .map(row => [row.evidenceId!, row.id] as const));
+  const visible = {
+    ...challenge,
+    evidence: challenge.evidence.map(row => ({
+      ...row,
+      trustedUploadId: links.get(row.id) ?? null,
+    })),
+    ...(awaitingReviewCompletion ? { judgments: [] } : {}),
+  };
+  return Response.json({ challenge: visible }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 /** DELETE retains the quest as cancelled; legacy success fields remain available. */

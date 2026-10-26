@@ -7,6 +7,8 @@ import {
   capJudgeVisuals,
   type JudgeVisionImage,
 } from "./media/prepare-evidence-visuals";
+import { describeEvidenceForJudge } from "./media/judge-evidence-summary";
+import type { TrustedEvidenceSource } from "./media/trusted-evidence-storage";
 import { detectScoredMatchContract } from "./scored-match";
 import { judgeShortScoredMatch } from "./scored-match-judge";
 import { AiBudgetError } from "./ai-governance";
@@ -426,6 +428,8 @@ export interface JudgeEvidencePayload {
   description: string | null;
   type: string;
   url?: string | null;
+  privateMedia?: boolean; // no transport URL ever enters model text
+  trustedSource?: TrustedEvidenceSource;
   preparedFrames?: string[] | null;
   preparedDurationSec?: number | null;
   preparedMode?: string | null;
@@ -457,7 +461,9 @@ async function getVisualsForParticipant(
   label: string,
   evidence: JudgeEvidencePayload,
 ): Promise<{ preambleLines: string[]; visuals: JudgeVisionImage[] }> {
-  if (evidence.preparedFrames && evidence.preparedFrames.length > 0) {
+  // Only legacy public proofs may reuse already-public Blob frame pointers.
+  // A private Evidence row must be decoded from the server-authorized object.
+  if (!evidence.privateMedia && evidence.preparedFrames && evidence.preparedFrames.length > 0) {
     const fast = await prepareParticipantVisualsFast(label, evidence.preparedFrames, {
       durationSec: evidence.preparedDurationSec,
       mode: evidence.preparedMode,
@@ -468,6 +474,8 @@ async function getVisualsForParticipant(
     description: evidence.description,
     type: evidence.type,
     url: evidence.url ?? null,
+    privateMedia: evidence.privateMedia === true,
+    trustedSource: evidence.trustedSource,
   });
 }
 
@@ -480,7 +488,8 @@ export async function judgeChallenge(params: JudgeChallengeParams): Promise<Judg
   const invalidProof = [evidenceA, evidenceB].some((evidence) => {
     if (!evidence) return false;
     if (required === "video" || required === "photo") {
-      return evidence.type !== required || !evidence.url?.trim();
+      return evidence.type !== required ||
+        !(evidence.url?.trim() || (evidence.privateMedia && evidence.trustedSource));
     }
     if (required === "text" || required === "self_report") {
       return !evidence.description?.trim();
@@ -591,11 +600,10 @@ Return ONLY a valid JSON object, nothing before or after it. Shape:
       reasoning: "Visual proof could not be read for every media submission. No winner can be recommended from descriptions; review or readable proof is required." };
   }
   const visualPreamble = [...visualsA.preambleLines, ...visualsB.preambleLines].join("\n");
-  const evidenceSummary = `Participant A evidence (${evidenceA!.type}):
-description: ${evidenceA!.description || "(none)"}${evidenceA!.url ? `\nmedia: ${evidenceA!.url}` : ""}
-
-Participant B evidence (${evidenceB!.type}):
-description: ${evidenceB!.description || "(none)"}${evidenceB!.url ? `\nmedia: ${evidenceB!.url}` : ""}`;
+  const evidenceSummary = [
+    describeEvidenceForJudge("A", evidenceA!),
+    describeEvidenceForJudge("B", evidenceB!),
+  ].join("\n\n");
 
   const userText = `Challenge: "${title}"
 Type: ${type}

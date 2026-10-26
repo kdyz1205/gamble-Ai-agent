@@ -7,6 +7,7 @@ import * as api from "@/lib/api-client";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
+import { putTrustedEvidenceFile } from "@/lib/media/trusted-browser-put";
 
 // Summoner.world proof palette.
 const NAVY = "#1E293B";
@@ -47,6 +48,8 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const [urlInput, setUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [privateUploadPhase, setPrivateUploadPhase] = useState<"idle" | "transfer" | "verify" | "bind">("idle");
+  const privateUploadController = useRef<AbortController | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,6 +75,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setUploadProgress(0);
     setError("");
   }, []);
+
+  // Browser backgrounding or navigation must not leave an old transfer writing
+  // to a new Quest screen. Aborting cannot create an Evidence row.
+  useEffect(() => () => privateUploadController.current?.abort(), []);
 
   // Stop any active webcam when component unmounts or mode changes
   useEffect(() => {
@@ -209,6 +216,85 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     try {
       let finalUrl: string | undefined = trimmedUrl || undefined;
       let finalType = f?.type.startsWith("video") ? "video" : f?.type.startsWith("image") ? "photo" : requiredMedia || evidenceType || "text";
+
+      // Prefer the server-verified PRIVATE object path when the new intake is
+      // explicitly available. A configured server error is NOT a reason to
+      // silently downgrade to public Blob/URL evidence.
+      if (f) {
+        const offer = await fetch("/api/uploads/trusted-evidence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            challengeId, contentType: f.type, fileSizeBytes: f.size,
+          }),
+        });
+        if (offer.status !== 404) {
+          if (!offer.ok) {
+            const problem = await offer.json().catch(() => ({}));
+            throw new Error(problem.error || "Verified private upload is not available");
+          }
+          const ticket = await offer.json() as {
+            uploadSessionId: string; uploadUrl: string;
+            headers: Record<string, string>;
+          };
+          if (!ticket.uploadSessionId || !ticket.uploadUrl || !ticket.headers) {
+            throw new Error("Trusted storage did not return an upload receipt");
+          }
+          setUploading(true);
+          setUploadProgress(0);
+          setPrivateUploadPhase("transfer");
+          const controller = new AbortController();
+          privateUploadController.current = controller;
+          try {
+            await putTrustedEvidenceFile({
+              uploadUrl: ticket.uploadUrl,
+              headers: ticket.headers,
+              file: f,
+              signal: controller.signal,
+              onProgress: setUploadProgress,
+            });
+            setPrivateUploadPhase("verify");
+
+            const completed = await fetch(
+              "/api/uploads/trusted-evidence/" +
+                encodeURIComponent(ticket.uploadSessionId) + "/complete",
+              { method: "POST" },
+            );
+            if (!completed.ok) {
+              const problem = await completed.json().catch(() => ({}));
+              throw new Error(problem.error || "Private media integrity check failed");
+            }
+
+            setPrivateUploadPhase("bind");
+            const bound = await fetch(
+              "/api/challenges/" + encodeURIComponent(challengeId) +
+                "/evidence/trusted",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  uploadSessionId: ticket.uploadSessionId,
+                  description: trimmedDescription || ("Uploaded: " + f.name),
+                }),
+              },
+            );
+            if (!bound.ok) {
+              const problem = await bound.json().catch(() => ({}));
+              throw new Error(problem.error || "Verified evidence could not be bound to this Quest");
+            }
+            // No permanent S3 URL is returned to the user or stored in Evidence.
+            resetAll();
+            setMode(null);
+            setDescription("");
+            await onSubmitted();
+            return;
+          } finally {
+            privateUploadController.current = null;
+            setPrivateUploadPhase("idle");
+            setUploading(false);
+          }
+        }
+      }
 
       // Upload file via Vercel Blob if present
       if (f) {
@@ -407,7 +493,25 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
               transition={{ type: "tween" }}
             />
           </div>
-          <p className="text-xs font-semibold mt-1" style={{ color: PEACH_DARK }}>Uploading… {uploadProgress}%</p>
+          <p role="status" aria-live="polite" className="text-xs font-semibold mt-1"
+            style={{ color: PEACH_DARK }}>
+            {privateUploadPhase === "verify" ? "Verifying the uploaded file on the server?" :
+              privateUploadPhase === "bind" ? "Saving verified proof to your Quest?" :
+                `Transferring video/photo? ${uploadProgress}%`}
+          </p>
+          {privateUploadPhase !== "idle" && (
+            <p className="text-xs mt-1" style={{ color: NAVY_DIM }}>
+              Keep this page open until your Quest confirms the proof was saved.
+            </p>
+          )}
+          {privateUploadPhase === "transfer" && (
+            <button type="button"
+              className="mt-2 text-xs font-semibold underline"
+              onClick={() => privateUploadController.current?.abort()}
+              style={{ color: ROSE_TEXT }}>
+              Cancel transfer
+            </button>
+          )}
         </div>
       )}
 

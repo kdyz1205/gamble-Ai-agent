@@ -1,4 +1,6 @@
 import { completeOracleJudgeVision } from "./llm-router";
+import type { VideoEvidenceSource } from "./media/local-evidence-video";
+import type { TrustedEvidenceSource } from "./media/trusted-evidence-storage";
 import {
   capJudgeVisuals,
   type JudgeVisionImage,
@@ -19,6 +21,8 @@ interface ScoredMatchEvidence {
   description: string | null;
   type: string;
   url?: string | null;
+  privateMedia?: boolean;
+  trustedSource?: TrustedEvidenceSource;
 }
 
 export interface ShortScoredMatchJudgeParams {
@@ -63,10 +67,17 @@ function parseJsonObject<T>(text: string): T | null {
   }
 }
 
-function videoUrl(evidence: ScoredMatchEvidence): string | null {
+function videoSource(evidence: ScoredMatchEvidence): VideoEvidenceSource | null {
   if (evidence.type.toLowerCase() !== "video") return null;
-  const url = evidence.url?.trim();
-  return url || null;
+  // A private source must NEVER fall back to a public client URL.
+  if (evidence.privateMedia) return evidence.trustedSource ?? null;
+  return evidence.url?.trim() || null;
+}
+
+function sameSource(a: VideoEvidenceSource, b: VideoEvidenceSource): boolean {
+  return typeof a === "string" || typeof b === "string"
+    ? a === b
+    : a.key === b.key && a.sha256 === b.sha256;
 }
 
 function fail(reason: string, confidence = 0.25) {
@@ -138,19 +149,31 @@ export async function judgeShortScoredMatch(
   params: ShortScoredMatchJudgeParams,
   contract: ScoredMatchContract,
 ) {
-  const urlA = videoUrl(params.evidenceA);
-  const urlB = videoUrl(params.evidenceB);
-  if (!urlA && !urlB) return fail("at least one shared, direct video must continuously cover the scored sports match.");
+  const sourceA = videoSource(params.evidenceA);
+  const sourceB = videoSource(params.evidenceB);
+  if (!sourceA && !sourceB) return fail("at least one video must continuously cover the scored sports match.");
 
-  const sources: Array<{ id: "A" | "B"; url: string; description: string }> = [];
-  if (urlA) sources.push({ id: "A", url: urlA, description: params.evidenceA.description ?? "(none)" });
-  if (urlB && urlB !== urlA) sources.push({ id: "B", url: urlB, description: params.evidenceB.description ?? "(none)" });
+  const sources: Array<{
+    id: "A" | "B";
+    source: VideoEvidenceSource;
+    description: string;
+  }> = [];
+  if (sourceA) sources.push({
+    id: "A", source: sourceA,
+    description: params.evidenceA.description ?? "(none)",
+  });
+  if (sourceB && (!sourceA || !sameSource(sourceB, sourceA))) {
+    sources.push({
+      id: "B", source: sourceB,
+      description: params.evidenceB.description ?? "(none)",
+    });
+  }
   const availableSources = new Set(sources.map((source) => source.id));
 
   const timelineResults = await Promise.allSettled(
     sources.map(async (source) => ({
       source,
-      timeline: await prepareScoredMatchTimeline(`SOURCE-${source.id}`, source.url),
+      timeline: await prepareScoredMatchTimeline(`SOURCE-${source.id}`, source.source),
     })),
   );
   const usableTimelines = timelineResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
@@ -159,7 +182,8 @@ export async function judgeShortScoredMatch(
     const message = firstError?.status === "rejected" && firstError.reason instanceof Error
       ? firstError.reason.message
       : "timeline extraction failed";
-    return fail(message);
+    return fail((params.evidenceA.privateMedia || params.evidenceB.privateMedia)
+      ? "private video extraction failed; review requires a readable recording" : message);
   }
 
   const timelineA = usableTimelines.find((entry) => entry.source.id === "A")?.timeline.visuals ?? [];
@@ -220,13 +244,15 @@ Find all rally windows in chronological order. Do not infer identity or continui
   try {
     const preparedDetails = await prepareRallyDetailVisuals(
       `SOURCE-${primary.id}`,
-      primary.url,
+      primary.source,
       discovery.candidateRallies,
     );
     detailImages = preparedDetails.visuals;
     detailFramesPerSecond = preparedDetails.framesPerSecond;
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "dense rally extraction failed");
+    return fail((params.evidenceA.privateMedia || params.evidenceB.privateMedia)
+      ? "private rally frame extraction failed"
+      : error instanceof Error ? error.message : "dense rally extraction failed");
   }
 
   const detail = await callVisionJson<DetailResult>({

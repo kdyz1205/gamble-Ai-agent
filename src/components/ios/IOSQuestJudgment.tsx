@@ -27,7 +27,7 @@ function proofComplete(quest: ChallengeData): boolean {
     const row = evidence.get(p.user.id);
     if (!row) return false;
     if (["video", "photo"].includes(quest.evidenceType)) {
-      return row.type === quest.evidenceType && !!row.url?.trim();
+      return row.type === quest.evidenceType && Boolean(row.url?.trim() || row.trustedUploadId);
     }
     return !!row.description?.trim();
   });
