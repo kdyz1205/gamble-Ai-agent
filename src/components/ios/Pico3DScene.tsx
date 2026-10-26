@@ -44,7 +44,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     const engine=renderer;
     const scene=new THREE.Scene();
     const camera=new THREE.PerspectiveCamera(35,1,.1,50);
-    camera.position.set(0,.75,5.55);
+    camera.position.set(0,.75,6.05);
     camera.lookAt(0,-.08,0);
     const light=new THREE.HemisphereLight(0xffffff,0x8174b3,1.45);
     const key=new THREE.DirectionalLight(0xffefd8,2.65);
@@ -58,9 +58,9 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     const resources=createPicoMeshResources();
     const left=createPicoCharacter(resources);
     const right=createPicoCharacter(resources);
-    left.root.position.x=-1.34;right.root.position.x=1.34;
+    left.root.position.x=-1.18;right.root.position.x=1.18;
     left.root.rotation.y=.24;right.root.rotation.y=-.24;
-    left.root.scale.setScalar(1.04);right.root.scale.setScalar(1.04);
+    left.root.scale.setScalar(1.02);right.root.scale.setScalar(1.02);
     scene.add(left.root,right.root);
     left.animate(0,false);right.animate(0,false,.8);
     const leftDiagnostic=picoMeshDiagnostics(left);
@@ -103,7 +103,7 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
       map:shadowTexture,depthWrite:false,transparent:true,opacity:.85,
       side:THREE.DoubleSide,
     });
-    const shadows=[-1.34,1.34].map((x,index)=>{
+    const shadows=[-1.18,1.18].map((x,index)=>{
       const mesh=new THREE.Mesh(shadowGeometry,shadowMaterial);
       mesh.name=index?"opponent_grounding":"creator_grounding";
       mesh.rotation.x=-Math.PI/2;
@@ -147,23 +147,28 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     }
     function animate(time:number){
       raf=0;
-      if(!eligible())return;
+      if(!eligible()){
+        // A media/visibility change may arrive between animation frames;
+        // the observable state must never claim motion is still active.
+        canvas!.dataset.animating="false";
+        return;
+      }
       // 30 FPS maximum on touch devices; 45 on desktop.
       if(time-lastDraw>=1000/(coarse?30:45)){
         const t=time*.001;
         left.animate(t,phase==="live");
         right.animate(t,phase==="live",1.3);
-        left.root.position.x=-1.34;right.root.position.x=1.34;
+        left.root.position.x=-1.18;right.root.position.x=1.18;
         left.root.rotation.y=.24+rotationDelta;
         right.root.rotation.y=-.24+rotationDelta;
         stars.rotation.y=t*.02;
         if(phase==="completed"&&winnerSide){
           const award=winnerSide==="creator"?left:right;
           const other=winnerSide==="creator"?right:left;
-          award.root.scale.setScalar(1.04+Math.sin(t*2.1)*.035);
+          award.root.scale.setScalar(1.02+Math.sin(t*2.1)*.035);
           other.root.scale.setScalar(1);
         }else{
-          left.root.scale.setScalar(1.04);right.root.scale.setScalar(1.04);
+          left.root.scale.setScalar(1.02);right.root.scale.setScalar(1.02);
         }
         render();
         lastDraw=time;
@@ -217,9 +222,17 @@ export default function Pico3DScene({phase,winnerSide,onReady,onUnavailable}:Pro
     document.addEventListener("visibilitychange",sync);
     window.addEventListener("sum-ios-preferences-changed",sync);
     reduceMedia.addEventListener?.("change",sync);
+    // Some embedded WebViews do not dispatch MediaQueryList change reliably.
+    // A low-frequency policy check reconciles animation state without polling
+    // gameplay data or drawing extra frames when motion is disabled.
+    const policyTimer=window.setInterval(()=>{
+      if(disposed||!contextHealthy)return;
+      if(eligible()!==(canvas.dataset.animating==="true"))sync();
+    },500);
 
     const cleanup=()=>{
       disposed=true;stop();
+      window.clearInterval(policyTimer);
       onView?.disconnect();resizeObserver?.disconnect();
       window.removeEventListener("resize",sync);
       document.removeEventListener("visibilitychange",sync);

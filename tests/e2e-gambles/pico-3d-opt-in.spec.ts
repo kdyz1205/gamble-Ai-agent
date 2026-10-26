@@ -46,7 +46,10 @@ test("real mesh Pico is opt-in, animated and safely returns to artwork",
       contentType:"image/png",
     });
 
+    await canvas.scrollIntoViewIfNeeded();
     await page.emulateMedia({reducedMotion:"reduce"});
+    await expect.poll(()=>page.evaluate(()=>
+      matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
     await expect(canvas).toHaveAttribute("data-animating","false");
     await page.emulateMedia({reducedMotion:"no-preference"});
     await expect(canvas).toHaveAttribute("data-animating","true");
