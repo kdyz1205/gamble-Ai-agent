@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import {SumText} from "@/components/locale/SumLanguage";
 
 export function Arrow({ className = "" }: { className?: string }) {
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -41,5 +42,5 @@ export function FamiliarNote({ title, children, mood = "guide" }: { title: strin
 }
 
 export function WorldFooter() {
-  return <footer className="sw-footer"><Link href="/enter" className="sw-footer__brand"><SummonSigil /><span>SUM<span>SUMMONER.WORLD</span></span></Link><p>Real life. Your quests. A Familiar by your side.</p><nav aria-label="Policies and support"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/support">Support</Link></nav></footer>;
+  return <footer className="sw-footer"><Link href="/" className="sw-footer__brand"><SummonSigil /><span>SUM<span>SUMMONER.WORLD</span></span></Link><p><SumText en="Real life. Your quests. A Familiar by your side." zh="真实生活，专属 Quest，还有 Pico 陪伴左右。"/></p><nav aria-label="Policies and support"><Link href="/privacy"><SumText en="Privacy" zh="隐私政策"/></Link><Link href="/terms"><SumText en="Terms" zh="使用条款"/></Link><Link href="/support"><SumText en="Support" zh="帮助与支持"/></Link></nav></footer>;
 }

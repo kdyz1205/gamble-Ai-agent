@@ -35,7 +35,11 @@ async function main() {
     assert.deepEqual([meta.width, meta.height], [width, height], name + " has incorrect crop dimensions");
     assert.ok(fs.statSync(file).size < 110_000, name + " exceeds lightweight image budget");
   }
-  assert.match(screens, /<IOSLoadingCards label="Finding public Quests/, "Quest loading placeholders");
+  assert.match(screens,
+    /<IOSLoadingCards label=\{translated\(language,"Finding public Quests/,
+    "Quest loading placeholders must remain, including localized copy");
+  assert.ok(screens.includes("正在寻找公开 Quest"),
+    "Chinese Quest loading state must exist alongside English");
   assert.match(screens, /<IOSLoadingCards label="Loading public community activity/, "Community loading placeholders");
   assert.ok(style.includes(".ios-loading-card__thumbnail"), "Real placeholder styling");
   console.log("IOS_CLEAN_ART_PASS", Object.keys(expected).length, "assets, 2 live loading states");
