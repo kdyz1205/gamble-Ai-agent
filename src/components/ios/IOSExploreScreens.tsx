@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
+import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import {useOpenQuests,useOwnQuests,usePublicActivity,useStarterPico} from "./IOSAppData";
 import {deriveQuestMilestoneRank} from "@/lib/ios-quest-rank";
 import IOSLoadingCards from "./IOSLoadingCards";
@@ -12,7 +13,10 @@ import OwnedFamiliarCollection from "./OwnedFamiliarCollection";
 import {PROFESSIONS} from "@/lib/summons/profession-system";
 
 const categories=[
-  { id:"all", label:"All" },{id:"move",label:"Move"},{id:"create",label:"Create"},{id:"grow",label:"Grow"},
+  {id:"all",label:"All",zh:"全部"},
+  {id:"move",label:"Move",zh:"运动"},
+  {id:"create",label:"Create",zh:"创造"},
+  {id:"grow",label:"Grow",zh:"成长"},
 ] as const;
 
 function classify(title:string,type:string) {
@@ -23,6 +27,7 @@ function classify(title:string,type:string) {
 }
 
 export function DiscoverScreen() {
+  const language=useSumLanguage();
   const {quests,loading,error,refresh}=useOpenQuests();
   const [filter,setFilter]=useState<(typeof categories)[number]["id"]>("all");
   const [search,setSearch]=useState("");
@@ -32,23 +37,23 @@ export function DiscoverScreen() {
   ),[quests,filter,search]);
   return <IosFrame title="Discover" eyebrow="SHARED POSSIBILITIES">
     <section className="ios-discover-console" aria-label="Matchmaking">
-      <div><span className="ios-overline">MATCHMAKING / PUBLIC QUESTS</span><h1>Find a Duel</h1>
-        <p>Join an open Quest or host a challenge of your own.</p></div>
-      <Link href="/app/create" className="ios-discover-console__new"><IosIcon name="spark" size={16}/> Host</Link>
+      <div><span className="ios-overline"><SumText en="MATCHMAKING / PUBLIC QUESTS" zh="匹配 / 公开 Quest"/></span><h1><SumText en="Find a Duel" zh="寻找对决"/></h1>
+        <p><SumText en="Join an open Quest or host a challenge of your own." zh="加入正在招募的 Quest，或由你发起新的挑战。"/></p></div>
+      <Link href="/app/create" className="ios-discover-console__new"><IosIcon name="spark" size={16}/> <SumText en="Host" zh="发起"/></Link>
     </section>
     <label className="ios-search"><IosIcon name="discover" size={18}/>
       <span className="sr-only">Search Quests</span>
-      <input aria-label="Search Quests" placeholder="Search Quests…" value={search} onChange={e=>setSearch(e.target.value)}/>
+      <input aria-label={translated(language,"Search Quests","搜索 Quest")} placeholder={translated(language,"Search Quests…","搜索 Quest…")} value={search} onChange={e=>setSearch(e.target.value)}/>
     </label>
-    <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}</button>)}</div>
-    <div className="ios-section__heading"><div><small>REAL OPEN CHALLENGES</small><h2>Open matches</h2></div><button className="ios-text-action" type="button" onClick={refresh}>Refresh</button></div>
-    {loading ? <IOSLoadingCards label="Finding public Quests…" /> :
+    <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{translated(language,item.label,item.zh)}</button>)}</div>
+    <div className="ios-section__heading"><div><small>REAL OPEN CHALLENGES</small><h2><SumText en="Open matches" zh="开放中的对决"/></h2></div><button className="ios-text-action" type="button" onClick={refresh}><SumText en="Refresh" zh="刷新"/></button></div>
+    {loading ? <IOSLoadingCards label={translated(language,"Finding public Quests…","正在寻找公开 Quest…")} /> :
       error ? <p className="ios-message ios-message--error" role="alert">{error}</p> :
-      visible.length===0 ? <IosEmpty image={visuals.move} heading="A new Quest could start with you."
-        description={search?"No matching public Quests. Try another search.":"No public open Quests right now. Be the one who starts something."}
-        action="Create a Quest" href="/app/create"/> :
+      visible.length===0 ? <IosEmpty image={visuals.move} heading={translated(language,"A new Quest could start with you.","下一个 Quest，也许就由你开启。")}
+        description={search?translated(language,"No matching public Quests. Try another search.","没有匹配的 Quest，请换个关键词。"):translated(language,"No public open Quests right now. Be the one who starts something.","暂时没有开放的 Quest，来发起第一个吧。")}
+        action={translated(language,"Create a Quest","创建 Quest")} href="/app/create"/> :
       <div className="ios-list">{visible.map(q=><IosQuestCard key={q.id} challenge={q}/>)}</div>}
-    <IosAction href="/app/community" secondary>See community activity</IosAction>
+    <IosAction href="/app/community" secondary><SumText en="See community activity" zh="查看社区动态"/></IosAction>
   </IosFrame>;
 }
 
@@ -87,6 +92,7 @@ const picoStates=[
 ] as const;
 
 export function PicosScreen() {
+  const language=useSumLanguage();
   const [role,setRole]=useState<(typeof picoStates)[number]["id"]>("guide");
   const active=picoStates.find(s=>s.id===role)||picoStates[0];
   const {quests,loading,error,signedIn}=useOwnQuests();
@@ -97,16 +103,16 @@ export function PicosScreen() {
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
     <section className="ios-pico-hero">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
-      <span className="ios-overline">YOUR STARTING GUIDE</span>
-      <h1>Pico, your first Summon</h1><p>Every player begins with Pico. Your own profession paths grow from real adventures.</p>
+      <span className="ios-overline"><SumText en="YOUR STARTING GUIDE" zh="你的初始伙伴"/></span>
+      <h1><SumText en="Pico, your first Summon" zh="Pico，你的第一位召唤兽"/></h1><p><SumText en="Every player begins with Pico. Your own profession paths grow from real adventures." zh="每位玩家都从 Pico 开始。完成真实的冒险，逐步解锁不同职业方向。"/></p>
       <p className="ios-pico-entitlement" role="status">
-        {!pico.signedIn?"Sign in to activate your included starter Pico.":
-        pico.loading?"Checking your Pico starter rule…":
-        pico.error?"Starter status unavailable. Try again after reconnecting.":
+        {!pico.signedIn?translated(language,"Sign in to activate your included starter Pico.","登录后激活附赠的初始 Pico。"):
+        pico.loading?translated(language,"Checking your Pico starter rule…","正在检查 Pico 初始资格…"):
+        pico.error?translated(language,"Starter status unavailable. Try again after reconnecting.","初始伙伴状态暂时不可用，请联网后重试。"):
         pico.starter?.persistedInventory?
-          "Pico is in your permanent Summon collection.":
-        pico.starter?"Pico is included for your account · persistent collection activates after the server rollout.":
-        "Pico starter status is not yet confirmed."}
+          translated(language,"Pico is in your permanent Summon collection.","Pico 已保存在你的永久召唤兽收藏中。"):
+        pico.starter?translated(language,"Pico is included for your account · persistent collection activates after the server rollout.","你的账号包含 Pico；永久收藏将在服务器上线后启用。"):
+        translated(language,"Pico starter status is not yet confirmed.","暂时无法确认初始 Pico 状态。")}
       </p>
     </section>
 

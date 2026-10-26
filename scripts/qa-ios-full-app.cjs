@@ -8,7 +8,7 @@ const assert=require("node:assert/strict");
 const base=process.env.SUM_IOS_URL||"http://127.0.0.1:3091";
 const out=process.env.SUM_IOS_OUTPUT||path.resolve("output","ios-full-app");
 const pages=process.env.SUM_IOS_WORKFLOW_ONLY?[]:["splash","onboarding","today","discover","create","quest-created","quest",
-  "evidence-add","quest-complete","picos","profile","achievements","evidence","stats","community","settings"];
+  "evidence-add","quest-complete","picos","story","profile","achievements","evidence","stats","community","settings"];
 const widths=process.env.SUM_IOS_WORKFLOW_ONLY?[390]:process.env.SUM_IOS_QUICK?[390,1440]:[320,390,768,1440];
 fs.mkdirSync(out,{recursive:true});
 const evidence={base,pages,widths,runAt:new Date().toISOString(),results:[]};
@@ -84,10 +84,10 @@ for(const width of widths){
         await page.evaluate(async()=>{const imgs=Array.from(document.images).filter(img=>img.getBoundingClientRect().top<innerHeight+130);await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));});
         const m=await meta(page);
         assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px; "+JSON.stringify(m.overflowingElements));
-        const intro=view==="splash"||view==="onboarding";
-        assert.equal(m.bottomNavs,intro?0:1,"exactly one appropriate bottom dock");
+        const immersive=view==="splash"||view==="onboarding"||view==="story";
+        assert.equal(m.bottomNavs,immersive?0:1,"no dock during story; one on normal screens");
         assert.equal(m.otherNavs,0,"global marketing nav must not duplicate the app nav");
-        if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Familiars","Profile"]);
+        if(!immersive)assert.deepEqual(m.labels,["Home","Discover","Create","Familiars","Profile"]);
         assert.deepEqual(runtimeErrors,[],"uncaught browser errors");
         assert.equal(m.errors,0,"render failure");
         if(view==="onboarding"&&width===390){

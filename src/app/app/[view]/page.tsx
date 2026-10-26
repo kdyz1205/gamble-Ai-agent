@@ -1,6 +1,6 @@
 import IOSFullApp from "@/components/ios/IOSFullApp";
 
-const mobilePages = ["splash","onboarding","today","discover","create","join","quest-created","quest","evidence-add","quest-complete","picos","quiz","profile","achievements","evidence","stats","community","settings"] as const;
+const mobilePages = ["splash","onboarding","today","discover","create","join","quest-created","quest","evidence-add","quest-complete","picos","quiz","story","profile","achievements","evidence","stats","community","settings"] as const;
 import {notFound} from "next/navigation";
 
 type PageProps = {
