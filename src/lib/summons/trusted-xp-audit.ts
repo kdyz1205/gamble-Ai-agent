@@ -7,6 +7,8 @@
  * or permission to mint an XP event / Summon ticket.
  */
 import prisma from "@/lib/db";
+import { createHash } from "node:crypto";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   evaluateTrustedXpAdmission,
   TRUSTED_XP_PAIR_WINDOW_DAYS,
@@ -20,12 +22,25 @@ export type TrustedXpAudit = TrustedXpAdmission & {
   xpGranted: false;
   ticketsGranted: 0;
   ownedSummonsGranted: 0;
+  // Internal immutable basis for an independent reviewer approval. Never
+  // expose a fingerprint alone as proof that a reward is payable.
+  sourceFingerprint: string | null;
+  finalJudgmentId: string | null;
 };
 
 export async function assessTrustedQuestXpForManualReview(input: {
   challengeId: string;
   userId: string;
 }): Promise<TrustedXpAudit> {
+  return prisma.$transaction(tx => assessTrustedQuestXpWithTx(tx,input),
+    { isolationLevel: "RepeatableRead", timeout: 15000 });
+}
+
+/** Call from the same transaction that authorizes or issues an XP award. */
+export async function assessTrustedQuestXpWithTx(
+  tx: Prisma.TransactionClient,
+  input: { challengeId: string; userId: string },
+): Promise<TrustedXpAudit> {
   const wrap = (blockers: string[]): TrustedXpAudit => ({
     challengeId: input.challengeId,
     userId: input.userId,
@@ -35,6 +50,8 @@ export async function assessTrustedQuestXpForManualReview(input: {
     xpGranted: false,
     ticketsGranted: 0,
     ownedSummonsGranted: 0,
+    sourceFingerprint: null,
+    finalJudgmentId: null,
   });
   if (process.env.ENABLE_TRUSTED_EVIDENCE_UPLOADS !== "true") {
     return wrap(["trusted_uploads_not_enabled"]);
@@ -43,8 +60,7 @@ export async function assessTrustedQuestXpForManualReview(input: {
     return wrap(["invalid_quest_or_user"]);
   }
 
-  // A read-only snapshot: never use a browser-supplied hash/proof flag.
-  return prisma.$transaction(async tx => {
+  // Read only server receipts and uploads, never browser-supplied hashes.
     const quest = await tx.challenge.findUnique({
       where: { id: input.challengeId },
       select: {
@@ -147,6 +163,36 @@ export async function assessTrustedQuestXpForManualReview(input: {
       pastSamePairXpAwards: historicPairCount,
       reusedMediaHashesInOtherQuests: duplicated,
     });
+    // Freeze the complete basis of this authorization. Issuance recomputes
+    // it in the award transaction, detecting revised verdicts, fresh appeals
+    // or any change to the media/participant bindings after approval.
+    const finalJudgmentId = validWinner ? receipt.id : null;
+    const sourceFingerprint = admission.admittedForManualReview && finalJudgmentId
+      ? createHash("sha256").update(JSON.stringify({
+          policyVersion: "private-proof-manual-xp-v1",
+          challengeId: quest.id,
+          ownerId: input.userId,
+          creatorId: quest.creatorId,
+          status: quest.status,
+          evidenceType: quest.evidenceType,
+          judgmentId: finalJudgmentId,
+          winningUserId: receipt?.winnerId ?? null,
+          review: review ? {
+            status: review.status, resolution: review.resolution,
+            finalJudgmentId: review.finalJudgmentId,
+            resolvedWinnerId: review.resolvedWinnerId,
+          } : null,
+          players: [...players].map(p => [p.userId,p.role,p.status])
+            .sort((a,b) => String(a[0]).localeCompare(String(b[0]))),
+          consent: quest.verdictResponses
+            .map(row => [row.userId,row.decision])
+            .sort((a,b) => String(a[0]).localeCompare(String(b[0]))),
+          uploads: [...uploads].map(u => [
+            u.id,u.evidenceId,u.userId,u.status,u.sha256,
+            u.contentType,u.expectedSizeBytes,u.observedSizeBytes,
+          ]).sort((a,b) => String(a[0]).localeCompare(String(b[0]))),
+        })).digest("hex")
+      : null;
     return {
       ...admission,
       challengeId: quest.id,
@@ -155,6 +201,7 @@ export async function assessTrustedQuestXpForManualReview(input: {
       xpGranted: false as const,
       ticketsGranted: 0 as const,
       ownedSummonsGranted: 0 as const,
+      sourceFingerprint,
+      finalJudgmentId,
     };
-  }, { isolationLevel: "RepeatableRead", timeout: 15000 });
 }

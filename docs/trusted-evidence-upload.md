@@ -124,6 +124,41 @@ private-upload migration has not yet run.
 - Controlled local mock-video winner tests prove engineering wiring but not
   real model accuracy or verified human performance.
 
+## Independent moderator clearance for video/photo XP
+
+**All flags default OFF**, including `SUMMON_XP_MANUAL_REVIEW_ENABLED`.
+The new additive `VerifiedXpApproval` table preserves one reviewer-signed
+authorization per (Quest, recipient). It references the **exact final
+Judgment ID and a SHA-256 of the server-provenance snapshot**: two consumed
+private-media receipts, both participant roles, both consent decisions,
+review status and resolved winner.
+
+- A reviewer must hold `User.isReviewer=true` and must **not** be a player
+  in the same Quest. `POST /api/reviews/xp` requires authenticated moderator
+  permissions and `confirm=true`. Its explicit actions are `approve`,
+  `revoke` and `issue`, with `challengeId`, `ownerId` and a 25+ character
+  `reason` for approval/revocation.
+- `approve` writes an immutable, idempotent, separate decision. It never
+  issues XP, tickets or owned items.
+- `issue` is separately confirmed by an independent moderator. Its current
+  Quest/proof fingerprint, reviewer authorization, appeal state and final
+  judgment are **rechecked in the SAME transaction as the XP receipt**.
+  Any removed consent, replaced private media, reopened appeal, forged
+  receipt or revoked approval fails closed.
+- `revoke` blocks issuance of an unused approval. If XP is already awarded,
+  revocation refuses automatic clawback; a separate explicit ledger correction,
+  ticket freeze and owned-item review will be necessary.
+- `ProfessionXpEvent.eventKey` remains unique and idempotent across retries.
+  Ticket draws and Familiar evolution have independent feature flags and
+  separate authorization; even successfully issued XP does not auto-mint them.
+- Source review approvals use a separate new table; **no legacy Evidence,
+  Challenge or User columns are modified** in this migration. Preview builds
+  keep all read/write calls behind the disabled feature flag.
+
+This is a staging **manual** release gate. Nothing in the ordinary challenge
+settlement hook auto-approves or auto-issues XP. Production needs real
+moderation procedures, appeal/reversal workflows, abuse analysis and consent.
+
 ## Isolated CI gates
 
 - `npm run test:trusted-evidence:smoke`: pure safe admission, policy,

@@ -25,6 +25,10 @@ import { getProviderById } from "../src/lib/llm-providers";
 import { executeChallengeJudgment } from "../src/lib/challenge-judgment";
 import { recordVerdictDecision, VerdictDecision } from "../src/lib/verdict-review";
 import { reconcileVerifiedQuestProfessionXp } from "../src/lib/summons/server-ledger";
+import {
+  approveTrustedQuestXpForReview,
+  revokeTrustedQuestXpReview,
+} from "../src/lib/summons/manual-xp-approval";
 import { assessTrustedQuestXpForManualReview } from "../src/lib/summons/trusted-xp-audit";
 import { AI_RECEIPT_ACTION, AI_RESERVATION_ACTION } from "../src/lib/ai-governance";
 
@@ -72,6 +76,8 @@ async function main() {
   assertIsolated();
   const previousAi = process.env.AI_ENABLED;
   const previousKey = process.env.OPENAI_API_KEY;
+  const priorPersistence = process.env.SUMMON_PERSISTENCE_ENABLED;
+  const priorManualReview = process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED;
   const provider = getProviderById("openai");
   assert.ok(provider && provider.kind === "openai_compat");
   const originalBase = provider.baseUrl;
@@ -376,8 +382,153 @@ async function main() {
       ownedSummons: 0,
       modelAccuracyClaim: false,
     }));
+
+    // Staged independent reward approval test. These flags affect ONLY this
+    // disposable CI process, never Next/Vercel or another player's account.
+    process.env.SUMMON_PERSISTENCE_ENABLED = "true";
+    process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED = "true";
+    const moderator = await prisma.user.create({ data: {
+      username: "ci_xp_reviewer_" + suffix,
+      email: "ci_xp_reviewer_" + suffix + "@example.invalid",
+      isReviewer: true,
+      credits: 10,
+    } });
+    people.push(moderator.id);
+    await assert.rejects(
+      () => reconcileVerifiedQuestProfessionXp({
+        challengeId: quest.id, userId: creator.id,
+      }),
+      /approval missing/i,
+      "Settled videos without a separate reviewer may never grant XP",
+    );
+    // Even giving a competing player the generic reviewer role must never
+    // permit them to approve their own Quest.
+    await prisma.user.update({
+      where: { id: creator.id }, data: { isReviewer: true },
+    });
+    await assert.rejects(
+      () => approveTrustedQuestXpForReview({
+        challengeId: quest.id, ownerId: creator.id,
+        reviewerId: creator.id,
+        reason: "Conflicted creator attempting to self-approve a video win",
+      }),
+      /cannot review their own Quest/i,
+    );
+    await prisma.user.update({
+      where: { id: creator.id }, data: { isReviewer: false },
+    });
+    const authorized = await approveTrustedQuestXpForReview({
+      challengeId: quest.id, ownerId: creator.id,
+      reviewerId: moderator.id,
+      reason: "Independent QA reviewer inspected original dual video receipts, both identities and final winner consent.",
+    });
+    assert.equal(authorized.status, "approved");
+    assert.equal(authorized.issuedXp, false, "Approval is never automatic issuance");
+    const approvalRetry = await approveTrustedQuestXpForReview({
+      challengeId: quest.id, ownerId: creator.id,
+      reviewerId: moderator.id,
+      reason: "Independent QA reviewer inspected original dual video receipts, both identities and final winner consent.",
+    });
+    assert.equal(approvalRetry.reused, true);
+    assert.equal(approvalRetry.approvalId, authorized.approvalId);
+    assert.equal(await prisma.professionXpEvent.count({
+      where: { challengeId: quest.id },
+    }), 0);
+
+    // Approval fingerprints become invalid if either player withdraws
+    // consent after review. Restoring verified consent re-enables that exact
+    // unchanged approval — no acceptance data is silently fabricated.
+    await prisma.verdictResponse.update({
+      where: { challengeId_userId: {
+        challengeId: quest.id, userId: opponent.id,
+      } },
+      data: { decision: "review_requested" },
+    });
+    await assert.rejects(
+      () => reconcileVerifiedQuestProfessionXp({
+        challengeId: quest.id, userId: creator.id,
+      }),
+      /stale|changed/i,
+      "Changed post-review consent must invalidate the approval",
+    );
+    await prisma.verdictResponse.update({
+      where: { challengeId_userId: {
+        challengeId: quest.id, userId: opponent.id,
+      } },
+      data: { decision: "accepted" },
+    });
+
+    const awards = await Promise.all(Array.from({ length: 3 }, () =>
+      reconcileVerifiedQuestProfessionXp({
+        challengeId: quest.id, userId: creator.id,
+      }),
+    ));
+    assert.equal(new Set(awards.map(item => item.eventId)).size, 1,
+      "Three same-user issuance retries must converge on one immutable XP receipt");
+    assert.equal(awards[0].amount, 100);
+    assert.equal(awards[0].professionId, "athletics");
+    assert.equal(await prisma.professionXpEvent.count({
+      where: { challengeId: quest.id, ownerId: creator.id },
+    }), 1);
+
+    // An independent moderator may revoke a *not-yet-issued* opponent review,
+    // but must not silently reverse XP already spent or converted into items.
+    const secondApproval = await approveTrustedQuestXpForReview({
+      challengeId: quest.id, ownerId: opponent.id,
+      reviewerId: moderator.id,
+      reason: "Separate review of the second competitor and the originally committed result.",
+    });
+    assert.equal(secondApproval.issuedXp, false);
+    const revoked = await revokeTrustedQuestXpReview({
+      challengeId: quest.id, ownerId: opponent.id,
+      reviewerId: moderator.id,
+      reason: "Further identity verification requested before awarding the opponent career experience.",
+    });
+    assert.equal(revoked.revoked, true);
+    await assert.rejects(
+      () => reconcileVerifiedQuestProfessionXp({
+        challengeId: quest.id, userId: opponent.id,
+      }),
+      /approval missing/i,
+      "Revoked reviewer approval must block loser XP issuance",
+    );
+    await assert.rejects(
+      () => revokeTrustedQuestXpReview({
+        challengeId: quest.id, ownerId: creator.id,
+        reviewerId: moderator.id,
+        reason: "Attempted silent clawback after an XP record has been issued",
+      }),
+      /already issued/i,
+    );
+    assert.equal(await prisma.professionXpEvent.count({
+      where: { challengeId: quest.id },
+    }), 1);
+    assert.equal(await prisma.summonTicket.count({
+      where: { ownerId: { in: people } },
+    }), 0);
+    assert.equal(await prisma.summonInstance.count({
+      where: { ownerId: { in: people } },
+    }), 0);
+    console.log(JSON.stringify({
+      result: "PASS",
+      phase: "independent_video_xp_review",
+      reviewerIndependent: true,
+      approvedThenIssued: true,
+      staleConsentBlocked: true,
+      repeatIssuanceSameEvent: true,
+      revokedOpponentApprovalBlocksXp: true,
+      deniedSilentClawback: true,
+      qaXpEventCount: 1,
+      realPlayerXpGrants: 0,
+      ticketsIssued: 0,
+      ownedSummonsIssued: 0,
+    }));
   } finally {
     process.env.AI_ENABLED = previousAi;
+    if (priorPersistence === undefined) delete process.env.SUMMON_PERSISTENCE_ENABLED;
+    else process.env.SUMMON_PERSISTENCE_ENABLED = priorPersistence;
+    if (priorManualReview === undefined) delete process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED;
+    else process.env.SUMMON_XP_MANUAL_REVIEW_ENABLED = priorManualReview;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
     provider.baseUrl = originalBase;
@@ -394,6 +545,14 @@ async function main() {
       await prisma.challenge.delete({ where: { id: replayQuestId } }).catch(() => {});
     }
     if (challengeId) {
+      // Manual reviewer approval is RESTRICT to retain forensic history in
+      // production; the disposable fixture must explicitly drop its own rows.
+      await prisma.verifiedXpApproval.deleteMany({
+        where: { challengeId },
+      }).catch(() => {});
+      await prisma.professionXpEvent.deleteMany({
+        where: { challengeId },
+      }).catch(() => {});
       await prisma.auditLog.deleteMany({ where: { challengeId } }).catch(() => {});
       await prisma.activityEvent.deleteMany({ where: { challengeId } }).catch(() => {});
       await prisma.challenge.delete({ where: { id: challengeId } }).catch(() => {});

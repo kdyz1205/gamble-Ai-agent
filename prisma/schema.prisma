@@ -93,6 +93,8 @@ model User {
   reviewCasesWon       ReviewCase[]      @relation("ReviewWinner")
   summonInstances       SummonInstance[]  @relation("SummonInventoryOwner")
   professionXpEvents    ProfessionXpEvent[] @relation("ProfessionXpOwner")
+  xpApprovalsOwned       VerifiedXpApproval[] @relation("XpApprovalOwner")
+  xpApprovalsReviewed    VerifiedXpApproval[] @relation("XpApprovalReviewer")
   summonTickets         SummonTicket[]    @relation("SummonTicketOwner")
   summonDrawReceipts     SummonDrawReceipt[] @relation("SummonDrawOwner")
   summonEvolutionReceipts SummonEvolutionReceipt[] @relation("SummonEvolutionOwner")
@@ -198,6 +200,7 @@ model Challenge {
   verdictResponses VerdictResponse[]
   reviewCase       ReviewCase?
   professionXpEvents ProfessionXpEvent[]
+  xpApprovals VerifiedXpApproval[]
   quizDuel         QuizDuel?
 
   // Hot-query indexes. The LIST API filters on (status, isPublic) ordered
@@ -444,6 +447,33 @@ model SummonInstance {
 
   @@index([ownerId, status, createdAt])
   @@index([speciesId, rarity])
+}
+
+/**
+ * Opt-in, reviewer-authorized progression clearance. This is NOT XP,
+ * a free ticket, a grant or a settlement. The approving reviewer must be
+ * independent of the Quest participants. Reconciliation rechecks the source.
+ */
+model VerifiedXpApproval {
+  id                String   @id @default(cuid())
+  challengeId       String
+  ownerId           String
+  reviewerUserId    String
+  finalJudgmentId   String
+  sourceFingerprint String
+  policyVersion     String   @default("private-proof-manual-xp-v1")
+  status            String   @default("approved") // approved | revoked
+  reason            String
+  approvedAt        DateTime @default(now())
+  revokedAt         DateTime?
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  owner User @relation("XpApprovalOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  reviewer User @relation("XpApprovalReviewer", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([challengeId, ownerId])
+  @@index([reviewerUserId, approvedAt])
+  @@index([status, approvedAt])
 }
 
 model ProfessionXpEvent {
