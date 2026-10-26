@@ -86,6 +86,7 @@ async function main() {
   const mediaKeys: string[] = [];
   const people: string[] = [];
   let challengeId: string | null = null;
+  let replayQuestId: string | null = null;
   let fixtureCalls = 0;
   let frameColors: string[] = [];
   const fixtureServer = createServer(async (req, res) => {
@@ -283,6 +284,55 @@ async function main() {
       "A read-only eligibility report must never grant XP");
     assert.equal(audit.ticketsGranted, 0);
     assert.equal(audit.ownedSummonsGranted, 0);
+
+    // An attacker cannot replay the same video into another Quest to farm
+    // multiple profession receipts. Query the REAL private-upload database.
+    const replayQuest = await prisma.challenge.create({ data: {
+      creatorId: creator.id,
+      title: "CI duplicated media " + suffix,
+      type: "Fitness", evidenceType: "video", stake: 0, status: "live",
+    } });
+    replayQuestId = replayQuest.id;
+    const identicalVideo = await readFile(join(folder, "blue.mp4"));
+    const replayKey = `trusted-evidence/${replayQuest.id}/${creator.id}/${randomUUID()}`;
+    mediaKeys.push(replayKey);
+    await store.send(new PutObjectCommand({
+      Bucket: "ci-private-evidence", Key: replayKey,
+      Body: identicalVideo, ContentType: "video/mp4",
+    }));
+    const replayReceipt = await verifyTrustedEvidenceObject({
+      key: replayKey, contentType: "video/mp4",
+      expectedSizeBytes: identicalVideo.length,
+    });
+    const duplicateEvidence = await prisma.evidence.create({ data: {
+      challengeId: replayQuest.id, userId: creator.id,
+      type: "video", description: "CI test cross-Quest byte replay",
+      url: null,
+    } });
+    await prisma.trustedEvidenceUpload.create({ data: {
+      id: randomUUID(), challengeId: replayQuest.id,
+      evidenceId: duplicateEvidence.id, userId: creator.id,
+      objectKey: replayKey, status: "consumed", contentType: "video/mp4",
+      sha256: replayReceipt.sha256,
+      expectedSizeBytes: identicalVideo.length,
+      observedSizeBytes: identicalVideo.length,
+      verifiedAt: new Date(), consumedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3600_000),
+    } });
+    const rejectedReplayAudit = await assessTrustedQuestXpForManualReview({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(rejectedReplayAudit.admittedForManualReview, false);
+    assert.ok(rejectedReplayAudit.blockers.includes("media_replay_across_quests"));
+    assert.equal(rejectedReplayAudit.xpGranted, false);
+    await prisma.challenge.delete({ where: { id: replayQuest.id } });
+    replayQuestId = null;
+    const recoveredAdmission = await assessTrustedQuestXpForManualReview({
+      challengeId: quest.id, userId: creator.id,
+    });
+    assert.equal(recoveredAdmission.admittedForManualReview, true,
+      "Removing the reused-media challenge should restore review eligibility");
+
     await assert.rejects(
       () => reconcileVerifiedQuestProfessionXp({ challengeId: quest.id, userId: creator.id }),
       /disabled/i,
@@ -304,6 +354,7 @@ async function main() {
       creditMovement: 0,
       xpAwards: 0,
       trustedXpAdmission: "review_candidate_only",
+      replayedVideoBlockedFromXp: true,
       ownedSummons: 0,
       modelAccuracyClaim: false,
     }));
@@ -320,6 +371,9 @@ async function main() {
       await store.send(new DeleteObjectCommand({
         Bucket: "ci-private-evidence", Key: key,
       })).catch(() => {});
+    }
+    if (replayQuestId) {
+      await prisma.challenge.delete({ where: { id: replayQuestId } }).catch(() => {});
     }
     if (challengeId) {
       await prisma.auditLog.deleteMany({ where: { challengeId } }).catch(() => {});
