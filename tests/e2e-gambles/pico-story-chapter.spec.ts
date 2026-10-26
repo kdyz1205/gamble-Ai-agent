@@ -31,11 +31,24 @@ test("Pico chapter: mobile guest can play one full original ritual without XP",
     await expect(page.getByTestId("pico-story-waiting")).toBeDisabled();
     await expect(story).toHaveAttribute("data-phase","complete",{timeout:12_000});
     await expect(page.getByTestId("pico-story-no-rewards")).toContainText("No XP");
-    await expect(page.getByTestId("pico-story-quest")).toHaveAttribute("href","/app/create");
+    const realQuest=page.getByTestId("pico-story-quest");
+    await expect(realQuest).toHaveAttribute("href","/app/create");
+    await expect(realQuest).toBeInViewport();
+    const accessible=await realQuest.evaluate(el=>{
+      const rect=el.getBoundingClientRect();
+      const top=document.elementFromPoint(rect.left+rect.width/2,
+        rect.top+rect.height/2);
+      return top===el||el.contains(top);
+    });
+    expect(accessible,"Real Quest action must not be covered by the tab bar").toBe(true);
+    mkdirSync("output/ios-full-app",{recursive:true});
+    await page.screenshot({path:"output/ios-full-app/pico-story-finished-immersive-390.png",
+      fullPage:true});
     await page.getByTestId("pico-story-replay").click();
     await expect(story).toHaveAttribute("data-phase","intro");
     await expect(page.getByTestId("pico-story-start")).toBeVisible();
-    await expect(page.locator('[data-testid="ios-tabbar"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="ios-tabbar"]')).toHaveCount(0);
+    await expect(page.getByRole("link",{name:"Back"})).toHaveAttribute("href","/app/today");
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth))
       .toBeLessThanOrEqual(1);
   });

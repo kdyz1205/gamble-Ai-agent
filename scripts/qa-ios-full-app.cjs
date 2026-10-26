@@ -84,10 +84,10 @@ for(const width of widths){
         await page.evaluate(async()=>{const imgs=Array.from(document.images).filter(img=>img.getBoundingClientRect().top<innerHeight+130);await Promise.all(imgs.map(img=>img.decode().catch(()=>null)));});
         const m=await meta(page);
         assert(m.overflow<=1,"horizontal overflow "+m.overflow+"px; "+JSON.stringify(m.overflowingElements));
-        const intro=view==="splash"||view==="onboarding";
-        assert.equal(m.bottomNavs,intro?0:1,"exactly one appropriate bottom dock");
+        const immersive=view==="splash"||view==="onboarding"||view==="story";
+        assert.equal(m.bottomNavs,immersive?0:1,"no dock during story; one on normal screens");
         assert.equal(m.otherNavs,0,"global marketing nav must not duplicate the app nav");
-        if(!intro)assert.deepEqual(m.labels,["Home","Discover","Create","Familiars","Profile"]);
+        if(!immersive)assert.deepEqual(m.labels,["Home","Discover","Create","Familiars","Profile"]);
         assert.deepEqual(runtimeErrors,[],"uncaught browser errors");
         assert.equal(m.errors,0,"render failure");
         if(view==="onboarding"&&width===390){

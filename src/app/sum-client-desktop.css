@@ -1,0 +1,83 @@
+/* SUM Web App is mobile-first, not a permanently simulated phone frame.
+ * At desktop widths it becomes a real responsive game workspace while
+ * marketing remains on the separately rendered public website. */
+@media (min-width: 1024px) {
+  .ios-app[data-product-surface="web-app"] {
+    width:min(100%,1160px);
+    min-height:100dvh;
+    margin:0 auto;
+    border-radius:0;
+    overflow:visible;
+    padding-bottom:112px;
+    box-shadow:0 0 0 1px #c6bbd757,0 32px 80px #38265d24;
+    background:
+      radial-gradient(ellipse 55% 25% at 8% 0%,#f9e7fd95,transparent),
+      radial-gradient(ellipse 65% 25% at 92% 0%,#deecffb9,transparent),
+      linear-gradient(#fffdfd,#f7f7fe 65%,#fffdfd);
+  }
+  .ios-app[data-product-surface="web-app"] .ios-header {
+    border-radius:0;
+    min-height:79px;
+    padding-inline:36px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-main {
+    max-width:1120px;
+    margin-inline:auto;
+    padding:24px 32px 45px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-main:has(> .ios-command-hud) {
+    display:grid;
+    grid-template-columns:minmax(0,1.22fr) minmax(0,.78fr);
+    grid-template-rows:auto auto auto auto;
+    align-content:start;
+    gap:22px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-main:has(> .ios-command-hud)>* {
+    min-width:0;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-main:has(> .ios-command-hud)>*+* {
+    margin-top:0;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-command-hud {
+    grid-column:1;grid-row:1;min-height:270px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry {
+    grid-column:2;grid-row:1;min-height:270px;margin:0;
+    align-content:space-between;padding:20px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry__body {
+    align-items:start;flex-direction:column;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry__body>a {
+    min-height:38px;width:auto;padding:10px 13px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-command-modes {
+    grid-column:1/-1;grid-row:2;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .ios-app[data-product-surface="web-app"] .ios-command-quests,
+  .ios-app[data-product-surface="web-app"] .ios-command-daily {
+    grid-column:1/-1;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-command-quests {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .ios-app[data-product-surface="web-app"] .ios-tabbar {
+    width:min(900px,calc(100% - 64px));
+    bottom:22px;
+    padding:8px 18px;
+    border-radius:22px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-tab {
+    min-height:51px;
+    flex-direction:row;
+    gap:9px;
+    font-size:12px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-quiz-arena {
+    min-height:400px;
+  }
+  .ios-app[data-product-surface="web-app"] .pico-story {
+    max-width:750px;
+  }
+}
