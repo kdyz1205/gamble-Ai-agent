@@ -20,7 +20,7 @@ const EVOLUTION = "20261025100000_audited_free_summon_evolution";
 const PROTECTED_BANK = "20261025233000_protected_quiz_bank";
 const PROTECTED_ROUND = "20261026061500_private_quiz_round_exposure";
 const SUMMON_TABLES = ["ProfessionXpEvent", "SummonDrawReceipt", "SummonEvolutionReceipt", "SummonInstance", "SummonTicket"];
-const QUIZ_TABLES = ["QuizAttempt","QuizDuel","QuizProtectedQuestion","QuizPrivateRound","QuizPrivateExposure"];
+const QUIZ_TABLES = ["QuizAttempt","QuizDuel","QuizPrivateExposure","QuizPrivateRound","QuizProtectedQuestion"];
 const addedColumns: Record<string, string[]> = {
   Challenge: ["arbiter", "disputeWindow", "eventTime", "evidenceHash", "fallbackRule", "joinWindow", "marketType", "paramsHash", "proofSource", "proofWindow", "proposition", "resolutionHash", "settlementMode", "stakeToken", "visibility"],
   Evidence: ["prepareError", "preparedAt", "preparedDurationSec", "preparedFrames", "preparedMode"],
