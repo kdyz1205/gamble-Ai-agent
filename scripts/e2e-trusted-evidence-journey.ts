@@ -17,7 +17,7 @@ import { request, type APIRequestContext } from "@playwright/test";
 import { Pool } from "pg";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
-import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 
@@ -165,6 +165,50 @@ async function main() {
     assert.equal(legacy.status(), 409, await legacy.text());
     assert.equal(await count("Evidence", challengeId), 0);
 
+    // A privileged storage key can theoretically replace bytes after the
+    // upload was verified. Bind MUST rehash the actual object and reject it.
+    // Preserve byte length and the MP4 signature to prove SHA-256 is decisive.
+    const tamperIssue = await creator.ctx.post("/api/uploads/trusted-evidence", {
+      data: { challengeId, contentType: "video/mp4", fileSizeBytes: bytes.length },
+    });
+    assert.equal(tamperIssue.status(), 201, await tamperIssue.text());
+    const tamperTicket = await readJson(tamperIssue);
+    const tamperId = tamperTicket.uploadSessionId as string;
+    const tamperPut = await creator.ctx.put(tamperTicket.uploadUrl as string, {
+      data: bytes,
+      headers: tamperTicket.headers as Record<string, string>,
+    });
+    assert.ok(tamperPut.ok(), "Trusted setup PUT failed");
+    const tamperComplete = await creator.ctx.post(
+      "/api/uploads/trusted-evidence/" + tamperId + "/complete",
+    );
+    assert.equal(tamperComplete.status(), 200, await tamperComplete.text());
+    const tamperRow = await db.query(
+      'SELECT "objectKey" FROM "TrustedEvidenceUpload" WHERE id=$1',
+      [tamperId],
+    );
+    assert.equal(tamperRow.rows.length, 1);
+    const replacedBytes = Buffer.from(bytes);
+    replacedBytes[replacedBytes.length - 1] ^= 1;
+    assert.equal(replacedBytes.length, bytes.length);
+    assert.notEqual(createHash("sha256").update(replacedBytes).digest("hex"), digest);
+    await store.send(new PutObjectCommand({
+      Bucket: "ci-private-evidence",
+      Key: tamperRow.rows[0].objectKey as string,
+      Body: replacedBytes,
+      ContentType: "video/mp4",
+    }));
+    const refused = await creator.ctx.post(
+      "/api/challenges/" + challengeId + "/evidence/trusted",
+      { data: { uploadSessionId: tamperId } },
+    );
+    assert.equal(refused.status(), 409, await refused.text());
+    assert.equal((await readJson(refused)).error, "upload_digest_changed");
+    assert.equal(await count("Evidence", challengeId), 0);
+    assert.equal((await db.query(
+      'SELECT status FROM "TrustedEvidenceUpload" WHERE id=$1', [tamperId],
+    )).rows[0].status, "verified", "Tampered upload must not be consumed");
+
     const uploadA = await uploadFor(creator.ctx, challengeId);
 
     // Independent real decoder receipt, through the PRIVATE S3 SDK rather
@@ -247,7 +291,8 @@ async function main() {
       result: "PASS", authenticatedPlayers: 2,
       privateMP4Bytes: bytes.length,
       distinctUploads: 2, immutableEvidenceRows: 2,
-      sha256Verified: true, presignedReplayRejected: true,
+      sha256Verified: true, postVerificationTamperRejected: true,
+      presignedReplayRejected: true,
       decoderDurationSeconds: Number(duration.toFixed(3)), verifiedPrivateFrames: 1,
       AI: "disabled_and_http_storage_denied",
       fakeVerdicts: 0, creditMovement: 0, xpIssued: 0,
