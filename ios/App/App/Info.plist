@@ -61,6 +61,9 @@
 	<key>WKAppBoundDomains</key>
 	<array>
 		<string>summoner.world</string>
+		<!-- Capacitor's local server.hostname is localhost; required when
+		     limitsNavigationsToAppBoundDomains is enabled, including for fallback. -->
+		<string>localhost</string>
 	</array>
 </dict>
 </plist>
