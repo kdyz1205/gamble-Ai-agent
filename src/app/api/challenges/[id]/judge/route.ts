@@ -1,3 +1,4 @@
+import { readOptionalJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, type TierId } from "@/lib/auth";
@@ -14,8 +15,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const challenge = await prisma.challenge.findUnique({ where: { id }, select: { creatorId: true, status: true, stake: true } });
   if (!challenge) return Response.json({ error: "Challenge not found" }, { status: 404 });
   if (challenge.creatorId !== user.userId) return Response.json({ error: "Only the creator can trigger judgment" }, { status: 403 });
-  let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch { /* Default model tier. */ }
+  const body = await readOptionalJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
   const tierId = ([1, 2, 3].includes(Number(body.tier)) ? Number(body.tier) : 1) as TierId;
   try {
     const result = await executeChallengeJudgment(id, tierId, {

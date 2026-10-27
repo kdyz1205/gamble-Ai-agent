@@ -1,3 +1,4 @@
+import { readOptionalJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import { after } from "next/server";
 import prisma from "@/lib/db";
@@ -29,15 +30,12 @@ export async function POST(
   let providerId: string | undefined;
   let model: string | undefined;
   let webhookUrl: string | undefined;
-  try {
-    const body = await req.json();
-    if ([1, 2, 3].includes(body?.tier)) tierId = body.tier as TierId;
-    if (typeof body?.providerId === "string") providerId = body.providerId;
-    if (typeof body?.model === "string") model = body.model;
-    if (typeof body?.webhookUrl === "string") webhookUrl = body.webhookUrl.trim() || undefined;
-  } catch {
-    /* defaults */
-  }
+  const body = await readOptionalJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
+  if (typeof body.tier === "number" && [1, 2, 3].includes(body.tier)) tierId = body.tier as TierId;
+  if (typeof body.providerId === "string") providerId = body.providerId;
+  if (typeof body.model === "string") model = body.model;
+  if (typeof body.webhookUrl === "string") webhookUrl = body.webhookUrl.trim() || undefined;
 
   if (webhookUrl && !isEvidenceUrlAllowed(webhookUrl)) {
     return Response.json({ error: "webhookUrl must be a safe public https URL" }, { status: 400 });

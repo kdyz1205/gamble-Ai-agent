@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import { getAuthUser, getAiModel, unauthorized, type TierId } from "@/lib/auth";
 import { parseChallenge, generateClarifications, type ParsedChallenge } from "@/lib/ai-engine";
@@ -59,22 +60,24 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: msg }, { status: 429 });
   }
 
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
   try {
-    const { input, tier: rawTier, priorDraft: rawPrior } = await req.json();
+    const { input, tier: rawTier, priorDraft: rawPrior } = body;
     if (!input || typeof input !== "string") {
       return Response.json({ error: "input string is required" }, { status: 400 });
     }
     if (input.length > 8000) return Response.json({ error: "Input too long (maximum 8000 characters)." }, { status: 413 });
     if (rawPrior && JSON.stringify(rawPrior).length > 16000) return Response.json({ error: "Prior draft too large." }, { status: 413 });
 
-    const tierId = ([1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
+    const tierId = (typeof rawTier === "number" && [1, 2, 3].includes(rawTier) ? rawTier : 1) as TierId;
     const balance = await getCredits(user.userId);
 
     // Light validation on the optional priorDraft — ensure it's an object with
     // at least a title. We send only a small subset to the LLM so context
     // stays focused (title/proposition/type/suggestedStake/evidenceType/deadline).
     const priorDraft: ParsedChallenge | null =
-      rawPrior && typeof rawPrior === "object" && typeof rawPrior.title === "string"
+      rawPrior && typeof rawPrior === "object" && !Array.isArray(rawPrior) && "title" in rawPrior && typeof rawPrior.title === "string"
         ? (rawPrior as ParsedChallenge)
         : null;
 

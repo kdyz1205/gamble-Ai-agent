@@ -1,18 +1,12 @@
 import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
-  const baseUrl = new URL(req.url).origin;
-
-  const res = await fetch(`${baseUrl}/api/auth/callback/credentials`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, action: "login" }),
-  });
-
-  if (!res.ok) {
-    return Response.json({ error: "Invalid credentials" }, { status: 401 });
-  }
-
-  return Response.json({ message: "Use NextAuth signIn() on the client side" }, { status: 200 });
+  // The former proxy discarded CSRF/session cookies and could report a sign-in
+  // page's HTTP 200 as successful authentication. Never forward credentials here.
+  void req;
+  return Response.json({
+    error: "Use the CSRF-protected sign-in flow to establish a session.",
+    code: "AUTH_USE_NEXTAUTH",
+    signInPath: "/auth/signin",
+  }, { status: 410, headers: { "Cache-Control": "private, no-store" } });
 }

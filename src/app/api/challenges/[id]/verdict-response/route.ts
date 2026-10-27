@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import {
@@ -17,8 +18,9 @@ export async function POST(
   if (!user) return unauthorized();
   const { id } = await params;
 
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
   try {
-    const body = await req.json() as { decision?: unknown; reason?: unknown };
     const decision = body.decision as VerdictDecisionValue;
     if (![VerdictDecision.accepted, VerdictDecision.reviewRequested].includes(decision)) {
       return Response.json({ error: "decision must be accepted or review_requested" }, { status: 400 });

@@ -1,50 +1,82 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { createPortal } from "react-dom";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import { createAuthAttemptController, credentialsSignInSucceeded, safeAuthReturnTo } from "@/lib/auth-client-flow";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
   onBeforeRedirect?: () => void;
+  initialMode?: "login" | "register";
+  returnTo?: string;
 }
 
-// LuckyPlay canonical palette — see project_luckyplay_design_system memory
-const NAVY = "#1E293B";
-const NAVY_DIM = "#64748B";
-const NAVY_FAINT = "#E2E8F0";
-const PEACH = "#FED7AA";        // orange-200 CTA
-const PEACH_HOVER = "#FDBA74";  // orange-300
-const PEACH_TEXT = "#7C2D12";   // orange-900
-const MINT = "#A7F3D0";
-const MINT_TEXT = "#065F46";
-const PINK = "#FFD1DC";
-const ROSE_BG = "#FECACA";
-const ROSE_TEXT = "#991B1B";
+// Shared Summoners World storybook palette — also used by /enter and /app.
+const NAVY = "var(--sum-ink)";
+const NAVY_DIM = "var(--sum-muted)";
+const NAVY_FAINT = "var(--sum-border)";
+const PEACH = "var(--storybook-forest)";
+const PEACH_HOVER = "#467b65";
+const PEACH_TEXT = "#FFFFFF";
+const MINT = "var(--sum-mint)";
+const MINT_TEXT = "var(--storybook-forest)";
+const PINK = "var(--storybook-blush)";
+const ROSE_BG = "#fff0ed";
+const ROSE_TEXT = "#94473E";
 
-export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }: Props) {
-  const [mode, setMode] = useState<"login" | "register">("register");
+export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, initialMode = "register", returnTo }: Props) {
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [attempts] = useState(createAuthAttemptController);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPending = useCallback(() => {
+    attempts.invalidate();
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, [attempts]);
+  const closeDialog = useCallback(() => {
+    cancelPending();
+    onClose();
+  }, [cancelPending, onClose]);
+
+  // Portals must render nothing on both the server and the first client render.
+  // Showing the dialog only after hydration avoids React hydration error #418.
+  useEffect(() => setMounted(true), []);
 
   // Reset transient state whenever modal closes so re-opening gives a clean slate
   // (fixes "modal closed but stuck" — old success/error/loading flags could keep
   // the overlay visible).
   useEffect(() => {
+    cancelPending();
     if (!open) {
       setError("");
       setLoading(false);
       setSuccess(false);
+      setWebviewWarning(false);
+      setWebviewCopyNotice("");
+    } else {
+      setMode(initialMode);
     }
-  }, [open]);
+    return cancelPending;
+  }, [open, initialMode, cancelPending]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") closeDialog(); };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [open, closeDialog]);
 
   /**
    * Detect in-app webviews where Google blocks OAuth ("disallowed_useragent"
@@ -68,46 +100,49 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
   };
 
   const [webviewWarning, setWebviewWarning] = useState(false);
+  const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
 
-  const handleGoogleLogin = () => {
-    // Guard: in-app webview → Google will reject with "disallowed_useragent".
-    // Show a copy-the-link prompt instead of the normal flow so the user can
-    // paste into real Safari / Chrome. We do NOT kick off signIn in this case.
+  const handleGoogleLogin = async () => {
+    if (!open) return;
     if (isBlockedWebview()) {
       setWebviewWarning(true);
       return;
     }
-
-    // Before starting the OAuth flow, nuke any stale state/PKCE cookies from a
-    // previously-abandoned attempt. Without this, if the user clicks Sign In,
-    // closes the modal, then clicks again, NextAuth compares the new URL state
-    // against a stale cookie and rejects the callback as "state mismatch".
-    const staleCookies = [
-      "next-auth.state",
-      "__Secure-next-auth.state",
-      "next-auth.pkce.code_verifier",
-      "__Secure-next-auth.pkce.code_verifier",
-      "next-auth.callback-url",
-      "__Secure-next-auth.callback-url",
-    ];
-    for (const name of staleCookies) {
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    const attempt = attempts.begin();
+    if (attempt === null) return;
+    setError("");
+    setLoading(true);
+    try {
+      // NextAuth owns state and PKCE cookies. Do not try to clear them from JS.
+      onBeforeRedirect?.();
+      const fromAuthPage = window.location.pathname.startsWith("/auth/");
+      const fallback = fromAuthPage ? "/app/today" : `${window.location.pathname}${window.location.search}`;
+      const callbackUrl = safeAuthReturnTo(returnTo ?? fallback, window.location.origin);
+      await signIn("google", { callbackUrl }, { prompt: "select_account" });
+    } catch {
+      if (attempts.current(attempt)) setError("Google sign-in could not start. Please try again.");
+    } finally {
+      if (attempts.current(attempt)) {
+        attempts.finish(attempt);
+        setLoading(false);
+      }
     }
-    onBeforeRedirect?.();
-    signIn("google", { callbackUrl: `${window.location.pathname}${window.location.search}` }, { prompt: "select_account" });
   };
 
   const copySiteLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      alert("Link copied. Open Safari or Chrome and paste it — Google sign-in works there.");
+      setWebviewCopyNotice("Link copied. Open it in Safari or Chrome.");
     } catch {
-      // no-op
+      setWebviewCopyNotice("Copy this URL and open it in Safari or Chrome.");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!open) return;
+    const attempt = attempts.begin();
+    if (attempt === null) return;
     setError("");
     setLoading(true);
     try {
@@ -118,21 +153,26 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
         username: mode === "register" ? username : undefined,
         action: mode,
       });
-
-      if (res?.error) {
-        setError(res.error === "CredentialsSignin" ? "Invalid credentials" : res.error);
-      } else {
-        setSuccess(true);
-        onSuccess();
-        setTimeout(() => {
-          setSuccess(false);
-          onClose();
-        }, 900);
+      if (!attempts.current(attempt)) return;
+      if (!credentialsSignInSucceeded(res)) {
+        setError(res?.error === "CredentialsSignin" ? "Invalid credentials"
+          : res?.error || "Sign-in did not complete. Please try again.");
+        return;
       }
+      setSuccess(true);
+      closeTimer.current = setTimeout(() => {
+        if (!attempts.current(attempt)) return;
+        setSuccess(false);
+        closeDialog();
+      }, 900);
+      onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (attempts.current(attempt)) setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (attempts.current(attempt)) {
+        attempts.finish(attempt);
+        setLoading(false);
+      }
     }
   };
 
@@ -145,7 +185,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
     caretColor: PEACH_HOVER,
   };
 
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
 
   return createPortal(
     <AnimatePresence>
@@ -153,35 +193,35 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
         <>
           {/* Backdrop — soft sky blur, not dark tribunal */}
           <motion.div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[1000]"
             style={{
-              background: "rgba(15, 23, 42, 0.25)",
+              background: "rgba(39, 60, 56, 0.34)",
               backdropFilter: "blur(10px)",
               WebkitBackdropFilter: "blur(10px)",
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={closeDialog}
           />
 
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto p-3 py-5 sm:p-6"
+            onClick={closeDialog}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="auth-portal relative w-full max-w-sm overflow-hidden"
-              style={{
-                borderRadius: "28px",
-                boxShadow: "0 20px 60px rgba(15,23,42,0.12), 0 4px 14px 0 rgba(251,146,60,0.18)",
-              }}
+              className="auth-portal relative w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
               initial={{ scale: 0.92, y: 24, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.92, y: 24, opacity: 0 }}
               transition={{ type: "spring", damping: 22, stiffness: 400 }}
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="summon-auth-title"
             >
               {/* Floating candy orbs in card bg */}
               <div
@@ -193,14 +233,15 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 style={{ background: PEACH, filter: "blur(26px)" }}
               />
 
-              <div className="relative p-7">
+              <div className="relative p-6 sm:p-7">
+                <button type="button" className="sum-auth-close" aria-label="Close sign-in" onClick={closeDialog}>×</button>
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
                     <motion.div
                       className="absolute inset-0 z-10 flex flex-col items-center justify-center"
                       style={{
-                        background: "rgba(255,255,255,0.92)",
+                        background: "rgba(255,253,250,0.96)",
                         backdropFilter: "blur(8px)",
                         borderRadius: "28px",
                       }}
@@ -212,7 +253,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                         className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
                         style={{
                           background: MINT,
-                          boxShadow: "0 4px 14px 0 rgba(110,231,183,0.40)",
+                          boxShadow: "0 8px 24px rgba(49,94,82,0.14)",
                         }}
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
@@ -252,13 +293,13 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <h2 className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join Summoner.world" : "Welcome back"}
+                      <h2 id="summon-auth-title" className="text-2xl font-bold" style={{ color: NAVY }}>
+                        {mode === "register" ? "Join Summoners World" : "Welcome back, Summoner"}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Let's summon your first quest"
-                          : "Good to see you again"}
+                          ? "Make your first quest a reality"
+                          : "Pick up your next quest"}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -278,8 +319,9 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                       onClick={copySiteLink}
                       className="px-3 py-1.5 text-[11px] font-black rounded-full active:scale-95 transition-transform"
                       style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}>
-                      📋 Copy link
+                      Copy link
                     </button>
+                    {webviewCopyNotice && <p className="mt-2 text-xs">{webviewCopyNotice}</p>}
                   </div>
                 )}
 
@@ -287,7 +329,8 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
-                  whileHover={{ scale: 1.02, background: "#F8FAFC" }}
+                  disabled={loading || success}
+                  whileHover={{ scale: 1.02, background: "#F8FCF8" }}
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 400, damping: 22 }}
                   className="w-full flex items-center justify-center gap-3 py-3 text-sm font-semibold mb-4"
@@ -332,6 +375,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 <AnimatePresence>
                   {error && (
                     <motion.div
+                      role="alert"
                       className="animate-error-shake mb-4 px-4 py-2.5 text-xs font-semibold"
                       style={{
                         background: ROSE_BG,
@@ -410,7 +454,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
 
                   <motion.button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || success}
                     whileHover={!loading ? { scale: 1.02 } : {}}
                     whileTap={!loading ? { scale: 0.96 } : {}}
                     transition={{ type: "spring", stiffness: 400, damping: 22 }}
@@ -446,7 +490,10 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect }
                 {/* Toggle mode */}
                 <div className="mt-5 text-center">
                   <button
+                    type="button"
+                    disabled={loading || success}
                     onClick={() => {
+                      cancelPending();
                       setMode(mode === "register" ? "login" : "register");
                       setError("");
                     }}

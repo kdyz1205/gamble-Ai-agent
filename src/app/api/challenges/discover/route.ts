@@ -1,3 +1,4 @@
+import { pageInteger } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import {
@@ -30,7 +31,8 @@ const CHALLENGE_SELECT = {
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "24", 10), 50);
+  const limit = pageInteger(url.searchParams.get("limit"), 24, 1, 50, true);
+  if (limit === null) return Response.json({ error: "Invalid pagination" }, { status: 400 });
   const latRaw = url.searchParams.get("lat");
   const lngRaw = url.searchParams.get("lng");
   const lat = latRaw != null && latRaw !== "" ? Number(latRaw) : NaN;

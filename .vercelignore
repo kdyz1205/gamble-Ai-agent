@@ -10,3 +10,5 @@ output/
 /ios/
 /ios-shell/
 *.log
+/src/generated/
+*.tsbuildinfo

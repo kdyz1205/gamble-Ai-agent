@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 /**
  * POST /api/agent/respond
  *
@@ -87,12 +88,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return Response.json({ error: "invalid JSON body" }, { status: 400 });
-  }
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
 
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) return Response.json({ error: "message required" }, { status: 400 });

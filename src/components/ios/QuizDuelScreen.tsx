@@ -67,6 +67,13 @@ async function fetchJson<T>(url:string,options?:RequestInit):Promise<T>{
 const mutation={method:"POST",headers:{"Content-Type":"application/json"}} as const;
 
 export default function QuizDuelScreen({id}:{id?:string}){
+  const {status,data:session}=useSession();
+  // A room/account switch is a new answer lifecycle, never a continuation of
+  // the previous room's selected answers, retry key or pending mutation.
+  return <QuizDuelSession key={`${status}:${session?.user?.id??"guest"}:${id??"create"}`} id={id}/>;
+}
+
+function QuizDuelSession({id}:{id?:string}){
   const {status}=useSession();
   const router=useRouter();
   const [topic,setTopic]=useState<Topic>("general");
@@ -74,6 +81,8 @@ export default function QuizDuelScreen({id}:{id?:string}){
   const [opponent,setOpponent]=useState("");
   const [voiceNotice,setVoiceNotice]=useState("");
   const [runtime,setRuntime]=useState<AiCapabilities|null>(null);
+  const [runtimeError,setRuntimeError]=useState("");
+  const [runtimeRetry,setRuntimeRetry]=useState(0);
   const pilotEnabled=runtime?.quiz.enabled===true;
   const [quiz,setQuiz]=useState<QuizView|null>(null);
   const [choices,setChoices]=useState<number[]>([-1,-1,-1]);
@@ -85,6 +94,13 @@ export default function QuizDuelScreen({id}:{id?:string}){
   const requestKey=useRef<string|null>(null);
   const autoExpireAttempt=useRef<string|null>(null);
   const topicWasChosen=useRef(false);
+  const mounted=useRef(true);
+  const actionBusy=useRef(false);
+  const revision=useRef(0);
+  useEffect(()=>{
+    mounted.current=true;
+    return()=>{mounted.current=false;};
+  },[]);
 
   const updateDescription=(value:string)=>{
     setDescription(value);
@@ -99,29 +115,59 @@ export default function QuizDuelScreen({id}:{id?:string}){
   useEffect(()=>{
     if(status!=="authenticated")return;
     let active=true;
+    setRuntimeError("");
     void fetchJson<{capabilities:AiCapabilities}>("/api/ai/runtime")
-      .then(result=>{if(active)setRuntime(result.capabilities);})
-      .catch(()=>{if(active)setRuntime(null);});
+      .then(result=>{
+        if(!result.capabilities||typeof result.capabilities.quiz?.enabled!=="boolean")
+          throw new Error("Quiz configuration could not be verified.");
+        if(active)setRuntime(result.capabilities);
+      })
+      .catch(e=>{
+        if(active){
+          setRuntime(null);
+          setRuntimeError(e instanceof Error?e.message:"Quiz configuration could not be loaded.");
+        }
+      });
     return()=>{active=false;};
-  },[status]);
+  },[status,runtimeRetry]);
   useEffect(()=>{
     if(!id||status!=="authenticated"||!pilotEnabled)return;
     let active=true;
+    let inFlight=false;
+    let controller:AbortController|null=null;
     const update=async()=>{
+      // Serialize reads and never let a pre-mutation snapshot overwrite a
+      // confirmed join/answer/cancel response that arrived in the meantime.
+      if(inFlight||actionBusy.current||document.hidden)return;
+      inFlight=true;
+      const observedRevision=revision.current;
+      controller=new AbortController();
+      const stillCurrent=()=>active&&mounted.current&&
+        observedRevision===revision.current&&!actionBusy.current;
       try{
-        const result=await fetchJson<{quiz:QuizView}>("/api/quiz/"+encodeURIComponent(id));
-        if(active){setQuiz(result.quiz);setError("");}
+        const result=await fetchJson<{quiz:QuizView}>("/api/quiz/"+encodeURIComponent(id),
+          {signal:controller.signal});
+        if(stillCurrent()){setQuiz(result.quiz);setError("");}
       }catch(e){
-        if(active)setError(e instanceof Error?e.message:"Quiz could not be loaded");
-      }finally{if(active)setLoading(false);}
+        if(stillCurrent())setError(e instanceof Error?e.message:"Quiz could not be loaded");
+      }finally{
+        if(stillCurrent())setLoading(false);
+        inFlight=false;
+      }
     };
     void update();
     const interval=setInterval(()=>{void update();},3000);
-    return()=>{active=false;clearInterval(interval);};
+    const visible=()=>{if(!document.hidden)void update();};
+    document.addEventListener("visibilitychange",visible);
+    return()=>{
+      active=false;controller?.abort();clearInterval(interval);
+      document.removeEventListener("visibilitychange",visible);
+    };
   },[id,status,pilotEnabled]);
 
   const create=async()=>{
-    if(working||status!=="authenticated"||!pilotEnabled)return;
+    if(actionBusy.current||status!=="authenticated"||!pilotEnabled)return;
+    actionBusy.current=true;revision.current++;
     setWorking(true);setError("");
     if(!requestKey.current)requestKey.current=crypto.randomUUID();
     try{
@@ -133,23 +179,35 @@ export default function QuizDuelScreen({id}:{id?:string}){
       const result=await fetchJson<{challengeId:string}>("/api/quiz",{
         ...mutation,body:JSON.stringify(body),
       });
+      if(!mounted.current)return;
+      // Preserve the key on ambiguous failures, but never reuse a successful
+      // creation when the player returns here to start another Quiz.
+      requestKey.current=null;
       router.push("/app/quiz?id="+encodeURIComponent(result.challengeId));
     }catch(e){
-      setError(e instanceof Error?e.message:"Quiz creation failed; you can retry safely");
-    }finally{setWorking(false);}
+      if(mounted.current)setError(e instanceof Error?e.message:"Quiz creation failed; you can retry safely");
+    }finally{
+      actionBusy.current=false;
+      if(mounted.current)setWorking(false);
+    }
   };
   const postAction=useCallback(async(path:string,body?:unknown)=>{
-    if(!id||working||!pilotEnabled)return;
+    if(!id||actionBusy.current||!pilotEnabled||status!=="authenticated")return;
+    actionBusy.current=true;revision.current++;
     setWorking(true);setError("");
     try{
       const result=await fetchJson<{quiz:QuizView}>(
         "/api/quiz/"+encodeURIComponent(id)+path,{
           ...mutation,body:body?JSON.stringify(body):undefined,
         });
-      setQuiz(result.quiz);
-    }catch(e){setError(e instanceof Error?e.message:"Quiz action failed");}
-    finally{setWorking(false);}
-  },[id,working,pilotEnabled]);
+      if(mounted.current)setQuiz(result.quiz);
+    }catch(e){
+      if(mounted.current)setError(e instanceof Error?e.message:"Quiz action failed");
+    }finally{
+      actionBusy.current=false;
+      if(mounted.current)setWorking(false);
+    }
+  },[id,pilotEnabled,status]);
   const share=async()=>{
     if(!id)return;
     const url=window.location.origin+"/app/quiz?id="+encodeURIComponent(id);
@@ -171,7 +229,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
     void postAction("/finalize");
   },[status,pilotEnabled,id,quiz?.id,quiz?.status,quiz?.accepted,expired,working,postAction]);
   const remain=secondsRemaining(quiz?.expiresAt||null,now);
-  const canSubmit=Boolean(pilotEnabled&&quiz?.status==="live"&&quiz.accepted&&
+  const canSubmit=Boolean(pilotEnabled&&quiz?.id===id&&quiz?.status==="live"&&quiz.accepted&&
     !quiz.ownSubmitted&&!expired&&choices.length===3&&
     choices.every(x=>Number.isInteger(x)&&x>=0&&x<=3)&&!working);
   const result=quiz?.result;
@@ -208,7 +266,15 @@ export default function QuizDuelScreen({id}:{id?:string}){
         detail="Both people must sign in separately. No account is shared with the AI provider."/>:
       !pilotEnabled?<section className="ios-quiz-card" aria-label="Quiz activation status"
         data-testid="quiz-pilot-disabled" role="status">
-        <h2>{runtime?"Free Quiz pilot is not active here":"Checking secure Quiz configuration…"}</h2>
+        <h2>{runtimeError?"Quiz configuration is unavailable":
+          runtime?"Free Quiz pilot is not active here":"Checking secure Quiz configuration…"}</h2>
+        {runtimeError&&<>
+          <p role="alert">{runtimeError}</p>
+          <button type="button" className="ios-secondary-button"
+            onClick={()=>setRuntimeRetry(value=>value+1)}>
+            Retry Quiz configuration
+          </button>
+        </>}
         <p>Creating or joining Quizzes requires a separately migrated, explicitly
           enabled test environment. No account, answer or credit will be changed.</p>
       </section>:
@@ -227,7 +293,7 @@ export default function QuizDuelScreen({id}:{id?:string}){
         </label>
         {voiceNotice&&<p role="status" className="ios-quiz-hint">{voiceNotice}</p>}
         <label className="ios-quiz-label">Question category
-          <select value={topic} onChange={e=>{
+          <select value={topic} disabled={working} onChange={e=>{
             setTopic(e.target.value as Topic);topicWasChosen.current=true;requestKey.current=null;
           }} aria-label="Quiz topic">
             {TOPICS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}

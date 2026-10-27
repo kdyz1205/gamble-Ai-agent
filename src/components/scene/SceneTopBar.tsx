@@ -30,6 +30,7 @@ export default function SceneTopBar({ title = sceneBrand.world, rightSlot, activ
               <span className="grid h-6 w-6 place-items-center rounded-lg bg-[rgba(112,214,165,0.2)] text-[#157b58]"><QuestGlyph className="h-3.5 w-3.5" kind="spark" /></span>
               Pico ready
             </span>
+            <Link className="hidden min-h-11 items-center px-3 font-bold text-[color:var(--sum-ink)] transition-opacity hover:opacity-65 sm:inline-flex" href="/auth/signin">Sign in</Link>
             <Link aria-label={activePath === "/enter" ? "Open SUM web app" : "New quest"} className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href={activePath === "/enter" ? "/app" : "/summons"}>
               <QuestGlyph className="h-4 w-4" kind="spark" />
               <span className="inline">{activePath === "/enter" ? "Open app" : "New quest"}</span>
