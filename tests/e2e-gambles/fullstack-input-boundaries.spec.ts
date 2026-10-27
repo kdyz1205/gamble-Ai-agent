@@ -15,6 +15,7 @@ test("malformed requests are rejected without server crashes, credit changes or 
   const email = `input-${token}@example.invalid`;
   let userId: string | undefined;
   const reports: string[] = [];
+  const judgmentFixture = `judge_input_${token}`;
   let checks = 0;
   try {
     for (const endpoint of ["/api/challenges", "/api/challenges/discover"]) {
@@ -34,6 +35,25 @@ test("malformed requests are rejected without server crashes, credit changes or 
     const session = await (await api.get(BASE + "/api/auth/session")).json();
     userId = session.user.id;
     const before = (await db.query('SELECT credits,latitude,longitude,"locationUpdatedAt" FROM "User" WHERE id=$1', [userId])).rows[0];
+    await db.query('INSERT INTO "Challenge" (id,"creatorId",title,type,status,stake,"updatedAt") VALUES ($1,$2,$3,$4,$5,0,NOW())',
+      [judgmentFixture, userId, "Synthetic invalid-judgment input fixture", "General", "cancelled"]);
+    for (const suffix of ["judge", "judge/async"]) {
+      for (const body of ["null", "[]", "{", "true", "7"]) {
+        const invalid = await api.post(`${BASE}/api/challenges/${judgmentFixture}/${suffix}`, {
+          data: body, headers: { "content-type": "application/json" },
+        });
+        expect(invalid.status(), `${suffix}: ${body}`).toBe(400);
+        expect((await invalid.json()).error).toBe("A JSON object is required"); checks++;
+      }
+      // Empty bodies retain legacy default options; the cancelled fixture is
+      // rejected by the existing lifecycle gate, never sent to an AI provider.
+      const defaulted = await api.post(`${BASE}/api/challenges/${judgmentFixture}/${suffix}`);
+      expect([400, 409]).toContain(defaulted.status());
+      expect((await defaulted.json()).error).not.toBe("A JSON object is required"); checks++;
+    }
+    expect((await db.query('SELECT COUNT(*)::integer AS count FROM "Judgment" WHERE "challengeId"=$1', [judgmentFixture])).rows[0].count).toBe(0); checks++;
+    expect((await db.query('SELECT COUNT(*)::integer AS count FROM "JudgeJob" WHERE "challengeId"=$1', [judgmentFixture])).rows[0].count).toBe(0); checks++;
+    expect((await db.query('SELECT status FROM "Challenge" WHERE id=$1', [judgmentFixture])).rows[0].status).toBe("cancelled"); checks++;
     const endpoints = ["/api/me/location", "/api/agent/respond", "/api/challenges/parse", "/api/challenges/adjust-draft",
       "/api/challenges/input_dummy_20261027/verdict-response", "/api/reviews/input_dummy_20261027/resolve"];
     for (const path of endpoints) {
@@ -73,6 +93,7 @@ test("malformed requests are rejected without server crashes, credit changes or 
     if (reports.length) await db.query('DELETE FROM "AuditLog" WHERE id=ANY($1::text[])', [reports]);
     const ids = (await db.query('SELECT id FROM "User" WHERE email=$1', [email])).rows.map((row: { id: string }) => row.id);
     if (ids.length) {
+      await db.query('DELETE FROM "Challenge" WHERE id=$1 AND "creatorId"=ANY($2::text[])', [judgmentFixture, ids]);
       await db.query('DELETE FROM "CreditTx" WHERE "userId"=ANY($1::text[])', [ids]);
       await db.query('DELETE FROM "ActivityEvent" WHERE "userId"=ANY($1::text[])', [ids]);
       await db.query('DELETE FROM "AuditLog" WHERE "actorUserId"=ANY($1::text[]) OR "targetUserId"=ANY($1::text[])', [ids]);

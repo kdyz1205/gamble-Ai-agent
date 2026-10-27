@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { readJsonObject, pageInteger, nearbyQuery } from "../src/lib/request-input";
+import { readJsonObject, readOptionalJsonObject, pageInteger, nearbyQuery } from "../src/lib/request-input";
 import { GET as discover } from "../src/app/api/challenges/discover/route";
 import { POST as support } from "../src/app/api/support/report/route";
 import prisma from "../src/lib/db";
+import { POST as reviewDiagnostic } from "../src/app/api/diag/review-proof/route";
 
 async function main() {
   let checks = 0;
@@ -25,6 +26,28 @@ async function main() {
   }
   assert.deepEqual(nearbyQuery(new URLSearchParams("lat=0&lng=0")), { latitude: 0, longitude: 0, radiusMiles: 10 }); checks++;
   assert.deepEqual(nearbyQuery(new URLSearchParams("lat=-90&lng=180&radius=2.5")), { latitude: -90, longitude: 180, radiusMiles: 2.5 }); checks++;
+  for (const text of ["", " ", "{}", "{\"tier\":2}"]) {
+    assert.deepEqual(await readOptionalJsonObject({ text: async () => text }), text.trim() ? JSON.parse(text) : {}); checks++;
+  }
+  for (const text of ["null", "[]", "true", "3", "\"text\"", "{"]) {
+    assert.equal(await readOptionalJsonObject({ text: async () => text }), null); checks++;
+  }
+  const priorToken = process.env.DIAG_TOKEN;
+  process.env.DIAG_TOKEN = "synthetic-local-unit-token-never-production";
+  try {
+    for (const body of ["null", "[]", "{"]) {
+      const invalid = new NextRequest("http://localhost/api/diag/review-proof", {
+        method: "POST", headers: { "content-type": "application/json", "x-diag-token": process.env.DIAG_TOKEN }, body,
+      });
+      const response = await reviewDiagnostic(invalid);
+      assert.equal(response.status, 400, "Authorized malformed diagnostics must not crash or mutate reviewer roles"); checks++;
+      assert.match(response.headers.get("cache-control") ?? "", /no-store/); checks++;
+      const forbidden = await reviewDiagnostic(new NextRequest("http://localhost/api/diag/review-proof", {
+        method: "POST", headers: { "content-type": "application/json" }, body,
+      }));
+      assert.equal(forbidden.status, 401, "Diagnostics remain protected before body parsing"); checks++;
+    }
+  } finally { if (priorToken === undefined) delete process.env.DIAG_TOKEN; else process.env.DIAG_TOKEN = priorToken; }
   const previousFind = prisma.challenge.findMany;
   const previousAudit = prisma.auditLog.create;
   let databaseCalls = 0;

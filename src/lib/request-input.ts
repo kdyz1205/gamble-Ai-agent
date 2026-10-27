@@ -30,3 +30,16 @@ export function nearbyQuery(search: URLSearchParams): NearbyQuery | null {
     || !Number.isFinite(radiusMiles) || radiusMiles <= 0) return null;
   return { latitude, longitude, radiusMiles };
 }
+
+/** Judgment historically permits an absent body to select the default tier.
+ * Preserve that contract, but never convert malformed/non-object input into a
+ * potentially chargeable judgment request. */
+export async function readOptionalJsonObject(request: { text(): Promise<string> }): Promise<Record<string, unknown> | null> {
+  try {
+    const text = await request.text();
+    if (!text.trim()) return {};
+    const value: unknown = JSON.parse(text);
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown> : null;
+  } catch { return null; }
+}
