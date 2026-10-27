@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { expireOverdueReviewCases } from "@/lib/verdict-review";
@@ -76,7 +77,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!authorized(req)) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const body = await req.json() as { action?: unknown; email?: unknown; reviewId?: unknown };
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" },
+    { status: 400, headers: { "Cache-Control": "private, no-store" } });
 
   if (body.action === "promote_reviewer" && typeof body.email === "string") {
     const user = await prisma.user.update({

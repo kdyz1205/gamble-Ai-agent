@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized } from "@/lib/auth";
@@ -15,14 +16,9 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const { lat, lng } = body as { lat?: unknown; lng?: unknown };
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
+  const { lat, lng } = body;
 
   if (
     typeof lat !== "number" ||

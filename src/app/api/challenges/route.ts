@@ -1,3 +1,4 @@
+import { pageInteger } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthUser, unauthorized, noCredits } from "@/lib/auth";
@@ -8,8 +9,9 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get("status");
   const type   = url.searchParams.get("type");
   const mine   = url.searchParams.get("mine") === "true";
-  const limit  = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
-  const offset = parseInt(url.searchParams.get("offset") || "0");
+  const limit = pageInteger(url.searchParams.get("limit"), 20, 1, 50, true);
+  const offset = pageInteger(url.searchParams.get("offset"), 0, 0, 2_147_483_647);
+  if (limit === null || offset === null) return Response.json({ error: "Invalid pagination" }, { status: 400 });
 
   const user = await getAuthUser();
 

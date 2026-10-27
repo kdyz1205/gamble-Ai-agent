@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { createPortal } from "react-dom";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
+import { createAuthAttemptController, credentialsSignInSucceeded, safeAuthReturnTo } from "@/lib/auth-client-flow";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,17 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [attempts] = useState(createAuthAttemptController);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPending = useCallback(() => {
+    attempts.invalidate();
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, [attempts]);
+  const closeDialog = useCallback(() => {
+    cancelPending();
+    onClose();
+  }, [cancelPending, onClose]);
 
   // Portals must render nothing on both the server and the first client render.
   // Showing the dialog only after hydration avoids React hydration error #418.
@@ -46,6 +58,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
   // (fixes "modal closed but stuck" — old success/error/loading flags could keep
   // the overlay visible).
   useEffect(() => {
+    cancelPending();
     if (!open) {
       setError("");
       setLoading(false);
@@ -55,14 +68,15 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
     } else {
       setMode(initialMode);
     }
-  }, [open, initialMode]);
+    return cancelPending;
+  }, [open, initialMode, cancelPending]);
 
   useEffect(() => {
     if (!open) return;
-    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") closeDialog(); };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [open, onClose]);
+  }, [open, closeDialog]);
 
   /**
    * Detect in-app webviews where Google blocks OAuth ("disallowed_useragent"
@@ -88,36 +102,31 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
   const [webviewWarning, setWebviewWarning] = useState(false);
   const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
 
-  const handleGoogleLogin = () => {
-    // Guard: in-app webview → Google will reject with "disallowed_useragent".
-    // Show a copy-the-link prompt instead of the normal flow so the user can
-    // paste into real Safari / Chrome. We do NOT kick off signIn in this case.
+  const handleGoogleLogin = async () => {
+    if (!open) return;
     if (isBlockedWebview()) {
       setWebviewWarning(true);
       return;
     }
-
-    // Before starting the OAuth flow, nuke any stale state/PKCE cookies from a
-    // previously-abandoned attempt. Without this, if the user clicks Sign In,
-    // closes the modal, then clicks again, NextAuth compares the new URL state
-    // against a stale cookie and rejects the callback as "state mismatch".
-    const staleCookies = [
-      "next-auth.state",
-      "__Secure-next-auth.state",
-      "next-auth.pkce.code_verifier",
-      "__Secure-next-auth.pkce.code_verifier",
-      "next-auth.callback-url",
-      "__Secure-next-auth.callback-url",
-    ];
-    for (const name of staleCookies) {
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    const attempt = attempts.begin();
+    if (attempt === null) return;
+    setError("");
+    setLoading(true);
+    try {
+      // NextAuth owns state and PKCE cookies. Do not try to clear them from JS.
+      onBeforeRedirect?.();
+      const fromAuthPage = window.location.pathname.startsWith("/auth/");
+      const fallback = fromAuthPage ? "/app/today" : `${window.location.pathname}${window.location.search}`;
+      const callbackUrl = safeAuthReturnTo(returnTo ?? fallback, window.location.origin);
+      await signIn("google", { callbackUrl }, { prompt: "select_account" });
+    } catch {
+      if (attempts.current(attempt)) setError("Google sign-in could not start. Please try again.");
+    } finally {
+      if (attempts.current(attempt)) {
+        attempts.finish(attempt);
+        setLoading(false);
+      }
     }
-    onBeforeRedirect?.();
-    const fromAuthPage = window.location.pathname.startsWith("/auth/");
-    const fallback = fromAuthPage ? "/app/today" : `${window.location.pathname}${window.location.search}`;
-    const callbackUrl = returnTo?.startsWith("/") && !returnTo.startsWith("//") && !returnTo.includes("\\")
-      ? returnTo : fallback;
-    signIn("google", { callbackUrl }, { prompt: "select_account" });
   };
 
   const copySiteLink = async () => {
@@ -131,6 +140,9 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!open) return;
+    const attempt = attempts.begin();
+    if (attempt === null) return;
     setError("");
     setLoading(true);
     try {
@@ -141,21 +153,26 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
         username: mode === "register" ? username : undefined,
         action: mode,
       });
-
-      if (res?.error) {
-        setError(res.error === "CredentialsSignin" ? "Invalid credentials" : res.error);
-      } else {
-        setSuccess(true);
-        onSuccess();
-        setTimeout(() => {
-          setSuccess(false);
-          onClose();
-        }, 900);
+      if (!attempts.current(attempt)) return;
+      if (!credentialsSignInSucceeded(res)) {
+        setError(res?.error === "CredentialsSignin" ? "Invalid credentials"
+          : res?.error || "Sign-in did not complete. Please try again.");
+        return;
       }
+      setSuccess(true);
+      closeTimer.current = setTimeout(() => {
+        if (!attempts.current(attempt)) return;
+        setSuccess(false);
+        closeDialog();
+      }, 900);
+      onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (attempts.current(attempt)) setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (attempts.current(attempt)) {
+        attempts.finish(attempt);
+        setLoading(false);
+      }
     }
   };
 
@@ -185,12 +202,12 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={closeDialog}
           />
 
           <motion.div
             className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto p-3 py-5 sm:p-6"
-            onClick={onClose}
+            onClick={closeDialog}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -217,7 +234,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
               />
 
               <div className="relative p-6 sm:p-7">
-                <button type="button" className="sum-auth-close" aria-label="Close sign-in" onClick={onClose}>×</button>
+                <button type="button" className="sum-auth-close" aria-label="Close sign-in" onClick={closeDialog}>×</button>
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
@@ -312,6 +329,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                 <motion.button
                   type="button"
                   onClick={handleGoogleLogin}
+                  disabled={loading || success}
                   whileHover={{ scale: 1.02, background: "#F8FCF8" }}
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 400, damping: 22 }}
@@ -357,6 +375,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                 <AnimatePresence>
                   {error && (
                     <motion.div
+                      role="alert"
                       className="animate-error-shake mb-4 px-4 py-2.5 text-xs font-semibold"
                       style={{
                         background: ROSE_BG,
@@ -435,7 +454,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
 
                   <motion.button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || success}
                     whileHover={!loading ? { scale: 1.02 } : {}}
                     whileTap={!loading ? { scale: 0.96 } : {}}
                     transition={{ type: "spring", stiffness: 400, damping: 22 }}
@@ -471,7 +490,10 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                 {/* Toggle mode */}
                 <div className="mt-5 text-center">
                   <button
+                    type="button"
+                    disabled={loading || success}
                     onClick={() => {
+                      cancelPending();
                       setMode(mode === "register" ? "login" : "register");
                       setError("");
                     }}

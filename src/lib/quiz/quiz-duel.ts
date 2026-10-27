@@ -103,7 +103,7 @@ export async function createQuizDuel(userId:string,raw:unknown){
   });
   if(existing){
     sameRequest(existing);
-    return {challengeId:existing.challengeId,reused:true};
+    return {challengeId:existing.challengeId,status:existing.status,reused:true};
   }
   const selected=chooseQuestionIds(input.topic);
   const commitment=answerCommitment(selected);
@@ -119,7 +119,7 @@ export async function createQuizDuel(userId:string,raw:unknown){
       });
       if(prior){
         sameRequest(prior);
-        return {challengeId:prior.challengeId,reused:true};
+        return {challengeId:prior.challengeId,status:prior.status,reused:true};
       }
       const creator=await tx.user.findUnique({where:{id:userId},
         select:{id:true,username:true}});
@@ -165,7 +165,7 @@ export async function createQuizDuel(userId:string,raw:unknown){
         type:"quiz_created",userId,challengeId:challenge.id,
         message:creator.username+" created a free Quiz duel",
       }});
-      return {challengeId:challenge.id,reused:false};
+      return {challengeId:challenge.id,status:"open",reused:false};
     },{timeout:15_000});
   }catch(err){
     // Concurrent retry may lose the requestKey uniqueness race. Do not
@@ -177,7 +177,7 @@ export async function createQuizDuel(userId:string,raw:unknown){
       });
       if(previous){
         sameRequest(previous);
-        return {challengeId:previous.challengeId,reused:true};
+        return {challengeId:previous.challengeId,status:previous.status,reused:true};
       }
       fail(409,"Quiz request key conflict");
     }
@@ -209,7 +209,10 @@ export async function getQuizDuelView(challengeIdRaw:unknown,userId:string){
   } as const;
   if(duel.challenge.status!==validPairs[duel.status as keyof typeof validPairs])
     throw new Error("Quiz and Quest lifecycle require reconciliation");
-  const participant=duel.challenge.participants.find(p=>p.userId===userId);
+  // A spectator record is not an accepted competitor. Questions and sealed
+  // result receipts remain private to the two player roles.
+  const participant=duel.challenge.participants.find(p=>p.userId===userId&&
+    (p.role==="creator"||p.role==="opponent"));
   const invited=duel.invitedUserId===userId;
   if(!participant && duel.invitedUserId&&!invited)
     fail(403,"This Quiz was invited to another account");

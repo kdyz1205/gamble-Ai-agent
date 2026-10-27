@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { resolveReviewCase, ReviewFlowError, type ReviewResolution } from "@/lib/verdict-review";
@@ -12,8 +13,9 @@ export async function POST(
   if (!user) return unauthorized();
   const { reviewId } = await params;
 
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
   try {
-    const body = await req.json() as { resolution?: unknown; winnerId?: unknown; notes?: unknown };
     const resolution = body.resolution as ReviewResolution;
     if (!["uphold", "override", "refund"].includes(resolution)) {
       return Response.json({ error: "resolution must be uphold, override, or refund" }, { status: 400 });

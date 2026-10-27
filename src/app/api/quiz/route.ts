@@ -14,7 +14,7 @@ export async function POST(req:NextRequest){
     {status:400,headers:{"Cache-Control":"private, no-store"}});}
   try{
     const result=await createQuizDuel(user.userId,body);
-    return Response.json({...result,status:"open",stakeCredits:0,
+    return Response.json({...result,stakeCredits:0,
       note:"Free Quiz only. Invitation and answers are audited; no purchased credits."},
       {status:result.reused?200:201,
         headers:{"Cache-Control":"private, no-store"}});

@@ -5,11 +5,13 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import AuthModal from "@/components/AuthModal";
+import { safeAuthReturnTo } from "@/lib/auth-client-flow";
 
-export default function SignInPortal() {
+export default function SignInPortal({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
   const signedIn = useRef(false);
+  const destination = safeAuthReturnTo(callbackUrl, typeof window === "undefined" ? undefined : window.location.origin);
 
   return (
     <main className="sum-auth-screen" data-testid="sum-auth-signin">
@@ -29,9 +31,9 @@ export default function SignInPortal() {
       <AuthModal
         open={open}
         initialMode="login"
-        returnTo="/app/today"
+        returnTo={destination}
         onClose={() => { setOpen(false); if (!signedIn.current) router.replace("/"); }}
-        onSuccess={() => { signedIn.current = true; router.replace("/app/today"); }}
+        onSuccess={() => { signedIn.current = true; router.replace(destination); }}
       />
     </main>
   );
