@@ -25,7 +25,7 @@ test("an HTTP failure without a NextAuth error parameter never displays successf
   await page.goto(`${BASE}/auth/signin`);
   await fill(page);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Sign-in did not complete");
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Sign-in did not complete");
   await expect(page).toHaveURL(/\/auth\/signin$/);
   await expect(page.getByText("You're in! Your quest world is ready.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign In", exact: true })).toBeEnabled();
