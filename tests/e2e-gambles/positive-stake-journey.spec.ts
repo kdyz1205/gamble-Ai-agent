@@ -25,7 +25,7 @@ test("registered friends stake five credits, submit real text proof, wait deadli
     await page.locator("textarea").first().fill("badminton first to 3 points");
     await page.getByRole("button", { name: "Summon", exact: true }).click();
     const portal = page.locator(".auth-portal");
-    await expect(portal.getByText("Join Summoner.world", { exact: true })).toBeVisible();
+    await expect(portal.getByText("Join Summoners World", { exact: true })).toBeVisible();
     await portal.getByPlaceholder("you@email.com").fill(email);
     await portal.getByPlaceholder("What should we call you?").fill(username);
     await portal.getByPlaceholder("At least 6 characters").fill(randomUUID());
