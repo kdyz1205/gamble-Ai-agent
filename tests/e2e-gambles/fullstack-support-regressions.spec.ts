@@ -4,7 +4,7 @@ const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
 test("a successful HTTP status without a support receipt preserves the user's report", async ({ page }) => {
   await page.route("**/api/support/report", (route) => route.fulfill({ json: {} }));
   await page.goto(`${BASE}/support`);
-  const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Send report" }) });
+  const form = page.locator("form").filter({ has: page.getByLabel("What happened?") });
   await form.getByLabel("Quest, profile, or proof link").fill("https://summoner.world/app/quest?id=fixture");
   await form.getByLabel("What happened?").fill("Please preserve this report when the receipt is missing.");
   await form.getByRole("button", { name: "Send report" }).click();
@@ -23,7 +23,7 @@ test("pending support submission is single-owner and cannot erase edits made in 
     await route.fulfill({ json: { ok: true, reportId: "isolated-support-receipt" } });
   });
   await page.goto(`${BASE}/support`);
-  const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Send report" }) });
+  const form = page.locator("form").filter({ has: page.getByLabel("What happened?") });
   await form.getByLabel("Request type").selectOption("block_user");
   await expect(form.getByLabel("Request type").locator('option:checked')).toHaveText("Request a user block");
   await form.getByLabel("What happened?").fill("Synthetic report for the in-flight submission boundary.");
