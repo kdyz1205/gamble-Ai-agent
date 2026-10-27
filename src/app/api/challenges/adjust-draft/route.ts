@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/lib/request-input";
 import { NextRequest } from "next/server";
 import { getAuthUser, unauthorized } from "@/lib/auth";
 import { getCredits } from "@/lib/credits";
@@ -23,14 +24,18 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return unauthorized();
 
-  const { instruction, draft } = await req.json();
-  if (!instruction || typeof instruction !== "string" || !draft) {
+  const body = await readJsonObject(req);
+  if (!body) return Response.json({ error: "A JSON object is required" }, { status: 400 });
+  const { instruction, draft } = body;
+  if (typeof instruction !== "string" || !instruction.trim() || !draft
+    || typeof draft !== "object" || Array.isArray(draft)) {
     return Response.json({ error: "instruction and draft required" }, { status: 400 });
   }
   if (instruction.length > 8000 || JSON.stringify(draft).length > 16000) {
     return Response.json({ error: "Draft adjustment is too large." }, { status: 413 });
   }
 
+  const currentDraft = draft as Record<string, unknown>;
   const credits = await getCredits(user.userId);
 
   const providerId = getProviderById(process.env.ORACLE_DEFAULT_PROVIDER ?? "")?.id ?? DEFAULT_LLM_PROVIDER_ID;
@@ -44,19 +49,19 @@ export async function POST(req: NextRequest) {
 
   // Serialize the current draft compactly so the AI can see what it's modifying.
   const currentJson = JSON.stringify({
-    title: draft.title,
-    proposition: draft.proposition,
-    marketType: draft.marketType,
-    type: draft.type,
-    suggestedStake: draft.suggestedStake ?? draft.stake,
-    evidenceType: draft.evidenceType ?? draft.evidence,
-    deadline: draft.deadline,
-    rules: draft.rules,
-    isPublic: draft.isPublic,
-    stakeOptions: draft.stakeOptions,
-    evidenceOptions: draft.evidenceOptions,
-    deadlineOptions: draft.deadlineOptions,
-    redFlags: draft.redFlags,
+    title: currentDraft.title,
+    proposition: currentDraft.proposition,
+    marketType: currentDraft.marketType,
+    type: currentDraft.type,
+    suggestedStake: currentDraft.suggestedStake ?? currentDraft.stake,
+    evidenceType: currentDraft.evidenceType ?? currentDraft.evidence,
+    deadline: currentDraft.deadline,
+    rules: currentDraft.rules,
+    isPublic: currentDraft.isPublic,
+    stakeOptions: currentDraft.stakeOptions,
+    evidenceOptions: currentDraft.evidenceOptions,
+    deadlineOptions: currentDraft.deadlineOptions,
+    redFlags: currentDraft.redFlags,
   }, null, 2);
 
   const system = `You are the AI brain of a challenge/betting platform. The user has a DRAFT and wants to tweak it using natural language. You must respond in the user's input language for all human-facing strings.
@@ -120,7 +125,7 @@ ${currentJson}`;
     const result = JSON.parse(jsonMatch[0]) as ParsedChallenge & { tweakMessage?: string };
 
     // Sanitize — the new draft must be sane or we reject it.
-    result.title = result.title || draft.title || "Untitled";
+    result.title = result.title || (typeof currentDraft.title === "string" ? currentDraft.title : "Untitled");
     result.type = result.type || "General";
     result.suggestedStake = typeof result.suggestedStake === "number" ? Math.max(0, Math.floor(result.suggestedStake)) : 0;
     result.evidenceType = result.evidenceType || "self_report";

@@ -17,7 +17,7 @@ function readString(value: unknown, maxLength: number) {
 
 function readKind(value: unknown): SupportKind | null {
   if (typeof value !== "string") return null;
-  return value in actionByKind ? (value as SupportKind) : null;
+  return Object.prototype.hasOwnProperty.call(actionByKind, value) ? (value as SupportKind) : null;
 }
 
 export async function POST(req: NextRequest) {
@@ -45,19 +45,24 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions).catch(() => null);
   const actorUserId = session?.user && "id" in session.user ? String(session.user.id) : undefined;
 
-  const auditLog = await prisma.auditLog.create({
-    data: {
-      action: actionByKind[kind],
-      actorUserId,
-      payload: JSON.stringify({
-        kind,
-        target,
-        reason,
-        contact,
-        userAgent: req.headers.get("user-agent")?.slice(0, 500) ?? null,
-      }),
-    },
-  });
+  try {
+    const auditLog = await prisma.auditLog.create({
+      data: {
+        action: actionByKind[kind],
+        actorUserId,
+        payload: JSON.stringify({
+          kind,
+          target,
+          reason,
+          contact,
+          userAgent: req.headers.get("user-agent")?.slice(0, 500) ?? null,
+        }),
+      },
+    });
 
-  return Response.json({ ok: true, reportId: auditLog.id });
+    return Response.json({ ok: true, reportId: auditLog.id }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: "Your report could not be saved. Please retry." },
+      { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
 }
