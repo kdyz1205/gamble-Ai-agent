@@ -1,12 +1,12 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { sceneTokens } from "@/lib/scene/scene-tokens";
 
 const supportKinds = [
   { value: "report_content", label: "Report content" },
-  { value: "block_user", label: "Block a user" },
+  { value: "block_user", label: "Request a user block" },
   { value: "support_request", label: "Support request" },
 ];
 
@@ -17,9 +17,12 @@ export default function SupportReportForm() {
   const [contact, setContact] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
+  const submitting = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setStatus("sending");
     setMessage("");
 
@@ -29,20 +32,22 @@ export default function SupportReportForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, target, reason, contact }),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; reportId?: string };
+      const data = (await response.json().catch(() => ({}))) as { error?: string; ok?: boolean; reportId?: string };
 
-      if (!response.ok) {
-        throw new Error(data.error || "Could not send report");
+      if (!response.ok || data?.ok !== true || typeof data.reportId !== "string" || !data.reportId.trim()) {
+        throw new Error(typeof data?.error === "string" ? data.error : "Your report was not confirmed. Please retry.");
       }
 
       setStatus("sent");
-      setMessage(data.reportId ? `Report received: ${data.reportId}` : "Report received");
+      setMessage(`Report received for review: ${data.reportId}`);
       setTarget("");
       setReason("");
       setContact("");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Could not send report");
+    } finally {
+      submitting.current = false;
     }
   }
 
@@ -59,7 +64,7 @@ export default function SupportReportForm() {
     >
       <label className="block space-y-2 text-sm font-semibold" style={{ color: sceneTokens.color.text }}>
         Request type
-        <select className={fieldClass} style={fieldStyle} value={kind} onChange={(event) => setKind(event.target.value)}>
+        <select disabled={status === "sending"} className={fieldClass} style={fieldStyle} value={kind} onChange={(event) => setKind(event.target.value)}>
           {supportKinds.map((option) => (
             <option key={option.value} value={option.value} style={{ color: "#050508" }}>
               {option.label}
@@ -73,6 +78,8 @@ export default function SupportReportForm() {
         <input
           className={fieldClass}
           style={fieldStyle}
+          disabled={status === "sending"}
+          maxLength={500}
           value={target}
           onChange={(event) => setTarget(event.target.value)}
           placeholder="https://summoner.world/join/..."
@@ -84,10 +91,13 @@ export default function SupportReportForm() {
         <textarea
           className={`${fieldClass} min-h-28 resize-none`}
           style={fieldStyle}
+          disabled={status === "sending"}
+          maxLength={2000}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           placeholder="Describe the unsafe content, user, proof issue, or result concern."
           required
+          minLength={10}
         />
       </label>
 
@@ -97,6 +107,8 @@ export default function SupportReportForm() {
           className={fieldClass}
           style={fieldStyle}
           type="email"
+          disabled={status === "sending"}
+          maxLength={320}
           value={contact}
           onChange={(event) => setContact(event.target.value)}
           placeholder="you@example.com"
@@ -104,7 +116,7 @@ export default function SupportReportForm() {
       </label>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs" style={{ color: status === "error" ? "#fecaca" : sceneTokens.color.textMuted }}>
+        <p role={status === "error" ? "alert" : "status"} aria-live="polite" className="text-xs" style={{ color: status === "error" ? "#fecaca" : sceneTokens.color.textMuted }}>
           {message || "Reports are written to the audit log for review."}
         </p>
         <button
