@@ -308,9 +308,69 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
     expect(failedJoin.status()).toBe(409);
     expect((await db.query('SELECT count(*)::int AS n FROM "CreditTx" WHERE "challengeId"=$1',
       [pendingId])).rows[0].n).toBe(0);
+    // A lost success response must be safe to retry, while starting the NEXT
+    // Quiz with the same settings must not silently reopen the old room.
+    // Exercise both sides with the real authenticated browser + isolated DB.
+    await a.getByRole("link",{name:"Create a new Quiz"}).click();
+    await expect(a.getByTestId("quiz-create-form")).toBeVisible();
+    await a.getByTestId("quiz-voice-transcript").fill(
+      "Challenge a friend to three mathematics Quiz questions.");
+    await a.getByRole("combobox",{name:"Quiz topic"}).selectOption("math");
+    const createKeys:string[]=[];
+    let committedId="";
+    let swallowFirstSuccess=true;
+    await a.route("**/api/quiz",async route=>{
+      if(route.request().method()!=="POST")return route.continue();
+      const data=route.request().postDataJSON() as {requestKey:string};
+      createKeys.push(data.requestKey);
+      if(!swallowFirstSuccess)return route.continue();
+      swallowFirstSuccess=false;
+      const committed=await route.fetch();
+      expect(committed.status()).toBe(201);
+      committedId=((await committed.json()) as {challengeId:string}).challengeId;
+      challengeIds.push(committedId);
+      // The server DID create a room. Simulate the client losing the 201 reply.
+      await route.fulfill({status:503,contentType:"application/json",
+        body:JSON.stringify({error:"Temporary reply lost; retry safely"})});
+    });
+    await a.getByTestId("quiz-create-submit").click();
+    await expect(a.getByRole("alert")).toContainText("Temporary reply lost");
+    const retried=a.waitForResponse(r=>r.url().endsWith("/api/quiz")&&
+      r.request().method()==="POST"&&r.status()===201);
+    await a.getByTestId("quiz-create-submit").click();
+    const retryReply=await retried;
+    expect((await retryReply.json()).challengeId).toBe(committedId);
+    expect(createKeys).toHaveLength(2);
+    expect(createKeys[0]).toBe(createKeys[1]);
+    await expect(a).toHaveURL(new RegExp("/app/quiz\\?id="+committedId));
+    await expect(a.getByTestId("quiz-cancel-invite")).toBeVisible();
+    await a.getByTestId("quiz-cancel-invite").click();
+    await expect(a.getByTestId("quiz-cancelled")).toBeVisible();
+
+    await a.getByRole("link",{name:"Create a new Quiz"}).click();
+    await expect(a.getByTestId("quiz-create-form")).toBeVisible();
+    // Same unchanged form when client state is preserved; a remounted form
+    // is also legitimate. Either way, this new game needs a new request key.
+    const nextResponse=a.waitForResponse(r=>r.url().endsWith("/api/quiz")&&
+      r.request().method()==="POST"&&r.status()===201);
+    await a.getByTestId("quiz-create-submit").click();
+    const newGame=await nextResponse;
+    const newId=(await newGame.json()).challengeId as string;
+    challengeIds.push(newId);
+    expect(newId).not.toBe(committedId);
+    expect(createKeys).toHaveLength(3);
+    expect(createKeys[2]).not.toBe(createKeys[0]);
+    await expect(a).toHaveURL(new RegExp("/app/quiz\\?id="+newId));
+    await expect(a.getByTestId("quiz-cancel-invite")).toBeVisible();
+    await a.getByTestId("quiz-cancel-invite").click();
+    await expect(a.getByTestId("quiz-cancelled")).toBeVisible();
+    await a.unroute("**/api/quiz");
+    expect((await db.query('SELECT COUNT(*)::int AS n FROM "CreditTx" WHERE "challengeId"=ANY($1::text[])',
+      [[committedId,newId]])).rows[0].n).toBe(0);
     expect(await balances()).toEqual(initialBalances);
     console.log(JSON.stringify({challengeId:id,creator:creator.id,friend:friend.id,
-      objectiveScores:[3,0],winnerId:creator.id,creditsTransferred:0,verdictCount:1}));
+      objectiveScores:[3,0],winnerId:creator.id,creditsTransferred:0,verdictCount:1,
+      rematchCreatedDistinct:true,retryStayedIdempotent:true}));
   }finally{
     for(const ctx of [creatorCtx,friendCtx,guestCtx])await ctx.close();
     for(const id of challengeIds){

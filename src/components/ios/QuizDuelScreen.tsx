@@ -136,6 +136,9 @@ export default function QuizDuelScreen({id}:{id?:string}){
       const result=await fetchJson<{challengeId:string}>("/api/quiz",{
         ...mutation,body:JSON.stringify(body),
       });
+      // Preserve the key on ambiguous failures, but never reuse a successful
+      // creation when the player returns here to start another Quiz.
+      requestKey.current=null;
       router.push("/app/quiz?id="+encodeURIComponent(result.challengeId));
     }catch(e){
       setError(e instanceof Error?e.message:"Quiz creation failed; you can retry safely");
