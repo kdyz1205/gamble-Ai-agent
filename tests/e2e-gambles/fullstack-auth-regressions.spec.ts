@@ -46,12 +46,12 @@ test("closing sign-in invalidates a delayed completion instead of navigating the
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await callbackStarted;
   await page.getByRole("button", { name: "Close sign-in" }).click();
-  await expect(page).toHaveURL(new RegExp(`${new URL(BASE).origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/$`));
+  await expect(page).toHaveURL(BASE + "/enter");
   const returned = page.waitForResponse("**/api/auth/callback/credentials");
   release();
   await returned;
   await page.waitForTimeout(300);
-  expect(new URL(page.url()).pathname).toBe("/");
+  expect(new URL(page.url()).pathname).toBe("/enter");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 

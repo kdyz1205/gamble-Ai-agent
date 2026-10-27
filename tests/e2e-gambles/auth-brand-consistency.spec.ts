@@ -33,7 +33,7 @@ test.describe("Summoners World entry, auth and recovery", () => {
     expect(bounds).not.toBeNull();
     expect(bounds!.width).toBeLessThanOrEqual(390);
     await page.getByRole("button", { name: "Close sign-in" }).click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/enter$/);
     expect(pageErrors).toEqual([]);
   });
 
