@@ -157,7 +157,7 @@ test.describe("iOS entry shell", () => {
     await page.getByRole("button", { name: "Summon", exact: true }).click();
 
     await expect(page.getByText("Sign in to continue")).toBeVisible();
-    await expect(page.getByText("Join Summoner.world")).toBeVisible();
+    await expect(page.getByText("Join Summoners World")).toBeVisible();
 
     const authPortal = page.locator(".auth-portal");
     await expect(authPortal).toBeVisible();
