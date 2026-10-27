@@ -334,9 +334,10 @@ test("two authenticated friends create, accept, answer and verify a no-money voi
         body:JSON.stringify({error:"Temporary reply lost; retry safely"})});
     });
     await a.getByTestId("quiz-create-submit").click();
-    await expect(a.getByRole("alert")).toContainText("Temporary reply lost");
+    await expect(a.locator('.ios-message--error[role="alert"]'))
+      .toContainText("Temporary reply lost");
     const retried=a.waitForResponse(r=>r.url().endsWith("/api/quiz")&&
-      r.request().method()==="POST"&&r.status()===201);
+      r.request().method()==="POST"&&r.status()===200);
     await a.getByTestId("quiz-create-submit").click();
     const retryReply=await retried;
     expect((await retryReply.json()).challengeId).toBe(committedId);
