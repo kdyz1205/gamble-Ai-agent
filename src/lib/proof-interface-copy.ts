@@ -39,6 +39,8 @@ const copy:Record<string,string>={
  'The photo could not be saved. Try again.':'照片未能保存，请重试。','Could not take photo.':'拍照失败，请重试。',
  'The server did not confirm this proof for the current account and Quest. Your input was kept.':'服务器未确认这份证据属于当前账号和 Quest，输入已保留。',
  'Could not submit proof':'证据提交失败，请重试。',
+ 'This recording could not be decoded. Record a longer clip or upload a video file. Your description was kept.':'这段录像无法解码。请录制更长的片段或上传视频文件，原说明已保留。',
+ 'The recorder did not finish saving. Please record again or upload a video file.':'录像未能完成保存，请重新录制或上传视频文件。',
  'Upload failed — configure Vercel Blob or S3.':'上传服务暂不可用。请稍后重试，或使用有效的公开 HTTPS 链接。',
  'Upload failed. Paste a public HTTPS URL instead.':'上传失败。你也可以改用公开 HTTPS 链接。',
 };

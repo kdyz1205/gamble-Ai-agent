@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {useSumLanguage} from "@/components/locale/SumLanguage";
 import {proofInterfaceCopy} from "@/lib/proof-interface-copy";
+import {recordedVideoIsDecodable} from "@/lib/recorded-video-validation";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
@@ -72,7 +73,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   const writtenProof = ["text", "self_report"].includes(evidenceType.trim().toLowerCase());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   type Capture={stream:MediaStream|null;recorder:MediaRecorder|null;video:HTMLVideoElement|null;
-    chunks:Blob[];startedAt:number;save:boolean};
+    chunks:Blob[];startedAt:number;save:boolean;validation?:AbortController;finalizeTimer?:number};
   const captureRef=useRef<Capture|null>(null);
   const [capturePending,setCapturePending]=useState(false);
   const mounted=useRef(true);
@@ -80,6 +81,8 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   function isCurrentCapture(capture:Capture){return mounted.current&&captureRef.current===capture;}
   const releaseCapture=useCallback((capture:Capture)=>{
     if(captureRef.current===capture)captureRef.current=null;
+    if(capture.finalizeTimer)window.clearTimeout(capture.finalizeTimer);
+    capture.validation?.abort();
     const recorder=capture.recorder;
     if(recorder){
       recorder.onstop=null;recorder.ondataavailable=null;recorder.onerror=null;
@@ -178,14 +181,27 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       const recorder=new MediaRecorder(capture.stream,mimeType?{mimeType}:undefined);
       capture.recorder=recorder;capture.chunks=[];capture.startedAt=Date.now();
       recorder.ondataavailable=event=>{if(isCurrentCapture(capture)&&event.data.size>0)capture.chunks.push(event.data);};
-      recorder.onstop=()=>{
+      recorder.onstop=async()=>{
         if(!isCurrentCapture(capture))return;
+        if(capture.finalizeTimer){window.clearTimeout(capture.finalizeTimer);capture.finalizeTimer=undefined;}
         const blob=new Blob(capture.chunks,{type:recorder.mimeType||capture.chunks[0]?.type||"video/webm"});
         const saved=capture.save;
         const duration=(Date.now()-capture.startedAt)/1000;
-        releaseCapture(capture);setStream(null);setRecording(false);setCapturePending(false);setMode(null);
-        if(!saved){setError("Recording ended before you chose Stop & save. No partial clip was kept.");return;}
-        if(!blob.size){setError("The recording was empty. Please record again or upload a video file.");return;}
+        // Let the recorder finish its dataavailable/stop sequence before ending
+        // tracks. Never treat a nonzero header-only Blob as captured video.
+        capture.stream?.getTracks().forEach(track=>track.stop());
+        setStream(null);setRecording(false);
+        if(!saved||!blob.size){
+          releaseCapture(capture);setCapturePending(false);setMode(null);
+          setError(!saved?"Recording ended before you chose Stop & save. No partial clip was kept.":
+            "The recording was empty. Please record again or upload a video file.");return;
+        }
+        capture.validation=new AbortController();
+        let playable=false;
+        try{playable=await recordedVideoIsDecodable(blob,capture.validation.signal);}catch{playable=false;}
+        if(!isCurrentCapture(capture))return;
+        releaseCapture(capture);setCapturePending(false);setMode(null);
+        if(!playable){setError("This recording could not be decoded. Record a longer clip or upload a video file. Your description was kept.");return;}
         setUrlInput("");setRecordedBlob(blob);setRecordedDuration(duration);
       };
       recorder.onerror=()=>{
@@ -203,7 +219,11 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
     const capture=captureRef.current;
     if(!capture||!isCurrentCapture(capture)||capture.recorder?.state!=="recording"||capture.save)return;
     capture.save=true;setCapturePending(true);setRecording(false);
-    try{capture.recorder.stop();capture.stream?.getTracks().forEach(track=>track.stop());}
+    capture.finalizeTimer=window.setTimeout(()=>{
+      if(!isCurrentCapture(capture))return;
+      cancelCapture();setError("The recorder did not finish saving. Please record again or upload a video file.");
+    },8000);
+    try{capture.recorder.stop();}
     catch(error){cancelCapture();setError(error instanceof Error?error.message:"Could not save the recording. Try again.");}
   };
 

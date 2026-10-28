@@ -43,3 +43,9 @@ This review does not prove every peer-app state or every SUM screen is polished.
 ## A failure exposed by full integration, not the new happy path
 
 The full browser suite exposed a real focus transition defect in the first candidate: an input-only focus selector hid the app dock while typing but restored it on pointer-down into Submit. The trace showed a Submit click at y=816.2, a reappearing dock over the control, and no evidence POST. The original unconfirmed-receipt test is retained unchanged. The dock now stays collapsed for the whole active/focused proof interaction, not just text-input focus; two explicit pointer-down/up counter-tests at 320px/390px require one request, preserved input on an unconfirmed receipt, and navigation restoration after leaving the form.
+
+## Very short recorder output is not equivalent to valid captured proof
+
+The first post-release run found a 0.6-second synthetic recording whose preview could not decode. A bounded comparison also reproduced a 110-byte WebM header with no playable frame on the previous 25fc9ff deployment, so this is not attributed to the new layout without evidence. The recorder now completes its queued dataavailable/stop event sequence before stopping tracks, locally verifies a decoded video frame before offering an uploadable preview, releases validation resources on cancellation/account teardown, and reports a recoverable error without clearing the original description/source when decoding fails. Two deliberately corrupt nonempty-output cases cover English and Chinese; the existing real-recorder normal-playback test is unchanged.
+
+Sources: https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/stop ; https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/readyState . This does not certify physical-device codecs or every captured frame.
