@@ -1,3 +1,6 @@
+"use client";
+import {SumLanguageSwitch,SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
+import {hasInformationalNavigation} from "@/lib/app-navigation";
 import Link from "next/link";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
@@ -11,29 +14,33 @@ interface SceneTopBarProps {
 }
 
 export default function SceneTopBar({ title = sceneBrand.world, rightSlot, activePath }: SceneTopBarProps) {
+  const language=useSumLanguage();
+  const informational=hasInformationalNavigation(activePath??"");
   return (
     <header className="quest-hud">
-      <Link href="/enter" className="group quest-hud__cluster min-w-0" aria-label="Summoner.world home">
+      <Link href="/enter" className="group quest-hud__cluster sum-scene-brand min-w-0" aria-label="Summoner.world home">
         <PicoFamiliar className="h-11 w-11 shrink-0 transition-transform group-hover:-translate-y-0.5" />
         <span className="min-w-0 pr-1">
-          <span className="block truncate text-sm font-black leading-tight text-[color:var(--sum-ink)] sm:text-base">
+          <span className="sum-scene-brand-compact" aria-hidden="true">SUM</span>
+          <span className="sum-scene-brand-full block truncate text-sm font-black leading-tight text-[color:var(--sum-ink)] sm:text-base">
             Summoner<span className="text-[#e85f4e]">.world</span>
           </span>
-          <span className="mt-0.5 block truncate text-[8px] font-black uppercase tracking-[0.22em] text-[color:var(--sum-muted)]">{title}</span>
+          <span className="sum-scene-brand-subtitle mt-0.5 block truncate text-[8px] font-black uppercase tracking-[0.22em] text-[color:var(--sum-muted)]">{title}</span>
         </span>
       </Link>
 
-      <div className="flex shrink-0 items-center gap-2 text-xs font-extrabold text-[color:var(--sum-muted)]">
+      <div className="sum-scene-controls flex shrink-0 items-center gap-2 text-xs font-extrabold text-[color:var(--sum-muted)]">
+        <SumLanguageSwitch surface="site"/>
         {rightSlot ?? (
           <>
             <span className="hidden items-center gap-2 rounded-full border-2 border-white/80 bg-white/60 px-3 py-2 shadow-[0_5px_0_rgba(23,53,75,0.06)] sm:inline-flex">
               <span className="grid h-6 w-6 place-items-center rounded-lg bg-[rgba(112,214,165,0.2)] text-[#157b58]"><QuestGlyph className="h-3.5 w-3.5" kind="spark" /></span>
-              Pico ready
+              <SumText en="Pico ready" zh="Pico 已准备好"/>
             </span>
-            <Link className="hidden min-h-11 items-center px-3 font-bold text-[color:var(--sum-ink)] transition-opacity hover:opacity-65 sm:inline-flex" href="/auth/signin">Sign in</Link>
-            <Link aria-label={activePath === "/enter" ? "Open SUM web app" : "New quest"} className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href={activePath === "/enter" ? "/app" : "/summons"}>
+            <Link className="hidden min-h-11 items-center px-3 font-bold text-[color:var(--sum-ink)] transition-opacity hover:opacity-65 sm:inline-flex" href="/auth/signin"><SumText en="Sign in" zh="登录"/></Link>
+            <Link aria-label={translated(language,informational?"Open SUM web app":"New quest",informational?"返回 SUM 客户端":"创建 Quest")} className="sum-world-button inline-flex min-h-11 items-center gap-2 px-4 py-2 font-black" href={informational?"/app":"/app/create"}>
               <QuestGlyph className="h-4 w-4" kind="spark" />
-              <span className="inline">{activePath === "/enter" ? "Open app" : "New quest"}</span>
+              <span className="inline">{translated(language,informational?"Open app":"New quest",informational?"进入客户端":"新建挑战")}</span>
             </Link>
           </>
         )}

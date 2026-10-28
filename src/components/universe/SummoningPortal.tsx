@@ -51,7 +51,7 @@ export default function SummoningPortal() {
               </button>
             ))}
           </div>
-          <Link className="sum-gate__choice" href={"/summons?seed="+quest.id} aria-label={"Summon "+quest.label.toLowerCase()+" quest"}>
+          <Link className="sum-gate__choice" href={"/app/create?seed="+quest.id} aria-label={"Summon "+quest.label.toLowerCase()+" quest"}>
             <span className="sum-gate__choice-symbol"><WorldGlyph kind={quest.kind}/></span>
             <span className="sum-gate__choice-copy"><small>{quest.realm} / STARTING POINT</small><strong aria-live="polite">{quest.name}</strong></span>
             <Arrow/>

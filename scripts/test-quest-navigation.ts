@@ -4,19 +4,25 @@ import { renderToStaticMarkup } from "react-dom/server";
 import SceneMobileNav from "../src/components/scene/SceneMobileNav";
 import SceneShell from "../src/components/scene/SceneShell";
 import QuestAppNav from "../src/components/QuestAppNav";
-import { sceneRoutes } from "../src/lib/scene/scene-routes";
+import { appDestinations, activeAppDestination, hasInformationalNavigation } from "../src/lib/app-navigation";
 import { matchesQuestView, questNextStep, questView } from "../src/components/quests/quest-list-model";
 import type { ChallengeData } from "../src/lib/api-client";
 
-assert.deepEqual(sceneRoutes.map(route => route.href), ["/summons", "/quests", "/quests?view=proof", "/quests?view=results", "/me"]);
+assert.deepEqual(appDestinations.map(route => route.href), ["/app/today", "/app/discover", "/app/create", "/app/picos", "/app/profile"]);
 for (const active of ["/quests", "/quests?view=proof", "/quests?view=results"]) {
   const html = renderToStaticMarkup(createElement(SceneMobileNav, { active }));
   assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1);
-  assert(html.includes(`href="${active.replaceAll("&", "&amp;")}"`));
+  assert(html.includes(`href="${activeAppDestination(active)}"`));
   assert(!/\/demo|\/contracts\/bind/.test(html));
   assert.equal((html.match(/<a /g) ?? []).length, 5);
 }
-console.log("PASS actual navigation renders five real routes with exact query-specific active selection");
+console.log("PASS actual navigation renders five canonical routes; legacy filtered history keeps a single Home selection");
+for(const route of ["/privacy","/terms","/support","/calculator","/enter","/contracts/bind","/duel/demo"]){
+  assert(hasInformationalNavigation(route));
+  assert.equal(renderToStaticMarkup(createElement(SceneMobileNav,{active:route})),"");
+}
+assert.equal(activeAppDestination("/me"),"/app/profile");
+assert.equal(activeAppDestination("/summons"),"/app/create");
 const bareAppDock = renderToStaticMarkup(createElement(QuestAppNav));
 assert(bareAppDock.includes('aria-label="App navigation"'), "app dock must handle a missing Next pathname during server rendering");
 console.log("PASS mobile app dock tolerates unavailable router context without throwing");

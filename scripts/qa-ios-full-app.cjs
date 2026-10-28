@@ -393,6 +393,7 @@ for(const width of widths){
       await page.goto(base+"/app/create",{waitUntil:"domcontentloaded"});
       await page.waitForFunction(()=>document.querySelector('[data-testid="ios-full-app"]')?.getAttribute("data-hydrated")==="true",null,{timeout:45000});
       await page.getByRole("textbox",{name:"Describe your challenge"}).waitFor({state:"visible",timeout:45000});
+      await page.getByTestId("composer-starter-ideas").locator("summary").click();
       const seed=page.getByRole("button",{name:"Create",exact:true}).first();
       await seed.click();
       await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Describe your challenge"]')?.value.length>8,undefined,{timeout:45000});

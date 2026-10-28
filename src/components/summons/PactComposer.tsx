@@ -5,7 +5,7 @@ import {SumText,useSumLanguage} from "@/components/locale/SumLanguage";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import type { CSSProperties, FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
@@ -49,11 +49,19 @@ function newRequestId(prefix: string) {
   return `${prefix}_${random}`;
 }
 
-export default function PactComposer({ initialPrompt = "", appMode = false }: { initialPrompt?: string; appMode?: boolean } = {}) {
+type ComposerStarter={id:string;label:string;labelZh:string;prompt:string};
+export default function PactComposer({ initialPrompt = "", appMode = false, starterChoices = [], initialStarterId }: {
+  initialPrompt?: string; appMode?: boolean; starterChoices?: readonly ComposerStarter[]; initialStarterId?:string;
+} = {}) {
   const uiLanguage=useSumLanguage();
   const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const { data: session, status: sessionStatus } = useSession();
   const restoredAuthRef = useRef(false);
+  const requestBusy=useRef(false);
+  const starterDialog=useRef<HTMLDialogElement>(null);
+  const starterDialogId=useId();
+  const [selectedStarter,setSelectedStarter]=useState(initialStarterId??"");
+  const [pendingStarter,setPendingStarter]=useState<{id:string;prompt:string}|null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLElement>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -77,6 +85,28 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   const canSubmit = Boolean(input.trim()) && !isSubmitting && !isRecording && !isTranscribing;
+  const busy=isSubmitting||isRecording||isTranscribing;
+  const ui=(en:string,zh:string)=>uiLanguage==="zh"?zh:en;
+  useEffect(()=>{
+    const dialog=starterDialog.current;
+    if(!dialog)return;
+    if(pendingStarter&&!dialog.open){
+      dialog.showModal();
+      dialog.querySelector<HTMLButtonElement>('[data-keep-message]')?.focus();
+    }else if(!pendingStarter&&dialog.open)dialog.close();
+  },[pendingStarter]);
+  function applyStarter(starter:{id:string;prompt:string}){
+    if(requestBusy.current||busy)return;
+    // Suggestions change only the unsent message, never the conversation,
+    // reviewed terms, retry identity, session or in-flight request.
+    setInput(starter.prompt);setSelectedStarter(starter.id);setPendingStarter(null);
+    inputRef.current?.focus();
+  }
+  function chooseStarter(starter:{id:string;prompt:string}){
+    if(requestBusy.current||busy)return;
+    if(input.trim()&&input!==starter.prompt){setPendingStarter(starter);return;}
+    applyStarter(starter);
+  }
   const latestReply = useMemo(() => turns.filter((turn) => turn.role === "ai").at(-1), [turns]);
   const latestUserTurn = useMemo(() => turns.filter((turn) => turn.role === "user").at(-1), [turns]);
   const challengeTitle = getChallengeTitle(input);
@@ -272,7 +302,8 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = input.trim();
-    if (!message || isSubmitting) return;
+    if (!message || requestBusy.current || isSubmitting || isRecording || isTranscribing) return;
+    requestBusy.current=true;
 
     triggerCastVisual();
     setIsSubmitting(true);
@@ -316,18 +347,20 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
         setError(message);
       }
     } finally {
+      requestBusy.current=false;
       setIsSubmitting(false);
     }
   }
 
   async function handlePublish() {
-    if (isSubmitting || marketUrl) return;
+    if (requestBusy.current || isSubmitting || marketUrl || input.trim() || isRecording || isTranscribing) return;
     const selectedDraft = draftWithSelectedSettings();
     if (!selectedDraft.readyToPublish) {
       setError("The quest still needs one clear answer before it can be published.");
       return;
     }
 
+    requestBusy.current=true;
     setIsSubmitting(true);
     setError(null);
     triggerCastVisual();
@@ -360,165 +393,23 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not publish quest");
     } finally {
+      requestBusy.current=false;
       setIsSubmitting(false);
     }
   }
 
-  const contractResult = latestReply ? (
-    <section
-      className="qx-contract-result relative z-10 mt-2 overflow-hidden rounded-[24px] p-3 sm:p-4"
-      data-ready={draftState.readyToPublish ? "true" : "false"}
-      data-testid="challenge-contract-result"
-      ref={resultRef}
-      style={{
-        border: "1px solid var(--sum-border)",
-        background:
-          "linear-gradient(135deg, rgba(255,255,255,0.94), rgba(223,245,255,0.82)), radial-gradient(circle at 88% 0%, rgba(255,216,107,0.28), transparent 34%)",
-        color: "var(--sum-ink)",
-        boxShadow: "0 14px 34px rgba(40,102,133,0.1)",
-      }}
-    >
-      <span aria-hidden className="qx-result-aura" />
-      <span aria-hidden className="qx-result-spine" />
-      <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Quest card" zh="挑战卡片"/> </p>
-          <h2 className="mt-1.5 max-w-[44rem] text-lg font-semibold leading-[1.12] sm:text-2xl">
-            {resultTitle}
-          </h2>
-        </div>
-        <span
-          className="qx-result-status rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]"
-          style={{
-            border: `1px solid ${draftState.readyToPublish ? "rgba(143,230,193,0.72)" : "var(--sum-border)"}`,
-            background: draftState.readyToPublish ? "rgba(143,230,193,0.36)" : "rgba(255,255,255,0.72)",
-            color: draftState.readyToPublish ? "var(--sum-ink)" : "var(--sum-muted)",
-          }}
-        >
-          {t(resultStatus)}
-        </span>
-      </div>
-
-      <p className="relative z-10 mt-3 text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
-        {resultSummary}
-      </p>
-
-      <div className="relative z-10 mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        {resultItems.map(([label, value], index) => (
-          <div
-            key={label}
-            className="qx-result-metric min-w-0 rounded-[16px] px-3 py-2.5"
-            style={{ "--metric-delay": `${index * 70}ms` } as CSSProperties}
-          >
-            <span>{t(label)}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </div>
-
-      {resultSafetyNote && (
-        <div
-          className="relative z-10 mt-3 rounded-[16px] px-3 py-2.5 text-sm font-semibold leading-5"
-          style={{
-            border: "1px solid rgba(180,35,74,0.18)",
-            background: "rgba(255,228,234,0.82)",
-            color: "#B4234A",
-          }}
-        >
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em]"><SumText en="Safety note" zh="安全说明"/></span>
-          {resultSafetyNote}
-        </div>
-      )}
-
-      <div className="qx-result-lockstrip relative z-10 mt-3 grid grid-cols-3 gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
-        <span>{draftState.readyToPublish ? t("Rules ready") : t("Rules to confirm")}</span>
-        <span><SumText en="Invite after publishing" zh="发布后邀请"/></span>
-        <span><SumText en="Proof comes next" zh="随后提交证据"/></span>
-      </div>
-
-      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2">
-        {draftState.readyToPublish && !marketUrl && (
-          <button
-            className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={() => { void handlePublish(); }}
-            style={{ background: "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))", color: "var(--sum-ink)" }}
-            type="button"
-          >
-            {isSubmitting
-              ? t("Publishing…")
-              : draftState.stake && draftState.stake > 0
-                ? (uiLanguage==="zh"?`发布并预留 ${draftState.stake} 积分`:`Publish & escrow ${draftState.stake} credits`)
-                : t("Publish free quest")}
-          </button>
-        )}
-        {marketUrl && (
-          <Link
-            className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold"
-            href={marketUrl}
-            style={{ background: "var(--sum-peach)", color: "var(--sum-ink)" }}
-          > <SumText en="Open Quest" zh="打开 Quest"/> </Link>
-        )}
-      </div>
-    </section>
-  ) : null;
-
-  return (
-    <>
-      <div
-        className="quest-composer h-full"
-        data-cast-phase={castPhase}
-        data-casting={castingActive ? "true" : "false"}
-        data-live={hasInput ? "true" : "false"}
-        data-result={latestReply ? "true" : "false"}
-        data-testid="pact-composer"
-      >
-        <span
-          aria-hidden
-          className="sum-quest-orb absolute right-5 top-5 opacity-80"
-          style={{ width: "2.75rem", height: "2.75rem", animationDelay: "-0.8s" }}
-        />
-        <span
-          aria-hidden
-          className="sum-quest-orb absolute bottom-6 left-6 hidden opacity-60 sm:block"
-          style={{ width: "3.5rem", height: "3.5rem", animationDelay: "-2s" }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-6 top-[72px] -z-10 h-px opacity-60"
-          style={{
-            background: "linear-gradient(90deg, transparent, rgba(143,230,193,0.72), rgba(255,185,120,0.58), transparent)",
-            boxShadow: "0 0 36px rgba(143,230,193,0.3)",
-          }}
-        />
-        <form
-          aria-busy={isSubmitting}
-          onSubmit={(event) => { void handleSubmit(event); }}
-          className="relative z-10 grid gap-3"
-        >
-          <div className="min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-extrabold leading-tight sm:text-xl" style={{ color: "var(--sum-ink)" }}> <SumText en="Tell Pico your idea." zh="告诉 Pico 你的想法。"/> </h2>
-                <p className="mt-2 max-w-[34rem] text-sm font-medium leading-5" style={{ color: "var(--sum-muted)" }}> <SumText en="Review every rule before publishing." zh="发布前请核对每一条规则。"/> </p>
-              </div>
-              <span
-                className="sum-sticker-badge shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]"
-                style={{
-                  background: draftState.readyToPublish ? "linear-gradient(135deg, var(--sum-sun), var(--sum-peach))" : undefined,
-                  color: "var(--sum-ink)",
-                }}
-              >
-                {draftState.readyToPublish ? t("Ready") : t("Quest draft")}
-              </span>
-            </div>
-
+  const starterControls=<>
+    {starterChoices.length>0&&<div className="ios-filters" role="group" aria-label="Starting categories">
+      {starterChoices.map(choice=><button key={choice.id} type="button" disabled={busy}
+        aria-pressed={selectedStarter===choice.id} className={"ios-chip"+(selectedStarter===choice.id?" is-selected":"")}
+        onClick={()=>chooseStarter(choice)}>{ui(choice.label,choice.labelZh)}</button>)}
+    </div>}
             <div className="quest-idea-strip mt-4">
               {promptChips.map(([label, example]) => (
                 <button
                   key={label}
                   disabled={isSubmitting || isRecording || isTranscribing}
-                  onClick={() => { setInput(example); inputRef.current?.focus(); }}
+                  onClick={() => chooseStarter({id:label,prompt:example})}
                   type="button"
                 >
                   {t(label)}
@@ -526,6 +417,8 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               ))}
             </div>
 
+  </>;
+  const termControls=(
             <details className="quest-terms">
               <summary>
                 <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> <SumText en="Quest terms" zh="挑战条款"/></span>
@@ -613,6 +506,161 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               </fieldset>
             </details>
 
+  );
+
+  const contractResult = latestReply ? (
+    <section
+      className="qx-contract-result relative z-10 mt-2 overflow-hidden rounded-[24px] p-3 sm:p-4"
+      data-ready={draftState.readyToPublish ? "true" : "false"}
+      data-testid="challenge-contract-result"
+      ref={resultRef}
+      style={{
+        border: "1px solid var(--sum-border)",
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.94), rgba(223,245,255,0.82)), radial-gradient(circle at 88% 0%, rgba(255,216,107,0.28), transparent 34%)",
+        color: "var(--sum-ink)",
+        boxShadow: "0 14px 34px rgba(40,102,133,0.1)",
+      }}
+    >
+      <span aria-hidden className="qx-result-aura" />
+      <span aria-hidden className="qx-result-spine" />
+      <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Quest card" zh="挑战卡片"/> </p>
+          <h2 className="mt-1.5 max-w-[44rem] text-lg font-semibold leading-[1.12] sm:text-2xl">
+            {resultTitle}
+          </h2>
+        </div>
+        <span
+          className="qx-result-status rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]"
+          style={{
+            border: `1px solid ${draftState.readyToPublish ? "rgba(143,230,193,0.72)" : "var(--sum-border)"}`,
+            background: draftState.readyToPublish ? "rgba(143,230,193,0.36)" : "rgba(255,255,255,0.72)",
+            color: draftState.readyToPublish ? "var(--sum-ink)" : "var(--sum-muted)",
+          }}
+        >
+          {t(resultStatus)}
+        </span>
+      </div>
+
+      <p className="relative z-10 mt-3 text-sm font-semibold leading-6" style={{ color: "var(--sum-muted)" }}>
+        {resultSummary}
+      </p>
+
+      <div className="relative z-10 mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {resultItems.map(([label, value], index) => (
+          <div
+            key={label}
+            className="qx-result-metric min-w-0 rounded-[16px] px-3 py-2.5"
+            style={{ "--metric-delay": `${index * 70}ms` } as CSSProperties}
+          >
+            <span>{t(label)}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+
+      {resultSafetyNote && (
+        <div
+          className="relative z-10 mt-3 rounded-[16px] px-3 py-2.5 text-sm font-semibold leading-5"
+          style={{
+            border: "1px solid rgba(180,35,74,0.18)",
+            background: "rgba(255,228,234,0.82)",
+            color: "#B4234A",
+          }}
+        >
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em]"><SumText en="Safety note" zh="安全说明"/></span>
+          {resultSafetyNote}
+        </div>
+      )}
+
+      <div className="qx-result-lockstrip relative z-10 mt-3 grid grid-cols-3 gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
+        <span>{draftState.readyToPublish ? t("Rules ready") : t("Rules to confirm")}</span>
+        <span><SumText en="Invite after publishing" zh="发布后邀请"/></span>
+        <span><SumText en="Proof comes next" zh="随后提交证据"/></span>
+      </div>
+
+      {hasInput&&!marketUrl&&draftState.readyToPublish&&<p role="status" data-testid="composer-pending-edit" className="composer-pending-edit">
+        {ui("Send your edited message to review the rules before publishing.","请先发送修改后的输入、核对规则，再发布挑战。")}
+      </p>}
+      <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2">
+        {draftState.readyToPublish && !marketUrl && (
+          <button
+            className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy||hasInput}
+            onClick={() => { void handlePublish(); }}
+            style={{ background: "linear-gradient(135deg, var(--sum-peach), var(--sum-sun))", color: "var(--sum-ink)" }}
+            type="button"
+          >
+            {isSubmitting
+              ? t("Publishing…")
+              : draftState.stake && draftState.stake > 0
+                ? (uiLanguage==="zh"?`发布并预留 ${draftState.stake} 积分`:`Publish & escrow ${draftState.stake} credits`)
+                : t("Publish free quest")}
+          </button>
+        )}
+        {marketUrl && (
+          <Link
+            className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold"
+            href={marketUrl}
+            style={{ background: "var(--sum-peach)", color: "var(--sum-ink)" }}
+          > <SumText en="Open Quest" zh="打开 Quest"/> </Link>
+        )}
+      </div>
+    </section>
+  ) : null;
+
+  return (
+    <>
+      <div
+        className={"quest-composer h-full"+(appMode?" quest-composer--app":"")}
+        data-cast-phase={castPhase}
+        data-casting={castingActive ? "true" : "false"}
+        data-live={hasInput ? "true" : "false"}
+        data-result={latestReply ? "true" : "false"}
+        data-testid="pact-composer"
+      >
+        <span
+          aria-hidden
+          className="sum-quest-orb absolute right-5 top-5 opacity-80"
+          style={{ width: "2.75rem", height: "2.75rem", animationDelay: "-0.8s" }}
+        />
+        <span
+          aria-hidden
+          className="sum-quest-orb absolute bottom-6 left-6 hidden opacity-60 sm:block"
+          style={{ width: "3.5rem", height: "3.5rem", animationDelay: "-2s" }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-6 top-[72px] -z-10 h-px opacity-60"
+          style={{
+            background: "linear-gradient(90deg, transparent, rgba(143,230,193,0.72), rgba(255,185,120,0.58), transparent)",
+            boxShadow: "0 0 36px rgba(143,230,193,0.3)",
+          }}
+        />
+        <form
+          aria-busy={isSubmitting}
+          onSubmit={(event) => { void handleSubmit(event); }}
+          className="relative z-10 grid gap-3"
+        >
+          <div className="min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-extrabold leading-tight sm:text-xl" style={{ color: "var(--sum-ink)" }}> <SumText en="Tell Pico your idea." zh="告诉 Pico 你的想法。"/> </h2>
+                <p className="mt-2 max-w-[34rem] text-sm font-medium leading-5" style={{ color: "var(--sum-muted)" }}> <SumText en="Review every rule before publishing." zh="发布前请核对每一条规则。"/> </p>
+              </div>
+              <span
+                className="sum-sticker-badge shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]"
+                style={{
+                  background: draftState.readyToPublish ? "linear-gradient(135deg, var(--sum-sun), var(--sum-peach))" : undefined,
+                  color: "var(--sum-ink)",
+                }}
+              >
+                {draftState.readyToPublish ? t("Ready") : t("Quest draft")}
+              </span>
+            </div>
+
+            {!appMode&&<>{starterControls}{termControls}</>}
             {turns.length > 0 && (
               <div aria-label="Challenge conversation" aria-live="polite" className="quest-conversation mt-4" ref={conversationRef} role="log" tabIndex={0}>
                 {turns.map((turn, index) => (
@@ -663,11 +711,18 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                 type="submit"
               >
                 <QuestGlyph className="h-4 w-4" kind="spark" />
-                {isSubmitting ? "Thinking…" : turns.length ? "Send reply" : t("Summon quest")}
+                {isSubmitting ? ui("Thinking…","正在整理…") : turns.length ? ui("Send reply","发送回复") : t("Summon quest")}
               </RitualButton>
               </div>
             </div>
 
+            {appMode&&<>
+              <details className="composer-starter-ideas" data-testid="composer-starter-ideas">
+                <summary>{ui("Need an idea? Choose a starting point","需要灵感？选择一个起点")}</summary>
+                {starterControls}
+              </details>
+              {termControls}
+            </>}
             {contractResult ?? (
               <div
                 className="quest-blueprint qx-blueprint-preview"
@@ -756,6 +811,15 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
 
       </div>
 
+      <dialog ref={starterDialog} className="composer-starter-dialog" aria-labelledby={starterDialogId}
+        onCancel={()=>setPendingStarter(null)} onClose={()=>setPendingStarter(null)}>
+        <h2 id={starterDialogId}>{ui("Replace the current message?","替换当前输入？")}</h2>
+        <p>{ui("Only this unsent message will change. Your conversation and reviewed rules will stay.","只会替换尚未发送的输入；已有对话和已核对的规则会保留。")}</p>
+        <div>
+          <button type="button" data-keep-message onClick={()=>setPendingStarter(null)}>{ui("Keep my text","保留我的输入")}</button>
+          <button type="button" disabled={busy} onClick={()=>{if(pendingStarter)applyStarter(pendingStarter);}}>{ui("Replace message","替换输入")}</button>
+        </div>
+      </dialog>
       <AuthModal
         open={authOpen}
         onBeforeRedirect={() => {

@@ -1,0 +1,53 @@
+/* Prompt-first composition. Optional inspiration never owns the draft lifecycle. */
+.ios-app[data-view="create"] .ios-forge-bar{padding:9px 12px;gap:10px;}
+.ios-app[data-view="create"] .ios-forge-bar .ios-art{width:44px;height:44px;border-radius:13px;}
+.ios-app[data-view="create"] .ios-forge-bar .ios-overline{display:none;}
+.ios-app[data-view="create"] .ios-composer{padding:8px 10px;}
+.ios-app[data-view="create"] .ios-main>.ios-composer{margin-top:12px;}
+.quest-composer--app .quest-composer__prompt{margin-top:12px;scroll-margin-block:90px 120px;}
+.ios-app .quest-composer--app .qx-challenge-input{display:block;width:100%;min-height:105px!important;height:105px;max-height:40dvh;resize:vertical;line-height:1.5;padding:0;}
+.ios-app .quest-composer--app .quest-composer__actions{margin-top:8px;padding-top:0;display:flex;gap:10px;align-items:stretch;}
+.ios-app .quest-composer--app .quest-submit-button{flex:1;min-height:46px;}
+.quest-composer--app>.sum-quest-orb{display:none;}
+.composer-starter-ideas{margin-top:12px;border:1px solid #ded7ec;border-radius:13px;background:#fbf9ff;padding:0 12px;}
+.composer-starter-ideas summary{cursor:pointer;min-height:44px;padding:11px 0;color:#514877;font-size:13px;font-weight:700;}
+.composer-starter-ideas .ios-filters{margin-top:0;}
+.composer-starter-ideas .quest-idea-strip{margin:10px 0 12px;display:flex;overflow-x:auto;max-width:100%;gap:6px;}
+.composer-starter-ideas .quest-idea-strip button{flex:none;}
+.quest-composer--app .quest-terms{margin-top:10px;}
+.quest-composer--app .quest-terms summary{flex-wrap:wrap;gap:4px 12px;}
+.quest-composer--app .quest-terms summary>span{overflow-wrap:anywhere;}
+.composer-pending-edit{font-size:13px;line-height:1.6;color:#735215;background:#fff5da;border-radius:10px;padding:10px;margin-top:12px;}
+.composer-starter-dialog{position:fixed;inset:0;margin:auto;width:min(420px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;border:1px solid #d5c8e8;border-radius:22px;background:#fffcff;color:#342d50;padding:24px;box-shadow:0 20px 80px #25203e44;}
+.composer-starter-dialog::backdrop{background:#211b3c88;backdrop-filter:blur(3px);}
+.composer-starter-dialog h2{font-size:20px;font-weight:800;line-height:1.3;}
+.composer-starter-dialog p{margin:12px 0 20px;font-size:14px;line-height:1.7;}
+.composer-starter-dialog>div{display:flex;flex-wrap:wrap;gap:10px;}
+.composer-starter-dialog button{min-height:44px;border:1px solid #b9a8d1;border-radius:12px;padding:10px 14px;font-weight:700;flex:1;}
+.composer-starter-dialog button[data-keep-message]{background:#6554bf;border-color:#6554bf;color:white;}
+.composer-starter-dialog button:focus-visible{outline:3px solid #8b71e6;outline-offset:3px;}
+.ios-app--night .composer-starter-ideas{background:#393352;border-color:#827397;}
+.ios-app--night .composer-starter-ideas summary{color:#f4edff;}
+@media(max-width:899px){
+  .ios-app[data-view="create"] .ios-main{padding-top:14px;}
+  .ios-app[data-view="create"]:has(.ios-composer :is(textarea,input):focus) .ios-tabbar{display:none;}
+  .ios-app[data-view="create"]:has(.ios-composer :is(textarea,input):focus) .ios-main{padding-bottom:32px;}
+}
+@media(min-width:900px){
+  .ios-app .quest-composer--app .qx-challenge-input{min-height:140px!important;height:140px;}
+  .ios-app[data-view="create"] .ios-forge-bar .ios-art{width:52px;height:52px;}
+}
+
+/* Compact legacy/site header: reserve room for both language and a real app action. */
+.sum-scene-brand-compact{display:none;}
+@media(max-width:600px){
+ .quest-hud{gap:8px;padding-inline:10px;}
+ .quest-hud .sum-scene-brand{flex:none;padding:6px;gap:4px;min-height:44px;}
+ .quest-hud .sum-scene-brand>.sum-familiar{width:32px;height:32px;min-width:32px;min-height:32px;flex:0 0 32px;}
+ .quest-hud .sum-scene-brand-full,.quest-hud .sum-scene-brand-subtitle{display:none;}
+ .quest-hud .sum-scene-brand-compact{display:block;font-size:15px;font-weight:900;line-height:1.2;color:#2b493e;white-space:nowrap;}
+ .quest-hud .sum-scene-controls{gap:6px;}
+ .quest-hud .sum-world-button{padding-inline:10px;font-size:11px;gap:5px;min-height:44px;white-space:nowrap;}
+ .quest-hud .sum-language-switch{padding:2px;}
+ .quest-hud .sum-language-switch button{min-width:32px;min-height:36px;padding-inline:5px;}
+}

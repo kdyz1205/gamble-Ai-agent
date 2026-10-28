@@ -51,7 +51,7 @@ test("primary navigation opens actual owned quests, proof and results with recov
     await page.unroute("**/api/challenges?*");
     const primary = page.getByRole("navigation", { name: "Quest world navigation" }).filter({ visible: true });
     const hrefs = await primary.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("href")));
-    expect(hrefs).toEqual(["/summons", "/quests", "/quests?view=proof", "/quests?view=results", "/me"]);
+    expect(hrefs).toEqual(["/app/today", "/app/discover", "/app/create", "/app/picos", "/app/profile"]);
     const counts: Record<string, number> = {};
     let screenshotStatus = "not attempted";
     await mkdir(testInfo.outputDir, { recursive: true });

@@ -32,7 +32,7 @@ export function PageIntro({ number, location, title, accent, children, example =
 }
 
 export function QuestJourney({ current = 0 }: { current?: number }) {
-  const steps = [["/summons", "Summon", "Give your idea a form"], ["/contracts/bind", "Make a pact", "Agree before you begin"], ["/duel/demo", "Offer proof", "Bring the moment back"], ["/judgment/demo", "Keep the story", "A result with a reason"]];
+  const steps = [["/app/create", "Summon", "Give your idea a form"], ["/contracts/bind", "Make a pact", "Agree before you begin"], ["/duel/demo", "Offer proof", "Bring the moment back"], ["/judgment/demo", "Keep the story", "A result with a reason"]];
   return <nav className="sw-journey" aria-label="Explore the quest journey">{steps.map(([href, title, detail], index) => <Link key={href} href={href} className={index === current ? "is-current" : ""} aria-current={index === current ? "page" : undefined}><span className="sw-journey__number">0{index + 1}</span><span><strong>{title}</strong><small>{detail}</small></span>{index < steps.length - 1 && <span className="sw-journey__connector" aria-hidden="true" />}</Link>)}</nav>;
 }
 

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {SumLanguageSwitch,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import {questStatusText} from "@/lib/interface-language";
+import {appDestinations,activeAppDestination} from "@/lib/app-navigation";
 
 type IconName = "home" | "discover" | "create" | "pico" | "user" | "back" | "arrow"
   | "star" | "camera" | "check" | "spark" | "calendar" | "shield" | "chart"
@@ -69,13 +70,7 @@ export function IosAction({ href, children, secondary = false, className = "" }:
   </Link>;
 }
 
-const tabs = [
-  { href: "/app/today", label: "Home", zh: "首页", icon: "home" },
-  { href: "/app/discover", label: "Discover", zh: "发现", icon: "discover" },
-  { href: "/app/create", label: "Create", zh: "创建", icon: "create" },
-  { href: "/app/picos", label: "Familiars", zh: "召唤兽", icon: "pico" },
-  { href: "/app/profile", label: "Profile", zh: "我的", icon: "user" },
-] as const;
+const tabs=appDestinations;
 
 const appTitles:Record<string,string>={
   "Quest HQ":"Quest 大厅","Discover":"发现挑战",
@@ -112,11 +107,7 @@ const appEyebrows:Record<string,string>={
 export function IosBottomNav() {
   const language=useSumLanguage();
   const path = usePathname();
-  const active = path === "/app" ? "/app/today"
-    : path.startsWith("/app/quest") || path.startsWith("/app/evidence-add") ? "/app/today"
-    : path.startsWith("/app/evidence") || path.startsWith("/app/stats") || path.startsWith("/app/achievements") || path.startsWith("/app/settings") ? "/app/profile"
-    : path.startsWith("/app/community") ? "/app/discover"
-    : path;
+  const active=activeAppDestination(path);
   return <nav className="ios-tabbar" aria-label="iOS app navigation" data-testid="ios-tabbar">
     {tabs.map(({ href,label,zh,icon }) => <Link key={href} href={href}
       aria-label={translated(language,label,zh)} aria-current={active === href ? "page" : undefined}

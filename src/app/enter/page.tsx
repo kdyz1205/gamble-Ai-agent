@@ -36,9 +36,9 @@ export default function EnterPage() {
         </section>
         <nav className="sum-premium-shortcuts sw-container" aria-label="Explore the SUM world">
           {[
-            { href: "/summons", image: "/storybook-premium/realm2.webp", label: "Summon Ideas", text: "Turn a spark into a real plan." },
-            { href: "/rituals", image: "/storybook-premium/hero2.webp", label: "Meet Pico", text: "A little companion at your side." },
-            { href: "/markets", image: "/storybook-premium/realm1.webp", label: "Explore Quests", text: "Find an adventure worth sharing." },
+            { href: "/app/create", image: "/storybook-premium/realm2.webp", label: "Summon Ideas", text: "Turn a spark into a real plan." },
+            { href: "/app/picos", image: "/storybook-premium/hero2.webp", label: "Meet Pico", text: "A little companion at your side." },
+            { href: "/app/discover", image: "/storybook-premium/realm1.webp", label: "Explore Quests", text: "Find an adventure worth sharing." },
             { href: "/judgment/demo", image: "/storybook-premium/pico3.webp", label: "Keep the Story", text: "Remember the moments that matter." },
           ].map(item => (
             <Link href={item.href} key={item.href} className="sum-premium-shortcut">
@@ -62,7 +62,7 @@ export default function EnterPage() {
             <Eyebrow>A WORLD YOU CAN HELP CREATE</Eyebrow>
             <h2 id="sum-premium-story-heading">Quests for a<br/><em>brighter tomorrow.</em></h2>
             <p>Bring your imagination into the real world. A Quest starts as an idea, becomes something both people agree to, and ends with proof and a story you can look back on.</p>
-            <Link className="sw-text-link" href="/summons">Start your own story <Arrow/></Link>
+            <Link className="sw-text-link" href="/app/create">Start your own story <Arrow/></Link>
             <p className="sum-premium-story__note">Every example is illustrative. Real results are determined from accepted rules and evidence.</p>
           </div>
         </section>
@@ -76,11 +76,11 @@ export default function EnterPage() {
         <section className="sw-realms-section sw-container sum-award-realms" aria-labelledby="realms-title">
           <div className="sw-section-heading">
             <div><Eyebrow>YOUR POSSIBILITIES ARE NOT ONE CATEGORY</Eyebrow><h2 id="realms-title">A new realm begins<br/>with your idea.</h2></div>
-            <Link className="sw-text-link" href="/summons">Create something of your own <Arrow/></Link>
+            <Link className="sw-text-link" href="/app/create">Create something of your own <Arrow/></Link>
           </div>
           <div className="sw-realms">
             {questSeeds.map((quest,index) => (
-              <Link className={"sw-realm sw-realm--"+quest.id} href={"/summons?seed="+quest.id} key={quest.id}>
+              <Link className={"sw-realm sw-realm--"+quest.id} href={"/app/create?seed="+quest.id} key={quest.id}>
                 <div className="sw-realm__header"><span className="sw-small-label">0{index+1} / {quest.realm}</span><WorldGlyph kind={quest.kind}/></div>
                 <div className="sw-realm__storybook" aria-hidden="true"><Image src={quest.id === "move" ? "/storybook-premium/realm1.webp" : quest.id === "craft" ? "/storybook-premium/realm2.webp" : "/storybook-premium/realm3.webp"} width={620} height={400} className="sum-storybook-realm-img" alt="" sizes="(max-width:699px) 100vw, (max-width:959px) 50vw, 33vw"/><span className="sum-realm__spark"><WorldGlyph kind={quest.kind}/></span></div>
                 <h3>{quest.name}</h3><p>{quest.hint}</p>
@@ -106,14 +106,14 @@ export default function EnterPage() {
               <span><WorldGlyph kind="proof"/>Review the proof</span>
               <span><WorldGlyph kind="chronicle"/>Explain the result</span>
             </div>
-            <Link className="sw-text-link" href="/rituals">Meet your AI Familiar <Arrow/></Link>
+            <Link className="sw-text-link" href="/app/picos">Meet your AI Familiar <Arrow/></Link>
             <p className="sw-fairness-note">Pico never accepts a pact on your behalf or invents an outcome.</p>
           </div>
         </section>
         <section className="sw-world-invitation sw-container sum-award-endcap">
           <SummonSigil/>
           <div><Eyebrow>YOUR WORLD IS WAITING</Eyebrow><h2>What will you bring to life?</h2><p>A friend, an idea, a shared finish line. It starts here.</p></div>
-          <Link className="sw-button sw-button--light" href="/summons">Open the Nexus <Arrow/></Link>
+          <Link className="sw-button sw-button--light" href="/app/create">Open the Nexus <Arrow/></Link>
         </section>
       </main>
       <WorldFooter/>

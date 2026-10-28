@@ -92,6 +92,8 @@ export function ProfileScreen() {
   const count=quests.filter(q=>q.status==="settled").length;
   const menu=[
     ["Your Quests","我的 Quest","today","/app/today"],
+    ["All Quest records","全部挑战记录","calendar","/quests"],
+    ["Credit activity","积分流水","chart","/me"],
     ["Your Evidence","我的证据","gallery","/app/evidence"],
     ["Achievements","成就","trophy","/app/achievements"],
     ["Your Journey","我的历程","chart","/app/stats"],
