@@ -51,3 +51,10 @@
  .quest-hud .sum-language-switch{padding:2px;}
  .quest-hud .sum-language-switch button{min-width:32px;min-height:36px;padding-inline:5px;}
 }
+
+/* A cancellable permission request must not squeeze primary actions on 320px screens. */
+.quest-composer__actions:has(.quest-voice-cancel){flex-wrap:wrap;}
+.quest-composer__actions .quest-voice-cancel{flex:0 0 100%;width:100%;min-height:44px;justify-content:center;}
+
+/* The legacy 3.7rem icon box is too narrow for a permission-status label. */
+.ios-app .quest-composer--app .quest-composer__actions:has(.quest-voice-cancel)>.quest-tool-button:not(.quest-voice-cancel){width:auto;min-width:3.7rem;flex:0 0 auto;padding-inline:8px;}

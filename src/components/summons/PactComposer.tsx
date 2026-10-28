@@ -5,12 +5,13 @@ import {SumText,useSumLanguage} from "@/components/locale/SumLanguage";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import type { CSSProperties, FormEvent } from "react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
 import * as api from "@/lib/api-client";
 import { COMPOSER_AUTH_CHECKPOINT, draftForComposer, readComposerCheckpoint } from "@/lib/composer-draft";
+import {advanceComposerOwner,type ComposerOwner} from "@/lib/composer-owner";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
 const proofOptions = ["24 hours", "72 hours", "7 days"] as const;
@@ -50,9 +51,18 @@ function newRequestId(prefix: string) {
 }
 
 type ComposerStarter={id:string;label:string;labelZh:string;prompt:string};
-export default function PactComposer({ initialPrompt = "", appMode = false, starterChoices = [], initialStarterId }: {
-  initialPrompt?: string; appMode?: boolean; starterChoices?: readonly ComposerStarter[]; initialStarterId?:string;
-} = {}) {
+type ComposerProps={initialPrompt?:string;appMode?:boolean;starterChoices?:readonly ComposerStarter[];initialStarterId?:string};
+export default function PactComposer(props:ComposerProps={}) {
+  const {data:session,status}=useSession();
+  const [owner,setOwner]=useState<ComposerOwner>({accountId:undefined,generation:0});
+  const next=advanceComposerOwner(owner,status==="loading"?undefined:session?.user?.id??null);
+  // Guarded render-time identity transition prevents a frame with B's session
+  // and A's draft. Guest login and same-account refresh retain local work.
+  if(next!==owner)setOwner(next);
+  return <PactComposerContent key={next.generation} {...props}/>;
+}
+
+function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],initialStarterId}:ComposerProps) {
   const uiLanguage=useSumLanguage();
   const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const { data: session, status: sessionStatus } = useSession();
@@ -69,7 +79,12 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
   const publishRequestIdRef = useRef<string | null>(null);
   const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
-  const voiceChunksRef = useRef<Blob[]>([]);
+  const mountedRef=useRef(true);
+  const voiceEpoch=useRef(0);
+  const voiceSaveRequested=useRef(false);
+  type VoicePhase="idle"|"permission"|"recording"|"stopping"|"transcribing";
+  const voicePhaseRef=useRef<VoicePhase>("idle");
+  const [voicePhase,setVoicePhase]=useState<VoicePhase>("idle");
   const [input, setInput] = useState(initialPrompt);
   const [stake, setStake] = useState("0");
   const [opponentMode, setOpponentMode] = useState<(typeof opponentOptions)[number]>("Invite only");
@@ -81,11 +96,11 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [marketUrl, setMarketUrl] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-
-  const canSubmit = Boolean(input.trim()) && !isSubmitting && !isRecording && !isTranscribing;
-  const busy=isSubmitting||isRecording||isTranscribing;
+  const isRecording=voicePhase==="recording";
+  const isTranscribing=voicePhase==="transcribing";
+  const voiceActive=voicePhase!=="idle";
+  const canSubmit=Boolean(input.trim())&&!isSubmitting&&!voiceActive;
+  const busy=isSubmitting||voiceActive;
   const ui=(en:string,zh:string)=>uiLanguage==="zh"?zh:en;
   useEffect(()=>{
     const dialog=starterDialog.current;
@@ -96,14 +111,14 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     }else if(!pendingStarter&&dialog.open)dialog.close();
   },[pendingStarter]);
   function applyStarter(starter:{id:string;prompt:string}){
-    if(requestBusy.current||busy)return;
+    if(requestBusy.current||voicePhaseRef.current!=="idle"||busy)return;
     // Suggestions change only the unsent message, never the conversation,
     // reviewed terms, retry identity, session or in-flight request.
     setInput(starter.prompt);setSelectedStarter(starter.id);setPendingStarter(null);
     inputRef.current?.focus();
   }
   function chooseStarter(starter:{id:string;prompt:string}){
-    if(requestBusy.current||busy)return;
+    if(requestBusy.current||voicePhaseRef.current!=="idle"||busy)return;
     if(input.trim()&&input!==starter.prompt){setPendingStarter(starter);return;}
     applyStarter(starter);
   }
@@ -151,6 +166,30 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     castTimersRef.current = [];
   }
 
+  const stopVoiceTracks=useCallback(()=>{
+    voiceStreamRef.current?.getTracks().forEach(track=>track.stop());
+    voiceStreamRef.current=null;
+  },[]);
+
+  function setVoiceStage(phase:VoicePhase) {
+    voicePhaseRef.current=phase;
+    if(mountedRef.current)setVoicePhase(phase);
+  }
+
+  const cancelVoice=useCallback((update=true)=>{
+    voiceEpoch.current++;
+    voiceSaveRequested.current=false;
+    const recorder=voiceRecorderRef.current;
+    voiceRecorderRef.current=null;
+    if(recorder){
+      recorder.onstop=null;recorder.ondataavailable=null;recorder.onerror=null;
+      if(recorder.state!=="inactive"){try{recorder.stop();}catch{}}
+    }
+    stopVoiceTracks();
+    voicePhaseRef.current="idle";
+    if(update&&mountedRef.current)setVoicePhase("idle");
+  },[stopVoiceTracks]);
+
   useEffect(() => {
     if (sessionStatus === "loading" || restoredAuthRef.current) return;
     restoredAuthRef.current = true;
@@ -166,16 +205,16 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     } catch { /* Restricted browser storage must not block challenge creation. */ }
   }, [sessionStatus, session?.user?.id]);
 
-  useEffect(() => {
-    return () => {
-      clearCastTimers();
-      if (voiceRecorderRef.current?.state === "recording") {
-        voiceRecorderRef.current.onstop = null;
-        voiceRecorderRef.current.stop();
-      }
-      voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
+  useEffect(()=>{
+    mountedRef.current=true;
+    const leave=()=>cancelVoice();
+    window.addEventListener("pagehide",leave);
+    return()=>{
+      mountedRef.current=false;
+      window.removeEventListener("pagehide",leave);
+      clearCastTimers();cancelVoice(false);
     };
-  }, []);
+  },[cancelVoice]);
 
   useEffect(() => {
     const log = conversationRef.current;
@@ -201,90 +240,70 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     setInput(event.currentTarget.value);
   }
 
-  function stopVoiceTracks() {
-    voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
-    voiceStreamRef.current = null;
-  }
-
-  async function transcribeVoice(recorder: MediaRecorder) {
-    const blob = new Blob(voiceChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-    voiceChunksRef.current = [];
-    if (!blob.size) return;
-
-    setIsTranscribing(true);
-    setError(null);
-    try {
-      const response = await api.transcribeAudio(blob);
-      const transcript = response.transcript.trim();
-      if (!transcript) {
-        setError("Pico could not hear a clear sentence. Try again closer to the microphone.");
-        return;
-      }
-      setInput((current) => current.trim() ? `${current.trimEnd()} ${transcript}` : transcript);
-      window.setTimeout(() => inputRef.current?.focus(), 0);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not transcribe voice";
-      if (/401|unauthorized/i.test(message)) {
-        setError("Sign in before using voice transcription.");
-        setAuthOpen(true);
-      } else {
-        setError(message);
-      }
-    } finally {
-      setIsTranscribing(false);
-    }
+  async function transcribeVoice(blob:Blob,attempt:number) {
+    const current=()=>mountedRef.current&&voiceEpoch.current===attempt;
+    if(!current())return;
+    if(!blob.size){setVoiceStage("idle");setError(ui("No audio was recorded. Please try again.","没有录到音频，请重试。"));return;}
+    setVoiceStage("transcribing");setError(null);
+    try{
+      const response=await api.transcribeAudio(blob);
+      if(!current())return;
+      const transcript=response.transcript.trim();
+      if(!transcript){setError(ui("Pico could not hear a clear sentence. Try again closer to the microphone.","Pico 没有听清，请靠近麦克风重试。"));return;}
+      setInput(text=>text.trim()?`${text.trimEnd()} ${transcript}`:transcript);
+      inputRef.current?.focus();
+    }catch(err){
+      if(!current())return;
+      const message=err instanceof Error?err.message:"Could not transcribe voice";
+      if(/401|unauthorized/i.test(message)){setError("Sign in before using voice transcription.");setAuthOpen(true);}
+      else setError(message);
+    }finally{if(current())setVoiceStage("idle");}
   }
 
   async function toggleVoiceInput() {
-    if (isRecording) {
-      voiceRecorderRef.current?.stop();
+    if(!mountedRef.current||requestBusy.current)return;
+    if(voicePhaseRef.current==="recording"){
+      const recorder=voiceRecorderRef.current;
+      if(!recorder||recorder.state!=="recording")return;
+      voiceSaveRequested.current=true;setVoiceStage("stopping");
+      try{recorder.stop();stopVoiceTracks();}
+      catch(err){cancelVoice();setError(err instanceof Error?err.message:"Could not stop recording.");}
       return;
     }
-
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setError("This browser does not support microphone recording.");
-      return;
+    if(voicePhaseRef.current!=="idle")return;
+    if(typeof MediaRecorder==="undefined"||!navigator.mediaDevices?.getUserMedia){
+      setError(ui("This browser does not support microphone recording.","当前浏览器不支持麦克风录音。"));return;
     }
-
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      voiceStreamRef.current = stream;
-      voiceChunksRef.current = [];
-      const mimeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/ogg;codecs=opus",
-        "audio/mp4;codecs=mp4a.40.2",
-        "audio/mp4",
-        "audio/webm",
-        "audio/aac",
-      ];
-      const mimeType = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
-      let recorder: MediaRecorder;
-      try {
-        recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      } catch {
-        recorder = new MediaRecorder(stream);
-      }
-      voiceRecorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) voiceChunksRef.current.push(event.data);
+    const attempt=++voiceEpoch.current;
+    const current=()=>mountedRef.current&&voiceEpoch.current===attempt;
+    voiceSaveRequested.current=false;setVoiceStage("permission");setError(null);
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(!current()){stream.getTracks().forEach(track=>track.stop());return;}
+      voiceStreamRef.current=stream;
+      const chunks:Blob[]=[];
+      const mimeCandidates=["audio/webm;codecs=opus","audio/ogg;codecs=opus","audio/mp4;codecs=mp4a.40.2","audio/mp4","audio/webm","audio/aac"];
+      const mimeType=mimeCandidates.find(candidate=>MediaRecorder.isTypeSupported(candidate));
+      let recorder:MediaRecorder;
+      try{recorder=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream);}
+      catch{recorder=new MediaRecorder(stream);}
+      voiceRecorderRef.current=recorder;
+      recorder.ondataavailable=event=>{if(current()&&event.data.size>0)chunks.push(event.data);};
+      recorder.onerror=()=>{
+        if(!current())return;
+        cancelVoice();setError(ui("Microphone recording stopped unexpectedly. No partial audio was sent.","录音意外停止，未发送不完整音频。"));
       };
-      recorder.onerror = () => {
-        setIsRecording(false);
-        stopVoiceTracks();
-        setError("Microphone recording stopped unexpectedly.");
+      recorder.onstop=()=>{
+        if(!current())return;
+        stopVoiceTracks();voiceRecorderRef.current=null;
+        if(!voiceSaveRequested.current){cancelVoice();setError(ui("Recording ended before you confirmed it. Please try again.","录音在确认前结束，请重试。"));return;}
+        const blob=new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||"audio/webm"});
+        void transcribeVoice(blob,attempt);
       };
-      recorder.onstop = () => {
-        setIsRecording(false);
-        stopVoiceTracks();
-        void transcribeVoice(recorder);
-      };
-      recorder.start(250);
-      setIsRecording(true);
-    } catch (err) {
-      stopVoiceTracks();
-      setError(err instanceof Error ? err.message : "Microphone access was not granted.");
+      recorder.start(250);setVoiceStage("recording");
+    }catch(err){
+      if(!current())return;
+      cancelVoice();setError(err instanceof Error?err.message:"Microphone access was not granted.");
     }
   }
 
@@ -303,7 +322,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = input.trim();
-    if (!message || requestBusy.current || isSubmitting || isRecording || isTranscribing) return;
+    if (!message || !mountedRef.current || requestBusy.current || isSubmitting || voicePhaseRef.current!=="idle") return;
     requestBusy.current=true;
 
     triggerCastVisual();
@@ -319,6 +338,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
         draftWithSelectedSettings(),
         newRequestId("turn"),
       );
+      if(!mountedRef.current)return;
       const nextTurns: api.AgentTurn[] = [
         ...turns,
         { role: "user", content: message },
@@ -340,6 +360,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
         : toolResult?.marketUrl || toolResult?.shareUrl ||
           (publishedId ? `/challenge/${publishedId}` : null));
     } catch (err) {
+      if(!mountedRef.current)return;
       const message = err instanceof Error ? err.message : "Could not draft challenge";
       if (/401|unauthorized/i.test(message)) {
         setError("Sign in to continue");
@@ -349,12 +370,12 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
       }
     } finally {
       requestBusy.current=false;
-      setIsSubmitting(false);
+      if(mountedRef.current)setIsSubmitting(false);
     }
   }
 
   async function handlePublish() {
-    if (requestBusy.current || isSubmitting || marketUrl || input.trim() || isRecording || isTranscribing) return;
+    if (!mountedRef.current || requestBusy.current || isSubmitting || marketUrl || input.trim() || voicePhaseRef.current!=="idle") return;
     const selectedDraft = draftWithSelectedSettings();
     if (!selectedDraft.readyToPublish) {
       setError("The quest still needs one clear answer before it can be published.");
@@ -368,6 +389,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     publishRequestIdRef.current ??= newRequestId("publish");
     try {
       const response = await api.publishAgentDraft(selectedDraft, publishRequestIdRef.current);
+      if(!mountedRef.current)return;
       applyServerDraft(response.draftState);
       setTurns((current) => [
         ...current,
@@ -392,10 +414,10 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
       }
       setMarketUrl(nextUrl);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not publish quest");
+      if(mountedRef.current)setError(err instanceof Error ? err.message : "Could not publish quest");
     } finally {
       requestBusy.current=false;
-      setIsSubmitting(false);
+      if(mountedRef.current)setIsSubmitting(false);
     }
   }
 
@@ -409,7 +431,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
               {promptChips.map(([label, example]) => (
                 <button
                   key={label}
-                  disabled={isSubmitting || isRecording || isTranscribing}
+                  disabled={busy}
                   onClick={() => chooseStarter({id:label,prompt:example})}
                   type="button"
                 >
@@ -688,7 +710,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
               <button
                 aria-label={isRecording ? "Stop voice recording" : "Describe quest by voice"}
                 className="quest-tool-button"
-                disabled={isSubmitting || isTranscribing}
+                disabled={isSubmitting || (voiceActive&&!isRecording)}
                 onClick={() => { void toggleVoiceInput(); }}
                 style={{ background: isRecording ? "#fecaca" : undefined, color: isRecording ? "#991b1b" : undefined }}
                 title={isRecording ? t("Stop recording") : "Speak your challenge"}
@@ -701,7 +723,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
                     <QuestGlyph className="h-5 w-5" kind="voice" />
                   )}
                 </span>
-                <span>{isTranscribing ? "..." : isRecording ? t("Stop") : t("Voice")}</span>
+                <span>{voicePhase==="permission"?ui("Waiting…","等待授权…"):isTranscribing?"...":isRecording?t("Stop"):t("Voice")}</span>
               </button>
               <RitualButton
                 aria-label="Summon"
@@ -714,6 +736,9 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
                 <QuestGlyph className="h-4 w-4" kind="spark" />
                 {isSubmitting ? ui("Thinking…","正在整理…") : turns.length ? ui("Send reply","发送回复") : t("Summon quest")}
               </RitualButton>
+              {voiceActive&&<button type="button" className="quest-tool-button quest-voice-cancel" aria-label="Cancel voice recording" onClick={()=>cancelVoice()}>
+                {ui("Cancel voice","取消语音")}
+              </button>}
               </div>
             </div>
 

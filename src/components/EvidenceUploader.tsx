@@ -66,22 +66,35 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   const requiredMedia = mediaProofKind(evidenceType);
   const writtenProof = ["text", "self_report"].includes(evidenceType.trim().toLowerCase());
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const recordStartRef = useRef<number>(0);
+  type Capture={stream:MediaStream|null;recorder:MediaRecorder|null;video:HTMLVideoElement|null;
+    chunks:Blob[];startedAt:number;save:boolean};
+  const captureRef=useRef<Capture|null>(null);
+  const [capturePending,setCapturePending]=useState(false);
   const mounted=useRef(true);
   const saveOwner=useRef(false);
+  function isCurrentCapture(capture:Capture){return mounted.current&&captureRef.current===capture;}
+  const releaseCapture=useCallback((capture:Capture)=>{
+    if(captureRef.current===capture)captureRef.current=null;
+    const recorder=capture.recorder;
+    if(recorder){
+      recorder.onstop=null;recorder.ondataavailable=null;recorder.onerror=null;
+      if(recorder.state!=="inactive"){try{recorder.stop();}catch{}}
+    }
+    capture.stream?.getTracks().forEach(track=>track.stop());
+    if(capture.video){capture.video.pause();capture.video.srcObject=null;}
+    capture.chunks=[];
+  },[]);
+  const cancelCapture=useCallback((update=true)=>{
+    const capture=captureRef.current;
+    if(capture)releaseCapture(capture);
+    if(update&&mounted.current){setCapturePending(false);setRecording(false);setStream(null);setMode(null);}
+  },[releaseCapture]);
   useEffect(()=>{
     mounted.current=true;
-    return()=>{
-      mounted.current=false;
-      const recorder=mediaRecorderRef.current;
-      if(recorder&&recorder.state!=="inactive"){
-        recorder.onstop=null;recorder.ondataavailable=null;
-        try{recorder.stop();}catch{}
-      }
-    };
-  },[]);
+    const leave=()=>cancelCapture();
+    window.addEventListener("pagehide",leave);
+    return()=>{mounted.current=false;window.removeEventListener("pagehide",leave);cancelCapture(false);};
+  },[cancelCapture]);
 
   const resetAll = useCallback(() => {
     setFile(null);
@@ -116,6 +129,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const pickFile = (kind: "video" | "photo") => {
+    if(captureRef.current||saveOwner.current||!mounted.current)return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = kind === "video" ? "video/*" : "image/*";
@@ -124,89 +138,96 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       if (!f||!mounted.current) return;
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(f);
+      setUrlInput("");
       setPreviewUrl(URL.createObjectURL(f));
       setError("");
     };
     input.click();
   };
 
-  const startCamera = async (withAudio: boolean) => {
-    setError("");
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
-      if(!mounted.current){s.getTracks().forEach(track=>track.stop());return;}
-      setStream(s);
-      setMode("record");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not access camera/mic. Grant permission and try again.");
+  function beginCapture():Capture|null {
+    if(captureRef.current||saveOwner.current||!mounted.current)return null;
+    const capture:Capture={stream:null,recorder:null,video:null,chunks:[],startedAt:0,save:false};
+    captureRef.current=capture;setCapturePending(true);setError("");return capture;
+  }
+
+  const startCamera=async(withAudio:boolean)=>{
+    const capture=beginCapture();if(!capture)return;
+    try{
+      if(!navigator.mediaDevices?.getUserMedia)throw new Error("Camera capture is unavailable. Upload a matching file instead.");
+      const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:withAudio});
+      if(!isCurrentCapture(capture)){stream.getTracks().forEach(track=>track.stop());return;}
+      capture.stream=stream;setStream(stream);setMode("record");setCapturePending(false);
+    }catch(error){
+      if(!isCurrentCapture(capture))return;
+      cancelCapture();setError(error instanceof Error?error.message:"Could not access camera/mic. Grant permission and try again.");
     }
   };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      setStream(null);
-    }
-  };
-
-  const startRecording = () => {
-    if (!stream) return;
-    try {
-      if (typeof MediaRecorder === "undefined") throw new Error("Video recording is unavailable. Upload a video file instead.");
-      const mimeType = recordingMimeType(type => MediaRecorder.isTypeSupported(type));
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      chunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || chunksRef.current[0]?.type || "video/webm" });
-        setRecordedBlob(blob);
-        setRecordedDuration((Date.now() - recordStartRef.current) / 1000);
-        chunksRef.current = [];
+  const startRecording=()=>{
+    const capture=captureRef.current;
+    if(!capture||!capture.stream||capture.recorder||!isCurrentCapture(capture))return;
+    try{
+      if(typeof MediaRecorder==="undefined")throw new Error("Video recording is unavailable. Upload a video file instead.");
+      const mimeType=recordingMimeType(type=>MediaRecorder.isTypeSupported(type));
+      const recorder=new MediaRecorder(capture.stream,mimeType?{mimeType}:undefined);
+      capture.recorder=recorder;capture.chunks=[];capture.startedAt=Date.now();
+      recorder.ondataavailable=event=>{if(isCurrentCapture(capture)&&event.data.size>0)capture.chunks.push(event.data);};
+      recorder.onstop=()=>{
+        if(!isCurrentCapture(capture))return;
+        const blob=new Blob(capture.chunks,{type:recorder.mimeType||capture.chunks[0]?.type||"video/webm"});
+        const saved=capture.save;
+        const duration=(Date.now()-capture.startedAt)/1000;
+        releaseCapture(capture);setStream(null);setRecording(false);setCapturePending(false);setMode(null);
+        if(!saved){setError("Recording ended before you chose Stop & save. No partial clip was kept.");return;}
+        if(!blob.size){setError("The recording was empty. Please record again or upload a video file.");return;}
+        setUrlInput("");setRecordedBlob(blob);setRecordedDuration(duration);
       };
-      recorder.onerror = () => { setError("Recording failed. Try again or upload a video file."); setRecording(false); stopCamera(); };
-      mediaRecorderRef.current = recorder;
-      recordStartRef.current = Date.now();
-      recorder.start();
-      setRecording(true);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not start recording. Upload a video file instead.");
+      recorder.onerror=()=>{
+        if(!isCurrentCapture(capture))return;
+        cancelCapture();setError("Recording failed. No partial clip was kept. Try again or upload a video file.");
+      };
+      recorder.start();setRecording(true);
+    }catch(error){
+      if(!isCurrentCapture(capture))return;
+      cancelCapture();setError(error instanceof Error?error.message:"Could not start recording. Upload a video file instead.");
     }
   };
 
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-    stopCamera();
+  const stopRecording=()=>{
+    const capture=captureRef.current;
+    if(!capture||!isCurrentCapture(capture)||capture.recorder?.state!=="recording"||capture.save)return;
+    capture.save=true;setCapturePending(true);setRecording(false);
+    try{capture.recorder.stop();capture.stream?.getTracks().forEach(track=>track.stop());}
+    catch(error){cancelCapture();setError(error instanceof Error?error.message:"Could not save the recording. Try again.");}
   };
 
-  const takePhoto = async () => {
-    setError("");
-    let captureStream: MediaStream | null = null;
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      captureStream = s;
-      if(!mounted.current)return;
-      // Wait a moment for focus, then snap
-      const video = document.createElement("video");
-      video.srcObject = s;
-      await video.play();
-      await new Promise(r => setTimeout(r, 400));
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")?.drawImage(video, 0, 0);
-      s.getTracks().forEach(t => t.stop());
-      canvas.toBlob((b) => {
-        if (!b||!mounted.current) return;
-        const f = new File([b], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        setFile(f);
-        setPreviewUrl(URL.createObjectURL(f));
-        setMode("photo");
-      }, "image/jpeg", 0.92);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not take photo.");
-    } finally { captureStream?.getTracks().forEach(track => track.stop()); }
+  const takePhoto=async()=>{
+    const capture=beginCapture();if(!capture)return;
+    try{
+      if(!navigator.mediaDevices?.getUserMedia)throw new Error("Camera capture is unavailable. Upload a photo instead.");
+      const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+      if(!isCurrentCapture(capture)){stream.getTracks().forEach(track=>track.stop());return;}
+      capture.stream=stream;
+      const video=document.createElement("video");capture.video=video;
+      video.muted=true;video.playsInline=true;video.srcObject=stream;
+      await video.play();if(!isCurrentCapture(capture))return;
+      await new Promise(resolve=>setTimeout(resolve,400));if(!isCurrentCapture(capture))return;
+      if(!video.videoWidth||!video.videoHeight)throw new Error("The camera did not provide a photo. Try again or upload a file.");
+      const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      const context=canvas.getContext("2d");if(!context)throw new Error("Photo capture is unavailable. Upload a file instead.");
+      context.drawImage(video,0,0);
+      const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("The photo could not be saved. Try again.")),"image/jpeg",0.92));
+      if(!isCurrentCapture(capture))return;
+      const file=new File([blob],`photo-${Date.now()}.jpg`,{type:"image/jpeg"});
+      if(previewUrl)URL.revokeObjectURL(previewUrl);
+      setUrlInput("");setFile(file);setPreviewUrl(URL.createObjectURL(file));setMode("photo");
+    }catch(error){
+      if(isCurrentCapture(capture))setError(error instanceof Error?error.message:"Could not take photo.");
+    }finally{
+      const current=isCurrentCapture(capture);releaseCapture(capture);
+      if(current)setCapturePending(false);
+    }
   };
 
   const getFileToUpload = (): File | null => {
@@ -218,7 +239,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   };
 
   const submit = async () => {
-    if(saveOwner.current||!mounted.current)return;
+    if(saveOwner.current||captureRef.current||!mounted.current)return;
     const f = getFileToUpload();
     const trimmedDescription = description.trim();
     const trimmedUrl = urlInput.trim();
@@ -322,14 +343,14 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       </div>
 
       {/* Mode chooser — only when no content chosen yet */}
-      {!mode && !hasContent && !writtenProof && (
+      {!mode && !file && !recordedBlob && !writtenProof && (
         <div className="grid grid-cols-2 gap-2 mb-4">
-          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Record video" hint="One continuous clip" tint={PEACH} onClick={() => startCamera(true)} />}
-          {requiredMedia !== "video" && <ActionTile kind="spark" label="Take photo" hint="Snap from camera" tint={MINT} onClick={takePhoto} />}
-          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Upload video" hint="MP4 / WebM" tint={LAVENDER} onClick={() => pickFile("video")} />}
-          {requiredMedia !== "video" && <ActionTile kind="receipt" label="Upload photo" hint="JPG / PNG" tint={PINK} onClick={() => pickFile("photo")} />}
+          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Record video" hint="One continuous clip" tint={PEACH} disabled={capturePending} onClick={() => startCamera(true)} />}
+          {requiredMedia !== "video" && <ActionTile kind="spark" label="Take photo" hint="Snap from camera" tint={MINT} disabled={capturePending} onClick={takePhoto} />}
+          {requiredMedia !== "photo" && <ActionTile kind="proof" label="Upload video" hint="MP4 / WebM" tint={LAVENDER} disabled={capturePending} onClick={() => pickFile("video")} />}
+          {requiredMedia !== "video" && <ActionTile kind="receipt" label="Upload photo" hint="JPG / PNG" tint={PINK} disabled={capturePending} onClick={() => pickFile("photo")} />}
           <div className="col-span-2">
-            <button onClick={() => setMode("url")}
+            <button disabled={capturePending} onClick={() => setMode("url")}
               className="w-full px-3 py-2 text-xs font-bold active:scale-95 transition-transform"
               style={{ color: NAVY_DIM, background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "16px" }}>
               Or paste a public HTTPS link
@@ -337,6 +358,11 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
           </div>
         </div>
       )}
+
+      {capturePending&&<div role="status" className="my-3 text-sm" data-testid="proof-media-pending">
+        <p>Preparing media capture. You can cancel without saving.</p>
+        <button type="button" aria-label="Cancel media capture" className="mt-2 min-h-11 px-4 font-bold underline" onClick={()=>cancelCapture()}>Cancel capture</button>
+      </div>}
 
       {/* Live camera preview while recording */}
       {mode === "record" && stream && !recordedBlob && (
@@ -346,7 +372,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
             style={{ background: "#000", maxHeight: 300, objectFit: "cover" }} />
           <div className="flex gap-2 mt-3">
             {!recording ? (
-              <motion.button onClick={startRecording} whileTap={{ scale: 0.95 }}
+              <motion.button disabled={capturePending} onClick={startRecording} whileTap={{ scale: 0.95 }}
                 className="flex-1 py-3 text-sm font-extrabold"
                 style={{ color: "#FFFFFF", background: "#EF4444", borderRadius: "9999px", boxShadow: "0 4px 14px 0 rgba(239,68,68,0.40)" }}>
                 🔴 Start recording
@@ -358,7 +384,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
                 ⏹ Stop &amp; save
               </motion.button>
             )}
-            <button onClick={() => { stopCamera(); setMode(null); }}
+            <button onClick={()=>cancelCapture()}
               className="px-4 py-2 text-xs font-bold"
               style={{ color: NAVY_DIM, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
               Cancel
@@ -461,7 +487,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       {/* Submit */}
       <motion.button
         onClick={submit}
-        disabled={submitting || !hasContent}
+        disabled={submitting || capturePending || !!stream || !hasContent}
         whileTap={{ scale: 0.96 }}
         whileHover={!submitting && hasContent ? { scale: 1.02, y: -1 } : undefined}
         transition={{ type: "spring", stiffness: 400, damping: 22 }}
@@ -480,12 +506,12 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   );
 }
 
-function ActionTile({ kind, label, hint, tint, onClick }: {
-  kind: "proof" | "spark" | "receipt"; label: string; hint: string; tint: string; onClick: () => void;
+function ActionTile({ kind, label, hint, tint, onClick, disabled=false }: {
+  kind: "proof" | "spark" | "receipt"; label: string; hint: string; tint: string; onClick: () => void; disabled?:boolean;
 }) {
   return (
     <motion.button
-      onClick={onClick}
+      onClick={onClick} disabled={disabled}
       whileHover={{ scale: 1.03, y: -2 }}
       whileTap={{ scale: 0.96 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
