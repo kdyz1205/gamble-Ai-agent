@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SessionProvider } from "next-auth/react";
 import VerdictReviewControls from "../src/components/VerdictReviewControls";
@@ -8,9 +8,9 @@ import EvidenceUploader from "../src/components/EvidenceUploader";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "../src/lib/evidence-client";
 
 for (const policy of ["photo", "video", "text", "self_report"]) {
-  const html = renderToStaticMarkup(createElement(SessionProvider, { session: null, children:
+  const html = renderToStaticMarkup(createElement(SessionProvider, { session: null } as ComponentProps<typeof SessionProvider>,
     createElement(EvidenceUploader, { challengeId: "contract-test", evidenceType: policy, onSubmitted: () => {} }),
-  }));
+  ));
   assert.equal(html.includes("Upload photo"), policy === "photo");
   assert.equal(html.includes("Take photo"), policy === "photo");
   assert.equal(html.includes("Upload video"), policy === "video");
