@@ -29,7 +29,7 @@ export function CreateScreen({seed}: {seed?:string}) {
     <div className="ios-filters" aria-label="Starting categories">
       {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
         className={"ios-chip"+(chosen===q.id?" is-selected":"")}
-        onClick={()=>choose(q.id)}>{q.label}</button>)}
+        onClick={()=>choose(q.id)}><SumText en={q.label} zh={q.id==="move"?"行动":q.id==="craft"?"创造":"成长"}/></button>)}
     </div>
     <section className="ios-composer" data-testid="ios-real-quest-composer">
       <PactComposer key={prompt} initialPrompt={prompt} appMode/>

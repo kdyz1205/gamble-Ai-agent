@@ -82,6 +82,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
   const challengeTitle = getChallengeTitle(input);
   const storedChallengeTitle = draftState.title || draftState.proposition || getChallengeTitle(latestUserTurn?.content ?? "");
   const stakeDisplay = stake === "0" ? "Free entry" : stake ? `${stake} credits` : "Unset";
+  const localizedStake = stake === "0" ? t("Free entry") : stake ? (uiLanguage === "zh" ? `${stake} 积分` : `${stake} credits`) : t("Unset");
   const hasInput = Boolean(input.trim());
   const displayChallengeTitle = hasInput ? challengeTitle : storedChallengeTitle;
   const castingActive = castPhase !== "idle" || isSubmitting;
@@ -405,7 +406,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
       <div className="relative z-10 mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {resultItems.map(([label, value], index) => (
           <div
-            key={t(label)}
+            key={label}
             className="qx-result-metric min-w-0 rounded-[16px] px-3 py-2.5"
             style={{ "--metric-delay": `${index * 70}ms` } as CSSProperties}
           >
@@ -515,7 +516,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             <div className="quest-idea-strip mt-4">
               {promptChips.map(([label, example]) => (
                 <button
-                  key={t(label)}
+                  key={label}
                   disabled={isSubmitting || isRecording || isTranscribing}
                   onClick={() => { setInput(example); inputRef.current?.focus(); }}
                   type="button"
@@ -528,7 +529,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             <details className="quest-terms">
               <summary>
                 <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> <SumText en="Quest terms" zh="挑战条款"/></span>
-                <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{t(stakeDisplay)} · {t(opponentMode)} · {t(proofWindow)}</span>
+                <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{localizedStake} · {t(opponentMode)} · {t(proofWindow)}</span>
               </summary>
               <fieldset className="quest-terms__grid min-w-0" disabled={isSubmitting}>
               <legend className="sr-only"><SumText en="Quest terms" zh="挑战条款"/></legend>
@@ -562,7 +563,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                     const selected = option === opponentMode;
                     return (
                       <button
-                        key={t(option)}
+                        key={option}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setOpponentMode(option);
@@ -593,7 +594,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                     const selected = option === proofWindow;
                     return (
                       <button
-                        key={t(option)}
+                        key={option}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setProofWindow(option);
@@ -630,7 +631,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                 disabled={isSubmitting}
                 onChange={handleInput}
                 onInput={handleInput}
-                placeholder={turns.length ? t("Answer the question or change a rule…") : placeholderExamples[0]}
+                placeholder={turns.length ? t("Answer the question or change a rule…") : t(placeholderExamples[0])}
                 ref={inputRef}
                 value={input}
               />
@@ -690,19 +691,20 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                       color: hasInput ? "var(--sum-ink)" : "var(--sum-muted)",
                     }}
                   >
-                    {hasInput ? "Structuring" : t("Waiting")}
+                    {hasInput ? t("Structuring") : t("Waiting")}
                   </span>
                 </div>
 
                 <div className="quest-blueprint__track">
                   {blueprintItems.map(([label, value]) => (
                     <span
-                      key={t(label)}
+                      key={label}
                       className="qx-blueprint-cell"
                     >
-                      <span className="block uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>{label}</span>
+                      <span className="block uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>{t(label)}</span>
                       <span className="mt-0.5 block truncate font-semibold normal-case tracking-normal" style={{ color: "var(--sum-ink)" }}>
-                        {value}
+                        {label === "Quest" ? (hasInput || latestUserTurn || draftState.title || draftState.proposition ? value : t("Awaiting challenge"))
+                          : label === "Credits" ? localizedStake : t(value)}
                       </span>
                     </span>
                   ))}
@@ -712,16 +714,16 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
 
             <p className="mt-2 text-xs font-semibold" style={{ color: "var(--sum-muted)" }}>
               {castPhase === "charging"
-                ? "Summoning quest intent..."
+                ? t("Summoning quest intent...")
                 : castPhase === "binding"
-                  ? "Binding quest proof..."
+                  ? t("Binding quest proof...")
                   : castPhase === "sealing"
-                    ? "Compiling quest terms..."
+                    ? t("Compiling quest terms...")
                     : castPhase === "settling"
-                      ? "Quest preview forming..."
+                      ? t("Quest preview forming...")
                       : latestReply
-                        ? draftState.readyToPublish ? "Ready to publish" : "Reply to Pico to finish the rules"
-                        : `${stakeDisplay} / ${proofWindow}`}
+                        ? draftState.readyToPublish ? t("Ready to publish") : t("Reply to Pico to finish the rules")
+                        : `${localizedStake} / ${t(proofWindow)}`}
             </p>
           </div>
 

@@ -3,6 +3,11 @@ import type { InterfaceLanguage } from "./interface-language";
 /** Reviewed interface strings only. Never translate user input, agreed Quest
  * rules, question-bank prompts, provider replies or immutable result receipts. */
 export const interfaceCopyZh: Record<string, string> = {
+  "Quest":"挑战", "Familiar":"伙伴", "Proof":"证据", "Mode":"模式", "AI referee":"AI 裁判",
+  "Awaiting challenge":"等待挑战描述", "Deadline detected":"已识别截止时间", "Structuring":"正在组织规则",
+  "Summoning quest intent...":"正在理解挑战意图…", "Binding quest proof...":"正在整理证据要求…",
+  "Compiling quest terms...":"正在整理挑战条款…", "Quest preview forming...":"正在生成挑战预览…",
+  "Ready to publish":"可以发布", "Reply to Pico to finish the rules":"回复 Pico，补齐挑战规则",
   "Welcome back, Summoner":"欢迎回来，召唤师", "Join Summoners World":"加入 Summoners World",
   "Make your first quest a reality":"让第一个 Quest 成为现实", "Pick up your next quest":"继续你的下一段冒险",
   "Continue with Google":"使用 Google 继续", "Email":"邮箱", "Nickname":"昵称", "Password":"密码", "or":"或",
