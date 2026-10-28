@@ -38,3 +38,15 @@ test('night proof fields stay readable and focused mobile input is not covered b
  const note=page.getByRole('textbox',{name:'Evidence description',exact:true});const contrast=await note.evaluate(el=>{const s=getComputedStyle(el);const rgb=(s:string)=>s.match(/[\d.]+/g)!.slice(0,3).map(Number);const l=(s:string)=>{const v=rgb(s).map(c=>{c/=255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;});return .2126*v[0]+.7152*v[1]+.0722*v[2];};const a=l(s.color),b=l(s.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});expect(contrast).toBeGreaterThanOrEqual(4.5);
  await page.setViewportSize({width:390,height:460});await note.fill('Keyboard-sized viewport');await expect(page.getByTestId('ios-tabbar')).not.toBeVisible();await note.blur();await expect(page.getByTestId('ios-tabbar')).toBeVisible();
 });
+
+for(const width of [320,390])test(`pointer submission stays reachable across input blur at ${width}px`,async({page})=>{
+ await setup(page);await page.setViewportSize({width,height:844});let posts=0;
+ await page.route('**/api/challenges/'+ID+'/evidence',r=>{posts++;return r.fulfill({status:200,json:{}});});
+ await page.goto(BASE+'/app/evidence-add?id='+ID);await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await page.getByRole('textbox',{name:'Public evidence link',exact:true}).fill('https://example.invalid/pointer-proof.png');
+ const note=page.getByRole('textbox',{name:'Evidence description',exact:true});await note.fill('Keep this evidence until a matching receipt');await expect(page.getByTestId('ios-tabbar')).not.toBeVisible();
+ const submit=page.getByRole('button',{name:'Submit proof',exact:true});await submit.evaluate(el=>{const b=el.getBoundingClientRect();window.scrollBy(0,b.bottom-(innerHeight-8));});
+ const box=await submit.boundingBox();if(!box)throw new Error('Submission control missing');await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+ await expect(page.getByTestId('ios-tabbar')).not.toBeVisible();expect(await submit.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));})).toBe(true);
+ await page.mouse.up();await expect.poll(()=>posts).toBe(1);await expect(page.locator('.proof-camp').getByRole('alert')).toContainText('did not confirm');await expect(note).toHaveValue('Keep this evidence until a matching receipt');
+ await submit.blur();await expect(page.getByTestId('ios-tabbar')).toBeVisible();expect(posts).toBe(1);
+});

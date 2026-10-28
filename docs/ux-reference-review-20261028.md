@@ -39,3 +39,7 @@ Four selected journey regressions failed on the existing deployed components: re
 No changes to API authorization, schema, dependencies, accepted rules, judgment, ledger or settlement. No production account creation, evidence submission or real-money actions. Browser test identities and failure responses are explicitly synthetic. Original isolated-database full business regressions remain required alongside new focused tests.
 
 This review does not prove every peer-app state or every SUM screen is polished. Remaining investigations include unsaved creation drafts when deliberately switching sections, physical-device keyboards and media, weak-network upload recovery, all signed-in journey roles, remaining marketing/legal translations, collection information architecture and consistent 2D/3D art. A passing screenshot is not proof of those workflows.
+
+## A failure exposed by full integration, not the new happy path
+
+The full browser suite exposed a real focus transition defect in the first candidate: an input-only focus selector hid the app dock while typing but restored it on pointer-down into Submit. The trace showed a Submit click at y=816.2, a reappearing dock over the control, and no evidence POST. The original unconfirmed-receipt test is retained unchanged. The dock now stays collapsed for the whole active/focused proof interaction, not just text-input focus; two explicit pointer-down/up counter-tests at 320px/390px require one request, preserved input on an unconfirmed receipt, and navigation restoration after leaving the form.
