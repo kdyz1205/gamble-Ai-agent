@@ -18,6 +18,8 @@ import "./ios-visual-reliability.css";
 import "./sum-language.css";
 import "./sum-client-desktop.css";
 import "./quest-compose-ux.css";
+import "./journey-context.css";
+import "./proof-interface.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",
