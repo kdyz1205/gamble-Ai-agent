@@ -48,6 +48,8 @@ jobs:
 
       - run: npx tsx scripts/test-evidence-receipt.ts
 
+      - run: npx tsx scripts/test-composer-owner.ts
+
       - run: npx prisma migrate deploy
 
       - run: npm run lint
@@ -77,6 +79,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
+          npx playwright test tests/e2e-gambles/voice-lifecycle-regressions.spec.ts tests/e2e-gambles/proof-camera-regressions.spec.ts --workers=1 --output=output/media-lifecycle-tests --reporter=list
           npx playwright test tests/e2e-gambles/session-proof-boundaries.spec.ts --workers=1 --output=output/session-proof-tests --reporter=list
           npx playwright test tests/e2e-gambles/composer-ux-regressions.spec.ts tests/e2e-gambles/navigation-ux-regressions.spec.ts --workers=1 --output=output/composer-nav-tests --reporter=list
           node scripts/qa-composer-navigation.cjs
@@ -100,6 +103,7 @@ jobs:
             output/composer-nav-tests
             output/composer-navigation
             output/session-proof-tests
+            output/media-lifecycle-tests
             output/security
             output/desktop-language
             tests/e2e-gambles/.playwright
