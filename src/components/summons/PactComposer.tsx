@@ -1,4 +1,6 @@
 "use client";
+import {interfaceCopy} from "@/lib/interface-copy";
+import {SumText,useSumLanguage} from "@/components/locale/SumLanguage";
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -48,6 +50,8 @@ function newRequestId(prefix: string) {
 }
 
 export default function PactComposer({ initialPrompt = "", appMode = false }: { initialPrompt?: string; appMode?: boolean } = {}) {
+  const uiLanguage=useSumLanguage();
+  const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const { data: session, status: sessionStatus } = useSession();
   const restoredAuthRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -377,9 +381,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
       <span aria-hidden className="qx-result-spine" />
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-            Quest card
-          </p>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Quest card" zh="挑战卡片"/> </p>
           <h2 className="mt-1.5 max-w-[44rem] text-lg font-semibold leading-[1.12] sm:text-2xl">
             {resultTitle}
           </h2>
@@ -392,7 +394,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             color: draftState.readyToPublish ? "var(--sum-ink)" : "var(--sum-muted)",
           }}
         >
-          {resultStatus}
+          {t(resultStatus)}
         </span>
       </div>
 
@@ -403,11 +405,11 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
       <div className="relative z-10 mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {resultItems.map(([label, value], index) => (
           <div
-            key={label}
+            key={t(label)}
             className="qx-result-metric min-w-0 rounded-[16px] px-3 py-2.5"
             style={{ "--metric-delay": `${index * 70}ms` } as CSSProperties}
           >
-            <span>{label}</span>
+            <span>{t(label)}</span>
             <strong>{value}</strong>
           </div>
         ))}
@@ -422,15 +424,15 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             color: "#B4234A",
           }}
         >
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em]">Safety note</span>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em]"><SumText en="Safety note" zh="安全说明"/></span>
           {resultSafetyNote}
         </div>
       )}
 
       <div className="qx-result-lockstrip relative z-10 mt-3 grid grid-cols-3 gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
-        <span>{draftState.readyToPublish ? "Rules ready" : "Rules to confirm"}</span>
-        <span>Invite after publishing</span>
-        <span>Proof comes next</span>
+        <span>{draftState.readyToPublish ? t("Rules ready") : t("Rules to confirm")}</span>
+        <span><SumText en="Invite after publishing" zh="发布后邀请"/></span>
+        <span><SumText en="Proof comes next" zh="随后提交证据"/></span>
       </div>
 
       <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2">
@@ -443,10 +445,10 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             type="button"
           >
             {isSubmitting
-              ? "Publishing…"
+              ? t("Publishing…")
               : draftState.stake && draftState.stake > 0
-                ? `Publish & escrow ${draftState.stake} credits`
-                : "Publish free quest"}
+                ? (uiLanguage==="zh"?`发布并预留 ${draftState.stake} 积分`:`Publish & escrow ${draftState.stake} credits`)
+                : t("Publish free quest")}
           </button>
         )}
         {marketUrl && (
@@ -454,9 +456,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             className="qx-result-cta inline-flex min-h-11 items-center rounded-full px-5 text-sm font-extrabold"
             href={marketUrl}
             style={{ background: "var(--sum-peach)", color: "var(--sum-ink)" }}
-          >
-            Open Quest
-          </Link>
+          > <SumText en="Open Quest" zh="打开 Quest"/> </Link>
         )}
       </div>
     </section>
@@ -498,12 +498,8 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
           <div className="min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-extrabold leading-tight sm:text-xl" style={{ color: "var(--sum-ink)" }}>
-                  Tell Pico your idea.
-                </h2>
-                <p className="mt-2 max-w-[34rem] text-sm font-medium leading-5" style={{ color: "var(--sum-muted)" }}>
-                  Review every rule before publishing.
-                </p>
+                <h2 className="text-lg font-extrabold leading-tight sm:text-xl" style={{ color: "var(--sum-ink)" }}> <SumText en="Tell Pico your idea." zh="告诉 Pico 你的想法。"/> </h2>
+                <p className="mt-2 max-w-[34rem] text-sm font-medium leading-5" style={{ color: "var(--sum-muted)" }}> <SumText en="Review every rule before publishing." zh="发布前请核对每一条规则。"/> </p>
               </div>
               <span
                 className="sum-sticker-badge shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em]"
@@ -512,34 +508,32 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                   color: "var(--sum-ink)",
                 }}
               >
-                {draftState.readyToPublish ? "Ready" : "Quest draft"}
+                {draftState.readyToPublish ? t("Ready") : t("Quest draft")}
               </span>
             </div>
 
             <div className="quest-idea-strip mt-4">
               {promptChips.map(([label, example]) => (
                 <button
-                  key={label}
+                  key={t(label)}
                   disabled={isSubmitting || isRecording || isTranscribing}
                   onClick={() => { setInput(example); inputRef.current?.focus(); }}
                   type="button"
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
 
             <details className="quest-terms">
               <summary>
-                <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> Quest terms</span>
-                <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{stakeDisplay} · {opponentMode} · {proofWindow}</span>
+                <span className="inline-flex items-center gap-2"><QuestGlyph className="h-4 w-4" kind="rules" /> <SumText en="Quest terms" zh="挑战条款"/></span>
+                <span className="text-[10px] font-bold text-[color:var(--sum-muted)]">{t(stakeDisplay)} · {t(opponentMode)} · {t(proofWindow)}</span>
               </summary>
               <fieldset className="quest-terms__grid min-w-0" disabled={isSubmitting}>
-              <legend className="sr-only">Quest terms</legend>
+              <legend className="sr-only"><SumText en="Quest terms" zh="挑战条款"/></legend>
               <label className="quest-control">
-                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
-                  Credits
-                </span>
+                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Credits" zh="积分"/> </span>
                 <input
                   className="mt-1 w-full bg-transparent text-lg font-semibold outline-none"
                   inputMode="numeric"
@@ -562,15 +556,13 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               </label>
 
               <div className="quest-control">
-                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
-                  Opponent
-                </span>
+                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Opponent" zh="对手"/> </span>
                 <div className="quest-choice-grid">
                   {opponentOptions.map((option) => {
                     const selected = option === opponentMode;
                     return (
                       <button
-                        key={option}
+                        key={t(option)}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setOpponentMode(option);
@@ -587,7 +579,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                         style={{ "--choice-color": "var(--sum-peach)" } as CSSProperties}
                         type="button"
                       >
-                        {option}
+                        {t(option)}
                       </button>
                     );
                   })}
@@ -595,15 +587,13 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               </div>
 
               <div className="quest-control">
-                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}>
-                  Proof window
-                </span>
+                <span className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Proof window" zh="证据提交时限"/> </span>
                 <div className="quest-choice-grid">
                   {Array.from(new Set([...proofOptions, proofWindow])).map((option) => {
                     const selected = option === proofWindow;
                     return (
                       <button
-                        key={option}
+                        key={t(option)}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
                           setProofWindow(option);
@@ -613,7 +603,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                         style={{ "--choice-color": "var(--sum-mint)" } as CSSProperties}
                         type="button"
                       >
-                        {option}
+                        {t(option)}
                       </button>
                     );
                   })}
@@ -626,7 +616,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               <div aria-label="Challenge conversation" aria-live="polite" className="quest-conversation mt-4" ref={conversationRef} role="log" tabIndex={0}>
                 {turns.map((turn, index) => (
                   <div className={`quest-conversation__turn quest-conversation__turn--${turn.role}`} key={index}>
-                    <span className="text-xs font-extrabold">{turn.role === "user" ? "You" : "Pico · AI referee"}</span>
+                    <span className="text-xs font-extrabold">{turn.role === "user" ? t("You") : "Pico · AI referee"}</span>
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{turn.content}</p>
                   </div>
                 ))}
@@ -634,13 +624,13 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
             )}
             <div className="quest-composer__prompt mt-3">
               <textarea
-                aria-label={turns.length ? "Reply to Pico" : "Describe your challenge"}
+                aria-label={turns.length ? t("Reply to Pico") : t("Describe your challenge")}
                 className="qx-challenge-input"
                 data-live={hasInput ? "true" : "false"}
                 disabled={isSubmitting}
                 onChange={handleInput}
                 onInput={handleInput}
-                placeholder={turns.length ? "Answer the question or change a rule…" : placeholderExamples[0]}
+                placeholder={turns.length ? t("Answer the question or change a rule…") : placeholderExamples[0]}
                 ref={inputRef}
                 value={input}
               />
@@ -651,7 +641,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                 disabled={isSubmitting || isTranscribing}
                 onClick={() => { void toggleVoiceInput(); }}
                 style={{ background: isRecording ? "#fecaca" : undefined, color: isRecording ? "#991b1b" : undefined }}
-                title={isRecording ? "Stop recording" : "Speak your challenge"}
+                title={isRecording ? t("Stop recording") : "Speak your challenge"}
                 type="button"
               >
                 <span aria-hidden className="grid h-5 w-5 place-items-center">
@@ -661,7 +651,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                     <QuestGlyph className="h-5 w-5" kind="voice" />
                   )}
                 </span>
-                <span>{isTranscribing ? "..." : isRecording ? "Stop" : "Voice"}</span>
+                <span>{isTranscribing ? "..." : isRecording ? t("Stop") : t("Voice")}</span>
               </button>
               <RitualButton
                 aria-label="Summon"
@@ -672,7 +662,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                 type="submit"
               >
                 <QuestGlyph className="h-4 w-4" kind="spark" />
-                {isSubmitting ? "Thinking…" : turns.length ? "Send reply" : "Summon quest"}
+                {isSubmitting ? "Thinking…" : turns.length ? "Send reply" : t("Summon quest")}
               </RitualButton>
               </div>
             </div>
@@ -687,11 +677,9 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--sum-muted)" }}>
-                      AI Quest Blueprint
-                    </p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--sum-muted)" }}> <SumText en="AI Quest Blueprint" zh="AI 挑战草案"/> </p>
                     <p className="mt-1 max-w-[42rem] truncate text-sm font-extrabold" style={{ color: "var(--sum-ink)" }}>
-                      {hasInput ? challengeTitle : "Type one measurable challenge sentence."}
+                      {hasInput ? challengeTitle : t("Type one measurable challenge sentence.")}
                     </p>
                   </div>
                   <span
@@ -702,14 +690,14 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
                       color: hasInput ? "var(--sum-ink)" : "var(--sum-muted)",
                     }}
                   >
-                    {hasInput ? "Structuring" : "Waiting"}
+                    {hasInput ? "Structuring" : t("Waiting")}
                   </span>
                 </div>
 
                 <div className="quest-blueprint__track">
                   {blueprintItems.map(([label, value]) => (
                     <span
-                      key={label}
+                      key={t(label)}
                       className="qx-blueprint-cell"
                     >
                       <span className="block uppercase tracking-[0.14em]" style={{ color: "var(--sum-muted)" }}>{label}</span>
@@ -738,9 +726,7 @@ export default function PactComposer({ initialPrompt = "", appMode = false }: { 
           </div>
 
           <aside className="hidden">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}>
-              Quest card
-            </p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.28em]" style={{ color: "var(--sum-muted)" }}> <SumText en="Quest card" zh="挑战卡片"/> </p>
             <h3 className="mt-3 text-base font-extrabold leading-tight" style={{ color: "var(--sum-ink)" }}>
               {displayChallengeTitle}
             </h3>
