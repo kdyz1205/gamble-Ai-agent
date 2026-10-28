@@ -80,7 +80,7 @@ test('failed draft request preserves text and can be retried without losing the 
   await page.route('**/api/agent/respond',r=>fail?r.fulfill({status:503,json:{error:'Synthetic recoverable draft outage'}}):r.fulfill({json:reply}));
   await page.goto(BASE+'/app/create');const input=page.locator('[data-testid="pact-composer"] textarea');
   await input.fill('Preserve this retry draft');await page.getByRole('button',{name:'Summon',exact:true}).click();
-  await expect(page.getByRole('alert')).toContainText('Synthetic recoverable draft outage');
+  await expect(page.getByTestId('pact-composer').getByRole('alert')).toContainText('Synthetic recoverable draft outage');
   await expect(input).toHaveValue('Preserve this retry draft');
   fail=false;await page.getByRole('button',{name:'Summon',exact:true}).click();
   await expect(page.getByRole('log')).toContainText(reply.userVisibleReply);

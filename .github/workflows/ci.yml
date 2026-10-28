@@ -69,6 +69,7 @@ jobs:
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
           npx playwright test tests/e2e-gambles/composer-ux-regressions.spec.ts tests/e2e-gambles/navigation-ux-regressions.spec.ts --workers=1 --output=output/composer-nav-tests --reporter=list
+          node scripts/qa-composer-navigation.cjs
           npx playwright test tests/e2e-gambles/desktop-locale-regressions.spec.ts --workers=1 --output=output/desktop-locale-tests --reporter=list
           node scripts/qa-desktop-language.cjs
           npx playwright test tests/e2e-gambles/visual-p1-regressions.spec.ts tests/e2e-gambles/community-p1-regressions.spec.ts --workers=1
@@ -87,6 +88,7 @@ jobs:
             output/ios-full-app
             output/desktop-locale-tests
             output/composer-nav-tests
+            output/composer-navigation
             output/desktop-language
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
