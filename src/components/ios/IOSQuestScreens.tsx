@@ -13,26 +13,16 @@ import IOSQuestJudgment from "./IOSQuestJudgment";
 import EvidenceUploader from "@/components/EvidenceUploader";
 
 export function CreateScreen({seed}: {seed?:string}) {
-  const [chosen,setChosen]=useState(seed==="craft"||seed==="grow"?seed:"move");
-  const [prompt,setPrompt]=useState(()=>questSeeds.find(item=>item.id===seed)?.prompt ?? "");
-  const choose=(id:string)=>{
-    setChosen(id);
-    const found=questSeeds.find(item=>item.id===id);
-    if(found)setPrompt(found.prompt);
-  };
+  const starter=questSeeds.find(item=>item.id===seed);
   return <IosFrame title="Quest Forge" eyebrow="YOUR IDEA · PICO HELPS" back="/app/today">
     <section className="ios-forge-bar" aria-label="Quest creation">
       <IosArt src={visuals.mascotHappy} alt="Pico"/>
       <div><span className="ios-overline"><SumText en="PICO / RULE BUILDER" zh="PICO / 规则助手"/></span><h1><SumText en="New Quest" zh="创建 Quest"/></h1>
         <p><SumText en="Describe a challenge. Review its rules before you invite anyone." zh="描述你想发起的挑战。邀请朋友前请先核对规则。"/></p></div>
     </section>
-    <div className="ios-filters" aria-label="Starting categories">
-      {questSeeds.map(q=><button key={q.id} type="button" aria-pressed={chosen===q.id}
-        className={"ios-chip"+(chosen===q.id?" is-selected":"")}
-        onClick={()=>choose(q.id)}><SumText en={q.label} zh={q.id==="move"?"行动":q.id==="craft"?"创造":"成长"}/></button>)}
-    </div>
     <section className="ios-composer" data-testid="ios-real-quest-composer">
-      <PactComposer key={prompt} initialPrompt={prompt} appMode/>
+      <PactComposer initialPrompt={starter?.prompt??""} initialStarterId={starter?.id}
+        starterChoices={questSeeds.map(q=>({...q,labelZh:q.id==="move"?"行动":q.id==="craft"?"创造":"成长"}))} appMode/>
     </section>
     <IosAction href="/app/quiz" secondary><SumText en="Or start a voice Quiz" zh="或开始双人语音 Quiz"/></IosAction>
     <p className="ios-footer-note"><SumText en="Publishing and any credit use require the existing confirmed Quest workflow. Pico does not publish on your behalf." zh="发布 Quest 或使用积分必须经过现有确认流程。Pico 不会替你发布挑战。"/></p>
