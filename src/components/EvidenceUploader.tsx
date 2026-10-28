@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {useSumLanguage} from "@/components/locale/SumLanguage";
+import {proofInterfaceCopy} from "@/lib/proof-interface-copy";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
@@ -47,6 +49,9 @@ export default function EvidenceUploader(props:Props) {
 }
 
 function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:Props&{ownerId?:string}) {
+  const language=useSumLanguage();
+  const t=(value:string)=>proofInterfaceCopy(language,value);
+  const fieldId=useId();
   const [mode, setMode] = useState<Mode>(null);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -331,17 +336,22 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="proof-camp"
+      className="proof-camp proof-camp--clear"
     >
       <fieldset disabled={submitting} className="min-w-0 border-0 p-0 m-0">
       <div className="proof-camp__header mb-4 flex items-center gap-3">
-        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] border-2 border-white bg-[#eafaff] shadow-[0_5px_0_rgba(23,53,75,0.08)]"><PicoFamiliar className="h-14 w-14" mood="referee" /></span>
+        <span className="proof-camp__mascot"><PicoFamiliar className="proof-camp__pico" mood="referee" /></span>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: PEACH_DARK }}>Proof camp</p>
-          <p className="mt-1 text-xs font-bold" style={{ color: NAVY_DIM }}>Each friend adds their own clear, traceable proof.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: PEACH_DARK }}>{t("Proof camp")}</p>
+          <p className="mt-1 text-xs font-bold" style={{ color: NAVY_DIM }}>{t("Each friend adds their own clear, traceable proof.")}</p>
         </div>
       </div>
 
+      <p className="proof-requirements" id={fieldId+"-requirements"} data-testid="proof-requirements">
+        {t(writtenProof?"Written evidence · describe the verifiable result":requiredMedia==="photo"?
+          "Photo evidence · image file · up to 80 MB":requiredMedia==="video"?
+          "Video evidence · video file · up to 80 MB":"Your own evidence · files up to 80 MB")}
+      </p>
       {/* Mode chooser — only when no content chosen yet */}
       {!mode && !file && !recordedBlob && !writtenProof && (
         <div className="grid grid-cols-2 gap-2 mb-4">
@@ -353,15 +363,15 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
             <button disabled={capturePending} onClick={() => setMode("url")}
               className="w-full px-3 py-2 text-xs font-bold active:scale-95 transition-transform"
               style={{ color: NAVY_DIM, background: "#FFFFFF", border: `1px dashed ${NAVY_FAINT}`, borderRadius: "16px" }}>
-              Or paste a public HTTPS link
+              {t("Or paste a public HTTPS link")}
             </button>
           </div>
         </div>
       )}
 
       {capturePending&&<div role="status" className="my-3 text-sm" data-testid="proof-media-pending">
-        <p>Preparing media capture. You can cancel without saving.</p>
-        <button type="button" aria-label="Cancel media capture" className="mt-2 min-h-11 px-4 font-bold underline" onClick={()=>cancelCapture()}>Cancel capture</button>
+        <p>{t("Preparing media capture. You can cancel without saving.")}</p>
+        <button type="button" aria-label={t("Cancel media capture")} className="mt-2 min-h-11 px-4 font-bold underline" onClick={()=>cancelCapture()}>{t("Cancel capture")}</button>
       </div>}
 
       {/* Live camera preview while recording */}
@@ -375,19 +385,19 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
               <motion.button disabled={capturePending} onClick={startRecording} whileTap={{ scale: 0.95 }}
                 className="flex-1 py-3 text-sm font-extrabold"
                 style={{ color: "#FFFFFF", background: "#EF4444", borderRadius: "9999px", boxShadow: "0 4px 14px 0 rgba(239,68,68,0.40)" }}>
-                🔴 Start recording
+                <span aria-hidden="true">● </span>{t("Start recording")}
               </motion.button>
             ) : (
               <motion.button onClick={stopRecording} whileTap={{ scale: 0.95 }}
                 className="flex-1 py-3 text-sm font-extrabold"
                 style={{ color: NAVY, background: "#FFFFFF", border: `2px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
-                ⏹ Stop &amp; save
+                <span aria-hidden="true">■ </span>{t("Stop & save")}
               </motion.button>
             )}
             <button onClick={()=>cancelCapture()}
               className="px-4 py-2 text-xs font-bold"
               style={{ color: NAVY_DIM, background: "#FFFFFF", border: `1px solid ${NAVY_FAINT}`, borderRadius: "9999px" }}>
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </div>
@@ -400,11 +410,11 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
             className="w-full rounded-2xl" style={{ background: "#000", maxHeight: 300 }} />
           <p className="text-xs font-semibold mt-2 px-3 py-1.5 inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}>
-            ✅ Recorded {recordedDuration.toFixed(1)}s ({Math.round(recordedBlob.size / 1024)} KB)
+            {language==="zh"?"已录制 ":"Recorded "}{recordedDuration.toFixed(1)}{language==="zh"?" 秒":"s"} ({Math.round(recordedBlob.size / 1024)} KB)
           </p>
           <button onClick={() => { setRecordedBlob(null); setRecordedDuration(0); setMode(null); }}
             className="ml-2 text-xs font-bold underline" style={{ color: NAVY_DIM }}>
-            Re-record
+            {t("Re-record")}
           </button>
         </div>
       )}
@@ -415,7 +425,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
           {file.type.startsWith("video") ? (
             <video controls src={previewUrl} className="w-full rounded-2xl" style={{ background: "#000", maxHeight: 300 }} />
           ) : (
-            <img src={previewUrl} alt="proof preview" className="w-full rounded-2xl" style={{ maxHeight: 300, objectFit: "cover" }} />
+            <img src={previewUrl} alt={t("proof preview")} className="w-full rounded-2xl" style={{ maxHeight: 300, objectFit: "cover" }} />
           )}
           <p className="text-xs font-semibold mt-2 px-3 py-1.5 inline-block"
             style={{ color: MINT_TEXT, background: MINT, borderRadius: "9999px" }}>
@@ -423,7 +433,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
           </p>
           <button onClick={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setFile(null); setPreviewUrl(null); setMode(null); }}
             className="ml-2 text-xs font-bold underline" style={{ color: NAVY_DIM }}>
-            Remove
+            {t("Remove")}
           </button>
         </div>
       )}
@@ -431,7 +441,8 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       {/* URL input */}
       {mode === "url" && (
         <div className="mb-3">
-          <input
+          <label className="proof-field-label" htmlFor={fieldId+"-url"}>{t("Public evidence link")}</label>
+          <input id={fieldId+"-url"} aria-describedby={fieldId+"-privacy"}
             type="url"
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
@@ -440,25 +451,30 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
             style={{ color: NAVY, border: `1.5px solid ${NAVY_FAINT}`, borderRadius: "16px" }}
           />
           <button onClick={() => setMode(null)} className="mt-2 text-xs font-bold" style={{ color: NAVY_DIM }}>
-            ← Back to upload options
+            <span aria-hidden="true">← </span>{t("Back to upload options")}
           </button>
         </div>
       )}
 
-      {/* Description — always visible */}
-      <textarea
+      {(file||recordedBlob)&&<p className="proof-helper" role="status">{t("Saved to this page only; submit below to send your proof.")}</p>}
+      {/* Persistent labels remain visible after text entry, unlike placeholders. */}
+      <label className="proof-field-label" htmlFor={fieldId+"-description"}>{t("Evidence description")}</label>
+      <textarea id={fieldId+"-description"} aria-describedby={fieldId+"-privacy"}
         value={description}
         onChange={e => setDescription(e.target.value)}
-        placeholder="Describe what you did. For a friend match: identify each player by shirt color or starting court side and upload one continuous recording. No scoreboard needed; add your remembered result if you have one."
+        placeholder={t("Describe what you did. What can the other player verify?")}
         rows={3}
         className="w-full px-4 py-3 text-sm font-medium bg-white focus:outline-none resize-y"
         style={{ color: NAVY, border: `1.5px solid ${NAVY_FAINT}`, borderRadius: "16px", minHeight: 80 }}
       />
 
+      <p id={fieldId+"-privacy"} className="proof-helper">{t("Keep the original agreed rules. Do not include passwords or private access links.")}</p>
       {/* Upload progress */}
       {uploading && (
         <div className="mt-3">
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: NAVY_FAINT }}>
+          <div role="progressbar" aria-label={t("Upload progress")} aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={Math.max(0,Math.min(100,uploadProgress||0))}
+            className="h-2 rounded-full overflow-hidden" style={{ background: NAVY_FAINT }}>
             <motion.div
               className="h-full"
               style={{ background: PEACH }}
@@ -467,7 +483,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
               transition={{ type: "tween" }}
             />
           </div>
-          <p className="text-xs font-semibold mt-1" style={{ color: PEACH_DARK }}>Uploading… {uploadProgress}%</p>
+          <p className="text-xs font-semibold mt-1" style={{ color: PEACH_DARK }}>{t("Uploading…")} {uploadProgress}%</p>
         </div>
       )}
 
@@ -479,7 +495,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
             role="alert" className="mt-3 px-3 py-2 text-xs font-bold"
             style={{ background: ROSE_BG, color: ROSE_TEXT, borderRadius: "12px" }}
           >
-            ⚠️ {error}
+            {t(error)}
           </motion.div>
         )}
       </AnimatePresence>
@@ -499,7 +515,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
           boxShadow: submitting || !hasContent ? "none" : undefined,
         }}
       >
-        {submitting ? (uploading ? "Uploading..." : "Submitting...") : "Submit proof"}
+        {t(submitting ? (uploading ? "Uploading..." : "Submitting...") : "Submit proof")}
       </motion.button>
       </fieldset>
     </motion.div>
@@ -509,6 +525,8 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
 function ActionTile({ kind, label, hint, tint, onClick, disabled=false }: {
   kind: "proof" | "spark" | "receipt"; label: string; hint: string; tint: string; onClick: () => void; disabled?:boolean;
 }) {
+  const language=useSumLanguage();
+  const t=(value:string)=>proofInterfaceCopy(language,value);
   return (
     <motion.button
       onClick={onClick} disabled={disabled}
@@ -523,8 +541,8 @@ function ActionTile({ kind, label, hint, tint, onClick, disabled=false }: {
       }}
     >
       <span className="mb-2 grid h-9 w-9 place-items-center rounded-[1rem] border-2 border-white bg-white/70 text-[color:var(--sum-ink)] shadow-[0_4px_0_rgba(23,53,75,0.08)]"><QuestGlyph className="h-4 w-4" kind={kind} /></span>
-      <p className="text-sm font-bold" style={{ color: NAVY }}>{label}</p>
-      <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>{hint}</p>
+      <p className="text-sm font-bold" style={{ color: NAVY }}>{t(label)}</p>
+      <p className="text-[11px] font-medium" style={{ color: NAVY_DIM }}>{t(hint)}</p>
     </motion.button>
   );
 }

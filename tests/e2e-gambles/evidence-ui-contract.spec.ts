@@ -140,7 +140,7 @@ test("agreed proof controls, real camera binding, failed transfer safety and dea
       return video.srcObject instanceof MediaStream && video.videoWidth > 0;
     }), { timeout: 15_000 }).toBe(true);
     await live.evaluate(el => { (window as Window & { qaTracks?: MediaStreamTrack[] }).qaTracks = ((el as HTMLVideoElement).srcObject as MediaStream).getTracks(); });
-    await press(page, "🔴 Start recording"); await page.waitForTimeout(700); await press(page, "⏹ Stop & save");
+    await press(page, "Start recording"); await page.waitForTimeout(700); await press(page, "Stop & save");
     await expect(page.locator('video[src^="blob:"]')).toBeVisible();
     await expect.poll(() => page.evaluate(() => (window as Window & { qaTracks?: MediaStreamTrack[] }).qaTracks?.every(track => track.readyState === "ended"))).toBe(true);
 
