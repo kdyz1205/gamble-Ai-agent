@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { upload as blobUpload } from "@vercel/blob/client";
 import * as api from "@/lib/api-client";
 import PicoFamiliar from "@/components/familiar/PicoFamiliar";
 import QuestGlyph from "@/components/world/QuestGlyph";
-import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
+import { isConfirmedEvidenceSubmission, mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
 
 // Summoner.world proof palette.
 const NAVY = "#1E293B";
@@ -39,7 +40,13 @@ function evidenceBlobPathname(challengeId: string, filename: string): string {
   return `evidence/${challengeId}/${Date.now()}-${safe}`;
 }
 
-export default function EvidenceUploader({ challengeId, evidenceType, onSubmitted }: Props) {
+export default function EvidenceUploader(props:Props) {
+  const {data:session}=useSession();
+  return <EvidenceUploaderContent key={JSON.stringify([props.challengeId,props.evidenceType,session?.user?.id??null])}
+    {...props} ownerId={session?.user?.id}/>;
+}
+
+function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:Props&{ownerId?:string}) {
   const [mode, setMode] = useState<Mode>(null);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -62,6 +69,19 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordStartRef = useRef<number>(0);
+  const mounted=useRef(true);
+  const saveOwner=useRef(false);
+  useEffect(()=>{
+    mounted.current=true;
+    return()=>{
+      mounted.current=false;
+      const recorder=mediaRecorderRef.current;
+      if(recorder&&recorder.state!=="inactive"){
+        recorder.onstop=null;recorder.ondataavailable=null;
+        try{recorder.stop();}catch{}
+      }
+    };
+  },[]);
 
   const resetAll = useCallback(() => {
     setFile(null);
@@ -101,7 +121,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     input.accept = kind === "video" ? "video/*" : "image/*";
     input.onchange = () => {
       const f = input.files?.[0];
-      if (!f) return;
+      if (!f||!mounted.current) return;
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(f);
       setPreviewUrl(URL.createObjectURL(f));
@@ -114,6 +134,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     setError("");
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
+      if(!mounted.current){s.getTracks().forEach(track=>track.stop());return;}
       setStream(s);
       setMode("record");
     } catch (e) {
@@ -164,6 +185,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       captureStream = s;
+      if(!mounted.current)return;
       // Wait a moment for focus, then snap
       const video = document.createElement("video");
       video.srcObject = s;
@@ -175,7 +197,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       canvas.getContext("2d")?.drawImage(video, 0, 0);
       s.getTracks().forEach(t => t.stop());
       canvas.toBlob((b) => {
-        if (!b) return;
+        if (!b||!mounted.current) return;
         const f = new File([b], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         setFile(f);
@@ -196,6 +218,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
   };
 
   const submit = async () => {
+    if(saveOwner.current||!mounted.current)return;
     const f = getFileToUpload();
     const trimmedDescription = description.trim();
     const trimmedUrl = urlInput.trim();
@@ -204,6 +227,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
     if (invalid) { setError(invalid); return; }
     if (f && f.size > 80 * 1024 * 1024) { setError("Proof files must be 80 MB or smaller. Trim the clip before uploading."); return; }
 
+    saveOwner.current=true;
     setSubmitting(true);
     setError("");
     try {
@@ -224,10 +248,12 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             multipart: f.size > 4 * 1024 * 1024,
             onUploadProgress: (p) => setUploadProgress(Math.round((p.loaded / p.total) * 100)),
           });
+          if(!mounted.current)return;
           finalUrl = uploaded.url;
           if (f.type.startsWith("video")) finalType = "video";
           else if (f.type.startsWith("image")) finalType = "photo";
         } catch (e) {
+          if(!mounted.current)return;
           // Fallback: try S3 presign if Blob isn't configured
           try {
             const pres = await fetch(`/api/uploads/evidence-presign`, {
@@ -236,8 +262,10 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
               body: JSON.stringify({ challengeId, contentType: f.type || "application/octet-stream", filename: f.name }),
             });
             const presJson = await pres.json();
+            if(!mounted.current)return;
             if (pres.ok && presJson?.uploadUrl && presJson?.publicUrl) {
               const uploaded = await fetch(presJson.uploadUrl, { method: "PUT", body: f, headers: { "Content-Type": f.type } });
+              if(!mounted.current)return;
               if (!uploaded.ok) throw new Error(`Upload failed (${uploaded.status}). Your proof was not submitted.`);
               finalUrl = presJson.publicUrl;
             } else {
@@ -252,23 +280,28 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
             );
           }
         } finally {
-          setUploading(false);
+          if(mounted.current)setUploading(false);
         }
       }
 
-      await api.submitEvidence(challengeId, {
+      if(!mounted.current)return;
+      const receipt=await api.submitEvidence(challengeId, {
         type: finalType,
         url: finalUrl,
         description: trimmedDescription || (f ? `Uploaded: ${f.name}` : "Proof submitted"),
       });
+      if(!mounted.current)return;
+      if(!isConfirmedEvidenceSubmission(receipt,challengeId,ownerId))throw new Error(
+        "The server did not confirm this proof for the current account and Quest. Your input was kept.");
       resetAll();
       setMode(null);
       setDescription("");
       await onSubmitted();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not submit proof");
+      if(mounted.current)setError(e instanceof Error ? e.message : "Could not submit proof");
     } finally {
-      setSubmitting(false);
+      saveOwner.current=false;
+      if(mounted.current)setSubmitting(false);
     }
   };
 
@@ -279,6 +312,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="proof-camp"
     >
+      <fieldset disabled={submitting} className="min-w-0 border-0 p-0 m-0">
       <div className="proof-camp__header mb-4 flex items-center gap-3">
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] border-2 border-white bg-[#eafaff] shadow-[0_5px_0_rgba(23,53,75,0.08)]"><PicoFamiliar className="h-14 w-14" mood="referee" /></span>
         <div>
@@ -416,7 +450,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="mt-3 px-3 py-2 text-xs font-bold"
+            role="alert" className="mt-3 px-3 py-2 text-xs font-bold"
             style={{ background: ROSE_BG, color: ROSE_TEXT, borderRadius: "12px" }}
           >
             ⚠️ {error}
@@ -441,6 +475,7 @@ export default function EvidenceUploader({ challengeId, evidenceType, onSubmitte
       >
         {submitting ? (uploading ? "Uploading..." : "Submitting...") : "Submit proof"}
       </motion.button>
+      </fieldset>
     </motion.div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
+import {isConfirmedEvidenceSubmission} from "@/lib/evidence-client";
 import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import {useSession} from "next-auth/react";
 import PactComposer from "@/components/summons/PactComposer";
@@ -111,6 +112,11 @@ export function QuestDetailScreen({id}: {id?:string}) {
 }
 
 export function EvidenceAddScreen({id}:{id?:string}) {
+  const {data:session}=useSession();
+  return <EvidenceAddContent key={JSON.stringify([id,session?.user?.id??null])} id={id}/>;
+}
+
+function EvidenceAddContent({id}:{id?:string}) {
   const language=useSumLanguage();
   const {quest,loading,error}=useQuest(id);
   const {data:session}=useSession();
@@ -118,6 +124,9 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   const [busy,setBusy]=useState(false);
   const [submitError,setSubmitError]=useState("");
   const [success,setSuccess]=useState(false);
+  const saving=useRef(false);
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const accepted=Boolean(quest&&session?.user?.id&&quest.participants.some(
     p=>p.user.id===session.user.id&&p.status==="accepted"
   ));
@@ -125,13 +134,17 @@ export function EvidenceAddScreen({id}:{id?:string}) {
   const textAllowed=policy==="text"||policy==="self_report";
   const alreadySubmitted=Boolean(quest?.evidence?.some(p=>p.userId===session?.user?.id));
   const save=async()=>{
-    if(!quest||!accepted||!textAllowed||!note.trim()||busy)return;
-    setBusy(true);setSubmitError("");
+    if(!quest||quest.status!=="live"||!accepted||!textAllowed||!note.trim()||saving.current||!mounted.current)return;
+    saving.current=true;setBusy(true);setSubmitError("");
     try{
-      await api.submitEvidence(quest.id,{type:"text",description:note.trim()});
+      const result=await api.submitEvidence(quest.id,{type:"text",description:note.trim()});
+      if(!mounted.current)return;
+      if(!isConfirmedEvidenceSubmission(result,quest.id,session?.user?.id))throw new Error(translated(language,
+        "The server did not confirm this proof for the current account and Quest. Your input was kept.",
+        "服务器未确认这份证据属于当前账号和 Quest，输入已保留。"));
       setSuccess(true);
-    }catch(e){setSubmitError(e instanceof Error?e.message:translated(language,"Evidence was not saved.","证据未保存成功。"));}
-    finally{setBusy(false);}
+    }catch(e){if(mounted.current)setSubmitError(e instanceof Error?e.message:translated(language,"Evidence was not saved.","证据未保存成功。"));}
+    finally{saving.current=false;if(mounted.current)setBusy(false);}
   };
   return <IosFrame title="Add Evidence" eyebrow="THE PROOF CHAPTER" back={id?"/app/quest?id="+encodeURIComponent(id):"/app/today"}>
     {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
@@ -151,7 +164,7 @@ export function EvidenceAddScreen({id}:{id?:string}) {
         <section className="ios-proof-form">
           <h2><SumText en="What happened?" zh="发生了什么？"/></h2><p><SumText en="Describe the real attempt and keep the agreed proof requirements in mind." zh="请如实描述这次行动，并遵守双方事先确认的证据要求。"/></p>
           {textAllowed?<><label htmlFor="ios-proof-note"><SumText en="Your written evidence" zh="书面证据"/></label>
-            <textarea id="ios-proof-note" value={note} onChange={e=>setNote(e.target.value)}
+            <textarea id="ios-proof-note" disabled={busy} value={note} onChange={e=>setNote(e.target.value)}
               placeholder={translated(language,"What did you do? What can the other player verify?","你做了什么？另一位玩家可以核实哪些内容？")}/>
             {submitError&&<p role="alert" className="ios-message ios-message--error">{submitError}</p>}
             <button className="ios-primary" type="button" disabled={!note.trim()||busy} onClick={()=>void save()}>

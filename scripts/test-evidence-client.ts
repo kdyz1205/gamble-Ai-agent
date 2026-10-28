@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { SessionProvider } from "next-auth/react";
 import VerdictReviewControls from "../src/components/VerdictReviewControls";
 import type { ChallengeData } from "../src/lib/api-client";
 import EvidenceUploader from "../src/components/EvidenceUploader";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "../src/lib/evidence-client";
 
 for (const policy of ["photo", "video", "text", "self_report"]) {
-  const html = renderToStaticMarkup(createElement(EvidenceUploader, { challengeId: "contract-test", evidenceType: policy, onSubmitted: () => {} }));
+  const html = renderToStaticMarkup(createElement(SessionProvider, { session: null, children:
+    createElement(EvidenceUploader, { challengeId: "contract-test", evidenceType: policy, onSubmitted: () => {} }),
+  }));
   assert.equal(html.includes("Upload photo"), policy === "photo");
   assert.equal(html.includes("Take photo"), policy === "photo");
   assert.equal(html.includes("Upload video"), policy === "video");
