@@ -28,6 +28,8 @@ for (const width of [900, 1280, 1440]) {
     expect(layout.app).toBeGreaterThan(width === 900 ? 760 : 1000);
     expect(layout.navRight).toBeLessThanOrEqual(layout.mainLeft + 1);
     expect(layout.mainWidth).toBeGreaterThan(500);
+    expect(await page.locator('.ios-tab').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+    expect(await page.locator('.ios-command-mode small').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(12);
     await expect(page.getByTestId("ios-tabbar")).toHaveCount(1);
     await expect(page.getByTestId("ios-tabbar").getByRole("link")).toHaveCount(5);
     if (width >= 1280) {
@@ -101,12 +103,15 @@ test('language changes synchronize existing tabs without resetting a local story
     await first.goto(BASE + '/app/story');
     await first.getByTestId('sum-lang-en').click();
     await second.goto(BASE + '/app/settings');
+    await first.bringToFront();
     await first.getByTestId('pico-story-start').click();
     await expect(first.getByTestId('pico-story')).toHaveAttribute('data-phase','ready',{timeout:20000});
+    await second.bringToFront();
     await second.getByTestId('sum-lang-zh').click();
     await expect(first.getByTestId('sum-lang-zh')).toHaveAttribute('aria-pressed','true');
     await expect(first.getByTestId('pico-story')).toHaveAttribute('data-phase','ready');
     await expect(first.getByTestId('pico-story-cast')).toContainText('释放星辉');
+    await first.bringToFront();
     await first.getByTestId('pico-story-cast').click();
     await expect(first.getByTestId('pico-story')).toHaveAttribute('data-phase','complete',{timeout:20000});
   } finally { await first.close(); await second.close(); }

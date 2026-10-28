@@ -71,6 +71,32 @@
   .ios-app[data-product-surface="web-app"][data-view="profile"] :is(.ios-menu,.ios-auth-invitation) { grid-column:2; }
   .ios-app[data-product-surface="web-app"][data-view="profile"] .ios-footer-note { grid-column:1/-1; }
 }
+/* A wider surface needs readable desktop type, not enlarged empty cards around
+ * the handheld 9–11px labels. Keep the already-audited contrast colors. */
+@media(min-width:900px) {
+  .ios-app[data-product-surface="web-app"] .ios-header__title strong { font-size:18px; }
+  .ios-app[data-product-surface="web-app"] .ios-header__title small { font-size:10px; }
+  .ios-app[data-product-surface="web-app"] .ios-tab { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] :is(.ios-helper,.ios-footer-note,.ios-pico-story-entry__note) { font-size:12px; line-height:1.7; }
+  .ios-app[data-product-surface="web-app"] .ios-command-hud__content p:not(.ios-overline) { font-size:14px; line-height:1.65; max-width:42ch; }
+  .ios-app[data-product-surface="web-app"] .ios-command-mode strong { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] .ios-command-mode small { font-size:12px; line-height:1.6; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry h2 { font-size:26px; line-height:1.25; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry p { font-size:14px; line-height:1.65; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry__body>a { font-size:13px; padding:12px 17px; }
+  .ios-app[data-product-surface="web-app"] .ios-command-auth strong { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] .ios-command-auth p { font-size:13px; }
+  .ios-app[data-product-surface="web-app"] .ios-settings-group { padding:22px; }
+  .ios-app[data-product-surface="web-app"] .ios-settings-group h2 { font-size:18px; }
+  .ios-app[data-product-surface="web-app"] .ios-setting { min-height:58px; }
+  .ios-app[data-product-surface="web-app"] .ios-setting span { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] .ios-setting select { min-height:42px; font-size:13px; }
+  .ios-app[data-product-surface="web-app"] .ios-setting small { font-size:12px; }
+  .ios-app[data-product-surface="web-app"] .ios-menu__row strong { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] :is(.ios-action,.ios-primary,.ios-secondary-button) { font-size:14px; }
+  .ios-app[data-product-surface="web-app"] .ios-quest-card__body strong { font-size:15px; }
+  .ios-app[data-product-surface="web-app"] .ios-quest-card__body small { font-size:12px; }
+}
 @media(min-width:900px) and (max-width:1100px) {
   .ios-app[data-product-surface="web-app"] .ios-command-modes { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .ios-app[data-product-surface="web-app"] :is(.ios-badge-grid,.ios-gallery) { grid-template-columns:repeat(2,minmax(0,1fr)); }
