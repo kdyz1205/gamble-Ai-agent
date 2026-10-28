@@ -36,6 +36,7 @@ export function DiscoverScreen() {
   const {category:filter,query:search}=discoverySelection(params);
   const returnTo=discoveryHref(filter,search);
   const restored=useRef(false);
+  const searchInput=useRef<HTMLInputElement>(null);
   function changeFilters(category:string,query:string){
     window.history.replaceState(null,"",discoveryHref(category,query));
   }
@@ -60,7 +61,7 @@ export function DiscoverScreen() {
     </section>
     <label className="ios-search"><IosIcon name="discover" size={18}/>
       <span className="sr-only">Search Quests</span>
-      <input aria-label={translated(language,"Search Quests","搜索 Quest")} placeholder={translated(language,"Search Quests…","搜索 Quest…")} value={search} maxLength={160} onChange={e=>changeFilters(filter,e.target.value)}/>
+      <input aria-label={translated(language,"Search Quests","搜索 Quest")} placeholder={translated(language,"Search Quests…","搜索 Quest…")} ref={searchInput} value={search} maxLength={160} onChange={e=>changeFilters(filter,e.target.value)}/>
     </label>
     <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>changeFilters(item.id,search)}>{translated(language,item.label,item.zh)}</button>)}</div>
     <div className="ios-section__heading"><div><small><SumText en="REAL OPEN CHALLENGES" zh="真实开放挑战"/></small><h2><SumText en="Open matches" zh="开放中的对决"/></h2></div><button className="ios-text-action" type="button" onClick={refresh}><SumText en="Refresh" zh="刷新"/></button></div>
@@ -73,7 +74,7 @@ export function DiscoverScreen() {
       visible.length===0 ? (search.trim()||filter!=="all"?<section className="ios-discovery-recovery" data-testid="discovery-no-matches">
         <IosEmpty image={visuals.move} heading={translated(language,"No matching Quests.","没有匹配的 Quest。")}
           description={translated(language,"These filters do not match the public Quests currently loaded. Clear them or try another search.","当前筛选未匹配到已加载的公开 Quest。可以清除筛选或更换关键词。")}/>
-        <button type="button" className="ios-secondary-button" onClick={()=>changeFilters("all","")}><SumText en="Clear filters" zh="清除筛选"/></button>
+        <button type="button" className="ios-secondary-button" onClick={()=>{changeFilters("all","");searchInput.current?.focus();}}><SumText en="Clear filters" zh="清除筛选"/></button>
       </section>:<IosEmpty image={visuals.move} heading={translated(language,"A new Quest could start with you.","下一个 Quest，也许就由你开启。")}
         description={translated(language,"No public open Quests right now. Be the one who starts something.","暂时没有开放的 Quest，来发起第一个吧。")}
         action={translated(language,"Create a Quest","创建 Quest")} href="/app/create"/>) :

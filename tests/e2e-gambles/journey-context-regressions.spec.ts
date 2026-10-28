@@ -44,3 +44,9 @@ test('a transient detail read can be retried without discarding its originating 
  await page.goto(BASE+'/app/quest?id='+ID+'&returnTo='+encodeURIComponent('/app/discover?category=move&q=badminton'));
  await expect(page.getByText('SYNTHETIC_DETAIL_UNAVAILABLE',{exact:true})).toBeVisible();fail=false;await page.getByRole('button',{name:'Try again',exact:true}).click();await expect(page.getByRole('heading',{name:challenge.title,exact:true})).toBeVisible();await page.getByRole('link',{name:'Back',exact:true}).click();await expect(page.getByRole('textbox',{name:'Search Quests',exact:true})).toHaveValue('badminton');
 });
+
+test('public invitation sharing excludes the viewer search and return context',async({page})=>{
+ await setup(page);await page.addInitScript(()=>{Object.defineProperty(navigator,'share',{configurable:true,value:undefined});Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as Window&{__shared?:string}).__shared=value;}}});});
+ await filter(page);await page.getByTestId('ios-quest-card').click();await page.getByRole('button',{name:'Share invitation',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as Window&{__shared?:string}).__shared)).toBe(BASE+'/app/join?id='+ID);
+});

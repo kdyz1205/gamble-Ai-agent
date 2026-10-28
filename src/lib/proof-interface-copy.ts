@@ -15,7 +15,7 @@ const copy:Record<string,string>={
  'Video evidence · video file · up to 80 MB':'视频证据 · 视频文件 · 不超过 80 MB',
  'Your own evidence · files up to 80 MB':'你自己的证据 · 文件不超过 80 MB',
  'Written evidence · describe the verifiable result':'书面证据 · 描述可核实的结果',
- 'Saved to this page only; submit below to send your proof.':'当前仅保留在此页面；点击下方提交后才会发送证据。',
+ 'Preview only — not submitted. Submit below to send your proof.':'仅供预览，尚未提交。点击下方按钮发送证据。',
  'Proof files must be 80 MB or smaller. Trim the clip before uploading.':'证据文件不能超过 80 MB，请剪短视频后再上传。',
  'Use a public HTTPS link to the proof file.':'请使用不含账号密码的公开 HTTPS 证据链接。',
  'Use a valid public HTTPS link to the proof file.':'请输入有效的公开 HTTPS 证据链接。',

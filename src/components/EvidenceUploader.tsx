@@ -456,7 +456,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
         </div>
       )}
 
-      {(file||recordedBlob)&&<p className="proof-helper" role="status">{t("Saved to this page only; submit below to send your proof.")}</p>}
+      {(file||recordedBlob)&&<p className="proof-helper" role="status">{t("Preview only — not submitted. Submit below to send your proof.")}</p>}
       {/* Persistent labels remain visible after text entry, unlike placeholders. */}
       <label className="proof-field-label" htmlFor={fieldId+"-description"}>{t("Evidence description")}</label>
       <textarea id={fieldId+"-description"} aria-describedby={fieldId+"-privacy"}

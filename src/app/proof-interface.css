@@ -29,3 +29,8 @@
  .ios-app[data-view="evidence-add"]:has(.ios-proof-form :is(textarea,input):focus) .ios-tabbar{display:none;}
  .ios-app[data-view="evidence-add"]:has(.ios-proof-form :is(textarea,input):focus) .ios-main{padding-bottom:36px;}
 }
+
+.ios-app .ios-proof-help{border-top:1px solid #d8cde9;padding-top:4px;color:#615574;font-size:12px;line-height:1.7;}
+.ios-app .ios-proof-help summary{min-height:44px;padding:11px 4px;cursor:pointer;font-weight:700;}
+.ios-app .ios-proof-help p{padding:0 4px 10px;}
+.ios-app--night .ios-proof-help{color:#ddd3eb;border-color:#857596;}

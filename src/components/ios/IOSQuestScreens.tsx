@@ -175,12 +175,15 @@ function EvidenceAddContent({id,returnTo}:{id?:string;returnTo?:string}) {
             </button></>:
             ["photo","video"].includes(policy) ?
               <div className="ios-app-media-proof" data-testid="ios-app-media-uploader">
-                <p className="ios-message"><SumText en="Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules." zh="请上传属于自己的、符合规则的视频或照片。上传服务会核查文件规则和参与权限；审核仍然依据双方认可的 Quest 规则。"/></p>
                 <EvidenceUploader
                   challengeId={quest.id}
                   evidenceType={quest.evidenceType}
                   onSubmitted={() => setSuccess(true)}
                 />
+                <details className="ios-proof-help" data-testid="proof-review-help">
+                  <summary><SumText en="How proof is reviewed" zh="证据如何审核"/></summary>
+                <p className="ios-message"><SumText en="Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules." zh="请上传属于自己的、符合规则的视频或照片。上传服务会核查文件规则和参与权限；审核仍然依据双方认可的 Quest 规则。"/></p>
+                </details>
               </div> :
               <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>
                 <SumText en="Open policy-specific proof capture" zh="打开规定的证据采集流程"/>
