@@ -126,6 +126,7 @@ test('switching interface language preserves the creation draft and login form f
   await page.getByTestId('sum-lang-zh').click();
   await expect(page.getByRole('textbox',{name:'描述你的挑战',exact:true})).toHaveValue('My original rules 原始规则 must remain unchanged.');
   await expect(page.getByRole('heading',{name:'告诉 Pico 你的想法。'})).toBeVisible();
+  await page.getByTestId('composer-starter-ideas').locator('summary').click();
   await expect(page.locator('.ios-filters').getByRole('button',{name:'行动',exact:true})).toBeVisible();
   await expect(page.getByRole('textbox',{name:'描述你的挑战',exact:true})).toHaveAttribute('placeholder','先赢三次羽毛球回合……');
   await expect(page.getByTestId('challenge-blueprint-preview')).toContainText('免费加入');
