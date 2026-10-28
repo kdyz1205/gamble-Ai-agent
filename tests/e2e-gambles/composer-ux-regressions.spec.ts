@@ -14,7 +14,7 @@ async function prepare(page:Page){
 }
 async function ideas(page:Page){
   const details=page.getByTestId('composer-starter-ideas');
-  if(await details.count() && !(await details.getAttribute('open')))await details.locator('summary').click();
+  if(await details.count() && (await details.getAttribute('open'))===null)await details.locator('summary').click();
 }
 for(const width of [320,390])test(`the first draft action is unobscured at ${width}px`,async({page})=>{
   await prepare(page);await page.setViewportSize({width,height:width===320?667:844});
