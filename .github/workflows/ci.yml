@@ -39,6 +39,15 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify reviewed dependency graph and runtime compatibility
+        run: |
+          node scripts/test-dependency-policy.cjs
+          node scripts/test-dependency-runtime.cjs
+          mkdir -p output/security
+          npm audit --audit-level=low --json > output/security/dependency-audit.json
+
+      - run: npx tsx scripts/test-evidence-receipt.ts
+
       - run: npx prisma migrate deploy
 
       - run: npm run lint
@@ -68,6 +77,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
+          npx playwright test tests/e2e-gambles/session-proof-boundaries.spec.ts --workers=1 --output=output/session-proof-tests --reporter=list
           npx playwright test tests/e2e-gambles/composer-ux-regressions.spec.ts tests/e2e-gambles/navigation-ux-regressions.spec.ts --workers=1 --output=output/composer-nav-tests --reporter=list
           node scripts/qa-composer-navigation.cjs
           npx playwright test tests/e2e-gambles/desktop-locale-regressions.spec.ts --workers=1 --output=output/desktop-locale-tests --reporter=list
@@ -89,6 +99,8 @@ jobs:
             output/desktop-locale-tests
             output/composer-nav-tests
             output/composer-navigation
+            output/session-proof-tests
+            output/security
             output/desktop-language
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
