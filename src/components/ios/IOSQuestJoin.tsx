@@ -78,7 +78,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
       </section> :
     <section className="ios-quest-invite" data-testid="ios-quest-invite">
       <div className="ios-quest-invite__eyebrow"><IosIcon name="people" size={20}/>
-        <span>PLAYER INVITATION / {quest.visibility === "invite_only" ? "PRIVATE" : "OPEN"}</span>
+        <span>PLAYER INVITATION / {quest.visibility === "invite_only" ? "PRIVATE" : "PUBLIC"}</span>
       </div>
       <h1>{quest.title}</h1>
       {quest.description && <p>{quest.description}</p>}
@@ -86,6 +86,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
         <div><span>Host</span><strong>{quest.creator?.username || "Summoner"}</strong></div>
         <div><span>Entry</span><strong>{stake > 0 ? stake + " platform credits" : "Free · 0 credits"}</strong></div>
         <div><span>Proof</span><strong>{quest.evidenceType.replace(/_/g, " ")}</strong></div>
+        <div data-testid="ios-invitation-state"><span>Quest status</span><strong>{quest.status.replace(/_/g, " ")}</strong></div>
         <div><span>Deadline</span><strong>{quest.deadline ? new Date(quest.deadline).toLocaleString() : "Not specified"}</strong></div>
       </div>
       <div className="ios-quest-invite__rules">

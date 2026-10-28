@@ -1,0 +1,110 @@
+/* Audited visual boundaries for real user text and both display themes.
+   No viewport overflow hiding, fixed title heights, or gameplay state changes. */
+.ios-app .ios-main > *,
+.ios-app :is(.ios-quest-description, .ios-quest-detail-card, .ios-quest-invite,
+  .ios-quest-judge, .ios-quest-card__body, .ios-app-proof-heading > div) {
+  min-width: 0;
+}
+.ios-app .ios-main :where(h1, h2, h3, p, strong, small, li, blockquote) {
+  overflow-wrap: anywhere;
+}
+.ios-app .ios-quest-detail-card > div {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.ios-app .ios-quest-detail-card > div > strong {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Color inheritance from .ios-app a otherwise turns white-backed controls
+   into white-on-white icons when --ios-ink changes for night mode. */
+.ios-app {
+  --ios-control-surface: #f4e8ff;
+  --ios-back-surface: #ffffff;
+  --ios-control-ink: #574286;
+  --ios-control-border: #cbb9e8;
+}
+.ios-app :is(.ios-back, .ios-header__avatar) {
+  color: var(--ios-control-ink);
+  background: var(--ios-control-surface);
+  border-color: var(--ios-control-border);
+}
+.ios-app .ios-back { background: var(--ios-back-surface); }
+
+.ios-app--night {
+  color-scheme: dark;
+  --ios-control-surface: #44385f;
+  --ios-back-surface: #44385f;
+  --ios-control-ink: #f5efff;
+  --ios-control-border: #a698c4;
+  --ios-night-surface: #393459;
+  --ios-night-raised: #302b49;
+  --ios-night-border: #756b93;
+  --ios-night-text: #f8f4ff;
+  --ios-night-muted: #d6cfe7;
+}
+.ios-app--night :is(.ios-header__brand, .ios-header__brand span,
+  .ios-header__title strong) { color: var(--ios-night-text); }
+.ios-app--night .ios-header__title small { color: var(--ios-night-muted); }
+
+/* Opaque shared surfaces make helper text, form controls and dock labels
+   readable independently of whichever scene/gradient is underneath them. */
+.ios-app--night .ios-settings-group,
+.ios-app--night :is(.ios-menu, .ios-empty, .ios-auth-invitation,
+  .ios-quest-detail-card, .ios-quest-invite, .ios-proof-form,
+  .ios-quest-judge, .ios-quest-judge__receipt, .ios-message) {
+  color: var(--ios-night-text);
+  background: var(--ios-night-surface);
+  border-color: var(--ios-night-border);
+}
+.ios-app--night :is(.ios-settings-group h2, .ios-setting span,
+  .ios-empty h2, .ios-auth-invitation h2, .ios-quest-description h1,
+  .ios-quest-detail-card h2, .ios-quest-detail-card > div > strong,
+  .ios-quest-invite h1, .ios-proof-form h2, .ios-menu__row strong,
+  .ios-quest-judge h2, .ios-quest-judge__receipt strong) {
+  color: var(--ios-night-text);
+}
+.ios-app--night :is(.ios-settings-group .ios-helper, .ios-setting small,
+  .ios-setting > svg, .ios-empty p, .ios-auth-invitation p,
+  .ios-quest-description p, .ios-quest-detail-card > p,
+  .ios-quest-detail-card > div > span:first-child,
+  .ios-quest-invite > p, .ios-quest-invite__eyebrow,
+  .ios-proof-form > p, .ios-quest-judge p, .ios-message,
+  .ios-footer-note, .ios-centered-description) {
+  color: var(--ios-night-muted);
+}
+.ios-app--night :is(.ios-setting, .ios-menu__row,
+  .ios-quest-detail-card > div) { border-color: var(--ios-night-border); }
+.ios-app--night :is(.ios-setting select, .ios-proof-form textarea) {
+  color: var(--ios-night-text);
+  background: var(--ios-night-raised);
+  border: 1px solid var(--ios-control-border);
+}
+.ios-app--night .ios-setting input { accent-color: #c8b7ff; }
+.ios-app--night :is(.ios-menu__icon, .ios-quest-invite__facts > div,
+  .ios-quest-invite__rules, .ios-quest-invite__approval,
+  .ios-quest-judge__approval) {
+  background: var(--ios-night-raised);
+  border-color: var(--ios-night-border);
+  color: var(--ios-night-text);
+}
+.ios-app--night :is(.ios-quest-invite__facts strong,
+  .ios-quest-invite__rules h2) { color: var(--ios-night-text); }
+.ios-app--night :is(.ios-quest-invite__facts span,
+  .ios-quest-invite__rules p) { color: var(--ios-night-muted); }
+.ios-app--night .ios-tabbar {
+  background: #242139;
+  border-color: #83759f;
+  box-shadow: 0 9px 28px #100e2866;
+}
+.ios-app--night .ios-tab {
+  color: #e6def6 !important;
+}
+.ios-app--night .ios-tab--active {
+  color: #ffffff !important;
+  background: #514575;
+}
+.ios-app--night :where(button, a, input, textarea, select):focus-visible {
+  outline-color: #ffe299;
+}
