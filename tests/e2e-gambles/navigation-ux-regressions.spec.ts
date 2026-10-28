@@ -35,3 +35,17 @@ test('the account ledger and complete Quest history remain reachable from the ne
   // Anonymous identity must still be rejected; do not mock a balance or make an account.
   await expect(page.getByRole('heading',{name:'Keep your quest history together'})).toBeVisible();
 });
+
+for(const width of [320,390])test(`site and legacy headers preserve brand and action at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:844});
+  for(const route of ['/me','/enter']){
+    await page.goto(BASE+route);
+    const brand=page.locator('.sum-scene-brand-compact');await expect(brand).toBeVisible();await expect(brand).toHaveText('SUM');
+    const bounds=await brand.evaluate(el=>({visible:el.clientWidth,content:el.scrollWidth,overflow:document.documentElement.scrollWidth-innerWidth}));
+    expect(bounds.content).toBeLessThanOrEqual(bounds.visible);expect(bounds.overflow).toBeLessThanOrEqual(1);
+    const action=page.locator('.quest-hud .sum-world-button');
+    expect(await action.evaluate(el=>{const r=el.getBoundingClientRect();return r.right<=innerWidth&&r.left>=0&&r.height>=44;})).toBe(true);
+    await page.getByTestId('sum-lang-zh').click();await expect(brand).toHaveText('SUM');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
+  }
+});

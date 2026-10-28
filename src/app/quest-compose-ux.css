@@ -37,3 +37,17 @@
   .ios-app .quest-composer--app .qx-challenge-input{min-height:140px!important;height:140px;}
   .ios-app[data-view="create"] .ios-forge-bar .ios-art{width:52px;height:52px;}
 }
+
+/* Compact legacy/site header: reserve room for both language and a real app action. */
+.sum-scene-brand-compact{display:none;}
+@media(max-width:600px){
+ .quest-hud{gap:8px;padding-inline:10px;}
+ .quest-hud .sum-scene-brand{flex:none;padding:6px;gap:4px;min-height:44px;}
+ .quest-hud .sum-scene-brand>.sum-familiar{width:32px;height:32px;min-width:32px;min-height:32px;flex:0 0 32px;}
+ .quest-hud .sum-scene-brand-full,.quest-hud .sum-scene-brand-subtitle{display:none;}
+ .quest-hud .sum-scene-brand-compact{display:block;font-size:15px;font-weight:900;line-height:1.2;color:#2b493e;white-space:nowrap;}
+ .quest-hud .sum-scene-controls{gap:6px;}
+ .quest-hud .sum-world-button{padding-inline:10px;font-size:11px;gap:5px;min-height:44px;white-space:nowrap;}
+ .quest-hud .sum-language-switch{padding:2px;}
+ .quest-hud .sum-language-switch button{min-width:32px;min-height:36px;padding-inline:5px;}
+}

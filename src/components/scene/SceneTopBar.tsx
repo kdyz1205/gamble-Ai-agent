@@ -18,17 +18,18 @@ export default function SceneTopBar({ title = sceneBrand.world, rightSlot, activ
   const informational=hasInformationalNavigation(activePath??"");
   return (
     <header className="quest-hud">
-      <Link href="/enter" className="group quest-hud__cluster min-w-0" aria-label="Summoner.world home">
+      <Link href="/enter" className="group quest-hud__cluster sum-scene-brand min-w-0" aria-label="Summoner.world home">
         <PicoFamiliar className="h-11 w-11 shrink-0 transition-transform group-hover:-translate-y-0.5" />
         <span className="min-w-0 pr-1">
-          <span className="block truncate text-sm font-black leading-tight text-[color:var(--sum-ink)] sm:text-base">
+          <span className="sum-scene-brand-compact" aria-hidden="true">SUM</span>
+          <span className="sum-scene-brand-full block truncate text-sm font-black leading-tight text-[color:var(--sum-ink)] sm:text-base">
             Summoner<span className="text-[#e85f4e]">.world</span>
           </span>
-          <span className="mt-0.5 block truncate text-[8px] font-black uppercase tracking-[0.22em] text-[color:var(--sum-muted)]">{title}</span>
+          <span className="sum-scene-brand-subtitle mt-0.5 block truncate text-[8px] font-black uppercase tracking-[0.22em] text-[color:var(--sum-muted)]">{title}</span>
         </span>
       </Link>
 
-      <div className="flex shrink-0 items-center gap-2 text-xs font-extrabold text-[color:var(--sum-muted)]">
+      <div className="sum-scene-controls flex shrink-0 items-center gap-2 text-xs font-extrabold text-[color:var(--sum-muted)]">
         <SumLanguageSwitch surface="site"/>
         {rightSlot ?? (
           <>
