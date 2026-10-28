@@ -3,14 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** One bottom navigation for iPhone and responsive web routes. */
-const destinations = [
-  { href: "/enter", label: "World", icon: "world" },
-  { href: "/markets", label: "Explore", icon: "explore" },
-  { href: "/summons", label: "Create", icon: "create" },
-  { href: "/rituals", label: "Familiars", icon: "pico" },
-  { href: "/me", label: "Me", icon: "me" },
-] as const;
+import {appDestinations,activeAppDestination,hasInformationalNavigation,legacySceneOwnsNavigation} from "@/lib/app-navigation";
+import {useSumLanguage,translated} from "@/components/locale/SumLanguage";
+
+const destinations=appDestinations.map(item=>({...item,icon:item.icon==="home"?"world":item.icon==="discover"?"explore":item.icon==="user"?"me":item.icon} as const));
 
 type IconKind = (typeof destinations)[number]["icon"];
 
@@ -33,26 +29,23 @@ function NavIcon({ kind }: { kind: IconKind }) {
   return <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[kind]}</svg>;
 }
 
-export default function QuestAppNav({ scene = false }: { scene?: boolean }) {
-  const pathname = usePathname() ?? "";
-  // The native-style app provides its own complete five-tab navigation.
-  if (pathname === "/enter" || pathname === "/auth" || pathname.startsWith("/auth/") || pathname === "/app" || pathname.startsWith("/app/")) return null;
-  const sceneRoute = ["/summons", "/contracts/bind", "/duel/demo", "/rituals", "/judgment/demo"].includes(pathname);
-  // SceneShell owns its dock; other pages share the same destination set without duplication.
-  if (scene !== sceneRoute) return null;
-  const active = pathname === "/" ? "/enter"
-    : pathname.startsWith("/market/") || pathname.startsWith("/join/") || pathname.startsWith("/challenge/") ? "/markets"
-    : pathname;
+export default function QuestAppNav({ scene = false, activePath }: { scene?: boolean; activePath?:string }) {
+  const language=useSumLanguage();
+  const pathname=usePathname()??activePath??"";
+  if(hasInformationalNavigation(pathname)||pathname==="/app"||pathname.startsWith("/app/"))return null;
+  // The scene and root layout must never both own a dock on /me or /quests.
+  if(scene!==legacySceneOwnsNavigation(pathname))return null;
+  const active=activeAppDestination(pathname);
   return <nav className={"sum-app-dock" + (scene ? " quest-mobile-dock" : "")} data-testid="sum-app-dock" aria-label={scene ? "Quest world navigation" : "App navigation"}>
-    {destinations.map(({ href, label, icon }) => <Link
+    {destinations.map(({ href, label, zh, icon }) => <Link
       key={href}
       href={href}
       className={"sum-app-dock__item" + (active === href ? " is-selected" : "")}
       aria-current={active === href ? "page" : undefined}
-      aria-label={label}
+      aria-label={translated(language,label,zh)}
     >
       <span className="sum-app-dock__icon"><NavIcon kind={icon}/></span>
-      <span className="sum-app-dock__label">{label}</span>
+      <span className="sum-app-dock__label">{translated(language,label,zh)}</span>
     </Link>)}
   </nav>;
 }

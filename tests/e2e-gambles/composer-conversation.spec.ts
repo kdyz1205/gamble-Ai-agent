@@ -105,7 +105,7 @@ test("real mobile conversation shows the missing rule and publishes the agreed f
     await page.goto(`${BASE}/quests`);
     await expect(page.getByTestId(`quest-card-${id}`)).toBeVisible();
     const nav = page.getByRole("navigation", { name: "Quest world navigation" }).filter({ visible: true });
-    expect(await nav.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("href")))).toEqual(["/summons", "/quests", "/quests?view=proof", "/quests?view=results", "/me"]);
+    expect(await nav.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("href")))).toEqual(["/app/today", "/app/discover", "/app/create", "/app/picos", "/app/profile"]);
     await assertNoOverflow(page);
     await page.screenshot({ path: info.outputPath("real-mobile-quest-list.png"), fullPage: true });
     await info.attach("real-conversation-receipt", { contentType: "application/json", body: Buffer.from(JSON.stringify({
