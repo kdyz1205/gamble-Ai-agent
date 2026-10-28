@@ -61,3 +61,12 @@ test('voice cancel while transcribing preserves typed text and discards the late
  await page.goto(BASE+'/app/create');const input=page.getByTestId('pact-composer').locator('textarea');await input.fill('Keep typed text');await input.blur();await page.getByRole('button',{name:'Describe quest by voice',exact:true}).click();await expect(page.getByRole('button',{name:'Stop voice recording',exact:true})).toBeVisible();await page.waitForTimeout(350);await page.getByRole('button',{name:'Stop voice recording',exact:true}).click();await expect.poll(()=>sent).toBe(true);
  await page.getByRole('button',{name:'Cancel voice recording',exact:true}).click();release();await expect(page.getByRole('button',{name:'Describe quest by voice',exact:true})).toBeEnabled();await expect(input).toHaveValue('Keep typed text');await allTracksStopped(page);
 });
+
+for(const width of [320,390])for(const lang of ['en','zh'])test(`pending voice controls fit ${width}px in ${lang}`,async({page},testInfo)=>{
+ await mediaFixture(page,{hold:true});await page.setViewportSize({width,height:667});await page.goto(BASE+'/app/create');if(lang==='zh')await page.getByTestId('sum-lang-zh').click();
+ await page.getByRole('button',{name:'Describe quest by voice',exact:true}).click();await expect(page.getByRole('button',{name:'Cancel voice recording',exact:true})).toBeVisible();
+ const boxes=await page.locator('.quest-composer__actions').evaluate(el=>({doc:document.documentElement.scrollWidth,viewport:innerWidth,buttons:[...el.querySelectorAll('button')].map(button=>{const r=button.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,client:button.clientWidth,scroll:button.scrollWidth};})}));
+ expect(boxes.doc).toBeLessThanOrEqual(width+1);for(const b of boxes.buttons){expect(b.left).toBeGreaterThanOrEqual(0);expect(b.right).toBeLessThanOrEqual(width+1);expect(b.scroll).toBeLessThanOrEqual(b.client+1);}
+ for(let i=0;i<boxes.buttons.length;i++)for(let j=i+1;j<boxes.buttons.length;j++){const a=boxes.buttons[i],b=boxes.buttons[j];expect(Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1||Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)<=1).toBe(true);}
+ await page.screenshot({path:testInfo.outputPath(`synthetic-voice-${width}-${lang}.png`),fullPage:true});await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);await page.getByRole('button',{name:'Cancel voice recording',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);
+});

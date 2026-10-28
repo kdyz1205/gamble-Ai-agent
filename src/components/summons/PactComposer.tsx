@@ -725,9 +725,6 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
                 </span>
                 <span>{voicePhase==="permission"?ui("Waiting…","等待授权…"):isTranscribing?"...":isRecording?t("Stop"):t("Voice")}</span>
               </button>
-              {voiceActive&&<button type="button" className="quest-tool-button" aria-label="Cancel voice recording" onClick={()=>cancelVoice()}>
-                {ui("Cancel voice","取消语音")}
-              </button>}
               <RitualButton
                 aria-label="Summon"
                 className="quest-primary-button quest-submit-button qx-generate-button"
@@ -739,6 +736,9 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
                 <QuestGlyph className="h-4 w-4" kind="spark" />
                 {isSubmitting ? ui("Thinking…","正在整理…") : turns.length ? ui("Send reply","发送回复") : t("Summon quest")}
               </RitualButton>
+              {voiceActive&&<button type="button" className="quest-tool-button quest-voice-cancel" aria-label="Cancel voice recording" onClick={()=>cancelVoice()}>
+                {ui("Cancel voice","取消语音")}
+              </button>}
               </div>
             </div>
 
