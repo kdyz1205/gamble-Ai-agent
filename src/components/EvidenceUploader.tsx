@@ -138,6 +138,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       if (!f||!mounted.current) return;
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(f);
+      setUrlInput("");
       setPreviewUrl(URL.createObjectURL(f));
       setError("");
     };
@@ -180,7 +181,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
         releaseCapture(capture);setStream(null);setRecording(false);setCapturePending(false);setMode(null);
         if(!saved){setError("Recording ended before you chose Stop & save. No partial clip was kept.");return;}
         if(!blob.size){setError("The recording was empty. Please record again or upload a video file.");return;}
-        setRecordedBlob(blob);setRecordedDuration(duration);
+        setUrlInput("");setRecordedBlob(blob);setRecordedDuration(duration);
       };
       recorder.onerror=()=>{
         if(!isCurrentCapture(capture))return;
@@ -220,7 +221,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
       if(!isCurrentCapture(capture))return;
       const file=new File([blob],`photo-${Date.now()}.jpg`,{type:"image/jpeg"});
       if(previewUrl)URL.revokeObjectURL(previewUrl);
-      setFile(file);setPreviewUrl(URL.createObjectURL(file));setMode("photo");
+      setUrlInput("");setFile(file);setPreviewUrl(URL.createObjectURL(file));setMode("photo");
     }catch(error){
       if(isCurrentCapture(capture))setError(error instanceof Error?error.message:"Could not take photo.");
     }finally{

@@ -26,3 +26,7 @@ The composer has a generation boundary for known-account changes and logout. Gue
 Retain the existing dependency audit, type/lint, database and browser gates. Add owner-transition unit assertions and media lifecycle browser regressions, including valid recording playback and normal transcription, not just cancellation. Build and test a frozen clean commit, compare the actual CI source tree, verify a non-aliased production-environment candidate, then independently recheck both formal domains and run the live regressions.
 
 No dependency, schema, API authorization, ledger, settlement or production data mutations are part of this patch. Physical iPhone permission/keyboard/camera behavior and final real-provider speech transcription remain separate acceptance scopes; virtual-device results do not prove them.
+
+## Source switching and compact layout follow-up
+
+A candidate-level check also caught stale invalid URL text blocking a newly selected file. Clear the prior URL only when a real replacement file/photo/recorded clip is installed; cancelling a picker/capture retains the original URL and description. The compact English/Chinese permission controls are checked for actual text overflow and overlapping hit areas at 320px and 390px, with cancel on its own row.

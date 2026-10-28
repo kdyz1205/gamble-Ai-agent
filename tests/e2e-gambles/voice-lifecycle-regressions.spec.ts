@@ -70,3 +70,12 @@ for(const width of [320,390])for(const lang of ['en','zh'])test(`pending voice c
  for(let i=0;i<boxes.buttons.length;i++)for(let j=i+1;j<boxes.buttons.length;j++){const a=boxes.buttons[i],b=boxes.buttons[j];expect(Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1||Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)<=1).toBe(true);}
  await page.screenshot({path:testInfo.outputPath(`synthetic-voice-${width}-${lang}.png`),fullPage:true});await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);await page.getByRole('button',{name:'Cancel voice recording',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);
 });
+
+test('a delayed publication receipt from a previous account never appears as the new account result',async({page})=>{
+ const session=await mediaFixture(page);let publishing=false,release=()=>{};const held=new Promise<void>(r=>{release=r;});
+ const reply={userVisibleReply:'PRIVATE_OWNER_A_REVIEW',agentAction:'draft_ready',draftPatch:{},toolName:null,toolArgs:null,draftState:{title:'PRIVATE_OWNER_A_REVIEW',proposition:'First to three',participants:'you + 1 invited friend',stake:0,stakeType:'none',evidenceType:'text',judgeRule:'Count rallies',timeWindow:'24 hours',safetyNotes:[],readyToPublish:true}};
+ await page.route('**/api/agent/respond',async r=>{if(r.request().postDataJSON().intent==='publish'){publishing=true;await held;await r.fulfill({json:{...reply,toolResult:{challengeId:'synthetic_private_published_a'}}});}else await r.fulfill({json:reply});});
+ await page.goto(BASE+'/app/create');await page.getByTestId('pact-composer').locator('textarea').fill('A reviewed draft');await page.getByRole('button',{name:'Summon',exact:true}).click();await page.getByRole('button',{name:'Publish free quest',exact:true}).click();await expect.poll(()=>publishing).toBe(true);
+ await session.changeOwner(MEDIA_B);const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/agent/respond');release();await response;await page.waitForTimeout(200);
+ await expect(page.getByRole('link',{name:'Open Quest',exact:true})).toHaveCount(0);await expect(page.getByTestId('challenge-contract-result')).toHaveCount(0);await expect(page.getByTestId('pact-composer').locator('textarea')).toHaveValue('');
+});

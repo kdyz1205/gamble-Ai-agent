@@ -38,3 +38,25 @@ test('a late photo permission grant cannot restore capture after cancellation',a
  const session=await mediaFixture(page,{hold:true});await proofFixture(page,'photo');await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:/^Take photo/}).click();await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);
  await page.getByRole('button',{name:'Cancel media capture',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);await expect(page.locator('.proof-camp img[alt="proof preview"]')).toHaveCount(0);expect(session.writes).toEqual([]);
 });
+
+test('normal photo capture creates a decodable preview and releases the generated device',async({page},testInfo)=>{
+ const session=await mediaFixture(page);await proofFixture(page,'photo');await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:/^Take photo/}).click();
+ const image=page.locator('.proof-camp img[alt="proof preview"]');await expect(image).toBeVisible();await expect.poll(()=>image.evaluate((el:HTMLImageElement)=>el.naturalWidth)).toBeGreaterThan(0);await allTracksStopped(page);expect(session.writes).toEqual([]);
+ await page.screenshot({path:testInfo.outputPath('synthetic-photo-preview.png'),fullPage:true});await page.getByRole('button',{name:'Remove',exact:true}).click();await expect(image).toHaveCount(0);await expect(page.getByRole('button',{name:/^Take photo/})).toBeVisible();
+});
+
+
+test('switching from a URL to an actual file does not validate the superseded URL',async({page})=>{
+ await mediaFixture(page);await proofFixture(page,'photo');let blobCalls=0,presignCalls=0;
+ await page.route(`**/api/challenges/${MEDIA_QUEST}/evidence/blob-handle`,r=>{blobCalls++;return r.fulfill({status:503,json:{error:'Synthetic Blob unavailable'}});});
+ await page.route('**/api/uploads/evidence-presign',r=>{presignCalls++;return r.fulfill({status:503,json:{error:'SYNTHETIC_TRANSFER_NOT_CONFIGURED'}});});
+ await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await page.locator('.proof-camp input[type="url"]').fill('this is not a URL');await page.getByRole('button',{name:/Back to upload options/}).click();
+ await page.locator('.proof-camp textarea').fill('Keep my description');const picker=page.waitForEvent('filechooser');await page.getByRole('button',{name:/^Upload photo/}).click();await(await picker).setFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
+ await page.getByRole('button',{name:'Submit proof',exact:true}).click();await expect(page.locator('.proof-camp').getByRole('alert')).toContainText('SYNTHETIC_TRANSFER_NOT_CONFIGURED');expect(blobCalls).toBe(1);expect(presignCalls).toBe(1);await expect(page.locator('.proof-camp textarea')).toHaveValue('Keep my description');
+});
+
+test('cancelling replacement capture retains the prior link and description',async({page})=>{
+ await mediaFixture(page,{hold:true});await proofFixture(page,'photo');await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await page.locator('.proof-camp input[type="url"]').fill('https://example.invalid/original-proof.png');await page.getByRole('button',{name:/Back to upload options/}).click();
+ await page.locator('.proof-camp textarea').fill('Keep my original note');await page.getByRole('button',{name:/^Take photo/}).click();await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);await page.getByRole('button',{name:'Cancel media capture',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);
+ await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await expect(page.locator('.proof-camp input[type="url"]')).toHaveValue('https://example.invalid/original-proof.png');await expect(page.locator('.proof-camp textarea')).toHaveValue('Keep my original note');
+});
