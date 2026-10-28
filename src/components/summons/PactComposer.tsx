@@ -146,6 +146,11 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     ["Familiar", "AI referee"],
   ] as const;
 
+  function clearCastTimers() {
+    castTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    castTimersRef.current = [];
+  }
+
   useEffect(() => {
     if (sessionStatus === "loading" || restoredAuthRef.current) return;
     restoredAuthRef.current = true;
@@ -177,10 +182,6 @@ export default function PactComposer({ initialPrompt = "", appMode = false, star
     if (log) log.scrollTop = log.scrollHeight;
   }, [latestReply]);
 
-  function clearCastTimers() {
-    castTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    castTimersRef.current = [];
-  }
 
   function triggerCastVisual() {
     clearCastTimers();

@@ -11,31 +11,28 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : "The connection could not be completed.";
 }
 
-export function useOwnQuests(enabled = true) {
-  const { status, data: session } = useSession();
-  const userId = session?.user?.id;
-  const [quests, setQuests] = useState<api.ChallengeData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
-  useEffect(() => {
-    let active = true;
-    if (!enabled) { return () => { active = false; }; }
-    if (status === "loading") return () => { active = false; };
-    if (status !== "authenticated" || !userId) {
-      setQuests([]); setLoading(false); setError("");
-      return () => { active = false; };
-    }
-    setQuests([]); setLoading(true); setError("");
-    api.listChallenges({ mine: true, limit: 50 }).then(data => {
-      if (active) { setQuests(data.challenges); setLoading(false); }
-    }).catch(err => {
-      if (active) { setLoading(false); setError(message(err)); }
-    });
-    return () => { active = false; };
-  }, [enabled, revision, status, userId]);
-  return { quests, loading: enabled && (loading || status === "loading"), error, refresh, signedIn: status === "authenticated" && !!userId, userId };
+const emptyQuests:api.ChallengeData[]=[];
+
+export function useOwnQuests(enabled=true) {
+  const {status,data:session}=useSession();
+  const userId=session?.user?.id;
+  const [revision,setRevision]=useState(0);
+  const refresh=useCallback(()=>setRevision(value=>value+1),[]);
+  const scope=enabled&&status==="authenticated"&&userId?JSON.stringify([userId,revision]):null;
+  const [snapshot,setSnapshot]=useState<{scope:string;quests:api.ChallengeData[];error:string}|null>(null);
+  const current=scope&&snapshot?.scope===scope?snapshot:null;
+  useEffect(()=>{
+    if(!scope)return;
+    let active=true;
+    api.listChallenges({mine:true,limit:50}).then(data=>{
+      if(active)setSnapshot({scope,quests:data.challenges,error:""});
+    }).catch(error=>{if(active)setSnapshot({scope,quests:[],error:message(error)});});
+    return()=>{active=false;};
+  },[scope]);
+  // Gate at render time, before effects run: another identity never receives an
+  // old owner's cached rows, even for a single render during session changes.
+  return {quests:current?.quests??emptyQuests,loading:enabled&&(status==="loading"||Boolean(scope&&!current)),
+    error:current?.error??"",refresh,signedIn:status==="authenticated"&&!!userId,userId,scope};
 }
 
 export function useOpenQuests(enabled = true) {
@@ -56,24 +53,22 @@ export function useOpenQuests(enabled = true) {
   return { quests, loading, error, refresh };
 }
 
-export function useQuest(id: string | undefined) {
-  const [quest, setQuest] = useState<api.ChallengeData | null>(null);
-  const [loading, setLoading] = useState(!!id);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
-  useEffect(() => {
-    if (!id) { setQuest(null);setLoading(false);setError("");return; }
-    let active = true;
-    setQuest(null);setLoading(true);setError("");
-    api.getChallenge(id).then(data => {
-      if (active) {setQuest(data.challenge);setLoading(false);}
-    }).catch(err => {
-      if (active) {setLoading(false);setError(message(err));}
-    });
-    return () => {active=false;};
-  }, [id,revision]);
-  return {quest,loading,error,refresh};
+export function useQuest(id:string|undefined) {
+  const {status,data:session}=useSession();
+  const [revision,setRevision]=useState(0);
+  const refresh=useCallback(()=>setRevision(value=>value+1),[]);
+  const scope=id&&status!=="loading"?JSON.stringify([id,status,session?.user?.id??null,revision]):null;
+  const [snapshot,setSnapshot]=useState<{scope:string;quest:api.ChallengeData|null;error:string}|null>(null);
+  const current=scope&&snapshot?.scope===scope?snapshot:null;
+  useEffect(()=>{
+    if(!scope||!id)return;
+    let active=true;
+    api.getChallenge(id).then(data=>{
+      if(active)setSnapshot({scope,quest:data.challenge,error:""});
+    }).catch(error=>{if(active)setSnapshot({scope,quest:null,error:message(error)});});
+    return()=>{active=false;};
+  },[id,scope]);
+  return {quest:current?.quest??null,loading:!!id&&(status==="loading"||!current),error:current?.error??"",refresh};
 }
 
 export function usePublicActivity(enabled = true) {
@@ -93,60 +88,47 @@ export function usePublicActivity(enabled = true) {
   return {events,loading,error,refresh};
 }
 
-export function useCreditBalance(enabled = true) {
-  const {status,data:session} = useSession();
-  const userId = session?.user?.id;
-  const [credits,setCredits] = useState<number|null>(null);
-  const [loading,setLoading] = useState(true);
-  const [error,setError] = useState("");
+export function useCreditBalance(enabled=true) {
+  const {status,data:session}=useSession();
+  const userId=session?.user?.id;
+  const scope=enabled&&status==="authenticated"&&userId?userId:null;
+  const [snapshot,setSnapshot]=useState<{scope:string;credits:number|null;error:string}|null>(null);
+  const current=scope&&snapshot?.scope===scope?snapshot:null;
   useEffect(()=>{
-    if(!enabled) return;
+    if(!scope)return;
     let active=true;
-    if(status==="loading") return ()=>{active=false;};
-    if(status!=="authenticated"||!userId){
-      setCredits(null);setLoading(false);setError("");return ()=>{active=false;};
-    }
-    setCredits(null);setLoading(true);setError("");
-    api.getTokenStatus().then(data=>{
-      if(active){setCredits(data.offChain.credits);setLoading(false);}
-    }).catch(err=>{if(active){setError(message(err));setLoading(false);}});
-    return ()=>{active=false;};
-  },[enabled,status,userId]);
-  return {credits,loading,error};
+    api.getTokenStatus().then(data=>{if(active)setSnapshot({scope,credits:data.offChain.credits,error:""});})
+      .catch(error=>{if(active)setSnapshot({scope,credits:null,error:message(error)});});
+    return()=>{active=false;};
+  },[scope]);
+  return {credits:current?.credits??null,loading:enabled&&(status==="loading"||Boolean(scope&&!current)),error:current?.error??""};
 }
 
-export function useEvidenceGallery(enabled = true) {
+type GalleryEvidence={id:string;type:string;url:string|null;description:string|null;createdAt:string;questId:string;questTitle:string};
+const emptyEvidence:GalleryEvidence[]=[];
+export function useEvidenceGallery(enabled=true) {
   const mine=useOwnQuests(enabled);
-  const [evidence,setEvidence]=useState<Array<{
-    id:string;type:string;url:string|null;description:string|null;createdAt:string;questId:string;questTitle:string;
-  }>>([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState("");
+  const [snapshot,setSnapshot]=useState<{scope:string;evidence:GalleryEvidence[];error:string}|null>(null);
+  const current=mine.scope&&snapshot?.scope===mine.scope&&!mine.loading?snapshot:null;
   useEffect(()=>{
-    if(!enabled) return;
+    const scope=mine.scope;
+    if(!enabled||!scope||mine.loading||mine.error)return;
     let active=true;
-    if(mine.loading) return ()=>{active=false;};
-    if(!mine.signedIn || mine.error || mine.quests.length===0) {
-      setEvidence([]);setLoading(false);setError(mine.error);return ()=>{active=false;};
-    }
-    // Detail endpoint authorizes proof access; the public list never does.
     const refs=mine.quests.filter(q=>q._count?.evidence).slice(0,20);
-    if(refs.length===0) {setEvidence([]);setLoading(false);return ()=>{active=false;};}
-    setLoading(true);setError("");
+    if(!refs.length){setSnapshot({scope,evidence:[],error:""});return()=>{active=false;};}
+    // Private evidence still comes only from server-authorized detail reads.
     Promise.allSettled(refs.map(q=>api.getChallenge(q.id))).then(results=>{
-      if(!active) return;
+      if(!active)return;
       const rows=results.flatMap(result=>result.status==="fulfilled"?
-        (result.value.challenge.evidence||[]).map(ev=>({
-          id:ev.id,type:ev.type,url:ev.url,description:ev.description,
-          createdAt:ev.createdAt,questId:result.value.challenge.id,questTitle:result.value.challenge.title
-        })) : []);
-      setEvidence(rows.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)));
-      setLoading(false);
-      if(results.every(x=>x.status==="rejected"))setError("Your proof could not be loaded. Try again from its private Quest room.");
+        (result.value.challenge.evidence||[]).map(ev=>({id:ev.id,type:ev.type,url:ev.url,description:ev.description,
+          createdAt:ev.createdAt,questId:result.value.challenge.id,questTitle:result.value.challenge.title})):[]);
+      setSnapshot({scope,evidence:rows.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)),
+        error:results.every(x=>x.status==="rejected")?"Your proof could not be loaded. Try again from its private Quest room.":""});
     });
-    return ()=>{active=false;};
-  },[enabled,mine.loading,mine.error,mine.signedIn,mine.quests]);
-  return {...mine,evidence,loading:mine.loading||loading,error:error||mine.error};
+    return()=>{active=false;};
+  },[enabled,mine.scope,mine.loading,mine.error,mine.quests]);
+  return {...mine,evidence:current?.evidence??emptyEvidence,
+    loading:enabled&&(mine.loading||Boolean(mine.scope&&!current&&!mine.error)),error:current?.error||mine.error};
 }
 
 export type StarterPicoEntitlement = {
@@ -180,6 +162,8 @@ export function useStarterPico(enabled=true){
   const refresh=useCallback(()=>setRevision(count=>count+1),[]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const scope=enabled&&status==="authenticated"&&userId?JSON.stringify([userId,revision]):null;
+  const [loadedScope,setLoadedScope]=useState<string|null>(null);
   useEffect(()=>{
     if(!enabled){setStarter(null);setProgression(null);setInventory(null);setLoading(false);setError("");return;}
     if(status==="loading"){setLoading(true);return;}
@@ -227,6 +211,7 @@ export function useStarterPico(enabled=true){
                !Number.isSafeInteger(p.receiptCount)||p.receiptCount<1))
             throw Error("Invalid audited XP receipt totals");
         }
+        if(!active)return;
         let starter=data.starter;
         if(data.inventory?.available&&!starter.persistedInventory){
           // The server advertises persistence only after its schema flag is
@@ -246,12 +231,14 @@ export function useStarterPico(enabled=true){
         if(starter.persistedInventory&&!starter.inventoryId)
           throw Error("Starter persistence has no verified item");
         if(active){setStarter(starter);setProgression(progression);
-          setInventory(snapshot);setLoading(false);}
+          setInventory(snapshot);setLoading(false);setLoadedScope(scope);}
       }).catch(err=>{
-        if(active){setError(message(err));setLoading(false);}
+        if(active){setError(message(err));setLoading(false);setLoadedScope(scope);}
       });
     return ()=>{active=false;controller.abort();};
-  },[enabled,status,userId,revision]);
-  return {starter,progression,inventory,loading:enabled&&(loading||status==="loading"),
-    error,signedIn:status==="authenticated"&&!!userId,refresh};
+  },[enabled,status,userId,revision,scope]);
+  const current=!!scope&&loadedScope===scope;
+  return {starter:current?starter:null,progression:current?progression:null,inventory:current?inventory:null,
+    loading:enabled&&(status==="loading"||Boolean(scope&&(!current||loading))),
+    error:current?error:"",signedIn:status==="authenticated"&&!!userId,refresh};
 }

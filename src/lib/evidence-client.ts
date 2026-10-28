@@ -29,3 +29,12 @@ export function recordingMimeType(isSupported: (type: string) => boolean): strin
 export function recordingExtension(mime: string): "mp4" | "webm" {
   return mime.toLowerCase().includes("mp4") ? "mp4" : "webm";
 }
+
+/** A 2xx response alone is not proof of persistence for this user and Quest. */
+export function isConfirmedEvidenceSubmission(value:unknown,challengeId:string,userId:string|undefined):boolean {
+  if(!userId||!value||typeof value!=="object"||Array.isArray(value))return false;
+  const evidence=(value as {evidence?:unknown}).evidence;
+  if(!evidence||typeof evidence!=="object"||Array.isArray(evidence))return false;
+  const row=evidence as Record<string,unknown>;
+  return typeof row.id==="string"&&row.id.trim().length>0&&row.challengeId===challengeId&&row.userId===userId;
+}

@@ -43,6 +43,8 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [webviewWarning, setWebviewWarning] = useState(false);
+  const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
   const [attempts] = useState(createAuthAttemptController);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelPending = useCallback(() => {
@@ -104,8 +106,6 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
     return false;
   };
 
-  const [webviewWarning, setWebviewWarning] = useState(false);
-  const [webviewCopyNotice, setWebviewCopyNotice] = useState("");
 
   const handleGoogleLogin = async () => {
     if (!open) return;
