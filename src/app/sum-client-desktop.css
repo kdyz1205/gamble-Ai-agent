@@ -1,0 +1,77 @@
+/* One responsive game client: handheld dock below 900px, sidebar/workspace above.
+ * No root overflow hiding: real text boundaries remain testable. Colors inherit
+ * the verified light/night theme instead of overriding it at desktop widths. */
+@media (min-width:900px) {
+  .ios-app[data-product-surface="web-app"] {
+    width:min(1320px,calc(100% - 48px)); min-height:calc(100dvh - 48px);
+    margin:24px auto; padding-bottom:24px; border-radius:24px;
+  }
+  .ios-app[data-product-surface="web-app"]:has(>.ios-tabbar) {
+    display:grid; grid-template-columns:184px minmax(0,1fr); grid-template-rows:auto 1fr; align-items:start;
+  }
+  .ios-app[data-product-surface="web-app"]>.ios-header {
+    grid-column:2; grid-row:1; min-width:0; padding-inline:28px; border-radius:0 24px 0 0;
+  }
+  .ios-app[data-product-surface="web-app"]>.ios-main {
+    grid-column:2; grid-row:2; width:100%; max-width:1120px;
+    min-width:0; margin-inline:auto; padding:28px 28px 40px;
+  }
+  .ios-app[data-product-surface="web-app"]>.ios-tabbar {
+    grid-column:1; grid-row:1 / span 2; position:sticky; align-self:start;
+    top:24px; bottom:auto; left:auto; transform:none;
+    width:calc(100% - 24px); margin:18px 12px; padding:12px 8px;
+    grid-template-columns:minmax(0,1fr); gap:7px; border-radius:18px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-tab {
+    flex-direction:row; justify-content:flex-start; gap:10px;
+    min-height:52px; padding:10px 12px; font-size:12px; text-align:start;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-tab--create .ios-tab__icon {
+    width:29px; height:29px; margin:0; flex-shrink:0;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-command-modes {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .ios-app[data-product-surface="web-app"]:is([data-view="discover"],[data-view="community"]) :is(.ios-list,.ios-feed) {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; align-items:start;
+  }
+  .ios-app[data-product-surface="web-app"] :is(.ios-badge-grid,.ios-gallery) {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+  .ios-app[data-product-surface="web-app"][data-view="settings"]>.ios-main {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; align-items:start;
+  }
+  .ios-app[data-product-surface="web-app"][data-view="settings"]>.ios-main>* { margin-top:0; min-width:0; }
+  .ios-app[data-product-surface="web-app"][data-view="settings"] .ios-signout { grid-column:1/-1; }
+  .ios-app[data-product-surface="web-app"]:is([data-view="quiz"],[data-view="story"],[data-view="create"],[data-view="quest"],[data-view="join"],[data-view="evidence-add"],[data-view="quest-complete"],[data-view="quest-created"])>.ios-main {
+    max-width:900px;
+  }
+  .ios-app[data-product-surface="web-app"] .ios-empty { max-width:660px; margin-inline:auto; }
+  .ios-app[data-product-surface="web-app"] .ios-quiz-arena { min-height:400px; }
+  .ios-app[data-product-surface="web-app"] .pico-story { max-width:760px; margin-inline:auto; }
+  .ios-app[data-product-surface="web-app"]:not(:has(>.ios-tabbar)) { max-width:860px; }
+  .ios-app[data-product-surface="web-app"]:not(:has(>.ios-tabbar))>.ios-header { border-radius:24px 24px 0 0; }
+  .ios-app[data-product-surface="web-app"]:not(:has(>.ios-tabbar))>.ios-main { max-width:760px; }
+}
+@media(min-width:1180px) {
+  .ios-app[data-product-surface="web-app"][data-view="today"]>.ios-main {
+    display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);
+    gap:22px; align-items:stretch; align-content:start;
+  }
+  .ios-app[data-product-surface="web-app"][data-view="today"]>.ios-main>* { min-width:0; margin-top:0; }
+  .ios-app[data-product-surface="web-app"] .ios-command-hud { grid-column:1; grid-row:1; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry { grid-column:2; grid-row:1; align-content:space-between; padding:24px; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry__body { flex-direction:column; align-items:flex-start; gap:18px; }
+  .ios-app[data-product-surface="web-app"] .ios-pico-story-entry__body>a { min-height:44px; }
+  .ios-app[data-product-surface="web-app"] :is(.ios-command-modes,.ios-command-quests,.ios-command-daily) { grid-column:1/-1; }
+  .ios-app[data-product-surface="web-app"] .ios-command-hud__content h1 { font-size:34px; }
+  .ios-app[data-product-surface="web-app"][data-view="profile"]>.ios-main { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:24px; align-items:start; }
+  .ios-app[data-product-surface="web-app"][data-view="profile"]>.ios-main>* { margin-top:0; min-width:0; }
+  .ios-app[data-product-surface="web-app"][data-view="profile"] .ios-profile-head { grid-column:1; grid-row:1/3; }
+  .ios-app[data-product-surface="web-app"][data-view="profile"] :is(.ios-menu,.ios-auth-invitation) { grid-column:2; }
+  .ios-app[data-product-surface="web-app"][data-view="profile"] .ios-footer-note { grid-column:1/-1; }
+}
+@media(min-width:900px) and (max-width:1100px) {
+  .ios-app[data-product-surface="web-app"] .ios-command-modes { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ios-app[data-product-surface="web-app"] :is(.ios-badge-grid,.ios-gallery) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
