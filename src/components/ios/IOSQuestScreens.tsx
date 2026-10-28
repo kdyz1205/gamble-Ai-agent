@@ -12,6 +12,8 @@ import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import IOSQuestJudgment from "./IOSQuestJudgment";
 import EvidenceUploader from "@/components/EvidenceUploader";
+import {questReturnTo,questRoute} from "@/lib/quest-navigation-context";
+import {proofTypeText} from "@/lib/interface-language";
 
 export function CreateScreen({seed}: {seed?:string}) {
   const starter=questSeeds.find(item=>item.id===seed);
@@ -42,15 +44,16 @@ function QuestStatus({status}: {status:string}) {
   return <span className={"ios-status ios-status--"+status.replace(/[^a-z]/g,"")}>{label}</span>;
 }
 
-function QuestMissing({loading,error}: {loading:boolean;error:string;id?:string}) {
+function QuestMissing({loading,error,retry,returnTo}: {loading:boolean;error:string;id?:string;retry?:()=>void;returnTo?:string}) {
   const language=useSumLanguage();
   return loading ? <p role="status" className="ios-message"><SumText en="Loading the real Quest…" zh="正在读取真实 Quest…"/></p>
-    : <IosEmpty heading={error?translated(language,"We could not open this Quest.","无法打开该 Quest。"):translated(language,"Choose an actual Quest.","请选择一个真实 Quest。")}
+    : <><IosEmpty heading={error?translated(language,"We could not open this Quest.","无法打开该 Quest。"):translated(language,"Choose an actual Quest.","请选择一个真实 Quest。")}
       description={error||translated(language,"A Quest must exist before a receipt, result or evidence record can appear.","Quest 必须真实存在，才能显示对应的证据、结果或记录。")}
-      action={translated(language,"Browse Quests","浏览 Quest")} href="/app/discover"/>;
+      action={translated(language,"Browse Quests","浏览 Quest")} href={questReturnTo(returnTo)||"/app/discover"}/>
+      {retry&&error&&<button type="button" className="ios-secondary-button" onClick={retry}><SumText en="Try again" zh="重试"/></button>}</>;
 }
 
-export function QuestDetailScreen({id}: {id?:string}) {
+export function QuestDetailScreen({id,returnTo}: {id?:string;returnTo?:string}) {
   const language=useSumLanguage();
   const {quest,loading,error,refresh}=useQuest(id);
   const {data:session}=useSession();
@@ -66,8 +69,8 @@ export function QuestDetailScreen({id}: {id?:string}) {
       setCopied(true);
     }catch {setCopied(false);}
   };
-  return <IosFrame title="Quest Detail" eyebrow="YOUR REAL ADVENTURE" back="/app/today">
-    {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
+  return <IosFrame title="Quest Detail" eyebrow="YOUR REAL ADVENTURE" back={questReturnTo(returnTo)||"/app/today"} navigationContext={returnTo}>
+    {!quest?<QuestMissing loading={loading} error={error} id={id} retry={refresh} returnTo={returnTo}/>:
     <>
       <div className="ios-quest-hero">
         <IosArt src={visuals.portal} alt="A glowing gateway to your next Quest"/>
@@ -87,22 +90,22 @@ export function QuestDetailScreen({id}: {id?:string}) {
         <h2><SumText en="Agreed Quest Details" zh="已确认的 Quest 规则"/></h2>
         <div><span><SumText en="Status" zh="状态"/></span><QuestStatus status={quest.status}/></div>
         <div><span><SumText en="Deadline" zh="截止时间"/></span><strong>{quest.deadline?new Date(quest.deadline).toLocaleString(language==="zh"?"zh-CN":"en-US"):translated(language,"Not specified","未指定")}</strong></div>
-        <div><span><SumText en="Proof type" zh="证据形式"/></span><strong>{quest.evidenceType.replace(/_/g," ")}</strong></div>
+        <div><span><SumText en="Proof type" zh="证据形式"/></span><strong>{proofTypeText(language,quest.evidenceType)}</strong></div>
         {quest.rules&&<p>{quest.rules}</p>}
         <p className="ios-footer-note"><SumText en="Only the accepted rules and actual evidence can determine a Quest result." zh="Quest 结果只能依据双方接受的规则与真实证据确定。"/></p>
       </section>
       {quest.status==="open"&&<div className="ios-actions">
         {creator?<p className="ios-message"><SumText en="Waiting for another person to join your Quest." zh="正在等待另一位玩家加入 Quest。"/></p>:
-          <IosAction href={"/app/join?id="+encodeURIComponent(quest.id)}><SumText en="Review and join Quest" zh="查看规则并加入 Quest"/></IosAction>}
+          <IosAction href={questRoute("join",quest.id,returnTo)}><SumText en="Review and join Quest" zh="查看规则并加入 Quest"/></IosAction>}
         <button type="button" className="ios-secondary-button" onClick={()=>void share()}>{copied?translated(language,"Shared or copied","已分享或复制"):translated(language,"Share invitation","分享邀请")}</button>
       </div>}
       {quest.arbiter==="quiz-curated-mcq-v1"
         ? <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>
         : <>
-          {quest.status==="live"&&<IosAction href={"/app/evidence-add?id="+encodeURIComponent(quest.id)}>
+          {quest.status==="live"&&<IosAction href={questRoute("evidence-add",quest.id,returnTo)}>
             {quest.evidence?.some(row=>row.userId===me) ? translated(language,"View proof status","查看证据状态") : translated(language,"Submit your proof","提交证据")}
           </IosAction>}
-          {quest.status==="settled"&&<IosAction href={"/app/quest-complete?id="+encodeURIComponent(quest.id)}><SumText en="View real result" zh="查看真实结果"/></IosAction>}
+          {quest.status==="settled"&&<IosAction href={questRoute("quest-complete",quest.id,returnTo)}><SumText en="View real result" zh="查看真实结果"/></IosAction>}
           {["judging","pending_settlement","disputed"].includes(quest.status)&&
             <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>}
         </>}
@@ -111,12 +114,12 @@ export function QuestDetailScreen({id}: {id?:string}) {
   </IosFrame>;
 }
 
-export function EvidenceAddScreen({id}:{id?:string}) {
+export function EvidenceAddScreen({id,returnTo}:{id?:string;returnTo?:string}) {
   const {data:session}=useSession();
-  return <EvidenceAddContent key={JSON.stringify([id,session?.user?.id??null])} id={id}/>;
+  return <EvidenceAddContent key={JSON.stringify([id,session?.user?.id??null])} id={id} returnTo={returnTo}/>;
 }
 
-function EvidenceAddContent({id}:{id?:string}) {
+function EvidenceAddContent({id,returnTo}:{id?:string;returnTo?:string}) {
   const language=useSumLanguage();
   const {quest,loading,error}=useQuest(id);
   const {data:session}=useSession();
@@ -146,20 +149,20 @@ function EvidenceAddContent({id}:{id?:string}) {
     }catch(e){if(mounted.current)setSubmitError(e instanceof Error?e.message:translated(language,"Evidence was not saved.","证据未保存成功。"));}
     finally{saving.current=false;if(mounted.current)setBusy(false);}
   };
-  return <IosFrame title="Add Evidence" eyebrow="THE PROOF CHAPTER" back={id?"/app/quest?id="+encodeURIComponent(id):"/app/today"}>
+  return <IosFrame title="Add Evidence" eyebrow="THE PROOF CHAPTER" back={id?questRoute("quest",id,returnTo):"/app/today"} navigationContext={returnTo}>
     {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
     <>
       <section className="ios-app-proof-heading" aria-label="Proof submission">
         <span className="ios-app-proof-heading__icon"><IosIcon name="camera" size={23}/></span>
-        <div><span className="ios-overline"><SumText en="REQUIRED PROOF" zh="所需证据"/> / {quest.evidenceType.replace(/_/g," ")}</span>
+        <div><span className="ios-overline"><SumText en="REQUIRED PROOF" zh="所需证据"/> / {proofTypeText(language,quest.evidenceType)}</span>
           <h1>{quest.title}</h1>
         </div>
       </section>
       {quest.status!=="live"?<IosEmpty image={visuals.mascot} heading={translated(language,"Proof is not open yet.","暂时无法提交证据。")}
-        description={translated(language,"Quest status: ","Quest 状态：")+quest.status+translated(language,". Evidence may only be changed while a Quest is live.","。只有 Quest 进行中才能修改证据。")} action={translated(language,"View Quest","查看 Quest")} href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
+        description={translated(language,"Quest status: ","Quest 状态：")+quest.status+translated(language,". Evidence may only be changed while a Quest is live.","。只有 Quest 进行中才能修改证据。")} action={translated(language,"View Quest","查看 Quest")} href={questRoute("quest",quest.id,returnTo)}/>:
       !accepted?<AuthInvitation title={translated(language,"Only accepted players can submit proof.","只有正式加入的玩家才能提交证据。")} detail={translated(language,"Sign in with the account participating in this Quest.","请使用参与该 Quest 的账号登录。")}/>:
       success||alreadySubmitted?<IosEmpty image={visuals.mascotHappy} heading={translated(language,"Your proof was saved.","你的证据已保存。")}
-        description={translated(language,"Your real proof submission is recorded. The referee cannot judge until every required player has submitted.","证据已真实记录。所有必要玩家提交证据后，才能进入裁判审核。")} action={translated(language,"View Quest","查看 Quest")} href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
+        description={translated(language,"Your real proof submission is recorded. The referee cannot judge until every required player has submitted.","证据已真实记录。所有必要玩家提交证据后，才能进入裁判审核。")} action={translated(language,"View Quest","查看 Quest")} href={questRoute("quest",quest.id,returnTo)}/>:
       <>
         <section className="ios-proof-form">
           <h2><SumText en="What happened?" zh="发生了什么？"/></h2><p><SumText en="Describe the real attempt and keep the agreed proof requirements in mind." zh="请如实描述这次行动，并遵守双方事先确认的证据要求。"/></p>
@@ -172,12 +175,15 @@ function EvidenceAddContent({id}:{id?:string}) {
             </button></>:
             ["photo","video"].includes(policy) ?
               <div className="ios-app-media-proof" data-testid="ios-app-media-uploader">
-                <p className="ios-message"><SumText en="Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules." zh="请上传属于自己的、符合规则的视频或照片。上传服务会核查文件规则和参与权限；审核仍然依据双方认可的 Quest 规则。"/></p>
                 <EvidenceUploader
                   challengeId={quest.id}
                   evidenceType={quest.evidenceType}
                   onSubmitted={() => setSuccess(true)}
                 />
+                <details className="ios-proof-help" data-testid="proof-review-help">
+                  <summary><SumText en="How proof is reviewed" zh="证据如何审核"/></summary>
+                <p className="ios-message"><SumText en="Attach your own matching recording or photo. The upload service enforces file policy and participant access; review still depends on the actual accepted Quest rules." zh="请上传属于自己的、符合规则的视频或照片。上传服务会核查文件规则和参与权限；审核仍然依据双方认可的 Quest 规则。"/></p>
+                </details>
               </div> :
               <IosAction href={"/challenge/"+encodeURIComponent(quest.id)+"/versus"}>
                 <SumText en="Open policy-specific proof capture" zh="打开规定的证据采集流程"/>
@@ -188,14 +194,14 @@ function EvidenceAddContent({id}:{id?:string}) {
   </IosFrame>;
 }
 
-export function QuestCompleteScreen({id}:{id?:string}) {
+export function QuestCompleteScreen({id,returnTo}:{id?:string;returnTo?:string}) {
   const language=useSumLanguage();
   const {quest,loading,error}=useQuest(id);
-  return <IosFrame title="Quest Result" eyebrow="THE STORY YOU MADE" back={id?"/app/quest?id="+encodeURIComponent(id):"/app/today"} tone="ios-result-screen">
+  return <IosFrame title="Quest Result" eyebrow="THE STORY YOU MADE" back={id?questRoute("quest",id,returnTo):"/app/today"} navigationContext={returnTo} tone="ios-result-screen">
     {!quest?<QuestMissing loading={loading} error={error} id={id}/>:
       quest.status!=="settled" ? <IosEmpty image={visuals.portal} heading={translated(language,"The result isn't final.","结果尚未最终确认。")}
         description={translated(language,"This Quest is currently ","当前 Quest 状态：")+quest.status.replace(/_/g," ")+translated(language,". Your real receipt will appear only after the required confirmation and settlement.","。完成必要确认及结算后才会显示真实的结果记录。")}
-        action={translated(language,"View Quest status","查看 Quest 状态")} href={"/app/quest?id="+encodeURIComponent(quest.id)}/>:
+        action={translated(language,"View Quest status","查看 Quest 状态")} href={questRoute("quest",quest.id,returnTo)}/>:
       <>
         <div className="ios-complete-hero"><IosArt src={visuals.mascotHappy} alt="Pico celebrating a completed Quest"/></div>
         <h1 className="ios-page-title ios-center"><SumText en="Quest Complete!" zh="Quest 已完成！"/></h1>
@@ -206,7 +212,7 @@ export function QuestCompleteScreen({id}:{id?:string}) {
             <p>{quest.judgments[0].reasoning||translated(language,"The result was recorded without a public explanation.","结果已记录，但没有公开说明。")}</p>
           </> : <p><SumText en="No detailed judgment was returned with this record." zh="该记录没有返回详细判定信息。"/></p>}
         </section>
-        <IosAction href={"/app/quest?id="+encodeURIComponent(quest.id)}><SumText en="View result receipt" zh="查看结果记录"/></IosAction>
+        <IosAction href={questRoute("quest",quest.id,returnTo)}><SumText en="View result receipt" zh="查看结果记录"/></IosAction>
         <IosAction href="/app/create" secondary><SumText en="Create another Quest" zh="再创建一个 Quest"/></IosAction>
       </>}
   </IosFrame>;

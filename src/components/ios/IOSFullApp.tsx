@@ -43,12 +43,14 @@ function OnboardingScreen() {
     </div>
     <div className="ios-onboard-copy">
       <small>{language==="zh"?chapter.zhLabel:chapter.label}</small><h1>{language==="zh"?chapter.zhTitle:chapter.title}</h1><p>{language==="zh"?chapter.zhDescription:chapter.description}</p>
-      <div className="ios-onboard-dots" aria-label={"Introduction step "+(step+1)+" of 3"}>
+      <p className="ios-onboard-position" aria-live="polite">{language==="zh"?`第 ${step+1} 步，共 3 步`:`Step ${step+1} of 3`}</p>
+      <div className="ios-onboard-dots" aria-label={language==="zh"?`介绍第 ${step+1} 步，共 3 步`:"Introduction step "+(step+1)+" of 3"}>
         {chapters.map((_,i)=><span className={i===step?"is-active":""} key={i}/>)}
       </div>
       <button type="button" className="ios-primary" onClick={()=>step===2?finish():setStep(s=>s+1)}>
         {step===2?<SumText en="Get Started" zh="开始冒险"/>:<SumText en="Next" zh="下一步"/>} <IosIcon name="arrow" size={18}/>
       </button>
+      {step>0&&<button className="ios-text-action" type="button" onClick={()=>setStep(value=>Math.max(0,value-1))}><SumText en="Previous step" zh="上一步"/></button>}
       {step<2&&<button className="ios-text-action" type="button" onClick={finish}><SumText en="Skip introduction" zh="跳过介绍"/></button>}
     </div>
   </IosFrame>;
@@ -65,8 +67,8 @@ function SplashScreen() {
 }
 
 /** Routes are real React pages, not static pictures of an app. */
-export default function IOSFullApp({view,questId,seed}:{
-  view: string; questId?:string; seed?:string;
+export default function IOSFullApp({view,questId,seed,returnTo}:{
+  view: string; questId?:string; seed?:string; returnTo?:string;
 }) {
   switch(view){
     case "splash":return <SplashScreen/>;
@@ -74,11 +76,11 @@ export default function IOSFullApp({view,questId,seed}:{
     case "today":return <TodayScreen/>;
     case "discover":return <DiscoverScreen/>;
     case "create":return <CreateScreen seed={seed}/>;
-    case "join":return <IOSQuestJoin id={questId}/>;
+    case "join":return <IOSQuestJoin id={questId} returnTo={returnTo}/>;
     case "quest-created":return <QuestCreatedScreen id={questId}/>;
-    case "quest":return <QuestDetailScreen id={questId}/>;
-    case "evidence-add":return <EvidenceAddScreen id={questId}/>;
-    case "quest-complete":return <QuestCompleteScreen id={questId}/>;
+    case "quest":return <QuestDetailScreen id={questId} returnTo={returnTo}/>;
+    case "evidence-add":return <EvidenceAddScreen id={questId} returnTo={returnTo}/>;
+    case "quest-complete":return <QuestCompleteScreen id={questId} returnTo={returnTo}/>;
     case "picos":return <PicosScreen/>;
     case "quiz":return <QuizDuelScreen id={questId}/>;
     case "story":return <PicoStoryChapter/>;

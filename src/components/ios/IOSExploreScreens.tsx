@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
+import {useSearchParams} from "next/navigation";
+import {discoverySelection,discoveryHref,questRoute} from "@/lib/quest-navigation-context";
 import Link from "next/link";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
 import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
@@ -30,8 +32,23 @@ function classify(title:string,type:string) {
 export function DiscoverScreen() {
   const language=useSumLanguage();
   const {quests,loading,error,refresh}=useOpenQuests();
-  const [filter,setFilter]=useState<(typeof categories)[number]["id"]>("all");
-  const [search,setSearch]=useState("");
+  const params=useSearchParams();
+  const {category:filter,query:search}=discoverySelection(params);
+  const returnTo=discoveryHref(filter,search);
+  const restored=useRef(false);
+  const searchInput=useRef<HTMLInputElement>(null);
+  function changeFilters(category:string,query:string){
+    window.history.replaceState(null,"",discoveryHref(category,query));
+  }
+  useEffect(()=>{
+    if(loading||error||restored.current)return;
+    const hash=window.location.hash;
+    if(!/^#quest-[a-zA-Z0-9_-]{1,128}$/.test(hash))return;
+    const card=document.getElementById(hash.slice(1));if(!card)return;
+    restored.current=true;
+    const frame=requestAnimationFrame(()=>{card.scrollIntoView({block:"center"});card.focus({preventScroll:true});});
+    return()=>cancelAnimationFrame(frame);
+  },[loading,error,quests]);
   const visible=useMemo(()=>quests.filter(q=>
     (filter==="all"||classify(q.title,q.type)===filter)&&
     (q.title+" "+q.description+" "+q.type).toLowerCase().includes(search.toLowerCase().trim())
@@ -44,16 +61,25 @@ export function DiscoverScreen() {
     </section>
     <label className="ios-search"><IosIcon name="discover" size={18}/>
       <span className="sr-only">Search Quests</span>
-      <input aria-label={translated(language,"Search Quests","搜索 Quest")} placeholder={translated(language,"Search Quests…","搜索 Quest…")} value={search} onChange={e=>setSearch(e.target.value)}/>
+      <input aria-label={translated(language,"Search Quests","搜索 Quest")} placeholder={translated(language,"Search Quests…","搜索 Quest…")} ref={searchInput} value={search} maxLength={160} onChange={e=>changeFilters(filter,e.target.value)}/>
     </label>
-    <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{translated(language,item.label,item.zh)}</button>)}</div>
+    <div className="ios-filters" role="group" aria-label="Quest categories">{categories.map(item=><button key={item.id} type="button" className={"ios-chip"+(filter===item.id?" is-selected":"")} aria-pressed={filter===item.id} onClick={()=>changeFilters(item.id,search)}>{translated(language,item.label,item.zh)}</button>)}</div>
     <div className="ios-section__heading"><div><small><SumText en="REAL OPEN CHALLENGES" zh="真实开放挑战"/></small><h2><SumText en="Open matches" zh="开放中的对决"/></h2></div><button className="ios-text-action" type="button" onClick={refresh}><SumText en="Refresh" zh="刷新"/></button></div>
     {loading ? <IOSLoadingCards label={translated(language,"Finding public Quests…","正在寻找公开 Quest…")} /> :
-      error ? <p className="ios-message ios-message--error" role="alert">{error}</p> :
-      visible.length===0 ? <IosEmpty image={visuals.move} heading={translated(language,"A new Quest could start with you.","下一个 Quest，也许就由你开启。")}
-        description={search?translated(language,"No matching public Quests. Try another search.","没有匹配的 Quest，请换个关键词。"):translated(language,"No public open Quests right now. Be the one who starts something.","暂时没有开放的 Quest，来发起第一个吧。")}
-        action={translated(language,"Create a Quest","创建 Quest")} href="/app/create"/> :
-      <div className="ios-list">{visible.map(q=><IosQuestCard key={q.id} challenge={q}/>)}</div>}
+      error ? <section className="ios-discovery-recovery" data-testid="discovery-load-error">
+        <h2><SumText en="We could not load Quests." zh="暂时无法读取 Quest。"/></h2>
+        <p role="alert" className="ios-message ios-message--error">{error}</p>
+        <button type="button" className="ios-secondary-button" onClick={refresh}><SumText en="Try again" zh="重试"/></button>
+      </section> :
+      visible.length===0 ? (search.trim()||filter!=="all"?<section className="ios-discovery-recovery" data-testid="discovery-no-matches">
+        <IosEmpty image={visuals.move} heading={translated(language,"No matching Quests.","没有匹配的 Quest。")}
+          description={translated(language,"These filters do not match the public Quests currently loaded. Clear them or try another search.","当前筛选未匹配到已加载的公开 Quest。可以清除筛选或更换关键词。")}/>
+        <button type="button" className="ios-secondary-button" onClick={()=>{changeFilters("all","");searchInput.current?.focus();}}><SumText en="Clear filters" zh="清除筛选"/></button>
+      </section>:<IosEmpty image={visuals.move} heading={translated(language,"A new Quest could start with you.","下一个 Quest，也许就由你开启。")}
+        description={translated(language,"No public open Quests right now. Be the one who starts something.","暂时没有开放的 Quest，来发起第一个吧。")}
+        action={translated(language,"Create a Quest","创建 Quest")} href="/app/create"/>) :
+      <><p className="ios-discovery-count" role="status">{language==="zh"?`当前列表中有 ${visible.length} 个匹配结果`:`${visible.length} matching Quests in this list`}</p>
+      <div className="ios-list">{visible.map(q=><IosQuestCard key={q.id} challenge={q} returnTo={returnTo}/>)}</div></>}
     <IosAction href="/app/community" secondary><SumText en="See community activity" zh="查看社区动态"/></IosAction>
   </IosFrame>;
 }
@@ -75,7 +101,7 @@ export function CommunityScreen() {
         <span><strong>{ev.user?.username||translated(language,"SUM community","SUM 社区")}</strong>
           <small>{new Date(ev.createdAt).toLocaleString(language==="zh"?"zh-CN":"en-US")}</small></span></div>
       <p>{presentation.message}</p>
-      {ev.challenge&&<Link className="ios-feed-card__quest" href={"/app/quest?id="+encodeURIComponent(ev.challenge.id)}>
+      {ev.challenge&&<Link className="ios-feed-card__quest" href={questRoute("quest",ev.challenge.id,"/app/community")}>
         <IosArt src={visuals.grow} alt=""/>
         <span><strong>{ev.challenge.title}</strong><small>{ev.challenge.status} · {ev.challenge.type}</small></span>
         <IosIcon name="arrow" size={18}/>

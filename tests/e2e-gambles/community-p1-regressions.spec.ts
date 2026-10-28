@@ -18,7 +18,7 @@ test("community explains recorded events without exposing internal labels or inv
   await expect(page.locator(".ios-feed")).not.toContainText("ChallengeAI");
   await expect(page.locator(".ios-feed")).not.toContainText("wins");
   await expect(page.locator(".ios-feed-card").nth(1)).toContainText("qa_real_member joined Summoners World.");
-  await expect(page.getByRole("link", { name: /A friendly badminton challenge/ })).toHaveAttribute("href", "/app/quest?id=read_only_visual");
+  await expect(page.getByRole("link", { name: /A friendly badminton challenge/ })).toHaveAttribute("href", "/app/quest?id=read_only_visual&returnTo=%2Fapp%2Fcommunity");
 });
 
 test("an empty community after test isolation remains an honest empty state", async ({ page }) => {

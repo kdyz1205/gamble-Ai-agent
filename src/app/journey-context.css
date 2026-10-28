@@ -1,0 +1,12 @@
+.ios-app .ios-discovery-recovery{padding:16px;border:1px solid #d9cfeb;border-radius:18px;background:#fffdfd;text-align:center;}
+.ios-app .ios-discovery-recovery h2{font-size:19px;font-weight:800;color:#3c335e;line-height:1.4;}
+.ios-app .ios-discovery-recovery .ios-empty{border:0;box-shadow:none;padding:8px;background:transparent;}
+.ios-app .ios-discovery-recovery button{min-height:44px;min-width:120px;margin-top:12px;border:1px solid #b6a4d6;border-radius:12px;padding:10px 16px;background:#f1eaff;color:#44306d;font-weight:750;}
+.ios-app .ios-discovery-count{font-size:12px;line-height:1.6;color:#6a5b7f;margin:8px 0;}
+.ios-app .ios-quest-card{scroll-margin-block:100px 120px;}
+.ios-app .ios-quest-card:focus-visible{outline:3px solid #7951ce;outline-offset:3px;}
+.ios-app .ios-onboard-position{margin:10px 0 4px;color:#625276;font-size:13px;line-height:1.5;}
+.ios-app--night .ios-discovery-recovery{background:#2d293f;border-color:#857596;}
+.ios-app--night .ios-discovery-recovery h2{color:#f6f0ff;}
+.ios-app--night .ios-discovery-recovery button{background:#453957;color:#f6f0ff;border-color:#a191b5;}
+.ios-app--night :is(.ios-discovery-count,.ios-onboard-position){color:#ddd3eb;}

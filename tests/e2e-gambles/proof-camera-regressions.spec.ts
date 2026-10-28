@@ -60,3 +60,28 @@ test('cancelling replacement capture retains the prior link and description',asy
  await page.locator('.proof-camp textarea').fill('Keep my original note');await page.getByRole('button',{name:/^Take photo/}).click();await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);await page.getByRole('button',{name:'Cancel media capture',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);
  await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await expect(page.locator('.proof-camp input[type="url"]')).toHaveValue('https://example.invalid/original-proof.png');await expect(page.locator('.proof-camp textarea')).toHaveValue('Keep my original note');
 });
+
+for(const language of ['en','zh']as const)test(`header-only recording is not uploadable and preserves the previous source in ${language}`,async({page})=>{
+ const fixture=await mediaFixture(page);await proofFixture(page);
+ await page.addInitScript(()=>{
+  const Recorder=window.MediaRecorder;
+  window.MediaRecorder=class extends Recorder{
+   constructor(stream:MediaStream,options?:MediaRecorderOptions){super(stream,options);
+    this.addEventListener('dataavailable',event=>{
+     event.stopImmediatePropagation();
+     const handler=this.ondataavailable;
+     // Deliberately corrupt the synthetic recorder output; app code must reject
+     // nonempty invalid media, not use its byte count as proof of recording.
+     const data=new Blob([new Uint8Array([26,69,223,163,159,66,134,129,1,66,247,129,1])],{type:'video/webm'});
+     handler?.call(this,new BlobEvent('dataavailable',{data}));
+    });
+   }
+  };
+ });
+ await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:'Or paste a public HTTPS link',exact:true}).click();await page.locator('.proof-camp input[type="url"]').fill('https://example.invalid/prior-video.mp4');await page.getByRole('button',{name:/Back to upload options/}).click();await page.locator('.proof-camp textarea').fill('Keep this original proof description');
+ await page.getByRole('button',{name:/^Record video/}).click();await page.getByRole('button',{name:/Start recording/}).click();await page.waitForTimeout(500);
+ if(language==='zh')await page.getByTestId('sum-lang-zh').click();
+ await page.getByRole('button',{name:language==='zh'?/停止并保存/:/Stop & save/}).click();
+ await expect(page.locator('.proof-camp').getByRole('alert')).toContainText(language==='zh'?'无法解码':'could not be decoded');await allTracksStopped(page);await expect(page.locator('.proof-camp video[controls]')).toHaveCount(0);await expect(page.getByRole('button',{name:language==='zh'?'重新录制':'Re-record',exact:true})).toHaveCount(0);await expect(page.locator('.proof-camp textarea')).toHaveValue('Keep this original proof description');
+ await page.getByRole('button',{name:language==='zh'?'或粘贴公开 HTTPS 链接':'Or paste a public HTTPS link',exact:true}).click();await expect(page.locator('.proof-camp input[type="url"]')).toHaveValue('https://example.invalid/prior-video.mp4');expect(fixture.writes).toEqual([]);
+});
