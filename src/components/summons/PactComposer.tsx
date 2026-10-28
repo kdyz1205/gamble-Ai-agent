@@ -12,6 +12,8 @@ import QuestGlyph from "@/components/world/QuestGlyph";
 import * as api from "@/lib/api-client";
 import { COMPOSER_AUTH_CHECKPOINT, draftForComposer, readComposerCheckpoint } from "@/lib/composer-draft";
 import {advanceComposerOwner,type ComposerOwner} from "@/lib/composer-owner";
+import {useComposerInputMemory} from "./ComposerInputMemory";
+import type {ComposerInputLease} from "@/lib/composer-input-memory";
 
 const opponentOptions = ["Open match", "Invite only", "Public pool"] as const;
 const proofOptions = ["24 hours", "72 hours", "7 days"] as const;
@@ -67,6 +69,11 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
   const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const { data: session, status: sessionStatus } = useSession();
   const restoredAuthRef = useRef(false);
+  const inputMemory=useComposerInputMemory();
+  const editedBeforeRestore=useRef(false);
+  const memoryLease=useRef<ComposerInputLease|null>(null);
+  const [memoryReady,setMemoryReady]=useState(false);
+  const [inputRestored,setInputRestored]=useState(false);
   const requestBusy=useRef(false);
   const starterDialog=useRef<HTMLDialogElement>(null);
   const starterDialogId=useId();
@@ -114,6 +121,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
     if(requestBusy.current||voicePhaseRef.current!=="idle"||busy)return;
     // Suggestions change only the unsent message, never the conversation,
     // reviewed terms, retry identity, session or in-flight request.
+    editedBeforeRestore.current=true;
     setInput(starter.prompt);setSelectedStarter(starter.id);setPendingStarter(null);
     inputRef.current?.focus();
   }
@@ -193,17 +201,41 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
   useEffect(() => {
     if (sessionStatus === "loading" || restoredAuthRef.current) return;
     restoredAuthRef.current = true;
+    const accountId=session?.user?.id??null;
+    const local=appMode?inputMemory?.read(accountId):null;
+    memoryLease.current=local?.lease??null;
+    // The existing one-use OAuth checkpoint has priority. It may contain a
+    // conversation; the navigation cache never stores reviewed/published state.
+    let restoredAuth=false;
     try {
       const raw = sessionStorage.getItem(COMPOSER_AUTH_CHECKPOINT);
-      if (!raw) return;
-      sessionStorage.removeItem(COMPOSER_AUTH_CHECKPOINT);
-      const saved = readComposerCheckpoint(raw, session?.user?.id ?? null);
-      if (!saved) return;
-      setInput(saved.input); setStake(saved.settings.stake);
-      setOpponentMode(saved.settings.opponentMode as (typeof opponentOptions)[number]);
-      setProofWindow(saved.settings.proofWindow); setDraftState(saved.draft); setTurns(saved.turns);
-    } catch { /* Restricted browser storage must not block challenge creation. */ }
-  }, [sessionStatus, session?.user?.id]);
+      if (raw) {
+        sessionStorage.removeItem(COMPOSER_AUTH_CHECKPOINT);
+        const saved = readComposerCheckpoint(raw, accountId);
+        if(saved&&!editedBeforeRestore.current){
+          setInput(saved.input); setStake(saved.settings.stake);
+          setOpponentMode(saved.settings.opponentMode as (typeof opponentOptions)[number]);
+          setProofWindow(saved.settings.proofWindow); setDraftState(saved.draft); setTurns(saved.turns);
+          restoredAuth=true;
+        }
+      }
+    } catch { /* Restricted storage must not block local navigation recovery. */ }
+    if(!restoredAuth&&local?.value&&!editedBeforeRestore.current){
+      const saved=local.value;
+      setInput(saved.input);setStake(saved.stake);setOpponentMode(saved.opponentMode);
+      setProofWindow(saved.proofWindow);setSelectedStarter(saved.selectedStarter);setInputRestored(true);
+    }
+    setMemoryReady(true);
+  }, [sessionStatus, session?.user?.id,appMode,inputMemory]);
+
+  useEffect(()=>{
+    const lease=memoryLease.current;
+    if(!appMode||!inputMemory||!lease||!memoryReady||sessionStatus==="loading")return;
+    const accountId=session?.user?.id??null;
+    if(turns.length||marketUrl||isSubmitting){inputMemory.clear(accountId,lease);return;}
+    inputMemory.write(accountId,lease,{input,stake,opponentMode,proofWindow,selectedStarter});
+  },[appMode,inputMemory,memoryReady,sessionStatus,session?.user?.id,input,stake,opponentMode,proofWindow,
+    selectedStarter,turns.length,marketUrl,isSubmitting]);
 
   useEffect(()=>{
     mountedRef.current=true;
@@ -237,6 +269,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
   }
 
   function handleInput(event: FormEvent<HTMLTextAreaElement>) {
+    editedBeforeRestore.current=true;
     setInput(event.currentTarget.value);
   }
 
@@ -250,6 +283,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
       if(!current())return;
       const transcript=response.transcript.trim();
       if(!transcript){setError(ui("Pico could not hear a clear sentence. Try again closer to the microphone.","Pico 没有听清，请靠近麦克风重试。"));return;}
+      editedBeforeRestore.current=true;
       setInput(text=>text.trim()?`${text.trimEnd()} ${transcript}`:transcript);
       inputRef.current?.focus();
     }catch(err){
@@ -324,6 +358,11 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
     const message = input.trim();
     if (!message || !mountedRef.current || requestBusy.current || isSubmitting || voicePhaseRef.current!=="idle") return;
     requestBusy.current=true;
+    editedBeforeRestore.current=true;
+    // This message is now being sent. Do not restore it as a fresh unsent
+    // challenge after navigation or silently replay a possibly billed request.
+    if(memoryLease.current)inputMemory?.clear(session?.user?.id??null,memoryLease.current);
+    setInputRestored(false);
 
     triggerCastVisual();
     setIsSubmitting(true);
@@ -456,6 +495,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
                   inputMode="numeric"
                   min="0"
                   onChange={(event) => {
+                    editedBeforeRestore.current=true;
                     const next = event.target.value;
                     setStake(next);
                     if (next.trim() === "") {
@@ -482,6 +522,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
                         key={option}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
+                          editedBeforeRestore.current=true;
                           setOpponentMode(option);
                           setDraftState((current) => ({
                             ...current,
@@ -513,6 +554,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
                         key={option}
                         data-selected={selected ? "true" : "false"}
                         onClick={() => {
+                          editedBeforeRestore.current=true;
                           setProofWindow(option);
                           setDraftState((current) => ({ ...current, timeWindow: option }));
                           publishRequestIdRef.current = null;
@@ -683,6 +725,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
               </span>
             </div>
 
+
             {!appMode&&<>{starterControls}{termControls}</>}
             {turns.length > 0 && (
               <div aria-label="Challenge conversation" aria-live="polite" className="quest-conversation mt-4" ref={conversationRef} role="log" tabIndex={0}>
@@ -742,6 +785,10 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
               </div>
             </div>
 
+            {inputRestored&&!turns.length&&!isSubmitting&&<p role="status" data-testid="composer-input-restored" className="ios-footer-note">
+              {ui("Restored your input and terms. Kept only in this tab until reload or closing; never sent automatically.",
+                "已恢复输入和条款。仅在当前标签页暂存，刷新或关闭后不保留；不会自动发送。")}
+            </p>}
             {appMode&&<>
               <details className="composer-starter-ideas" data-testid="composer-starter-ideas">
                 <summary>{ui("Need an idea? Choose a starting point","需要灵感？选择一个起点")}</summary>

@@ -49,6 +49,7 @@ jobs:
       - run: npx tsx scripts/test-evidence-receipt.ts
 
       - run: npx tsx scripts/test-composer-owner.ts
+      - run: npx tsx scripts/test-composer-input-memory.ts
       - run: npx tsx scripts/test-quest-navigation-context.ts
       - run: npx tsx scripts/test-proof-interface-copy.ts
 
@@ -85,6 +86,7 @@ jobs:
           node scripts/qa-journey-proof.cjs
           npx playwright test tests/e2e-gambles/voice-lifecycle-regressions.spec.ts tests/e2e-gambles/proof-camera-regressions.spec.ts --workers=1 --output=output/media-lifecycle-tests --reporter=list
           npx playwright test tests/e2e-gambles/session-proof-boundaries.spec.ts --workers=1 --output=output/session-proof-tests --reporter=list
+          npx playwright test tests/e2e-gambles/composer-input-continuity.spec.ts --workers=1 --output=output/composer-input-continuity --reporter=list
           npx playwright test tests/e2e-gambles/composer-ux-regressions.spec.ts tests/e2e-gambles/navigation-ux-regressions.spec.ts --workers=1 --output=output/composer-nav-tests --reporter=list
           node scripts/qa-composer-navigation.cjs
           npx playwright test tests/e2e-gambles/desktop-locale-regressions.spec.ts --workers=1 --output=output/desktop-locale-tests --reporter=list
@@ -105,6 +107,7 @@ jobs:
             output/ios-full-app
             output/desktop-locale-tests
             output/composer-nav-tests
+            output/composer-input-continuity
             output/composer-navigation
             output/session-proof-tests
             output/media-lifecycle-tests
