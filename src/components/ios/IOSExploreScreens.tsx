@@ -10,6 +10,7 @@ import ProfessionSummonStudio from "./ProfessionSummonStudio";
 import FreeSummonDrawPanel from "./FreeSummonDrawPanel";
 import OwnedFamiliarCollection from "./OwnedFamiliarCollection";
 import {PROFESSIONS} from "@/lib/summons/profession-system";
+import {publicActivityPresentation} from "@/lib/public-activity-presentation";
 
 const categories=[
   { id:"all", label:"All" },{id:"move",label:"Move"},{id:"create",label:"Create"},{id:"grow",label:"Grow"},
@@ -63,18 +64,18 @@ export function CommunityScreen() {
     {loading?<IOSLoadingCards label="Loading public community activity…" rows={2}/>:
     error?<p className="ios-message ios-message--error" role="alert">{error}</p>:
     events.length===0?<IosEmpty image={visuals.create} heading="Your community starts small." description="No public activity has been recorded yet. Completed Quests and public updates will appear here when available." action="Explore Quests" href="/app/discover"/>:
-    <div className="ios-feed">{events.map(ev=><article className="ios-feed-card" key={ev.id}>
+    <div className="ios-feed">{events.map(ev=>{const presentation=publicActivityPresentation(ev);return <article className="ios-feed-card" key={ev.id}>
       <div className="ios-feed-card__author"><span className="ios-feed-card__avatar"><IosIcon name="pico"/></span>
         <span><strong>{ev.user?.username||"SUM community"}</strong>
           <small>{new Date(ev.createdAt).toLocaleString()}</small></span></div>
-      <p>{ev.message}</p>
+      <p>{presentation.message}</p>
       {ev.challenge&&<Link className="ios-feed-card__quest" href={"/app/quest?id="+encodeURIComponent(ev.challenge.id)}>
         <IosArt src={visuals.grow} alt=""/>
         <span><strong>{ev.challenge.title}</strong><small>{ev.challenge.status} · {ev.challenge.type}</small></span>
         <IosIcon name="arrow" size={18}/>
       </Link>}
-      <small>Public activity · {ev.type}</small>
-    </article>)}</div>}
+      <small>{presentation.label}</small>
+    </article>;})}</div>}
     <IosAction href="/app/create">Start a Quest with others</IosAction>
     <p className="ios-footer-note">Likes, comments and custom posts are not supported by the current service. This feed only shows recorded public activity.</p>
   </IosFrame>;

@@ -49,7 +49,11 @@ async function main() {
         }
       }
       const feed = await (await anon.get("/api/feed?limit=50")).json();
-      assert.equal(feed.events.some((event: { challengeId: string }) => event.challengeId === id), visibility === "public");
+      // These actors use the repository's explicit @example.invalid fixture
+      // marker. Even their public Quests stay out of the player activity feed.
+      // Positive ordinary-public visibility/count/pagination is covered by
+      // test-public-feed-db.ts with distinct non-fixture-domain accounts.
+      assert.equal(feed.events.some((event: { challengeId: string }) => event.challengeId === id), false);
       const discovery = await (await anon.get("/api/challenges?limit=50")).json();
       assert.equal(discovery.challenges.some((quest: { id: string }) => quest.id === id), visibility === "public");
     }
