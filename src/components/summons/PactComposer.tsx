@@ -5,7 +5,7 @@ import {SumText,useSumLanguage} from "@/components/locale/SumLanguage";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import type { CSSProperties, FormEvent } from "react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import RitualButton from "@/components/scene/RitualButton";
 import QuestGlyph from "@/components/world/QuestGlyph";
@@ -166,17 +166,17 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
     castTimersRef.current = [];
   }
 
-  function stopVoiceTracks() {
+  const stopVoiceTracks=useCallback(()=>{
     voiceStreamRef.current?.getTracks().forEach(track=>track.stop());
     voiceStreamRef.current=null;
-  }
+  },[]);
 
   function setVoiceStage(phase:VoicePhase) {
     voicePhaseRef.current=phase;
     if(mountedRef.current)setVoicePhase(phase);
   }
 
-  function cancelVoice(update=true) {
+  const cancelVoice=useCallback((update=true)=>{
     voiceEpoch.current++;
     voiceSaveRequested.current=false;
     const recorder=voiceRecorderRef.current;
@@ -188,7 +188,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
     stopVoiceTracks();
     voicePhaseRef.current="idle";
     if(update&&mountedRef.current)setVoicePhase("idle");
-  }
+  },[stopVoiceTracks]);
 
   useEffect(() => {
     if (sessionStatus === "loading" || restoredAuthRef.current) return;
@@ -214,7 +214,7 @@ function PactComposerContent({initialPrompt="",appMode=false,starterChoices=[],i
       window.removeEventListener("pagehide",leave);
       clearCastTimers();cancelVoice(false);
     };
-  },[]);
+  },[cancelVoice]);
 
   useEffect(() => {
     const log = conversationRef.current;

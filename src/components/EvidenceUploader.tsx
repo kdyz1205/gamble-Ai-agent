@@ -73,7 +73,7 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
   const mounted=useRef(true);
   const saveOwner=useRef(false);
   function isCurrentCapture(capture:Capture){return mounted.current&&captureRef.current===capture;}
-  function releaseCapture(capture:Capture){
+  const releaseCapture=useCallback((capture:Capture)=>{
     if(captureRef.current===capture)captureRef.current=null;
     const recorder=capture.recorder;
     if(recorder){
@@ -83,18 +83,18 @@ function EvidenceUploaderContent({challengeId,evidenceType,onSubmitted,ownerId}:
     capture.stream?.getTracks().forEach(track=>track.stop());
     if(capture.video){capture.video.pause();capture.video.srcObject=null;}
     capture.chunks=[];
-  }
-  function cancelCapture(update=true){
+  },[]);
+  const cancelCapture=useCallback((update=true)=>{
     const capture=captureRef.current;
     if(capture)releaseCapture(capture);
     if(update&&mounted.current){setCapturePending(false);setRecording(false);setStream(null);setMode(null);}
-  }
+  },[releaseCapture]);
   useEffect(()=>{
     mounted.current=true;
     const leave=()=>cancelCapture();
     window.addEventListener("pagehide",leave);
     return()=>{mounted.current=false;window.removeEventListener("pagehide",leave);cancelCapture(false);};
-  },[]);
+  },[cancelCapture]);
 
   const resetAll = useCallback(() => {
     setFile(null);
