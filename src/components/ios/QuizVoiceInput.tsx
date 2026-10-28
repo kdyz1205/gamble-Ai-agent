@@ -1,4 +1,6 @@
 "use client";
+import {interfaceCopy} from "@/lib/interface-copy";
+import {SumText,useSumLanguage} from "@/components/locale/SumLanguage";
 
 import {useEffect,useRef,useState} from "react";
 import {transcribeAudio} from "@/lib/api-client";
@@ -9,6 +11,8 @@ export function QuizVoiceInput({value,onChange,onResult,disabled=false}:{
   value:string;onChange:(text:string)=>void;
   onResult:(result:Result)=>void;disabled?:boolean;
 }){
+  const uiLanguage=useSumLanguage();
+  const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const [language,setLanguage]=useState<Language>("auto");
   const [recording,setRecording]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -136,27 +140,24 @@ export function QuizVoiceInput({value,onChange,onResult,disabled=false}:{
       if(active.current)setError(err instanceof Error?err.message:"Microphone permission denied.");
     }
   };
-  return <section className="ios-quiz-voice" aria-label="Voice Quiz request">
-    <div className="ios-quiz-languages" role="group" aria-label="Voice language">
+  return <section className="ios-quiz-voice" aria-label={t("Voice Quiz request")}>
+    <div className="ios-quiz-languages" role="group" aria-label={t("Voice language")}>
       {(["auto","en","zh"] as const).map(l=><button key={l} type="button"
         aria-pressed={language===l} disabled={busy||recording||disabled}
         onClick={()=>setLanguage(l)}>
-        {l==="auto"?"Auto":l==="en"?"EN":"中文"}
+        {l==="auto"?t("Auto"):l==="en"?"EN":"中文"}
       </button>)}
     </div>
     <button className="ios-secondary-button" type="button"
       data-testid="quiz-microphone"
       disabled={busy||disabled}
       onClick={()=>void (recording?stop():start())}>
-      {busy?"Transcribing…":recording?"Stop recording":"Speak your Quiz"}
+      {busy?t("Transcribing…"):recording?t("Stop recording"):t("Speak your Quiz")}
     </button>
-    <p className="ios-summon-hint">
-      Your microphone is used only after pressing Record. Text is editable and
-      creating the Quiz requires a separate confirmation.
-    </p>
+    <p className="ios-summon-hint"> <SumText en="Your microphone is used only after pressing Record. Text is editable and creating the Quiz requires a separate confirmation." zh="只有点击录音后才会使用麦克风。文字可以编辑，创建 Quiz 需要另行确认。"/> </p>
     {preview&&recording&&<p role="status" className="ios-quiz-transcript">
       Hearing: {preview}
     </p>}
-    {error&&<p role="alert" className="ios-message ios-message--error">{error}</p>}
+    {error&&<p role="alert" className="ios-message ios-message--error">{t(error)}</p>}
   </section>;
 }

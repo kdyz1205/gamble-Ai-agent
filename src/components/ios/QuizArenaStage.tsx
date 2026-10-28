@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import {useCallback,useState,type CSSProperties} from "react";
 import {visuals} from "./IOSAppUI";
 import QuizArenaParticles from "./QuizArenaParticles";
+import {SumText,useSumLanguage,translated,type SumLanguage} from "@/components/locale/SumLanguage";
 
 const Pico3DScene=dynamic(()=>import("./Pico3DScene"),{ssr:false});
 
@@ -28,7 +29,18 @@ const SPARKS=Array.from({length:22},(_,index)=>({
   size:index%5===0?4:2,
 }));
 
-function statusText(phase:Phase,outcome:Outcome){
+function statusText(phase:Phase,outcome:Outcome,language:SumLanguage){
+  if(language==="zh"){
+    if(phase==="preview")return "竞技场预览 · 尚未开始比赛";
+    if(phase==="open")return "邀请已创建 · 等待对手确认";
+    if(phase==="live")return "对决进行中 · 答案由服务器核验";
+    if(phase==="cancelled")return "邀请已取消 · 没有奖励";
+    if(outcome==="won")return "胜利已核验 · 服务器结果记录";
+    if(outcome==="lost")return "比赛已结束 · 结果已核验";
+    if(outcome==="tie")return "平局 · 双方正确题数相同";
+    if(outcome==="timeout")return "对决已超时 · 没有胜者";
+    return "比赛已结束 · 请核对服务器记录";
+  }
   if(phase==="preview")return "Arena preview · no active match";
   if(phase==="open")return "Invitation created · challenger not yet confirmed";
   if(phase==="live")return "Match live · answers verified by the server";
@@ -45,6 +57,7 @@ function statusText(phase:Phase,outcome:Outcome){
  * or reveals an answer. Phase and outcome come from the existing API.
  */
 export default function QuizArenaStage({phase,creator,opponent,outcome=null,winnerSide=null}:Props){
+  const language=useSumLanguage();
   const resolved=phase==="completed"&&winnerSide!==null;
   const [show3D,setShow3D]=useState(false);
   const [ready3D,setReady3D]=useState(false);
@@ -81,15 +94,15 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
         } as CSSProperties}/>)}
     </div>
     <div className="ios-quiz-arena__top">
-      <span className="ios-quiz-arena__eyebrow">SUMMONER ARENA <span aria-hidden="true">✦</span></span>
+      <span className="ios-quiz-arena__eyebrow"><SumText en="SUMMONER ARENA" zh="召唤师竞技场"/> <span aria-hidden="true">✦</span></span>
       <div className="ios-quiz-arena__top-actions">
         <button type="button" className="ios-quiz-arena__mode"
           data-testid="toggle-pico-3d"
           aria-label={show3D?"Return to Pico illustrations":"Show procedural Pico 3D prototype"}
           aria-pressed={show3D} onClick={switchMode}>
-          {show3D?"2D ART":"3D MODE"}
+          {show3D?<SumText en="2D ART" zh="2D 插画"/>:<SumText en="3D MODE" zh="3D 模式"/>}
         </button>
-        <span className="ios-quiz-arena__free">FREE · 0 CREDITS</span>
+        <span className="ios-quiz-arena__free"><SumText en="FREE · 0 CREDITS" zh="免费 · 0 积分"/></span>
       </div>
     </div>
     <div className="ios-quiz-arena__fighters">
@@ -104,7 +117,7 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
           alt="" draggable={false}/>
         <span className="ios-quiz-arena__fighter-label">
           <small>SUMMONER ONE</small>
-          <strong>{creator||"Your Pico"}</strong>
+          <strong>{creator||translated(language,"Your Pico","你的 Pico")}</strong>
         </span>
         {phase==="completed"&&winnerSide==="creator"&&
           <span className="ios-quiz-arena__winner-mark">WINNER</span>}
@@ -123,7 +136,7 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
           alt="" draggable={false}/>
         <span className="ios-quiz-arena__fighter-label">
           <small>SUMMONER TWO</small>
-          <strong>{opponent||"Friend pending"}</strong>
+          <strong>{opponent||translated(language,"Friend pending","等待好友加入")}</strong>
         </span>
         {phase==="completed"&&winnerSide==="opponent"&&
           <span className="ios-quiz-arena__winner-mark">WINNER</span>}
@@ -135,6 +148,6 @@ export default function QuizArenaStage({phase,creator,opponent,outcome=null,winn
       Original mesh prototype · drag to rotate</span>}
     {modelError&&<p className="ios-quiz-arena__fallback" role="status">
       3D is unavailable here. The illustrated Pico is still playable.</p>}
-    <p className="ios-quiz-arena__status" role="status">{statusText(phase,outcome)}</p>
+    <p className="ios-quiz-arena__status" role="status">{statusText(phase,outcome,language)}</p>
   </section>;
 }

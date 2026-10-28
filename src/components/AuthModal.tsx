@@ -1,6 +1,8 @@
 "use client";
+import {interfaceCopy} from "@/lib/interface-copy";
+import {SumText,SumLanguageSwitch,useSumLanguage} from "@/components/locale/SumLanguage";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { createPortal } from "react-dom";
@@ -30,6 +32,9 @@ const ROSE_BG = "#fff0ed";
 const ROSE_TEXT = "#94473E";
 
 export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, initialMode = "register", returnTo }: Props) {
+  const fieldId=useId();
+  const uiLanguage=useSumLanguage();
+  const t=(text:string)=>interfaceCopy(uiLanguage,text);
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -234,7 +239,8 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
               />
 
               <div className="relative p-6 sm:p-7">
-                <button type="button" className="sum-auth-close" aria-label="Close sign-in" onClick={closeDialog}>×</button>
+                <button type="button" className="sum-auth-close" aria-label={t("Close sign-in")} onClick={closeDialog}>×</button>
+                <div className="sum-auth-language"><SumLanguageSwitch surface="auth"/></div>
                 {/* Success overlay */}
                 <AnimatePresence>
                   {success && (
@@ -261,9 +267,7 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                       >
                         <PicoFamiliar className="h-20 w-20" mood="celebrate" />
                       </motion.div>
-                      <p className="text-base font-bold" style={{ color: MINT_TEXT }}>
-                        You&apos;re in! Your quest world is ready.
-                      </p>
+                      <p className="text-base font-bold" style={{ color: MINT_TEXT }}> <SumText en="You're in! Your quest world is ready." zh="登录成功，你的 Quest 世界已准备好。"/> </p>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -294,12 +298,12 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                       transition={{ duration: 0.25 }}
                     >
                       <h2 id="summon-auth-title" className="text-2xl font-bold" style={{ color: NAVY }}>
-                        {mode === "register" ? "Join Summoners World" : "Welcome back, Summoner"}
+                        {mode === "register" ? t("Join Summoners World") : t("Welcome back, Summoner")}
                       </h2>
                       <p className="text-sm mt-1.5" style={{ color: NAVY_DIM }}>
                         {mode === "register"
-                          ? "Make your first quest a reality"
-                          : "Pick up your next quest"}
+                          ? t("Make your first quest a reality")
+                          : t("Pick up your next quest")}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -312,16 +316,14 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                   <div className="mb-4 px-4 py-3 rounded-2xl text-xs font-semibold leading-relaxed"
                     style={{ background: ROSE_BG, color: ROSE_TEXT, border: `1px solid ${ROSE_TEXT}33` }}>
                     <p className="mb-2">
-                      Google blocks sign-in from in-app browsers. Open this page in <b>Safari</b> or <b>Chrome</b> directly, or use email + password below.
+                      Google blocks sign-in from in-app browsers. Open this page in <b>Safari</b> <SumText en="or" zh="或"/> <b>Chrome</b> directly, or use email + password below.
                     </p>
                     <button
                       type="button"
                       onClick={copySiteLink}
                       className="px-3 py-1.5 text-[11px] font-black rounded-full active:scale-95 transition-transform"
-                      style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}>
-                      Copy link
-                    </button>
-                    {webviewCopyNotice && <p className="mt-2 text-xs">{webviewCopyNotice}</p>}
+                      style={{ color: ROSE_TEXT, background: "#FFFFFF", border: `1px solid ${ROSE_TEXT}` }}> <SumText en="Copy link" zh="复制链接"/> </button>
+                    {webviewCopyNotice && <p className="mt-2 text-xs">{t(webviewCopyNotice)}</p>}
                   </div>
                 )}
 
@@ -358,16 +360,12 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                       fill="#EA4335"
                     />
-                  </svg>
-                  Continue with Google
-                </motion.button>
+                  </svg> <SumText en="Continue with Google" zh="使用 Google 继续"/> </motion.button>
 
                 {/* Divider */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
-                  <span className="text-xs font-medium" style={{ color: NAVY_DIM }}>
-                    or
-                  </span>
+                  <span className="text-xs font-medium" style={{ color: NAVY_DIM }}> <SumText en="or" zh="或"/> </span>
                   <div className="flex-1 h-px" style={{ background: NAVY_FAINT }} />
                 </div>
 
@@ -394,11 +392,10 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <div>
-                    <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
-                      Email
-                    </label>
+                    <label htmlFor={fieldId+"-email"} className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}> <SumText en="Email" zh="邮箱"/> </label>
                     <input
                       type="email"
+                      id={fieldId+"-email"}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@email.com"
@@ -419,14 +416,13 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                         className="overflow-hidden"
                       >
                         <div>
-                          <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
-                            Nickname
-                          </label>
+                          <label htmlFor={fieldId+"-username"} className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}> <SumText en="Nickname" zh="昵称"/> </label>
                           <input
                             type="text"
-                            value={username}
+                            id={fieldId+"-username"}
+                      value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="What should we call you?"
+                            placeholder={t("What should we call you?")}
                             required
                             className={inputClass}
                             style={inputStyle}
@@ -437,14 +433,13 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                   </AnimatePresence>
 
                   <div>
-                    <label className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}>
-                      Password
-                    </label>
+                    <label htmlFor={fieldId+"-password"} className="block text-xs font-semibold mb-1.5" style={{ color: NAVY_DIM }}> <SumText en="Password" zh="密码"/> </label>
                     <input
                       type="password"
+                      id={fieldId+"-password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder={t("At least 6 characters")}
                       required
                       minLength={6}
                       className={inputClass}
@@ -477,12 +472,12 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
                         />
-                        {mode === "register" ? "Creating…" : "Signing in…"}
+                        {mode === "register" ? t("Creating…") : t("Signing in…")}
                       </span>
                     ) : mode === "register" ? (
-                      "Enter the Quest World"
+                      t("Enter the Quest World")
                     ) : (
-                      "Sign In"
+                      t("Sign In")
                     )}
                   </motion.button>
                 </form>
@@ -503,8 +498,8 @@ export default function AuthModal({ open, onClose, onSuccess, onBeforeRedirect, 
                     onMouseLeave={(e) => (e.currentTarget.style.color = NAVY_DIM)}
                   >
                     {mode === "register"
-                      ? "Already have an account? Sign in"
-                      : "New here? Create an account"}
+                      ? t("Already have an account? Sign in")
+                      : t("New here? Create an account")}
                   </button>
                 </div>
               </div>

@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import {SumLanguageSwitch,useSumLanguage,translated} from "@/components/locale/SumLanguage";
+import {questStatusText} from "@/lib/interface-language";
 
 type IconName = "home" | "discover" | "create" | "pico" | "user" | "back" | "arrow"
   | "star" | "camera" | "check" | "spark" | "calendar" | "shield" | "chart"
@@ -68,14 +70,47 @@ export function IosAction({ href, children, secondary = false, className = "" }:
 }
 
 const tabs = [
-  { href: "/app/today", label: "Home", icon: "home" },
-  { href: "/app/discover", label: "Discover", icon: "discover" },
-  { href: "/app/create", label: "Create", icon: "create" },
-  { href: "/app/picos", label: "Familiars", icon: "pico" },
-  { href: "/app/profile", label: "Profile", icon: "user" },
+  { href: "/app/today", label: "Home", zh: "首页", icon: "home" },
+  { href: "/app/discover", label: "Discover", zh: "发现", icon: "discover" },
+  { href: "/app/create", label: "Create", zh: "创建", icon: "create" },
+  { href: "/app/picos", label: "Familiars", zh: "召唤兽", icon: "pico" },
+  { href: "/app/profile", label: "Profile", zh: "我的", icon: "user" },
 ] as const;
 
+const appTitles:Record<string,string>={
+  "Quest HQ":"Quest 大厅","Discover":"发现挑战",
+  "Quest Forge":"创建 Quest","Familiars":"召唤兽",
+  "Voice Quiz Duel":"双人 Quiz","Pico · Chapter One":"Pico · 第一章",
+  "Quest Detail":"Quest 详情","Quest Invitation":"Quest 邀请",
+  "Add Evidence":"提交证据","Quest Result":"Quest 结果",
+  "New Quest":"新建 Quest","Profile":"个人主页",
+  "Achievements":"成就","Stats":"统计","Evidence":"证据",
+  "Settings":"设置","Community":"社区",
+  "My Evidence":"我的证据","Your Journey":"我的历程",
+  "Quest Created":"Quest 创建成功","Quest Complete":"Quest 已完成",
+};
+const appEyebrows:Record<string,string>={
+  "YOUR LIVE GAME":"你的游戏世界",
+  "SHARED POSSIBILITIES":"一起探索更多可能",
+  "YOUR IDEA · PICO HELPS":"你的想法 · Pico 陪你",
+  "COMPANIONS FOR REAL QUESTS":"真实 Quest 的冒险伙伴",
+  "VERIFIED · FRIEND VS FRIEND":"双人对决 · 结果可核查",
+  "ONE STORY · ONE MOVE":"一段剧情 · 一个技能",
+  "YOUR REAL ADVENTURE":"你的真实冒险",
+  "READ · AGREE · ENTER":"阅读 · 同意 · 加入",
+  "THE PROOF CHAPTER":"证据提交",
+  "THE STORY YOU MADE":"你的结果记录",
+  "A NEW ADVENTURE":"新的冒险",
+  "YOUR OWN LITTLE WORLD":"你的 Quest 世界",
+  "MILESTONES":"成长里程碑",
+  "YOUR PRIVATE PROOF GALLERY":"你的私人证据库",
+  "REAL QUEST ACTIVITY":"真实 Quest 活动",
+  "MAKE IT YOUR OWN":"个性化设置",
+  "REAL PEOPLE · REAL PROGRESS":"真实玩家 · 真实进度",
+};
+
 export function IosBottomNav() {
+  const language=useSumLanguage();
   const path = usePathname();
   const active = path === "/app" ? "/app/today"
     : path.startsWith("/app/quest") || path.startsWith("/app/evidence-add") ? "/app/today"
@@ -83,11 +118,11 @@ export function IosBottomNav() {
     : path.startsWith("/app/community") ? "/app/discover"
     : path;
   return <nav className="ios-tabbar" aria-label="iOS app navigation" data-testid="ios-tabbar">
-    {tabs.map(({ href,label,icon }) => <Link key={href} href={href}
-      aria-label={label} aria-current={active === href ? "page" : undefined}
+    {tabs.map(({ href,label,zh,icon }) => <Link key={href} href={href}
+      aria-label={translated(language,label,zh)} aria-current={active === href ? "page" : undefined}
       className={"ios-tab" + (active === href ? " ios-tab--active" : "") + (label === "Create" ? " ios-tab--create" : "")}>
       <span className="ios-tab__icon"><IosIcon name={icon} size={21}/></span>
-      <span>{label}</span>
+      <span>{translated(language,label,zh)}</span>
     </Link>)}
   </nav>;
 }
@@ -96,6 +131,8 @@ export function IosFrame({ title, eyebrow, back, children, hero, withNav = true,
   title?: string; eyebrow?: string; back?: string; children: ReactNode;
   hero?: ReactNode; withNav?: boolean; tone?: string;
 }) {
+  const language=useSumLanguage();
+  const path=usePathname();
   const [night,setNight]=useState(false);
   const [reduceMotion,setReduceMotion]=useState(false);
   const [hydrated,setHydrated]=useState(false);
@@ -111,18 +148,23 @@ export function IosFrame({ title, eyebrow, back, children, hero, withNav = true,
     window.addEventListener("sum-ios-preferences-changed",update);
     return ()=>window.removeEventListener("sum-ios-preferences-changed",update);
   },[]);
-  return <div className={"ios-app " + tone + (night?" ios-app--night":"")} data-hydrated={hydrated} data-reduce-motion={reduceMotion} data-testid="ios-full-app">
+  return <div className={"ios-app " + tone + (night?" ios-app--night":"")} data-hydrated={hydrated} data-reduce-motion={reduceMotion} data-testid="ios-full-app" data-product-surface="web-app" data-view={path.split("/")[2]||"today"}>
     {title && <header className="ios-header">
-      {back ? <Link className="ios-back" aria-label="Back" href={back}><IosIcon name="back" size={19}/></Link>
+      {back ? <Link className="ios-back" aria-label={translated(language,"Back","返回")} href={back}><IosIcon name="back" size={19}/></Link>
         : <span className="ios-header__brand">SUM <span>✦</span></span>}
       <div className="ios-header__title">
-        {eyebrow && <small>{eyebrow}</small>}
-        <strong>{title}</strong>
+        {eyebrow && <small>{translated(language,eyebrow,appEyebrows[eyebrow]||eyebrow)}</small>}
+        <strong>{translated(language,title,appTitles[title]||title)}</strong>
       </div>
-      <Link aria-label="Your profile" href="/app/profile" className="ios-header__avatar">
-        <IosIcon name="pico" size={22}/>
-      </Link>
+      <div className="ios-header__controls">
+        <SumLanguageSwitch surface="app"/>
+        <Link aria-label={translated(language,"Your profile","个人主页")}
+          href="/app/profile" className="ios-header__avatar">
+          <IosIcon name="pico" size={22}/>
+        </Link>
+      </div>
     </header>}
+    {!title&&<div className="ios-intro-language"><SumLanguageSwitch surface="app"/></div>}
     {hero}
     <main className="ios-main" id="ios-app-main">{children}</main>
     {withNav && <IosBottomNav/>}
@@ -143,15 +185,16 @@ export function IosQuestCard({ challenge, compact = false }: {
   challenge: {id:string; title:string; status:string; type:string; stake:number; deadline:string|null; _count?:{evidence:number}};
   compact?: boolean;
 }) {
-  const status = challenge.status.replace(/_/g," ");
+  const language=useSumLanguage();
+  const status = questStatusText(language,challenge.status);
   const image = /fit|sport|run|walk|badminton/i.test(challenge.title+" "+challenge.type) ? visuals.move
     : /draw|paint|art|creat|music/i.test(challenge.title+" "+challenge.type) ? visuals.create : visuals.grow;
   return <Link href={"/app/quest?id="+encodeURIComponent(challenge.id)}
     className={"ios-quest-card" + (compact ? " ios-quest-card--small" : "")} data-testid="ios-quest-card">
     <span className="ios-quest-card__cover"><IosArt src={image}/></span>
     <span className="ios-quest-card__body"><strong>{challenge.title}</strong>
-      <small>{challenge.type} · {status} · {challenge.stake > 0 ? challenge.stake+" credits" : "Free"}</small>
-      {challenge.deadline && <small>Due {new Date(challenge.deadline).toLocaleDateString()}</small>}
+      <small>{challenge.type} · {status} · {challenge.stake > 0 ? challenge.stake+translated(language," credits"," 积分") : translated(language,"Free","免费")}</small>
+      {challenge.deadline && <small>{translated(language,"Due ","截止 ")}{new Date(challenge.deadline).toLocaleDateString(language==="zh"?"zh-CN":"en-US")}</small>}
     </span><IosIcon name="arrow" size={18}/>
   </Link>;
 }

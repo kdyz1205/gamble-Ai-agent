@@ -1,4 +1,5 @@
 "use client";
+import {interfaceCopy} from "@/lib/interface-copy";
 
 import {useCallback,useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
@@ -7,6 +8,7 @@ import {IosFrame,IosAction} from "./IOSAppUI";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import {QuizVoiceInput} from "./QuizVoiceInput";
 import QuizArenaStage from "./QuizArenaStage";
+import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 
 const TOPICS=[
   {id:"general",label:"General knowledge / 常识"},
@@ -74,6 +76,8 @@ export default function QuizDuelScreen({id}:{id?:string}){
 }
 
 function QuizDuelSession({id}:{id?:string}){
+  const language=useSumLanguage();
+  const t=(text:string)=>interfaceCopy(language,text);
   const {status}=useSession();
   const router=useRouter();
   const [topic,setTopic]=useState<Topic>("general");
@@ -247,65 +251,72 @@ function QuizDuelSession({id}:{id?:string}){
     <section className="ios-quiz-hero ios-quiz-hero--compact"
       data-testid="ios-duel-hud" aria-label="Duel controls and match status">
       <div className="ios-quiz-hero__top">
-        <span className="ios-overline">1V1 · VERIFIED QUIZ</span>
-        <span className="ios-quiz-hero__phase">{arenaPhase.toUpperCase()}</span>
+        <span className="ios-overline"><SumText en="1V1 · VERIFIED QUIZ" zh="双人对决 · 结果可核查"/></span>
+        <span className="ios-quiz-hero__phase">{translated(language,arenaPhase.toUpperCase(),({preview:"演示",open:"待加入",live:"进行中",completed:"已完成",cancelled:"已取消"} as const)[arenaPhase])}</span>
       </div>
-      <h1>{quiz?.status==="open"?"Invite your challenger":
+      <h1>{translated(language,
+      quiz?.status==="open"?"Invite your challenger":
         quiz?.status==="live"?quiz.ownSubmitted?"Answers locked in":"Your turn to play":
         quiz?.status==="completed"?"Your match receipt is ready":
-        quiz?.status==="cancelled"?"Invitation closed":"Challenge a friend to a Quiz"}</h1>
-      <p>{quiz?.status==="live"?"Both players receive the same three sealed questions. The server checks each answer.":
+        quiz?.status==="cancelled"?"Invitation closed":"Challenge a friend to a Quiz",
+      quiz?.status==="open"?"邀请你的对手":
+        quiz?.status==="live"?quiz.ownSubmitted?"答案已提交":"轮到你答题":
+        quiz?.status==="completed"?"已生成比赛记录":
+        quiz?.status==="cancelled"?"邀请已关闭":"邀请朋友进行 Quiz 对决")}</h1>
+      <p>{translated(language,
+      quiz?.status==="live"?"Both players receive the same three sealed questions. The server checks each answer.":
         quiz?.status==="completed"?"The server has finalized the score. Review the sealed result below.":
         quiz?.status==="cancelled"?"No credits were reserved or transferred.":
-        "Speak, invite, then answer three sealed questions. A server receipt confirms the outcome."}</p>
-      <strong>Free challenge · 0 credits at stake</strong>
+        "Speak, invite, then answer three sealed questions. A server receipt confirms the outcome.",
+      quiz?.status==="live"?"双方回答同样的三道题，答案由服务器核验。":
+        quiz?.status==="completed"?"比分已由服务器结算，请查看下方可核查的记录。":
+        quiz?.status==="cancelled"?"此次取消没有预留或转移积分。":
+        "描述想出的题目、邀请好友、回答三道题，最后查看服务器结果。")}</p>
+      <strong><SumText en="Free challenge · 0 credits at stake" zh="免费对决 · 不押注积分"/></strong>
     </section>
-    {status==="loading"?<p role="status">Checking account…</p>:
+    {status==="loading"?<p role="status"><SumText en="Checking account…" zh="正在核对账号…"/></p>:
       status!=="authenticated"?<AuthInvitation
-        title="Sign in to play a real Quiz"
-        detail="Both people must sign in separately. No account is shared with the AI provider."/>:
+        title={translated(language,"Sign in to play a real Quiz","登录后开始真实 Quiz")}
+        detail={translated(language,"Both people must sign in separately. No account is shared with the AI provider.","双方分别登录自己的账号，不向 AI 提供方共享账号。")}/>:
       !pilotEnabled?<section className="ios-quiz-card" aria-label="Quiz activation status"
         data-testid="quiz-pilot-disabled" role="status">
-        <h2>{runtimeError?"Quiz configuration is unavailable":
-          runtime?"Free Quiz pilot is not active here":"Checking secure Quiz configuration…"}</h2>
+        <h2>{runtimeError?translated(language,"Quiz configuration is unavailable","暂时无法读取 Quiz 配置"):
+          runtime?translated(language,"Free Quiz pilot is not active here","当前服务器未启用免费 Quiz"):translated(language,"Checking secure Quiz configuration…","正在核对 Quiz 配置…")}</h2>
         {runtimeError&&<>
           <p role="alert">{runtimeError}</p>
           <button type="button" className="ios-secondary-button"
             onClick={()=>setRuntimeRetry(value=>value+1)}>
-            Retry Quiz configuration
+            <SumText en="Retry Quiz configuration" zh="重新读取 Quiz 配置"/>
           </button>
         </>}
         <p>Creating or joining Quizzes requires a separately migrated, explicitly
           enabled test environment. No account, answer or credit will be changed.</p>
       </section>:
       !id?<section className="ios-quiz-card" data-testid="quiz-create-form">
-        <h2>1. Describe your Quiz</h2>
+        <h2><SumText en="1. Describe your Quiz" zh="1. 描述你的 Quiz"/></h2>
         <QuizVoiceInput value={description} disabled={working}
           onChange={updateDescription}
           onResult={v=>setVoiceNotice(v.usedFallback?
             "Browser transcription was used; confirm every word before creating.":
             "Audio was transcribed. Please review the text and rules.")}/>
-        <label className="ios-quiz-label">Voice transcript / editable instructions
-          <textarea rows={3} value={description} maxLength={300}
+        <label className="ios-quiz-label"><SumText en="Voice transcript / editable instructions" zh="语音文字 / 可编辑说明"/> <textarea rows={3} value={description} maxLength={300}
             data-testid="quiz-voice-transcript" disabled={working}
             placeholder="Challenge a friend to a science quiz / 跟朋友比三道数学题"
             onChange={e=>updateDescription(e.target.value)}/>
         </label>
         {voiceNotice&&<p role="status" className="ios-quiz-hint">{voiceNotice}</p>}
-        <label className="ios-quiz-label">Question category
-          <select value={topic} disabled={working} onChange={e=>{
+        <label className="ios-quiz-label"><SumText en="Question category" zh="题目类别"/> <select value={topic} disabled={working} onChange={e=>{
             setTopic(e.target.value as Topic);topicWasChosen.current=true;requestKey.current=null;
-          }} aria-label="Quiz topic">
+          }} aria-label={t("Quiz topic")}>
             {TOPICS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </label>
-        <label className="ios-quiz-label">Invite a username (optional)
-          <input value={opponent} maxLength={48} disabled={working}
-            placeholder="Leave blank to invite with a link"
+        <label className="ios-quiz-label"><SumText en="Invite a username (optional)" zh="邀请玩家用户名（可选）"/> <input value={opponent} maxLength={48} disabled={working}
+            placeholder={t("Leave blank to invite with a link")}
             onChange={e=>{setOpponent(e.target.value);requestKey.current=null;}}/>
         </label>
         <div className="ios-quiz-rules">
-          <strong>2. Verify the match rules</strong>
+          <strong><SumText en="2. Verify the match rules" zh="2. 核对比赛规则"/></strong>
           <p>Three multiple-choice questions · 15 minutes once joined · one
           final answer per person · no edits · a tie stays a draw. Missing
           answers at timeout produce no winner. Answers are checked by a fixed
@@ -315,11 +326,11 @@ function QuizDuelSession({id}:{id?:string}){
         </div>
         <button data-testid="quiz-create-submit" type="button" className="ios-primary"
           disabled={working} onClick={()=>void create()}>
-          {working?"Creating…":"Confirm and create free Quiz"}
+          {working?t("Creating…"):t("Confirm and create free Quiz")}
         </button>
       </section>:
       <section className="ios-quiz-card" data-testid="quiz-duel-room">
-        {loading&&!quiz?<p role="status">Loading Quiz invitation…</p>:
+        {loading&&!quiz?<p role="status"><SumText en="Loading Quiz invitation…" zh="正在读取 Quiz 邀请…"/></p>:
           quiz?<div className="ios-quiz-room">
             <div className="ios-quiz-heading">
               <span className="ios-overline">{quiz.status.toUpperCase()} · {quiz.topic}</span>
@@ -333,35 +344,33 @@ function QuizDuelSession({id}:{id?:string}){
               <small>Question commitment: <code>{quiz.answerCommitment.slice(0,14)}…</code></small>
             </div>
             {quiz.status==="open"&&<>
-              <h3>1. Invite a friend</h3>
+              <h3><SumText en="1. Invite a friend" zh="1. 邀请朋友"/></h3>
               <p>Share this URL. The other person needs their own account,
                 accepts the Quiz, then both receive the same three questions.</p>
               <button type="button" className="ios-secondary-button"
                 onClick={()=>void share()} data-testid="quiz-share-invite">
-                {copied?"Invitation shared or copied":"Share invitation link"}
+                {copied?t("Invitation shared or copied"):t("Share invitation link")}
               </button>
               {quiz.isCreator&&<button type="button" className="ios-secondary-button"
                 data-testid="quiz-cancel-invite" disabled={working}
-                onClick={()=>void postAction("/cancel")}>
-                Cancel unaccepted invitation · 0 credit refund needed
-              </button>}
+                onClick={()=>void postAction("/cancel")}> <SumText en="Cancel unaccepted invitation · 0 credit refund needed" zh="取消尚未被接受的邀请 · 无需退还积分"/> </button>}
               {quiz.canJoin?<button className="ios-primary" type="button"
                 data-testid="quiz-accept-invite" disabled={working}
                 onClick={()=>void postAction("/accept")}>
-                {working?"Joining…":"Accept free Quiz · 0 credits"}
+                {working?t("Joining…"):t("Accept free Quiz · 0 credits")}
               </button>:
-              <p className="ios-quiz-hint">Waiting for the invited player to accept.</p>}
+              <p className="ios-quiz-hint"><SumText en="Waiting for the invited player to accept." zh="正在等待受邀玩家接受邀请。"/></p>}
             </>}
             {quiz.status==="cancelled"&&<div role="status"
               data-testid="quiz-cancelled">
               This free Quiz invitation was canceled before the other player joined.
               No credits were reserved or transferred.
-              <IosAction href="/app/quiz" secondary>Create a new Quiz</IosAction>
+              <IosAction href="/app/quiz" secondary><SumText en="Create a new Quiz" zh="创建新的 Quiz"/></IosAction>
             </div>}
             {quiz.status==="live"&&<>
-              <h3>2. Answer the same three questions</h3>
+              <h3><SumText en="2. Answer the same three questions" zh="2. 回答相同的三道题"/></h3>
               <p role="status" className="ios-quiz-timer">
-                {expired?"The answer deadline has passed.":
+                {expired?t("The answer deadline has passed."):
                   "Time remaining: "+Math.floor(remain/60)+"m "+(remain%60)+"s"}
               </p>
               {quiz.accepted&&quiz.questions?
@@ -386,32 +395,30 @@ function QuizDuelSession({id}:{id?:string}){
                   <button className="ios-primary" type="button"
                     data-testid="quiz-submit-answers" disabled={!canSubmit}
                     onClick={()=>void postAction("/answer",{answers:choices})}>
-                    {working?"Saving…":"Submit answers permanently"}
+                    {working?t("Saving…"):t("Submit answers permanently")}
                   </button>
                   <p className="ios-quiz-hint">You cannot change answers after
                     submitting. The server—not the device—checks the result.</p>
-                </div>:<p>This Quiz is available only to accepted competitors.</p>}
+                </div>:<p><SumText en="This Quiz is available only to accepted competitors." zh="仅已正式加入的参赛者可以访问此 Quiz。"/></p>}
               {expired&&<button type="button" className="ios-secondary-button"
                 disabled={working} data-testid="quiz-finalize-expired"
-                onClick={()=>void postAction("/finalize")}>
-                Complete expired Quiz · no prize
-              </button>}
+                onClick={()=>void postAction("/finalize")}> <SumText en="Complete expired Quiz · no prize" zh="结束已超时的 Quiz · 无奖励"/> </button>}
             </>}
             {quiz.status==="completed"&&result&&<>
-              <h3>3. Final, server-recorded verdict</h3>
+              <h3><SumText en="3. Final, server-recorded verdict" zh="3. 服务器记录的最终结果"/></h3>
               <div className="ios-quiz-result" role="status"
                 data-testid="quiz-final-verdict">
-                <strong>{result.outcome==="tie"?"Draw · equal verified scores":
-                  result.outcome==="void_timeout"?"Timed out · no winner":
-                  result.winnerId===quiz.playerUserId?"You won on correct answers":
-                  "Other player won on correct answers"}</strong>
+                <strong>{result.outcome==="tie"?t("Draw · equal verified scores"):
+                  result.outcome==="void_timeout"?t("Timed out · no winner"):
+                  result.winnerId===quiz.playerUserId?t("You won on correct answers"):
+                  t("Other player won on correct answers")}</strong>
                 {result.scores.map(s=><p key={s.userId}>
-                  {s.userId===quiz.playerUserId?"You":"Other player"}:
-                  {" "+(s.score===null?"Not submitted":s.score+" / 3 correct")}
+                  {s.userId===quiz.playerUserId?t("You"):t("Other player")}:
+                  {" "+(s.score===null?t("Not submitted"):s.score+" / 3 correct")}
                 </p>)}
               </div>
               <div className="ios-quiz-rules">
-                <strong>Answer-key verification</strong>
+                <strong><SumText en="Answer-key verification" zh="答案核验"/></strong>
                 <p>Committed under {result.bankVersion}; answer key is now
                   revealed only after finalization.</p>
                 {result.correctAnswers.map((a,i)=>{
@@ -420,14 +427,14 @@ function QuizDuelSession({id}:{id?:string}){
                   </p>;
                 })}
                 <details className="ios-quiz-receipt" data-testid="quiz-verified-answer-receipt">
-                  <summary>Recalculate the result · sealed answer receipts</summary>
+                  <summary><SumText en="Recalculate the result · sealed answer receipts" zh="重新核算结果 · 已封存的答题回执"/></summary>
                   {result.scores.map(s=><div key={s.userId}>
-                    <strong>{s.userId===quiz.playerUserId?"Your choices":"Other player's choices"}</strong>
+                    <strong>{s.userId===quiz.playerUserId?t("Your choices"):t("Other player's choices")}</strong>
                     <p>{s.answers?s.answers.map((answer,i)=>
-                      "Q"+(i+1)+": option "+(answer+1)).join(" · "):"No submitted answers"}</p>
+                      "Q"+(i+1)+": option "+(answer+1)).join(" · "):t("No submitted answers")}</p>
                     <code>{s.answerHash??"No answer hash"}</code>
                   </div>)}
-                  <p>Final Quiz resolution SHA-256:</p>
+                  <p><SumText en="Final Quiz resolution SHA-256:" zh="最终 Quiz 结果 SHA-256："/></p>
                   <code>{quiz.resolutionHash??"Not available"}</code>
                 </details>
                 <small>No credits were transferred. Receipt version: {result.version}.
@@ -435,18 +442,16 @@ function QuizDuelSession({id}:{id?:string}){
                   revealed correct answers. The final hash identifies the
                   exact server-recorded outcome.</small>
               </div>
-              <IosAction href="/app/quiz" secondary>Start another free Quiz</IosAction>
+              <IosAction href="/app/quiz" secondary><SumText en="Start another free Quiz" zh="再开始一局免费 Quiz"/></IosAction>
             </>}
             <button type="button" className="ios-secondary-button"
-              onClick={()=>{window.location.reload();}} disabled={working}>
-              Refresh server receipt
-            </button>
-          </div>:<p>Quiz unavailable.</p>}
+              onClick={()=>{window.location.reload();}} disabled={working}> <SumText en="Refresh server receipt" zh="刷新服务器回执"/> </button>
+          </div>:<p><SumText en="Quiz unavailable." zh="Quiz 暂不可用。"/></p>}
       </section>}
     {error&&<p className="ios-message ios-message--error" role="alert">{error}</p>}
     {status==="authenticated"&&<section className="ios-quiz-runtime"
       aria-label="AI provider routing">
-      <strong>How this Quiz uses AI</strong>
+      <strong><SumText en="How this Quiz uses AI" zh="此 Quiz 如何使用 AI"/></strong>
       <p>Speech: {runtime?
         runtime.speech.configured
           ?"Server transcription via "+runtime.speech.providerId+" API"

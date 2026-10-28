@@ -15,6 +15,8 @@ import "./ios-quest-journey.css";
 import "./quest-starter-controls.css";
 import "./auth-portal.css";
 import "./ios-visual-reliability.css";
+import "./sum-language.css";
+import "./sum-client-desktop.css";
 
 export const metadata: Metadata = {
   applicationName: "Summon World",

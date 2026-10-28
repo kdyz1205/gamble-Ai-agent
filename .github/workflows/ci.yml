@@ -68,6 +68,8 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
+          npx playwright test tests/e2e-gambles/desktop-locale-regressions.spec.ts --workers=1 --output=output/desktop-locale-tests --reporter=list
+          node scripts/qa-desktop-language.cjs
           npx playwright test tests/e2e-gambles/visual-p1-regressions.spec.ts tests/e2e-gambles/community-p1-regressions.spec.ts --workers=1
           npm run test:production:http
           SUM_IOS_URL=http://localhost:3000 SUM_IOS_QUICK=1 node scripts/qa-ios-full-app.cjs
@@ -82,6 +84,8 @@ jobs:
           path: |
             playwright-report
             output/ios-full-app
+            output/desktop-locale-tests
+            output/desktop-language
             tests/e2e-gambles/.playwright
             /tmp/summoner-browser-server.log
           if-no-files-found: ignore
