@@ -9,12 +9,13 @@ import { IosAction, IosFrame, IosIcon, IosEmpty } from "./IOSAppUI";
 import { useCreditBalance, useQuest } from "./IOSAppData";
 import { AuthInvitation } from "./IOSPersonalScreens";
 import {questStatusText,proofTypeText} from "@/lib/interface-language";
+import {questRoute} from "@/lib/quest-navigation-context";
 
 /**
  * A real accepted-rules checkpoint INSIDE the mobile Web App. The backend,
  * not this component, owns participant seats, stake debit and challenge state.
  */
-export default function IOSQuestJoin({ id }: { id?: string }) {
+export default function IOSQuestJoin({ id,returnTo }: { id?: string;returnTo?:string }) {
   const language=useSumLanguage();
   const { quest, loading, error, refresh } = useQuest(id);
   const { data: session, status: sessionStatus } = useSession();
@@ -54,7 +55,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
     setAcceptError("");
     try {
       await api.acceptChallenge(quest.id);
-      router.replace("/app/quest?id=" + encodeURIComponent(quest.id));
+      router.replace(questRoute("quest",quest.id,returnTo));
     } catch (caught) {
       setAcceptError(caught instanceof Error ? caught.message :
         translated(language,"This invitation could not be accepted","无法接受这份邀请。"));
@@ -64,7 +65,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
     }
   }
 
-  return <IosFrame title="Quest Invitation" eyebrow="READ · AGREE · ENTER" back="/app/discover">
+  return <IosFrame title="Quest Invitation" eyebrow="READ · AGREE · ENTER" back={id?questRoute("quest",id,returnTo):"/app/discover"} navigationContext={returnTo}>
     {!id ? <IosEmpty heading={translated(language,"Invitation link missing.","邀请链接缺失。")}
       description={translated(language,"Use an actual invitation from a friend to enter the Quest.","请使用朋友发来的真实 Quest 邀请链接。")}
       action={translated(language,"Discover Quests","发现 Quest")} href="/app/discover"/> :
@@ -98,7 +99,7 @@ export default function IOSQuestJoin({ id }: { id?: string }) {
         <p>{quest.rules || quest.proposition || translated(language,"No specific rules were supplied. Do not accept until the host clarifies the Quest.","发起者尚未提供明确规则。请在规则澄清前不要接受这份 Quest。")}</p>
       </div>
       {isCreator ? <p className="ios-message"><SumText en="You created this Quest. Send this invitation to the other player." zh="这是你创建的 Quest，请将邀请发送给另一位玩家。"/></p> :
-       isAccepted ? <IosAction href={"/app/quest?id=" + encodeURIComponent(quest.id)}><SumText en="Continue your accepted Quest" zh="继续已加入的 Quest"/></IosAction> :
+       isAccepted ? <IosAction href={questRoute("quest",quest.id,returnTo)}><SumText en="Continue your accepted Quest" zh="继续已加入的 Quest"/></IosAction> :
        quest.status !== "open" ? <p className="ios-message"><SumText en="This Quest is" zh="当前 Quest 状态："/> {questStatusText(language,quest.status)}<SumText en=" and cannot accept a new player." zh="；暂不接受新玩家。"/></p> :
        sessionStatus !== "authenticated" ? <AuthInvitation
           title={translated(language,"Sign in to join this Quest.","登录后加入 Quest。")}

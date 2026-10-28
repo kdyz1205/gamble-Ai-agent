@@ -1,11 +1,12 @@
 import IOSFullApp from "@/components/ios/IOSFullApp";
+import {questReturnTo} from "@/lib/quest-navigation-context";
 
 const mobilePages = ["splash","onboarding","today","discover","create","join","quest-created","quest","evidence-add","quest-complete","picos","quiz","story","profile","achievements","evidence","stats","community","settings"] as const;
 import {notFound} from "next/navigation";
 
 type PageProps = {
   params: Promise<{view:string}>;
-  searchParams: Promise<{id?:string;seed?:string}>;
+  searchParams: Promise<{id?:string;seed?:string;returnTo?:string}>;
 };
 
 export async function generateStaticParams() {
@@ -19,5 +20,6 @@ export default async function MobilePage({params,searchParams}:PageProps) {
   return <IOSFullApp view={view}
     questId={typeof search.id==="string"?search.id:undefined}
     seed={typeof search.seed==="string"?search.seed:undefined}
+    returnTo={questReturnTo(search.returnTo)??undefined}
   />;
 }

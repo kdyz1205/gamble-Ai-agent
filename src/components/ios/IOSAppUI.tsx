@@ -7,6 +7,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import {SumLanguageSwitch,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import {questStatusText} from "@/lib/interface-language";
 import {appDestinations,activeAppDestination} from "@/lib/app-navigation";
+import {questReturnTo,questRoute} from "@/lib/quest-navigation-context";
 
 type IconName = "home" | "discover" | "create" | "pico" | "user" | "back" | "arrow"
   | "star" | "camera" | "check" | "spark" | "calendar" | "shield" | "chart"
@@ -104,10 +105,10 @@ const appEyebrows:Record<string,string>={
   "REAL PEOPLE · REAL PROGRESS":"真实玩家 · 真实进度",
 };
 
-export function IosBottomNav() {
+export function IosBottomNav({contextPath}:{contextPath?:string}={}) {
   const language=useSumLanguage();
   const path = usePathname();
-  const active=activeAppDestination(path);
+  const active=activeAppDestination((questReturnTo(contextPath)||path).split("#")[0]);
   return <nav className="ios-tabbar" aria-label="iOS app navigation" data-testid="ios-tabbar">
     {tabs.map(({ href,label,zh,icon }) => <Link key={href} href={href}
       aria-label={translated(language,label,zh)} aria-current={active === href ? "page" : undefined}
@@ -118,9 +119,9 @@ export function IosBottomNav() {
   </nav>;
 }
 
-export function IosFrame({ title, eyebrow, back, children, hero, withNav = true, tone = "" }: {
+export function IosFrame({ title, eyebrow, back, children, hero, withNav = true, tone = "",navigationContext }: {
   title?: string; eyebrow?: string; back?: string; children: ReactNode;
-  hero?: ReactNode; withNav?: boolean; tone?: string;
+  hero?: ReactNode; withNav?: boolean; tone?: string; navigationContext?:string;
 }) {
   const language=useSumLanguage();
   const path=usePathname();
@@ -158,7 +159,7 @@ export function IosFrame({ title, eyebrow, back, children, hero, withNav = true,
     {!title&&<div className="ios-intro-language"><SumLanguageSwitch surface="app"/></div>}
     {hero}
     <main className="ios-main" id="ios-app-main">{children}</main>
-    {withNav && <IosBottomNav/>}
+    {withNav && <IosBottomNav contextPath={navigationContext}/>}
   </div>;
 }
 
@@ -172,15 +173,16 @@ export function IosEmpty({ image = visuals.mascot, heading, description, action,
   </section>;
 }
 
-export function IosQuestCard({ challenge, compact = false }: {
+export function IosQuestCard({ challenge, compact = false,returnTo }: {
   challenge: {id:string; title:string; status:string; type:string; stake:number; deadline:string|null; _count?:{evidence:number}};
-  compact?: boolean;
+  compact?: boolean; returnTo?:string;
 }) {
   const language=useSumLanguage();
   const status = questStatusText(language,challenge.status);
   const image = /fit|sport|run|walk|badminton/i.test(challenge.title+" "+challenge.type) ? visuals.move
     : /draw|paint|art|creat|music/i.test(challenge.title+" "+challenge.type) ? visuals.create : visuals.grow;
-  return <Link href={"/app/quest?id="+encodeURIComponent(challenge.id)}
+  const origin=questReturnTo(returnTo)?.split("#")[0];
+  return <Link id={"quest-"+challenge.id} href={questRoute("quest",challenge.id,origin?origin+"#quest-"+challenge.id:undefined)}
     className={"ios-quest-card" + (compact ? " ios-quest-card--small" : "")} data-testid="ios-quest-card">
     <span className="ios-quest-card__cover"><IosArt src={image}/></span>
     <span className="ios-quest-card__body"><strong>{challenge.title}</strong>
