@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const sharp = require("sharp");
+const ts = require("typescript");
 
 const expected = {
   mascot: ["pico-companion.webp", 392, 337],
@@ -35,8 +36,26 @@ async function main() {
     assert.deepEqual([meta.width, meta.height], [width, height], name + " has incorrect crop dimensions");
     assert.ok(fs.statSync(file).size < 110_000, name + " exceeds lightweight image budget");
   }
-  assert.match(screens, /<IOSLoadingCards label="Finding public Quests/, "Quest loading placeholders");
-  assert.match(screens, /<IOSLoadingCards label="Loading public community activity/, "Community loading placeholders");
+  // Inspect the actual loading component's label, allowing reviewed localized
+  // expressions without relaxing the requirement to render live placeholders.
+  const parsed = ts.createSourceFile("IOSExploreScreens.tsx", screens, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const loadingLabels = [];
+  const visit = node => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(parsed) === "IOSLoadingCards") {
+      const label = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.text === "label");
+      if (label?.initializer && ts.isJsxExpression(label.initializer)) {
+        const expression = label.initializer.expression;
+        if (expression && ts.isCallExpression(expression) && expression.expression.getText(parsed) === "translated") {
+          const [, en, zh] = expression.arguments;
+          if (en && zh && ts.isStringLiteral(en) && ts.isStringLiteral(zh)) loadingLabels.push([en.text, zh.text]);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  assert.ok(loadingLabels.some(([en,zh]) => en === "Finding public Quests…" && zh === "正在寻找公开 Quest…"), "Quest loading placeholders remain bilingual");
+  assert.ok(loadingLabels.some(([en,zh]) => en === "Loading public community activity…" && zh === "正在读取公开社区动态…"), "Community loading placeholders remain bilingual");
   assert.ok(style.includes(".ios-loading-card__thumbnail"), "Real placeholder styling");
   console.log("IOS_CLEAN_ART_PASS", Object.keys(expected).length, "assets, 2 live loading states");
 }

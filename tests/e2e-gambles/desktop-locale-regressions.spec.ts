@@ -138,6 +138,28 @@ test('switching interface language preserves the creation draft and login form f
   expect(writes).toEqual([]);
 });
 
+test('unresolved discovery and community reads display real bilingual loading placeholders', async ({ page }) => {
+  await english(page);
+  for(const item of [
+    {route:'/app/discover',pattern:'**/api/challenges?**',en:'Finding public Quests…',zh:'正在寻找公开 Quest…',body:{challenges:[],total:0}},
+    {route:'/app/community',pattern:'**/api/feed?**',en:'Loading public community activity…',zh:'正在读取公开社区动态…',body:{events:[],total:0}},
+  ]) {
+    let release:()=>void=()=>{};
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    await page.route(item.pattern,async route=>{await held;await route.fulfill({json:item.body});});
+    try {
+      await page.goto(BASE+item.route);
+      await page.getByTestId('sum-lang-en').click();
+      await expect(page.getByRole('status',{name:item.en,exact:true})).toBeVisible();
+      await page.getByTestId('sum-lang-zh').click();
+      await expect(page.getByRole('status',{name:item.zh,exact:true})).toBeVisible();
+      release();
+      await expect(page.locator('.ios-loading-list')).toHaveCount(0);
+      await expect(page.locator('.ios-empty')).toBeVisible();
+    } finally {release();await page.unroute(item.pattern);}
+  }
+});
+
 test('language switches preserve original public Quest content and status', async ({ page }) => {
   await english(page);
   const id='locale_read_fixture_20261027';
