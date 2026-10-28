@@ -18,10 +18,12 @@ test('recording start failure releases camera and microphone before showing retr
  await mediaFixture(page);await proofFixture(page);await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:/^Record video/}).click();await page.evaluate(()=>{window.__sumMediaProbe.failStart=true;});
  await page.getByRole('button',{name:/Start recording/}).click();await expect(page.locator('.proof-camp').getByRole('alert')).toContainText('Synthetic start failure');await allTracksStopped(page);await expect(page.getByRole('button',{name:/^Record video/})).toBeVisible();
 });
-test('normal stop saves one playable browser recording and repeated stop does not throw',async({page})=>{
+test('normal stop saves one playable browser recording and repeated stop does not throw',async({page},testInfo)=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));const session=await mediaFixture(page);await proofFixture(page);await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.getByRole('button',{name:/^Record video/}).click();await page.getByRole('button',{name:/Start recording/}).click();await page.waitForTimeout(500);
  await page.getByRole('button',{name:/Stop & save/}).evaluate(el=>{el.dispatchEvent(new MouseEvent('click',{bubbles:true}));el.dispatchEvent(new MouseEvent('click',{bubbles:true}));});await expect(page.getByRole('button',{name:'Re-record',exact:true})).toBeVisible();await allTracksStopped(page);
- await expect.poll(()=>page.locator('.proof-camp video[controls]').evaluate((v:HTMLVideoElement)=>v.readyState)).toBeGreaterThanOrEqual(1);expect(errors).toEqual([]);expect(session.writes).toEqual([]);
+ await expect.poll(()=>page.locator('.proof-camp video[controls]').evaluate((v:HTMLVideoElement)=>v.readyState)).toBeGreaterThanOrEqual(1);
+ const player=page.locator('.proof-camp video[controls]');await player.evaluate(async(v:HTMLVideoElement)=>{v.muted=true;await v.play();});await expect.poll(()=>player.evaluate((v:HTMLVideoElement)=>v.currentTime)).toBeGreaterThan(0);
+ await page.screenshot({path:testInfo.outputPath('synthetic-video-stop-save.png'),fullPage:true});expect(errors).toEqual([]);expect(session.writes).toEqual([]);
 });
 test('typing a proof description first does not hide the file and camera choices',async({page})=>{
  await mediaFixture(page);await proofFixture(page,'photo');await page.goto(BASE+'/app/evidence-add?id='+MEDIA_QUEST);await page.locator('.proof-camp textarea').fill('A description before choosing the proof');

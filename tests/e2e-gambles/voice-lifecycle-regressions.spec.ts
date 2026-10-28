@@ -17,9 +17,10 @@ test('a late microphone permission result is stopped after leaving the composer'
  await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);await leaveAppPage(page);await page.evaluate(()=>window.__sumMediaProbe.release());
  await allTracksStopped(page);expect(transcription).toBe(0);expect(await page.evaluate(()=>window.__sumMediaProbe.recorders.length)).toBe(0);
 });
-test('pending microphone permission can be cancelled and a stale result cannot start recording',async({page})=>{
+test('pending microphone permission can be cancelled and a stale result cannot start recording',async({page},testInfo)=>{
  await mediaFixture(page,{hold:true});await page.goto(BASE+'/app/create');await page.getByRole('button',{name:'Describe quest by voice',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.__sumMediaProbe.streams.length)).toBe(1);
+ await page.screenshot({path:testInfo.outputPath('synthetic-voice-permission-cancel.png'),fullPage:true});
  await page.getByRole('button',{name:'Cancel voice recording',exact:true}).click();await page.evaluate(()=>window.__sumMediaProbe.release());await allTracksStopped(page);
  await expect(page.getByRole('button',{name:'Describe quest by voice',exact:true})).toBeEnabled();expect(await page.evaluate(()=>window.__sumMediaProbe.recorders.length)).toBe(0);
 });
