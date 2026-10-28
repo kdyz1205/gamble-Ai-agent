@@ -33,3 +33,28 @@ Primary documentation consulted:
 ## Remaining scope
 
 This patch fixes first-message input/terms across client navigation, not a complete persisted AI conversation. Returning to a reviewed conversation, restoring after reload/closing, cross-device drafts, and in-flight business reconciliation need their own state/consent design. The UI must not describe this as a cloud-saved draft. No API, database schema, dependencies, identity/auth backend, credit ledger, referee or settlement behavior changes.
+
+## Additional live navigation defect, independently reproduced
+
+The preceding recording correction passed its media regressions on the formal
+site, but the untouched profile-to-ledger check failed. The retained trace shows
+the fixed Create dock intercepting the link and target movement during smooth
+scroll retries. A separate anonymous browser comparison at 320px/390px called
+`scrollIntoView({block:'end'})`: the baseline settled with the link covered by
+the dock (hit-test false). Injecting only scoped root scroll policy and scroll
+padding/margins placed the same link above the dock with a stable hit target.
+The original click could eventually work in that probe; this does not erase the
+intermittent failed production trace.
+
+The production patch changes only programmatic scroll targeting while `.ios-app`
+is mounted. It adds four checks for both mobile widths, out-of-app policy
+restoration, and reduced-motion/keyboard access. The existing ledger navigation
+test is unchanged. The original 36 pure tests and 16 input cases are retained.
+
+Primary documentation checked for this mechanism:
+- https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-padding-bottom
+- https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-behavior
+
+Trace, before/after injected CSS measurements and screenshots are in
+`research-os-coordination/SUM_DRAFT_CONTINUITY_20261028/profile-scroll-probe.json`.
+No account, balance, route destination, API, authentication or ledger logic changes.

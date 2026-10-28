@@ -10,3 +10,9 @@
 .ios-app--night .ios-discovery-recovery h2{color:#f6f0ff;}
 .ios-app--night .ios-discovery-recovery button{background:#453957;color:#f6f0ff;border-color:#a191b5;}
 .ios-app--night :is(.ios-discovery-count,.ios-onboard-position){color:#ddd3eb;}
+
+/* App chrome is fixed. Navigation/focus scrolling must not animate a target
+   underneath the dock between pointer-down and pointer-up. Wheel/touch scrolling
+   is unchanged; marketing pages retain their existing smooth-scroll policy. */
+html:has(.ios-app),body:has(.ios-app){scroll-behavior:auto!important;scroll-padding-block:90px 110px;}
+.ios-app .ios-menu__row{scroll-margin-block:90px 110px;}
