@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {advanceComposerOwner,type ComposerOwner} from '../src/lib/composer-owner';
+let checks=0;
+const initial:ComposerOwner={accountId:undefined,generation:0};
+assert.equal(advanceComposerOwner(initial,undefined),initial);checks++;
+let state=advanceComposerOwner(initial,null);assert.deepEqual(state,{accountId:null,generation:0});checks++;
+const guest=state;state=advanceComposerOwner(state,'A');assert.deepEqual(state,{accountId:'A',generation:0});checks++;
+assert.equal(advanceComposerOwner(state,'A'),state);checks++;
+assert.equal(advanceComposerOwner(state,undefined),state);checks++;
+state=advanceComposerOwner(state,'B');assert.deepEqual(state,{accountId:'B',generation:1});checks++;
+state=advanceComposerOwner(state,'A');assert.deepEqual(state,{accountId:'A',generation:2});checks++;
+state=advanceComposerOwner(state,null);assert.deepEqual(state,{accountId:null,generation:3});checks++;
+state=advanceComposerOwner(state,'B');assert.deepEqual(state,{accountId:'B',generation:3});checks++;
+assert.deepEqual(guest,{accountId:null,generation:0});checks++;
+assert.deepEqual(advanceComposerOwner(initial,'A'),{accountId:'A',generation:0});checks++;
+console.log(`COMPOSER_OWNER_PASS ${checks} guest login, same-user refresh, logout and A-B-A isolation checks`);
