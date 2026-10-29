@@ -8,6 +8,7 @@ import {IosFrame,IosAction} from "./IOSAppUI";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import {QuizVoiceInput} from "./QuizVoiceInput";
 import QuizArenaStage from "./QuizArenaStage";
+import InvitationShare from "./InvitationShare";
 import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 
 const TOPICS=[
@@ -94,7 +95,7 @@ function QuizDuelSession({id}:{id?:string}){
   const [loading,setLoading]=useState(Boolean(id));
   const [working,setWorking]=useState(false);
   const [error,setError]=useState("");
-  const [copied,setCopied]=useState(false);
+
   const requestKey=useRef<string|null>(null);
   const autoExpireAttempt=useRef<string|null>(null);
   const topicWasChosen=useRef(false);
@@ -212,15 +213,6 @@ function QuizDuelSession({id}:{id?:string}){
       if(mounted.current)setWorking(false);
     }
   },[id,pilotEnabled,status]);
-  const share=async()=>{
-    if(!id)return;
-    const url=window.location.origin+"/app/quiz?id="+encodeURIComponent(id);
-    try{
-      if(navigator.share)await navigator.share({title:"Join my free Quiz",url});
-      else await navigator.clipboard.writeText(url);
-      setCopied(true);
-    }catch{setCopied(false);}
-  };
 
   const expired=Boolean(quiz?.expiresAt&&Date.parse(quiz.expiresAt)<=now);
   // The authenticated client's own expired room can self-finalize through the
@@ -347,10 +339,8 @@ function QuizDuelSession({id}:{id?:string}){
               <h3><SumText en="1. Invite a friend" zh="1. 邀请朋友"/></h3>
               <p>Share this URL. The other person needs their own account,
                 accepts the Quiz, then both receive the same three questions.</p>
-              <button type="button" className="ios-secondary-button"
-                onClick={()=>void share()} data-testid="quiz-share-invite">
-                {copied?t("Invitation shared or copied"):t("Share invitation link")}
-              </button>
+              <InvitationShare id={quiz.id} kind="quiz" title={quiz.title}
+                label="Share invitation link" labelZh="分享邀请链接" testId="quiz-share-invite"/>
               {quiz.isCreator&&<button type="button" className="ios-secondary-button"
                 data-testid="quiz-cancel-invite" disabled={working}
                 onClick={()=>void postAction("/cancel")}> <SumText en="Cancel unaccepted invitation · 0 credit refund needed" zh="取消尚未被接受的邀请 · 无需退还积分"/> </button>}

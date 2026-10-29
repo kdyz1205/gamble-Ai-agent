@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import {SumText} from "@/components/locale/SumLanguage";
 import {PROFESSIONS,type ProfessionId} from "@/lib/summons/profession-system";
 import {creatureRenderFor} from "@/lib/summons/creature-render-manifest";
 import type {CreatureStage} from "@/lib/summons/creature-visual-bible";
@@ -59,15 +60,15 @@ export default function OwnedFamiliarCollection({
 }){
   return <section className="ios-section" aria-label="Your Owned Familiars">
     <div className="ios-section__heading">
-      <div><small>ACCOUNT-BOUND COLLECTION</small><h2>My owned Familiars</h2></div>
+      <div><small><SumText en="ACCOUNT-BOUND COLLECTION" zh="账号的真实收藏"/></small><h2><SumText en="My owned Familiars" zh="我拥有的召唤兽"/></h2></div>
     </div>
-    {!signedIn?<p>Sign in to see your own persistent Summon collection.</p>:
-      loading?<p role="status">Checking your actual Summon inventory...</p>:
-      error?<p role="alert">Owned items could not be verified. No inventory is being guessed.</p>:
+    {!signedIn?<p><SumText en="Sign in to see your own persistent Summon collection." zh="登录后查看属于你的永久召唤兽收藏。"/></p>:
+      loading?<p role="status"><SumText en="Checking your actual Summon inventory..." zh="正在读取真实的召唤兽收藏…"/></p>:
+      error?<p role="alert"><SumText en="Owned items could not be verified. No inventory is being guessed." zh="暂时无法核实收藏，不会推测或伪造你拥有的物品。"/></p>:
       !inventory||!inventory.available?
-        <p>Persistent free Summon inventory is not active here. Collection ownership is unknown, not zero.</p>:
+        <p><SumText en="Persistent free Summon inventory is not active here. Collection ownership is unknown, not zero." zh="此服务器尚未启用永久召唤兽收藏。当前拥有数量未知，不是零。"/></p>:
       inventory.items.length===0?
-        <p>No owned free-ticket Summons have been recorded for your account under this system yet. Pico is shown separately.</p>:
+        <p><SumText en="No owned free-ticket Summons have been recorded for your account under this system yet. Pico is shown separately." zh="当前系统尚未记录此账号通过免费票据获得的召唤兽，Pico 单独展示。"/></p>:
       <div style={{display:"grid",gap:12}}>
         <p><strong>{inventory.items.length} confirmed items in the loaded record.</strong>
           {inventory.totalKnown?" All recorded items fit in this view.":" Showing only the latest 50; older owned items may exist."}
@@ -81,8 +82,7 @@ export default function OwnedFamiliarCollection({
           </div>)}
         </div>
       </div>}
-    <small>Only existing owner-scoped database records from verified free-ticket draws appear here.
-      Career Atlas demonstrations, local random previews and unearned 3D prototypes do not enter your collection.
-      This view does not spend tickets or change item ownership.</small>
+    <small><SumText en="Only existing owner-scoped database records from verified free-ticket draws appear here. Career Atlas demonstrations, local random previews and unearned 3D prototypes do not enter your collection. This view does not spend tickets or change item ownership."
+      zh="这里只显示经核实、属于当前账号的免费票据抽取记录。图鉴演示、随机预览和未获得的 3D 原型不会加入收藏，查看页面也不会花费票据或改变归属。"/></small>
   </section>;
 }
