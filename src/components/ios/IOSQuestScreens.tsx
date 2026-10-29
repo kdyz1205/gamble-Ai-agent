@@ -12,6 +12,7 @@ import {useQuest} from "./IOSAppData";
 import {AuthInvitation} from "./IOSPersonalScreens";
 import IOSQuestJudgment from "./IOSQuestJudgment";
 import EvidenceUploader from "@/components/EvidenceUploader";
+import InvitationShare from "./InvitationShare";
 import {questReturnTo,questRoute} from "@/lib/quest-navigation-context";
 import {proofTypeText} from "@/lib/interface-language";
 
@@ -57,18 +58,9 @@ export function QuestDetailScreen({id,returnTo}: {id?:string;returnTo?:string}) 
   const language=useSumLanguage();
   const {quest,loading,error,refresh}=useQuest(id);
   const {data:session}=useSession();
-  const [copied,setCopied]=useState(false);
+
   const me=session?.user?.id;
   const creator=Boolean(me&&quest?.creatorId===me);
-  const share=async()=>{
-    if(!quest)return;
-    const url=window.location.origin+"/app/join?id="+encodeURIComponent(quest.id);
-    try{
-      if(navigator.share) await navigator.share({title:quest.title,url});
-      else await navigator.clipboard.writeText(url);
-      setCopied(true);
-    }catch {setCopied(false);}
-  };
   return <IosFrame title="Quest Detail" eyebrow="YOUR REAL ADVENTURE" back={questReturnTo(returnTo)||"/app/today"} navigationContext={returnTo}>
     {!quest?<QuestMissing loading={loading} error={error} id={id} retry={refresh} returnTo={returnTo}/>:
     <>
@@ -97,7 +89,7 @@ export function QuestDetailScreen({id,returnTo}: {id?:string;returnTo?:string}) 
       {quest.status==="open"&&<div className="ios-actions">
         {creator?<p className="ios-message"><SumText en="Waiting for another person to join your Quest." zh="正在等待另一位玩家加入 Quest。"/></p>:
           <IosAction href={questRoute("join",quest.id,returnTo)}><SumText en="Review and join Quest" zh="查看规则并加入 Quest"/></IosAction>}
-        <button type="button" className="ios-secondary-button" onClick={()=>void share()}>{copied?translated(language,"Shared or copied","已分享或复制"):translated(language,"Share invitation","分享邀请")}</button>
+        <InvitationShare id={quest.id} kind="quest" title={quest.title} label="Share invitation" labelZh="分享邀请"/>
       </div>}
       {quest.arbiter==="quiz-curated-mcq-v1"
         ? <IOSQuestJudgment quest={quest} userId={me} onUpdated={refresh}/>
