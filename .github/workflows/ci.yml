@@ -84,6 +84,7 @@ jobs:
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
           npx playwright test tests/e2e-gambles/journey-context-regressions.spec.ts tests/e2e-gambles/proof-interface-regressions.spec.ts --workers=1 --output=output/journey-proof-tests --reporter=list
           node scripts/qa-journey-proof.cjs
+          npx playwright test tests/e2e-gambles/invitation-recovery-regressions.spec.ts tests/e2e-gambles/companion-guidance-regressions.spec.ts --workers=1 --output=output/interaction-tests --reporter=list
           npx playwright test tests/e2e-gambles/voice-lifecycle-regressions.spec.ts tests/e2e-gambles/proof-camera-regressions.spec.ts --workers=1 --output=output/media-lifecycle-tests --reporter=list
           npx playwright test tests/e2e-gambles/session-proof-boundaries.spec.ts --workers=1 --output=output/session-proof-tests --reporter=list
           npx playwright test tests/e2e-gambles/composer-input-continuity.spec.ts tests/e2e-gambles/app-scroll-target-regressions.spec.ts --workers=1 --output=output/composer-input-continuity --reporter=list
@@ -111,6 +112,7 @@ jobs:
             output/composer-navigation
             output/session-proof-tests
             output/media-lifecycle-tests
+            output/interaction-tests
             output/journey-proof-tests
             output/journey-proof
             output/security

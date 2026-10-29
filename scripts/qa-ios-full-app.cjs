@@ -221,11 +221,14 @@ for(const width of widths){
       await page.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
       await page.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
       assert((await page.locator(".ios-pico-hero").innerText()).includes("Pico, your first Summon"));
+      await page.getByTestId("companion-records").locator("summary").click();
       const rank=await page.getByRole("region",{name:"Your Quest Milestone Level"}).innerText();
       assert(rank.includes("Sign in to see milestones"),"no fabricated guest level");
       const recorded=await page.getByRole("region",{name:"Recorded Profession XP"}).innerText();
       assert(recorded.includes("Sign in to check server-verified Quest XP"),"no guest XP leak");
       assert(recorded.includes("not lifetime XP"),"historical XP is incomplete");
+      await page.getByTestId("companion-records").locator("summary").click();
+      await page.getByTestId("companion-concepts").locator("summary").click();
       const atlas=page.getByRole("group",{name:"Twelve concept creature families"});
       assert.equal(await atlas.getByRole("button").count(),12,"All 12 family species must be browseable");
       const originals=page.locator(".ios-creature-atlas-card img.ios-creature-art");
@@ -368,6 +371,7 @@ for(const width of widths){
         const mobile=await compact.newPage();
         await mobile.goto(base+"/app/picos",{waitUntil:"domcontentloaded"});
         await mobile.locator('[data-hydrated=true]').waitFor({state:"visible",timeout:45000});
+        await mobile.getByTestId("companion-concepts").locator("summary").click();
         const tabs=mobile.getByRole("tablist",{name:"Summon design chapters"});
         const widths=[];
         for(const name of ["Career Atlas","Summon Preview","Fusion Lab","XP Guide"]){
