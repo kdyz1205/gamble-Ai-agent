@@ -15,6 +15,7 @@ function InvitationShareState({id,kind,title,label,labelZh,testId}:Props){
   const [outcome,setOutcome]=useState<"idle"|"copied"|"shared">("idle");
   const [pending,setPending]=useState(false),[manual,setManual]=useState(false),[url,setUrl]=useState("");
   const owner=useRef(false),mounted=useRef(true),trigger=useRef<HTMLButtonElement>(null);
+  const origin=useRef<HTMLButtonElement|null>(null);
   const dialog=useRef<HTMLDialogElement>(null),field=useRef<HTMLInputElement>(null);const heading=useId(),fieldId=useId();
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{
@@ -22,16 +23,20 @@ function InvitationShareState({id,kind,title,label,labelZh,testId}:Props){
     if(manual&&!node.open){node.showModal();field.current?.focus();field.current?.select();}
     else if(!manual&&node.open)node.close();
   },[manual]);
-  function close(){setManual(false);trigger.current?.focus();}
-  async function send(copyOnly=false){
+  function close(){setManual(false);(origin.current??trigger.current)?.focus();}
+  async function send(copyOnly=false,source?:HTMLButtonElement){
     if(owner.current||!mounted.current||!/^[-A-Za-z0-9_]{1,128}$/.test(id))return;
-    owner.current=true;setPending(true);setOutcome("idle");
+    owner.current=true;if(source)origin.current=source;setPending(true);setOutcome("idle");
     const link=new URL('/app/'+(kind==="quest"?"join":"quiz")+'?'+new URLSearchParams({id}),window.location.origin).href;
     setUrl(link);
     try{
       if(!copyOnly&&typeof navigator.share==="function"){
         try{await navigator.share({title,url:link});if(mounted.current)setOutcome("shared");return;}
-        catch(error){if((error as {name?:string})?.name==="AbortError")return;}
+        catch(error){
+          // The platform intentionally conflates cancellation and no available
+          // target. Do not auto-copy; the explicit copy action remains usable.
+          if((error as {name?:string})?.name==="AbortError")return;
+        }
       }
       if(!mounted.current)return;
       try{
@@ -43,11 +48,13 @@ function InvitationShareState({id,kind,title,label,labelZh,testId}:Props){
   }
   return <div className="ios-invitation-share">
     <button ref={trigger} type="button" className="ios-secondary-button" data-testid={testId}
-      disabled={pending} aria-label={t(label,labelZh)} aria-busy={pending} onClick={()=>void send()}>
+      disabled={pending} aria-label={t(label,labelZh)} aria-busy={pending} onClick={event=>void send(false,event.currentTarget)}>
       {pending?t("Opening share options…","正在打开分享选项…"):t(label,labelZh)}
     </button>
+    <button className="ios-invitation-share__copy" type="button" disabled={pending}
+      onClick={event=>void send(true,event.currentTarget)}>{t("Copy invitation link","复制邀请链接")}</button>
     <p role="status" aria-live="polite" data-testid="invitation-share-status" className="ios-invitation-share__status">
-      {outcome==="copied"?t("Invitation link copied.","邀请链接已复制。"):outcome==="shared"?t("Share action completed.","分享操作已完成。"):""}
+      {outcome==="copied"?t("Invitation link copied.","邀请链接已复制。"):outcome==="shared"?t("Handed to system sharing.","已交给系统分享。"):""}
     </p>
     <dialog ref={dialog} className="ios-invitation-dialog" aria-labelledby={heading} onCancel={close} onClose={close}>
       <h2 id={heading}>{t("Invitation link","邀请链接")}</h2>

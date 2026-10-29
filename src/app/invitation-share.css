@@ -15,3 +15,8 @@
 .ios-app--night .ios-invitation-dialog{background:#302942;color:#f8f2ff;border-color:#9080a8;}
 .ios-app--night .ios-invitation-dialog input{background:#463a5b;color:#fff;border-color:#a593c3;}
 .ios-app--night .ios-invitation-dialog .ios-invitation-dialog__hint{color:#d1c5e1;}
+
+.ios-invitation-share__copy{min-height:44px;padding:8px 12px;border:0;background:transparent;color:#5b4481;font:inherit;font-size:13px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+.ios-invitation-share__copy:focus-visible{outline:3px solid #8b71e6;outline-offset:2px;border-radius:8px;}
+.ios-invitation-share__copy:disabled{opacity:.55;cursor:wait;}
+.ios-app--night .ios-invitation-share__copy{color:#e2d4fa;}

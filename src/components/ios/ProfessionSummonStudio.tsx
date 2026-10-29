@@ -139,7 +139,7 @@ export default function ProfessionSummonStudio(){
         onClick={()=>setActiveChapter(chapter.id)}>{translated(language,chapter.label,chapterZh[chapter.id])}</button>)}
     </div>
 
-    {activeChapter==="career"&&<div className="ios-summon-lab" role="tabpanel"
+    {activeChapter==="career"&&<div className="ios-summon-lab" role="tabpanel" tabIndex={0}
       id="summon-panel-career" aria-labelledby="summon-tab-career">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">01 · CHOOSE A PROFESSION</span>
@@ -234,7 +234,7 @@ export default function ProfessionSummonStudio(){
       </div>
     </div>}
 
-    {activeChapter==="summon"&&<div className="ios-summon-lab" role="tabpanel"
+    {activeChapter==="summon"&&<div className="ios-summon-lab" role="tabpanel" tabIndex={0}
       id="summon-panel-summon" aria-labelledby="summon-tab-summon">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">02 · A CHANCE TO SUMMON</span>
@@ -279,7 +279,7 @@ export default function ProfessionSummonStudio(){
         Nothing persists to your account and no Summon is granted.</p>
     </div>}
 
-    {activeChapter==="fusion"&&<div className="ios-summon-lab" role="tabpanel"
+    {activeChapter==="fusion"&&<div className="ios-summon-lab" role="tabpanel" tabIndex={0}
       id="summon-panel-fusion" aria-labelledby="summon-tab-fusion">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">03 · COMBINE TWO LINEAGES</span>
@@ -311,7 +311,7 @@ export default function ProfessionSummonStudio(){
         crests, not finished 3D models or owned inventory.</p>
     </div>}
 
-    {activeChapter==="progress"&&<div className="ios-summon-lab" role="tabpanel"
+    {activeChapter==="progress"&&<div className="ios-summon-lab" role="tabpanel" tabIndex={0}
       id="summon-panel-progress" aria-labelledby="summon-tab-progress">
       <div className="ios-summon-lab__title">
         <span className="ios-overline">04 · REAL BATTLES → FUTURE GROWTH</span>
