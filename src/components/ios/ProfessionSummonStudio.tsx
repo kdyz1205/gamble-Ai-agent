@@ -2,6 +2,7 @@
 
 import {useRef,useState,type CSSProperties} from "react";
 import Image from "next/image";
+import {useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import dynamic from "next/dynamic";
 import {getCreatureBlockout} from "@/lib/summons/creature-model-manifest";
 import {IosAction} from "./IOSAppUI";
@@ -53,6 +54,8 @@ function CreaturePortrait({id,stage,context}:{
  * No credit, stake, DB, inventory, or settlement mutations occur here.
  */
 export default function ProfessionSummonStudio(){
+  const language=useSumLanguage();
+  const chapterZh={career:"职业图鉴",summon:"召唤预览",fusion:"融合演示",progress:"成长说明"} as const;
   const [primary,setPrimary]=useState<ProfessionId>("athletics");
   const [occupation,setOccupation]=useState("badminton");
   const [secondary,setSecondary]=useState<ProfessionId>("software");
@@ -126,9 +129,14 @@ export default function ProfessionSummonStudio(){
       {CHAPTERS.map(chapter=><button key={chapter.id} type="button"
         role="tab" id={"summon-tab-"+chapter.id}
         aria-controls={"summon-panel-"+chapter.id}
-        aria-selected={activeChapter===chapter.id}
+        aria-selected={activeChapter===chapter.id} tabIndex={activeChapter===chapter.id?0:-1}
         className={"ios-summon-chapter"+(activeChapter===chapter.id?" is-selected":"")}
-        onClick={()=>setActiveChapter(chapter.id)}>{chapter.label}</button>)}
+        onKeyDown={event=>{
+          const index=CHAPTERS.findIndex(item=>item.id===chapter.id);
+          const next=event.key==="ArrowRight"?(index+1)%CHAPTERS.length:event.key==="ArrowLeft"?(index+CHAPTERS.length-1)%CHAPTERS.length:event.key==="Home"?0:event.key==="End"?CHAPTERS.length-1:null;
+          if(next===null)return;event.preventDefault();const target=CHAPTERS[next].id;setActiveChapter(target);document.getElementById("summon-tab-"+target)?.focus();
+        }}
+        onClick={()=>setActiveChapter(chapter.id)}>{translated(language,chapter.label,chapterZh[chapter.id])}</button>)}
     </div>
 
     {activeChapter==="career"&&<div className="ios-summon-lab" role="tabpanel"

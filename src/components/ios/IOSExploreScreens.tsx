@@ -128,8 +128,18 @@ export function PicosScreen() {
   const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
   const recordedXp=pico.progression?.verifiedProfessionXp;
   const tickets=pico.progression?.summonTickets;
+  const recordsRef=useRef<HTMLDetailsElement>(null),conceptsRef=useRef<HTMLDetailsElement>(null);
+  useEffect(()=>{
+    const reveal=()=>{
+      const target=window.location.hash==="#recorded-progress"?recordsRef.current:
+        window.location.hash==="#career-concepts"?conceptsRef.current:null;
+      if(target){target.open=true;requestAnimationFrame(()=>target.scrollIntoView({block:"start"}));}
+    };
+    reveal();window.addEventListener("hashchange",reveal);
+    return()=>window.removeEventListener("hashchange",reveal);
+  },[]);
   return <IosFrame title="Familiars" eyebrow="COMPANIONS FOR REAL QUESTS">
-    <section className="ios-pico-hero">
+    <section className="ios-pico-hero ios-pico-hero--focused">
       <div className="ios-pico-hero__glow"><IosArt src={visuals.mascot} alt="Pico, your first Quest guide"/></div>
       <span className="ios-overline"><SumText en="YOUR STARTING GUIDE" zh="你的初始伙伴"/></span>
       <h1><SumText en="Pico, your first Summon" zh="Pico，你的第一位召唤兽"/></h1><p><SumText en="Every player begins with Pico. Your own profession paths grow from real adventures." zh="每位玩家都从 Pico 开始。完成真实的冒险，逐步解锁不同职业方向。"/></p>
@@ -144,6 +154,29 @@ export function PicosScreen() {
       </p>
     </section>
 
+    <section className="ios-companion-next" aria-label={translated(language,"Pico next steps","Pico 的下一步")}>
+      <div><span className="ios-overline"><SumText en="START WITH A REAL ACTION" zh="从真实行动开始"/></span>
+        <h2><SumText en="What would you like to do?" zh="你想先做什么？"/></h2>
+        <p><SumText en="Pico helps you agree on a clear challenge. Your collection and recorded progress stay separate from concept previews." zh="Pico 帮你约定清晰的挑战。真实收藏和已记录进度，与概念预览分别展示。"/></p></div>
+      <IosAction href="/app/create"><SumText en="Create a Quest with Pico" zh="和 Pico 创建 Quest"/></IosAction>
+      <IosAction href="/app/story" secondary><SumText en="Try Pico's story · local preview" zh="体验 Pico 剧情 · 本地演示"/></IosAction>
+    </section>
+    <nav className="ios-companion-sections" aria-label={translated(language,"Companion sections","召唤兽页面分区")}>
+      <a href="#your-collection"><SumText en="Your collection" zh="你的收藏"/></a>
+      <a href="#recorded-progress" onClick={()=>{if(recordsRef.current)recordsRef.current.open=true;}}><SumText en="Recorded progress" zh="已记录进度"/></a>
+      <a href="#career-concepts" onClick={()=>{if(conceptsRef.current)conceptsRef.current.open=true;}}><SumText en="Concept atlas" zh="概念图鉴"/></a>
+    </nav>
+    <div id="your-collection" className="ios-companion-anchor">
+    <OwnedFamiliarCollection inventory={pico.inventory}
+      signedIn={pico.signedIn} loading={pico.loading} error={pico.error}
+      evolutionAvailable={pico.progression?.evolutionAvailable===true}
+      verifiedProfessionXp={pico.progression?.verifiedProfessionXp?.byProfession??[]}
+      onEvolutionComplete={pico.refresh}/>
+      {pico.error&&<button type="button" className="ios-secondary-button" onClick={pico.refresh}><SumText en="Retry collection" zh="重新读取收藏"/></button>}
+    </div>
+    <details id="recorded-progress" className="ios-companion-disclosure" data-testid="companion-records" ref={recordsRef}>
+      <summary><strong><SumText en="Recorded progress" zh="已记录进度"/></strong><span><SumText en="Quest milestones, XP and ticket receipts" zh="挑战里程碑、经验与票据记录"/></span></summary>
+      <div className="ios-companion-disclosure__body">
     <section className="ios-milestone" aria-label="Your Quest Milestone Level">
       <span className="ios-overline">YOUR QUEST JOURNEY</span>
       {!signedIn?<><h2>Summoner Level</h2><p>Sign in to see milestones from your own real Quests. No pretend XP.</p></>:
@@ -208,22 +241,22 @@ export function PicosScreen() {
     <FreeSummonDrawPanel tickets={tickets??null}
       enabled={pico.progression?.freeDrawsAvailable===true}
       onDrawComplete={pico.refresh}/>
-    <OwnedFamiliarCollection inventory={pico.inventory}
-      signedIn={pico.signedIn} loading={pico.loading} error={pico.error}
-      evolutionAvailable={pico.progression?.evolutionAvailable===true}
-      verifiedProfessionXp={pico.progression?.verifiedProfessionXp?.byProfession??[]}
-      onEvolutionComplete={pico.refresh}/>
-    <ProfessionSummonStudio/>
+      </div>
+    </details>
+    <details id="career-concepts" className="ios-companion-disclosure" data-testid="companion-concepts" ref={conceptsRef}>
+      <summary><strong><SumText en="Explore creature concepts" zh="探索召唤兽概念"/></strong><span><SumText en="Preview only · not owned items or earned rewards" zh="仅供预览 · 不代表已拥有或已获得奖励"/></span></summary>
+      <div className="ios-companion-disclosure__body"><ProfessionSummonStudio/></div>
+    </details>
 
     <section className="ios-section">
-      <div className="ios-section__heading"><div><small>PICO IS HERE NOW</small><h2>How Pico helps</h2></div></div>
+      <div className="ios-section__heading"><div><small><SumText en="PICO IS HERE NOW" zh="PICO 在这里陪你"/></small><h2><SumText en="How Pico helps" zh="Pico 能帮你什么"/></h2></div></div>
       <div className="ios-pico-moods" role="group" aria-label="Pico role">
         {picoStates.map(s=><button type="button" key={s.id} aria-pressed={role===s.id}
           className={"ios-pico-mood"+(role===s.id?" is-selected":"")} onClick={()=>setRole(s.id)}>
-          <IosArt src={s.image} alt=""/><span>{s.label}</span>
+          <IosArt src={s.image} alt=""/><span>{translated(language,s.label,({guide:"引导",clarify:"澄清",review:"审核"} as const)[s.id])}</span>
         </button>)}
       </div>
-      <p className="ios-pico-explanation" aria-live="polite">{active.copy}</p>
+      <p className="ios-pico-explanation" aria-live="polite">{translated(language,active.copy,({guide:"告诉 Pico 你想实现的挑战。",clarify:"Pico 帮助双方把规则说清楚，再共同确认。",review:"证据审核必须依据双方实际接受的规则。"} as const)[active.id])}</p>
     </section>
     <section className="ios-pico-note"><IosArt src={visuals.mascotHappy} alt=""/>
       <p><strong>Progress comes from real action</strong> Future Familiars may get new expressions and stories, but their level cannot change AI judgment, evidence requirements or credit outcomes.</p>
