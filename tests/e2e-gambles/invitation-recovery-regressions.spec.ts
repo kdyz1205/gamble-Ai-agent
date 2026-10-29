@@ -35,7 +35,10 @@ test('a late share result does not label a different signed-in account as succes
 });
 for(const width of [320,390])test(`manual invitation stays usable at ${width}px and when language switches`,async({page},testInfo)=>{
  await page.setViewportSize({width,height:844});await setup(page);await page.getByTestId('sum-lang-zh').click();await page.getByRole('button',{name:'分享邀请',exact:true}).click();const dialog=page.getByRole('dialog',{name:'邀请链接',exact:true});await expect(dialog).toBeVisible();await expect(dialog.getByRole('textbox',{name:'邀请网址',exact:true})).toHaveValue(BASE+'/app/join?id='+ID);
- expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1&&el.getBoundingClientRect().right<=innerWidth)).toBe(true);await page.screenshot({path:testInfo.outputPath(`invite-fallback-${width}-zh.png`)});await dialog.getByRole('button',{name:'关闭',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.getByRole('button',{name:'分享邀请',exact:true})).toBeVisible();
+ expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1&&el.getBoundingClientRect().right<=innerWidth)).toBe(true);
+ const selection=await dialog.locator('input').evaluate(el=>{const css=getComputedStyle(el,'::selection');return{foreground:css.color,background:css.backgroundColor,start:el.selectionStart,end:el.selectionEnd,length:el.value.length,scroll:el.scrollLeft};});
+ expect(selection.foreground).toBe('rgb(48, 38, 64)');expect(selection.background).toBe('rgb(234, 223, 255)');expect(selection.start).toBe(0);expect(selection.end).toBe(selection.length);expect(selection.scroll).toBe(0);
+await page.screenshot({path:testInfo.outputPath(`invite-fallback-${width}-zh.png`)});await dialog.getByRole('button',{name:'关闭',exact:true}).click();await expect(dialog).not.toBeVisible();await expect(page.getByRole('button',{name:'分享邀请',exact:true})).toBeVisible();
 });
 
 test('an ambiguous native abort always leaves an explicit manual-copy exit',async({page})=>{

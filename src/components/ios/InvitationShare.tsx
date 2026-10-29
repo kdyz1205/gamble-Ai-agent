@@ -20,7 +20,7 @@ function InvitationShareState({id,kind,title,label,labelZh,testId}:Props){
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   useEffect(()=>{
     const node=dialog.current;if(!node)return;
-    if(manual&&!node.open){node.showModal();field.current?.focus();field.current?.select();}
+    if(manual&&!node.open){node.showModal();field.current?.focus();field.current?.select();if(field.current)field.current.scrollLeft=0;}
     else if(!manual&&node.open)node.close();
   },[manual]);
   function close(){setManual(false);(origin.current??trigger.current)?.focus();}
@@ -60,7 +60,7 @@ function InvitationShareState({id,kind,title,label,labelZh,testId}:Props){
       <h2 id={heading}>{t("Invitation link","邀请链接")}</h2>
       <p>{t("Sharing or clipboard access is unavailable. Copy this link manually and send it to your friend.","暂时无法使用系统分享或剪贴板。请手动复制链接，再发送给朋友。")}</p>
       <label htmlFor={fieldId}>{t("Invitation URL","邀请网址")}</label>
-      <input id={fieldId} ref={field} type="url" readOnly value={url} onFocus={event=>event.currentTarget.select()}/>
+      <input id={fieldId} ref={field} type="url" readOnly value={url} onFocus={event=>{event.currentTarget.select();event.currentTarget.scrollLeft=0;}}/>
       <p className="ios-invitation-dialog__hint">{t("Your friend still needs their own account and must accept the actual rules. Sharing does not create a player or change credits.","朋友仍须使用自己的账号，并接受实际规则。分享不会自动加入玩家或变动积分。")}</p>
       <div className="ios-invitation-dialog__actions">
         <button className="ios-secondary-button" type="button" disabled={pending} onClick={()=>void send(true)}>{t("Try copying again","再次尝试复制")}</button>

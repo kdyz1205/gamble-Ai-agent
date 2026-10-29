@@ -20,3 +20,7 @@
 .ios-invitation-share__copy:focus-visible{outline:3px solid #8b71e6;outline-offset:2px;border-radius:8px;}
 .ios-invitation-share__copy:disabled{opacity:.55;cursor:wait;}
 .ios-app--night .ios-invitation-share__copy{color:#e2d4fa;}
+
+/* Selection is the recovery action: keep the complete URL selected while its
+   visible start and text remain legible in both light and dark appearance. */
+.ios-invitation-dialog input::selection{background:#eadfff;color:#302640;}
