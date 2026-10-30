@@ -73,6 +73,9 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
+      - name: Verify free Summon browser mutation boundaries without business writes
+        run: node scripts/test-summon-boundary.cjs
+
       - name: Verify real browser creation and cancellation against production build
         env:
           AI_ENABLED: "false"
