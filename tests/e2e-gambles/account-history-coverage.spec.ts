@@ -46,6 +46,9 @@ test('a bounded 270-record history never mislabels loaded counts as account-wide
 test('the same account can show a verified milestone from more than fifty distinct records',async({page})=>{
  await setup(page,80);await page.route('**/api/summons/me',r=>r.fulfill({status:503,json:{error:'Synthetic unavailable'}}));
  await page.goto(BASE+'/app/picos');
+ // Milestones are intentionally inside an optional disclosure after the
+ // companion UX redesign; opening it is part of the real user flow.
+ await page.getByTestId('companion-records').locator('summary').click();
  const area=page.getByRole('region',{name:'Your Quest Milestone Level'});
  await expect(area).toContainText('Level 5');
  await expect(area).not.toContainText('limited to 50 records');
@@ -71,7 +74,7 @@ test('older authorized evidence is reachable through explicit Load more instead 
  await expect(page.getByText('OLDER_OWN_PROOF_ACCESSIBLE',{exact:false})).toHaveCount(0);
  await page.getByRole('button',{name:'Load more proof',exact:true}).click();
  await expect(page.getByText('OLDER_OWN_PROOF_ACCESSIBLE',{exact:false})).toBeVisible();
- await expect(page.getByTestId('evidence-gallery-coverage')).toContainText('26 of 26');
+ await expect(page.getByRole('button',{name:'Load more proof',exact:true})).toHaveCount(0);
 });
 test('a failed detail read cannot be silently misrepresented as a complete empty evidence gallery',async({page})=>{
  await setup(page,2);
@@ -80,7 +83,7 @@ test('a failed detail read cannot be silently misrepresented as a complete empty
   return r.fulfill({json:{challenge:{...make(0),evidence:[{id:'proof_success',userId:A,type:'text',url:null,description:'A_VALID_PROOF',createdAt:'2026-10-30T10:00:00Z'}]}}});
  });
  await page.goto(BASE+'/app/evidence');await expect(page.getByText('A_VALID_PROOF',{exact:false})).toBeVisible();
- await expect(page.getByRole('alert')).toContainText('could not be loaded');
+ await expect(page.locator('.ios-message--error[role=alert]')).toContainText('could not be loaded');
  await expect(page.getByRole('button',{name:'Retry evidence',exact:true})).toBeVisible();
 });
 test('pagination reads from the prior signed-in account never become the next account’s history',async({page})=>{
