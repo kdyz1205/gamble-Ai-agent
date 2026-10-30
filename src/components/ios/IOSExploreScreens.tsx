@@ -4,6 +4,7 @@ import { useEffect,useMemo,useRef,useState } from "react";
 import {useSearchParams} from "next/navigation";
 import {discoverySelection,discoveryHref,questRoute} from "@/lib/quest-navigation-context";
 import Link from "next/link";
+import {useSession} from "next-auth/react";
 import {IosAction,IosArt,IosEmpty,IosFrame,IosIcon,IosQuestCard,visuals} from "./IOSAppUI";
 import {SumText,useSumLanguage,translated} from "@/components/locale/SumLanguage";
 import {useOpenQuests,useOwnQuests,usePublicActivity,useStarterPico} from "./IOSAppData";
@@ -120,6 +121,11 @@ const picoStates=[
 ] as const;
 
 export function PicosScreen() {
+  const {data:session}=useSession();
+  return <PicosAccountScreen key={session?.user?.id??"guest"}/>;
+}
+
+function PicosAccountScreen() {
   const language=useSumLanguage();
   const [role,setRole]=useState<(typeof picoStates)[number]["id"]>("guide");
   const active=picoStates.find(s=>s.id===role)||picoStates[0];

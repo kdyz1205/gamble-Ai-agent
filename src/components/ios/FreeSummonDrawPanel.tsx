@@ -1,6 +1,6 @@
 "use client";
 
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {PROFESSIONS,RARITY_ODDS} from "@/lib/summons/profession-system";
 import type {AccountFreeTicketSummary} from "@/lib/summons/ticket-read-contract";
 
@@ -19,6 +19,9 @@ export default function FreeSummonDrawPanel({
   tickets:AccountFreeTicketSummary|null;enabled:boolean;
   onDrawComplete:()=>void;
 }){
+  const mounted=useRef(true);
+  const committing=useRef(false);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const [career,setCareer]=useState("");
   const [occupation,setOccupation]=useState("");
   const [confirm,setConfirm]=useState(false);
@@ -34,7 +37,8 @@ export default function FreeSummonDrawPanel({
     profession?.specialties[0]?.id??"";
 
   const commit=async()=>{
-    if(!chosen||!specialization||busy||!confirm)return;
+    if(!chosen||!specialization||committing.current||!confirm)return;
+    committing.current=true;
     const stable=request??{
       professionId:chosen,occupationId:specialization,
       requestKey:crypto.randomUUID(),
@@ -51,15 +55,17 @@ export default function FreeSummonDrawPanel({
         throw new Error(body.error||"Could not verify free draw receipt");
       }
       if(body.draw.creditsTransferred!==0||!body.draw.receiptId||
-         !body.draw.instanceId)
+         !body.draw.instanceId||body.draw.professionId!==stable.professionId||
+         body.draw.occupationId!==stable.occupationId)
         throw Error("Summon server receipt is incomplete");
+      if(!mounted.current)return;
       setResult(body.draw);setConfirm(false);setRequest(null);
       onDrawComplete();
     }catch(err){
       // Uncertain network responses keep the SAME request key on retry.
       // We must never silently submit a second, spendable draw after a timeout.
-      setError(err instanceof Error?err.message:"Summon receipt could not be verified");
-    }finally{setBusy(false);}
+      if(mounted.current)setError(err instanceof Error?err.message:"Summon receipt could not be verified");
+    }finally{committing.current=false;if(mounted.current)setBusy(false);}
   };
 
   if(!tickets||!enabled)

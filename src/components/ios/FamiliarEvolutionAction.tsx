@@ -1,6 +1,6 @@
 "use client";
 
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {
   nextFamiliarStage,requiredVerifiedXp,type EvolutionStage,
 } from "@/lib/summons/evolution-rules";
@@ -17,6 +17,9 @@ export default function FamiliarEvolutionAction({
   item:OwnedFamiliar;verifiedXp:number|null;
   onEvolutionComplete?:()=>void;
 }){
+  const mounted=useRef(true);
+  const committing=useRef(false);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const [confirm,setConfirm]=useState(false);
   const [pending,setPending]=useState<Pending|null>(null);
   const [busy,setBusy]=useState(false);
@@ -28,7 +31,8 @@ export default function FamiliarEvolutionAction({
   const ready=verifiedXp!==null&&Number.isSafeInteger(verifiedXp)&&
     verifiedXp>=required;
   const onConfirm=async()=>{
-    if(!ready||busy||!confirm||!stage)return;
+    if(!ready||committing.current||!confirm||!stage)return;
+    committing.current=true;
     const request=pending??{requestKey:crypto.randomUUID(),toForm:stage};
     setPending(request);setBusy(true);setError("");
     try{
@@ -48,11 +52,12 @@ export default function FamiliarEvolutionAction({
          body.receipt.rarityUnchanged!==true||
          body.receipt.creditsTransferred!==0)
         throw Error("Evolution response has inconsistent ownership data");
+      if(!mounted.current)return;
       setReceipt(body.receipt);setPending(null);setConfirm(false);
       onEvolutionComplete?.();
     }catch(err){
-      setError(err instanceof Error?err.message:"Evolution receipt is unavailable");
-    }finally{setBusy(false);}
+      if(mounted.current)setError(err instanceof Error?err.message:"Evolution receipt is unavailable");
+    }finally{committing.current=false;if(mounted.current)setBusy(false);}
   };
   return <div style={{display:"grid",gap:6}}>
     <small>
