@@ -87,7 +87,7 @@ export function TodayScreen() {
 export function ProfileScreen() {
   const language=useSumLanguage();
   const {data:session,status}=useSession();
-  const {quests,loading,error,signedIn}=useOwnQuests();
+  const {quests,loading,error,signedIn,total,complete}=useOwnQuests();
   const {credits,loading:creditsLoading,error:creditError}=useCreditBalance();
   const count=quests.filter(q=>q.status==="settled").length;
   const menu=[
@@ -109,13 +109,18 @@ export function ProfileScreen() {
         <SumText en="Your personal Quest record" zh="你的个人 Quest 记录"/>:
         <SumText en="Sign in for your own Quest history" zh="登录后查看你的 Quest 历史"/>}</p>
       {signedIn && <div className="ios-metrics ios-metrics--profile">
-        <div><strong>{loading?"–":count}</strong><span><SumText en="Settled" zh="已结算"/></span></div>
-        <div><strong>{loading?"–":quests.length}</strong><span><SumText en="Quests" zh="Quest"/></span></div>
+        <div><strong>{loading?"–":complete?count:"≥"+count}</strong><span><SumText en="Settled" zh="已结算"/></span></div>
+        <div><strong>{loading?"–":total??"≥"+quests.length}</strong><span><SumText en="Quests" zh="Quest"/></span></div>
         <div><strong>{creditsLoading?"–":credits??"–"}</strong><span><SumText en="Credits" zh="积分"/></span></div>
       </div>}
     </section>
     {!signedIn ? <AuthInvitation/> : <>
       {error && <p role="alert" className="ios-message ios-message--error">{error}</p>}
+      {!loading&&!error&&!complete&&<p role="status" data-testid="quest-history-coverage">
+        {translated(language,"Showing "+quests.length+" of "+(total??"an unverified number of")+" Quest records. Status counts reflect loaded records only.",
+          "目前显示 "+quests.length+" / "+(total??"未知总量")+" 条 Quest。状态数量只统计已加载记录。")}
+        {" "}<Link href="/quests"><SumText en="Open all Quest records" zh="查看全部 Quest 记录"/></Link>
+      </p>}
       {creditError && <p role="alert" className="ios-message ios-message--error">{creditError}</p>}
     </>}
     <section className="ios-menu" aria-label={translated(language,"Your account","你的账号")}>
@@ -147,7 +152,7 @@ const badges=[
 
 export function AchievementsScreen() {
   const language=useSumLanguage();
-  const {quests,loading,error,signedIn}=useOwnQuests();
+  const {quests,loading,error,signedIn,complete}=useOwnQuests();
   const {streak}=useDeviceRituals();
   const countSettled=quests.filter(q=>q.status==="settled").length;
   const evidence=quests.reduce((sum,q)=>sum+(q._count?.evidence||0),0);
@@ -164,12 +169,14 @@ export function AchievementsScreen() {
       messageZh="成就进度根据你的真实 Quest 记录计算。"/>}
     <div className="ios-badge-grid">{badges.map(b=>{
         const achieved=b.name==="Seven-Day Streak" ? streak>=7 :
-          signedIn && !loading && b.check(quests.length,countSettled,evidence);
+          signedIn && !loading && !error && b.check(quests.length,countSettled,evidence);
         return <article key={b.name} className={"ios-badge" + (achieved?" is-earned":"")}>
           <div className="ios-badge__art"><IosArt src={b.art}/><span><IosIcon name={b.icon}/></span></div>
           <h2>{translated(language,b.name,b.zhName)}</h2>
           <p>{translated(language,b.detail,b.zhDetail)}</p>
           <small>{achieved?translated(language,"Earned from your record","按真实记录解锁"):
+            signedIn&&(!complete||Boolean(error)||loading)?
+              translated(language,"Not yet verified from loaded history","现有记录尚无法核实"):
             signedIn?translated(language,"Not earned","尚未解锁"):
               translated(language,"Locked · sign in","未解锁 · 请先登录")}</small>
         </article>;
@@ -179,7 +186,8 @@ export function AchievementsScreen() {
 
 export function EvidenceScreen() {
   const language=useSumLanguage();
-  const {evidence,loading,error,signedIn}=useEvidenceGallery();
+  const {evidence,loading,error,signedIn,hasMoreEvidence,evidenceCoverage,
+    loadMore,complete,refresh}=useEvidenceGallery();
   const [filter,setFilter]=useState<"all"|"photo"|"video"|"text">("all");
   const selected=evidence.filter(x=>filter==="all"||x.type===filter||(filter==="photo"&&x.type==="image"));
   const filterLabels=[
@@ -210,9 +218,23 @@ export function EvidenceScreen() {
         <h2>{translated(language,entry.label,entry.zh)}</h2>
         <p><SumText en="Illustration · no user proof" zh="示意插画 · 非用户证据"/></p>
       </div>)}</div></>:
-    <><EmptyOrError loading={loading} error={error}
-      message={evidence.length===0?"No evidence yet. Open a live Quest to add your first proof.":""}
-      messageZh={evidence.length===0?"尚无证据。打开进行中的 Quest，提交第一份真实证据。":""}/>
+      <><EmptyOrError loading={loading} error={error}
+      message={!loading&&!error&&evidence.length===0&&!hasMoreEvidence&&complete?
+        "No evidence of your own yet. Open a live Quest to add proof.":""}
+      messageZh={!loading&&!error&&evidence.length===0&&!hasMoreEvidence&&complete?
+        "尚未找到你本人提交的证据。打开进行中的 Quest，提交证据。":""}/>
+      {!loading&&(hasMoreEvidence||!complete||Boolean(error))&&<p role="status"
+        className="ios-message" data-testid="evidence-gallery-coverage">
+        {translated(language,
+          "Checked "+evidenceCoverage.checked+" of "+evidenceCoverage.eligible+
+          " loaded Quest rooms with evidence. Only your own submissions are displayed."+
+          (!complete?" Other Quest records may not be loaded.":""),
+          "已检查 "+evidenceCoverage.checked+" / "+evidenceCoverage.eligible+
+          " 个已加载的含证据 Quest；仅展示你本人提交的证据。"+
+          (!complete?" 其他 Quest 记录可能尚未加载。":""))}
+      </p>}
+      {error&&<button type="button" className="ios-secondary-button" onClick={refresh}>
+        <SumText en="Retry evidence" zh="重新读取证据"/></button>}
       <div className="ios-gallery">{selected.map(item=><article className="ios-proof" key={item.id}>
         <div className="ios-proof__visual">
           {item.url && /^https:\/\//i.test(item.url) && ["image","photo"].includes(item.type)
@@ -226,6 +248,13 @@ export function EvidenceScreen() {
           <SumText en="Open record" zh="查看记录"/>
         </Link>
       </article>)}</div>
+      {!loading&&selected.length===0&&evidence.length>0&&<p className="ios-message">
+        <SumText en="No matching proof in the loaded entries. Choose another filter or load more."
+          zh="已加载证据中没有匹配类型。可以切换筛选或加载更多。"/></p>}
+      {hasMoreEvidence&&<button type="button" className="ios-secondary-button" disabled={loading}
+        onClick={loadMore}><SumText en="Load more proof" zh="加载更多证据"/></button>}
+      {!complete&&<IosAction href="/quests" secondary>
+        <SumText en="Browse full Quest history" zh="浏览完整 Quest 历史"/></IosAction>}
     </>}
     <IosAction href="/app/today" secondary><SumText en="See your Quests" zh="查看我的 Quest"/></IosAction>
   </IosFrame>;
@@ -233,7 +262,7 @@ export function EvidenceScreen() {
 
 export function StatsScreen() {
   const language=useSumLanguage();
-  const {quests,loading,error,signedIn}=useOwnQuests();
+  const {quests,loading,error,signedIn,total,complete}=useOwnQuests();
   const {rituals,done,streak}=useDeviceRituals();
   const labels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const zhLabels=["日","一","二","三","四","五","六"];
@@ -252,13 +281,22 @@ export function StatsScreen() {
       detailZh="所有统计均来自你的真实 Quest 记录。"/>:
     <>
       <div className="ios-metrics ios-metrics--large">
-        <div><strong>{loading?"–":quests.length}</strong><span><SumText en="Quests" zh="Quest"/></span></div>
-        <div><strong>{loading?"–":settled}</strong><span><SumText en="Settled" zh="已结算"/></span></div>
-        <div><strong>{loading?"–":open}</strong><span><SumText en="Active" zh="进行中"/></span></div>
+        <div><strong>{loading?"–":total??"≥"+quests.length}</strong><span><SumText en="Quests" zh="Quest"/></span></div>
+        <div><strong>{loading?"–":complete?settled:"≥"+settled}</strong><span><SumText en="Settled" zh="已结算"/></span></div>
+        <div><strong>{loading?"–":complete?open:"≥"+open}</strong><span><SumText en="Active" zh="进行中"/></span></div>
       </div>
       <EmptyOrError loading={loading} error={error}
         message="Your activity chart shows actual Quest creation dates."
         messageZh="活动图表仅显示真实 Quest 的创建日期。"/>
+      {!loading&&!error&&!complete&&<p role="status" className="ios-message"
+        data-testid="quest-history-coverage">
+        {translated(language,
+          "Showing "+quests.length+" of "+(total??"an unverified number of")+
+          " Quest records. Status counts are lower bounds and the week chart includes loaded records only.",
+          "目前显示 "+quests.length+" / "+(total??"未知总量")+
+          " 条 Quest。状态数量只是下限，周图表仅包含已加载记录。")}
+        {" "}<Link href="/quests"><SumText en="Browse full history" zh="浏览完整历史"/></Link>
+      </p>}
       <section className="ios-ritual-progress">
         <div><strong>{done}/{rituals.length}</strong><span>
           <SumText en="Daily check-ins today · on device" zh="今天的打卡 · 仅此设备"/></span></div>

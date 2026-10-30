@@ -16,7 +16,7 @@ const proofStatuses = new Set(["evidence_window_open", "creator_submitted", "opp
 export function TodayScreen() {
   const language=useSumLanguage();
   const { data: session } = useSession();
-  const { quests, loading, error, signedIn, refresh } = useOwnQuests();
+  const { quests, loading, error, signedIn, refresh, complete:historyComplete, total } = useOwnQuests();
   const [authOpen, setAuthOpen] = useState(false);
   const active = quests.filter(q => !terminalStatuses.has(q.status));
   const complete = quests.filter(q => q.status === "settled");
@@ -30,7 +30,7 @@ export function TodayScreen() {
         <span><SumText en="SUM / QUEST HQ" zh="SUM / QUEST 大厅"/></span>
         <span className="ios-command-hud__status">
           <span className="ios-command-hud__status-dot" aria-hidden="true"/>
-          {loading ? translated(language,"Syncing","同步中") : signedIn ? active.length + translated(language," active"," 个进行中") : translated(language,"Guest mode","访客模式")}
+          {loading ? translated(language,"Syncing","同步中") : signedIn ? (historyComplete?String(active.length):"≥"+active.length) + translated(language," active"," 个进行中") : translated(language,"Guest mode","访客模式")}
         </span>
       </div>
       <div className="ios-command-hud__content">
@@ -50,6 +50,13 @@ export function TodayScreen() {
       </Link>
     </section>
 
+    {signedIn&&!loading&&!error&&!historyComplete&&<p className="ios-message"
+      role="status" data-testid="quest-history-coverage">
+      {translated(language,"Displaying "+quests.length+" of "+(total??"an unverified number of")+
+        " Quest records. Active count is a lower bound.",
+        "已加载 "+quests.length+" / "+(total??"未知总量")+" 条 Quest；进行中数量仅为下限。")}
+      {" "}<Link href="/quests"><SumText en="All Quest records" zh="全部 Quest 记录"/></Link>
+    </p>}
     <section className="ios-pico-story-entry" aria-label="Play the first Pico chapter"
       data-testid="pico-story-home-entry">
       <div className="ios-pico-story-entry__chapter">
