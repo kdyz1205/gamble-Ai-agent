@@ -42,4 +42,8 @@ assert.deepEqual(deriveQuestMilestoneRank([{id:"",status:"settled"}]),
 assert.deepEqual(deriveQuestMilestoneRank(records(1),0),
   {status:"unknown",reason:"invalid-record"});
 assert.equal(deriveQuestMilestoneRank([{id:"pending",status:"pending_settlement"}]).status,"ready");
-console.log("IOS_QUEST_RANK_TESTS_PASS 16 cases");
+assert.deepEqual(deriveQuestMilestoneRank(records(60)),{status:"unknown",reason:"history-limit"});
+const completeHistory=deriveQuestMilestoneRank(records(60),50,true);
+assert.equal(completeHistory.status,"ready");
+if(completeHistory.status==="ready")assert.equal(completeHistory.settled,60);
+console.log("IOS_QUEST_RANK_TESTS_PASS 18 cases");

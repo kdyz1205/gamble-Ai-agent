@@ -123,9 +123,9 @@ export function PicosScreen() {
   const language=useSumLanguage();
   const [role,setRole]=useState<(typeof picoStates)[number]["id"]>("guide");
   const active=picoStates.find(s=>s.id===role)||picoStates[0];
-  const {quests,loading,error,signedIn}=useOwnQuests();
+  const {quests,loading,error,signedIn,complete,total}=useOwnQuests();
   const pico=useStarterPico();
-  const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests):null;
+  const rank=signedIn&&!loading&&!error?deriveQuestMilestoneRank(quests,50,complete):null;
   const recordedXp=pico.progression?.verifiedProfessionXp;
   const tickets=pico.progression?.summonTickets;
   const recordsRef=useRef<HTMLDetailsElement>(null),conceptsRef=useRef<HTMLDetailsElement>(null);
@@ -182,7 +182,12 @@ export function PicosScreen() {
       {!signedIn?<><h2>Summoner Level</h2><p>Sign in to see milestones from your own real Quests. No pretend XP.</p></>:
       loading?<p role="status">Checking your real Quest records…</p>:
       error?<p role="alert">Your Quest history could not be loaded. Level is unavailable.</p>:
-      rank?.status==="unknown"?<><h2>Level unavailable</h2><p>We need your complete Quest history before calculating a rank. Current results are limited to 50 records.</p></>:
+      rank?.status==="unknown"?<><h2><SumText en="Level unavailable" zh="等级暂不可用"/></h2>
+        <p>{translated(language,
+          "The history is partial: "+quests.length+" of "+(total??"an unknown total")+
+          " Quest records. Open all records before trusting a level.",
+          "历史记录未完全加载：已有 "+quests.length+" / "+(total??"未知总量")+
+          " 条 Quest。请查看完整记录再确认等级。")}</p></>:
       rank?.status==="ready"?<>
         <div className="ios-milestone__heading"><div><h2>Level {rank.level} · {rank.title}</h2>
           <p>{rank.settled} distinct settled Quest{rank.settled===1?"":"s"} in the loaded record.</p></div>

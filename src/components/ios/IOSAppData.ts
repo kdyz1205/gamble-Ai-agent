@@ -13,26 +13,68 @@ function message(error: unknown) {
 
 const emptyQuests:api.ChallengeData[]=[];
 
+// The API provides a trusted total and pagination. A first-50 sample is never
+// an account-wide count. Bound client loading; disclose partial histories.
+const OWNED_QUEST_PAGE=50;
+const OWNED_QUEST_LIMIT=250;
+type OwnedQuestSnapshot={
+  scope:string;quests:api.ChallengeData[];total:number|null;
+  complete:boolean;error:string;
+};
 export function useOwnQuests(enabled=true) {
   const {status,data:session}=useSession();
   const userId=session?.user?.id;
   const [revision,setRevision]=useState(0);
   const refresh=useCallback(()=>setRevision(value=>value+1),[]);
   const scope=enabled&&status==="authenticated"&&userId?JSON.stringify([userId,revision]):null;
-  const [snapshot,setSnapshot]=useState<{scope:string;quests:api.ChallengeData[];error:string}|null>(null);
+  const [snapshot,setSnapshot]=useState<OwnedQuestSnapshot|null>(null);
   const current=scope&&snapshot?.scope===scope?snapshot:null;
   useEffect(()=>{
     if(!scope)return;
     let active=true;
-    api.listChallenges({mine:true,limit:50}).then(data=>{
-      if(active)setSnapshot({scope,quests:data.challenges,error:""});
-    }).catch(error=>{if(active)setSnapshot({scope,quests:[],error:message(error)});});
+    void (async()=>{
+      try{
+        const quests:api.ChallengeData[]=[];
+        const seen=new Set<string>();
+        let total:number|null=null;
+        for(let offset=0;offset<OWNED_QUEST_LIMIT;offset+=OWNED_QUEST_PAGE){
+          const data=await api.listChallenges({mine:true,limit:OWNED_QUEST_PAGE,offset});
+          if(!active)return;
+          if(!Array.isArray(data.challenges)||data.challenges.length>OWNED_QUEST_PAGE)
+            throw Error("Quest history returned an invalid page. Refresh to try again.");
+          // Legacy clients/mocks may lack 'total': preserve loaded records
+          // without claiming completeness, rather than inventing a total.
+          if(total===null){
+            if(!Number.isSafeInteger(data.total)||data.total<0){
+              setSnapshot({scope,quests:data.challenges,total:null,complete:false,error:""});
+              return;
+            }
+            total=data.total;
+          }else if(data.total!==total)
+            throw Error("Quest history changed during paging. Refresh to verify the complete record.");
+          if(offset+data.challenges.length>total)
+            throw Error("Quest history contains more rows than its verified total.");
+          for(const quest of data.challenges){
+            if(!quest||typeof quest.id!=="string"||!quest.id||seen.has(quest.id))
+              throw Error("Quest history contains an invalid or duplicate record. Refresh to verify.");
+            seen.add(quest.id);quests.push(quest);
+          }
+          if(quests.length===total)break;
+          if(data.challenges.length!==OWNED_QUEST_PAGE)
+            throw Error("Quest history returned a shortened page before its verified total.");
+        }
+        if(active)setSnapshot({scope,quests,total,complete:total!==null&&quests.length===total,error:""});
+      }catch(error){
+        if(active)setSnapshot({scope,quests:[],total:null,complete:false,error:message(error)});
+      }
+    })();
     return()=>{active=false;};
   },[scope]);
-  // Gate at render time, before effects run: another identity never receives an
-  // old owner's cached rows, even for a single render during session changes.
-  return {quests:current?.quests??emptyQuests,loading:enabled&&(status==="loading"||Boolean(scope&&!current)),
-    error:current?.error??"",refresh,signedIn:status==="authenticated"&&!!userId,userId,scope};
+  // Gate at render time: no previous identity's page or count is ever shown.
+  const quests=current?.quests??emptyQuests;
+  return {quests,loading:enabled&&(status==="loading"||Boolean(scope&&!current)),
+    error:current?.error??"",total:current?.total??null,complete:current?.complete??false,
+    loaded:quests.length,refresh,signedIn:status==="authenticated"&&!!userId,userId,scope};
 }
 
 export function useOpenQuests(enabled = true) {
@@ -108,27 +150,44 @@ type GalleryEvidence={id:string;type:string;url:string|null;description:string|n
 const emptyEvidence:GalleryEvidence[]=[];
 export function useEvidenceGallery(enabled=true) {
   const mine=useOwnQuests(enabled);
-  const [snapshot,setSnapshot]=useState<{scope:string;evidence:GalleryEvidence[];error:string}|null>(null);
-  const current=mine.scope&&snapshot?.scope===mine.scope&&!mine.loading?snapshot:null;
+  const [detailLimit,setDetailLimit]=useState(20);
+  const loadMore=useCallback(()=>setDetailLimit(value=>Math.min(OWNED_QUEST_LIMIT,value+20)),[]);
+  const candidates=mine.quests.filter(q=>Boolean(q._count?.evidence));
+  const visible=candidates.slice(0,detailLimit);
+  const [snapshot,setSnapshot]=useState<{scope:string;limit:number;evidence:GalleryEvidence[];
+    error:string}|null>(null);
+  const current=mine.scope&&snapshot?.scope===mine.scope&&snapshot.limit===visible.length&&!mine.loading?snapshot:null;
   useEffect(()=>{
     const scope=mine.scope;
-    if(!enabled||!scope||mine.loading||mine.error)return;
+    if(!enabled||!scope||mine.loading||mine.error||!mine.userId)return;
     let active=true;
-    const refs=mine.quests.filter(q=>q._count?.evidence).slice(0,20);
-    if(!refs.length){setSnapshot({scope,evidence:[],error:""});return()=>{active=false;};}
-    // Private evidence still comes only from server-authorized detail reads.
+    const refs=mine.quests.filter(q=>Boolean(q._count?.evidence)).slice(0,detailLimit);
+    if(!refs.length){
+      setSnapshot({scope,limit:0,evidence:[],error:""});
+      return()=>{active=false;};
+    }
+    // The personal gallery must never show an opponent's evidence merely
+    // because the current player can read the shared Quest room.
     Promise.allSettled(refs.map(q=>api.getChallenge(q.id))).then(results=>{
       if(!active)return;
       const rows=results.flatMap(result=>result.status==="fulfilled"?
-        (result.value.challenge.evidence||[]).map(ev=>({id:ev.id,type:ev.type,url:ev.url,description:ev.description,
-          createdAt:ev.createdAt,questId:result.value.challenge.id,questTitle:result.value.challenge.title})):[]);
-      setSnapshot({scope,evidence:rows.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)),
-        error:results.every(x=>x.status==="rejected")?"Your proof could not be loaded. Try again from its private Quest room.":""});
+        (result.value.challenge.evidence||[]).filter(ev=>ev.userId===mine.userId).map(ev=>({
+          id:ev.id,type:ev.type,url:ev.url,description:ev.description,
+          createdAt:ev.createdAt,questId:result.value.challenge.id,questTitle:result.value.challenge.title
+        })):[]);
+      const failures=results.filter(result=>result.status==="rejected").length;
+      setSnapshot({scope,limit:refs.length,
+        evidence:rows.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)),
+        error:failures?failures+" Quest proof reads could not be loaded. Retry to check your full personal record.":""});
     });
     return()=>{active=false;};
-  },[enabled,mine.scope,mine.loading,mine.error,mine.quests]);
+  },[enabled,mine.scope,mine.loading,mine.error,mine.quests,mine.userId,detailLimit]);
   return {...mine,evidence:current?.evidence??emptyEvidence,
-    loading:enabled&&(mine.loading||Boolean(mine.scope&&!current&&!mine.error)),error:current?.error||mine.error};
+    loading:enabled&&(mine.loading||Boolean(mine.scope&&!current&&!mine.error)),
+    error:current?.error||mine.error,
+    evidenceCoverage:{checked:visible.length,eligible:candidates.length},
+    hasMoreEvidence:candidates.length>visible.length,
+    loadMore};
 }
 
 export type StarterPicoEntitlement = {

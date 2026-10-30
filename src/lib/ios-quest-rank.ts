@@ -1,6 +1,6 @@
 /**
  * Read-only Quest milestone levels, not the future server-owned XP economy.
- * The current mine-list endpoint is limited to 50 rows. Do not manufacture
+ * A queried page is not necessarily complete. Do not manufacture
  * an account-wide rank when the queried history may be truncated.
  */
 export type QuestMilestoneRecord = {id: string; status: string};
@@ -20,12 +20,13 @@ export type QuestMilestoneRank =
 
 export function deriveQuestMilestoneRank(
   quests: readonly QuestMilestoneRecord[],
-  queryLimit = 50
+  queryLimit = 50,
+  verifiedComplete = false
 ): QuestMilestoneRank {
   if (!Number.isInteger(queryLimit) || queryLimit < 1) {
     return {status:"unknown",reason:"invalid-record"};
   }
-  if (quests.length >= queryLimit) {
+  if (!verifiedComplete && quests.length >= queryLimit) {
     return {status:"unknown",reason:"history-limit"};
   }
   const ids = new Map<string, string>();
