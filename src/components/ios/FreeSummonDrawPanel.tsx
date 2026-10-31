@@ -37,7 +37,7 @@ export default function FreeSummonDrawPanel({
     profession?.specialties[0]?.id??"";
 
   const commit=async()=>{
-    if(!chosen||!specialization||committing.current||!confirm)return;
+    if((!request&&(!chosen||!specialization))||committing.current||!confirm)return;
     committing.current=true;
     const stable=request??{
       professionId:chosen,occupationId:specialization,
@@ -87,7 +87,14 @@ export default function FreeSummonDrawPanel({
       <p>Next pity counters: Rare {result.rareMissesAfter}/19, Epic {result.epicMissesAfter}/79.</p>
       <p>Actual draw weights: {result.effectiveWeights.map(x=>x.id+":"+x.weight).join(", ")}.</p>
     </div>:null}
-    {available.length===0?<p>No available free career tickets. An earned milestone awaiting issuance cannot be spent.</p>:
+    {request&&confirm?
+      <div role="group" aria-label="Resume unresolved free ticket request" data-testid="summon-pending-retry">
+        <p>{busy?"Checking the original draw request. Do not start a second draw.":"Previous draw result could not be confirmed. Do not start another draw. Retry only the original request for "+(PROFESSIONS.find(p=>p.id===request.professionId)?.name??request.professionId)+"."}</p>
+        <button type="button" disabled={busy} onClick={()=>void commit()}>
+          {busy?"Checking original receipt...":"Retry original draw receipt"}
+        </button>
+      </div>:
+    available.length===0?<p>No available free career tickets. An earned milestone awaiting issuance cannot be spent.</p>:
       <div className="ios-summon-input">
         <label htmlFor="free-summon-career">Career pool</label>
         <select id="free-summon-career" value={chosen}
