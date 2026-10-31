@@ -89,7 +89,7 @@ export default function FreeSummonDrawPanel({
     </div>:null}
     {request&&confirm?
       <div role="group" aria-label="Resume unresolved free ticket request" data-testid="summon-pending-retry">
-        <p>Previous draw result could not be confirmed. Do not start another draw. Retry only the original request for {PROFESSIONS.find(p=>p.id===request.professionId)?.name??request.professionId}.</p>
+        <p>{busy?"Checking the original draw request. Do not start a second draw.":"Previous draw result could not be confirmed. Do not start another draw. Retry only the original request for "+(PROFESSIONS.find(p=>p.id===request.professionId)?.name??request.professionId)+"."}</p>
         <button type="button" disabled={busy} onClick={()=>void commit()}>
           {busy?"Checking original receipt...":"Retry original draw receipt"}
         </button>
