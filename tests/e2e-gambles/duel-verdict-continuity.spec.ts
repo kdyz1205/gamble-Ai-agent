@@ -35,7 +35,9 @@ async function setup(page: Page) {
   }));
 }
 
-test.use({ viewport: { width: 390, height: 844 }, video: "off", channel: "chrome" });
+test.use({ viewport: { width: 390, height: 844 }, video: "off",
+  ...(process.env.CI ? {} : { channel: "chrome" }),
+});
 test.setTimeout(55_000);
 
 test("disputed duel displays proposed result and lets the player accept, without promising credit payout", async ({ page }) => {
