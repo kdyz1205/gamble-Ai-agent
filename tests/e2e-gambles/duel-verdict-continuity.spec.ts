@@ -106,3 +106,40 @@ test("private proof and result stay hidden even if a response contains stale sen
   await expect(page.getByTestId("duel-verdict-review")).toHaveCount(0);
   await expect(page.locator('a[href*="private-video.mp4"]')).toHaveCount(0);
 });
+
+for (const width of [390, 1280]) {
+  test(`critical duel copy stays readable on the dark surface at ${width}px`, async ({ page }, info) => {
+    await setup(page);
+    await page.setViewportSize({ width, height: 844 });
+    await page.route(`**/api/challenges/${ID}`, route => route.fulfill({ json: { challenge: duel("disputed") } }));
+    await page.goto(`${BASE}/challenge/${ID}/versus`);
+    await expect(page.getByRole("heading", { name: "Synthetic badminton duel", exact: true })).toBeVisible();
+    await expect(page.getByTestId("duel-verdict-review")).toBeVisible();
+    const contrast = await page.evaluate(() => {
+      const heading = document.querySelector("h1")!;
+      const surface = heading.closest(".min-h-screen")!;
+      const samples = [heading, ...surface.querySelectorAll(".text-text-secondary")];
+      const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      const rgba = (color: string) => {
+        context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      };
+      const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
+        const v = value / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      }).reduce((total, value, i) => total + value * [0.2126, 0.7152, 0.0722][i], 0);
+      const background = rgba(getComputedStyle(surface).backgroundColor);
+      return samples.map(node => {
+        const color = rgba(getComputedStyle(node).color), alpha = color[3] / 255;
+        const text = color.slice(0, 3).map((v, i) => v * alpha + background[i] * (1 - alpha));
+        const a = luminance(text), b = luminance(background);
+        return { text: node.textContent?.trim().slice(0, 80), ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
+      });
+    });
+    expect(contrast.length).toBeGreaterThan(2);
+    for (const sample of contrast) expect(sample.ratio, `Low-contrast duel copy: ${sample.text}`).toBeGreaterThanOrEqual(7);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await info.attach("duel-copy-contrast", { contentType: "application/json", body: Buffer.from(JSON.stringify(contrast)) });
+    await page.screenshot({ path: info.outputPath(`duel-review-${width}px.png`), fullPage: true });
+  });
+}

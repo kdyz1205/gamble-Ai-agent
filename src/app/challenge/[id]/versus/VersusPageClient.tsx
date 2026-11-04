@@ -15,6 +15,16 @@ import VerdictReviewControls from "@/components/VerdictReviewControls";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
 import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
+// Keep the legacy dark arena readable without changing the bright app theme.
+const DUEL_SURFACE_STYLE = {
+  background: "#06060f",
+  color: "#f1f5f9",
+  "--color-text-primary": "#f1f5f9",
+  "--color-text-secondary": "#d3deed",
+  "--color-text-tertiary": "#c1cde1",
+  "--color-text-muted": "#c1cde1",
+} as React.CSSProperties;
+
 /* ── Helpers ── */
 function evidenceBlobPathname(challengeId: string, filename: string): string {
   const base = filename
@@ -572,7 +582,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   /* ── Auth guard ── */
   if (!uid) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: "#06060f" }}>
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={DUEL_SURFACE_STYLE}>
         <ParticleBackground />
         <motion.div className="relative z-10 space-y-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
@@ -597,7 +607,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   /* ── Loading / Error ── */
   if (err || !challenge) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: "#06060f" }}>
+      <div className="min-h-screen flex flex-col items-center justify-center px-6" style={DUEL_SURFACE_STYLE}>
         <ParticleBackground />
         <motion.div className="relative z-10 text-center space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           {err ? (
@@ -623,7 +633,7 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   const opponentEvidence = proofRestricted ? undefined : challenge.evidence.find(e => e.userId === opponent?.user.id);
 
   return (
-    <div className="min-h-screen relative" style={{ background: "#06060f" }}>
+    <div className="min-h-screen relative" style={DUEL_SURFACE_STYLE}>
       <ParticleBackground />
 
       {/* Ambient glow orbs */}
