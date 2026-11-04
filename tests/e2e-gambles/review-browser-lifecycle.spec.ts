@@ -6,7 +6,7 @@ import { expect, test, type BrowserContext } from "@playwright/test";
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
 test.use({ ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}), video: "off" });
 
-test("player requests review and an independent reviewer refunds actual stakes once through the review portal", async ({ browser }, info) => {
+test("player requests review and an independent reviewer refunds actual stakes once through the VS duel and review portal", async ({ browser }, info) => {
   test.setTimeout(240_000);
   // Reviewer authorization is an explicit local QA fixture, never a cloud role grant.
   expect(["localhost", "127.0.0.1"]).toContain(new URL(BASE).hostname);
@@ -65,7 +65,12 @@ test("player requests review and an independent reviewer refunds actual stakes o
     const judged = await judging;
     expect(judged.status(), await judged.text()).toBe(200);
     expect(await judged.json()).toMatchObject({ judgment: { winnerId: creator.id, method: "rules" }, creditsUsed: 0 });
-    const controls = creator.page.getByTestId("verdict-review-controls");
+    // Exercise the shipped VS route with real isolated DB/API state, not mocked responses.
+    await creator.page.goto(`${BASE}/challenge/${id}/versus`);
+    await expect(creator.page.getByText("Player Decision Required", { exact: true })).toBeVisible();
+    await expect(creator.page.getByRole("heading", { name: /^Proposed winner:/ })).toBeVisible();
+    await expect(creator.page.getByText("Not settled — no reward confirmed")).toBeVisible();
+    const controls = creator.page.getByTestId("duel-verdict-review").getByTestId("verdict-review-controls");
     await controls.getByRole("button", { name: "Request review", exact: true }).click();
     const reason = `Please review the actual check-in proof and refund both players by agreement. ${run}`;
     await controls.getByLabel("What should the reviewer re-check?").fill(reason);
@@ -103,6 +108,10 @@ test("player requests review and an independent reviewer refunds actual stakes o
     expect(final.judgments[0]).toMatchObject({ method: "manual", winnerId: null, reasoning: notes });
     await creator.page.bringToFront();
     await creator.page.reload();
+    await expect(creator.page.getByRole("heading", { name: "Final result: No winner (tie / void)" })).toBeVisible();
+    await expect(creator.page.getByText("Winner reward")).toHaveCount(0);
+    await expect(creator.page.getByTestId("duel-verdict-review")).toHaveCount(0);
+    await creator.page.goto(`${BASE}/challenge/${id}`);
     const receipt = creator.page.getByTestId("result-receipt-card");
     await expect(receipt).toContainText("Quest Settled");
     await expect(receipt).toContainText("Human review");
