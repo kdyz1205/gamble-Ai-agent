@@ -11,6 +11,7 @@ import type { ChallengeDetail } from "@/lib/api-client";
 import { readOracleLlmPrefs } from "@/lib/oracle-prefs";
 import { upload as blobUpload } from "@vercel/blob/client";
 import ParticleBackground from "@/components/ParticleBackground";
+import VerdictReviewControls from "@/components/VerdictReviewControls";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "@/lib/evidence-client";
 import { isTerminalChallenge, JUDGE_POLL_DELAYS, JUDGE_POLL_TIMEOUT_MS, startVisiblePolling } from "@/lib/visible-polling";
 
@@ -34,13 +35,16 @@ const TIER_DESC: Record<1 | 2 | 3, string> = {
 function statusConfig(s: string) {
   const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
     open:      { label: "Awaiting Challenger", color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
+    matched:   { label: "Players Matched", color: "#00d4c8", bg: "rgba(0,212,200,0.1)", border: "rgba(0,212,200,0.25)" },
+    pending_settlement: { label: "Settlement Pending", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
+    disputed:  { label: "Player Decision Required", color: "#f5a623", bg: "rgba(245,166,35,0.1)", border: "rgba(245,166,35,0.25)" },
     live:      { label: "Quest in Progress", color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     judging:   { label: "Familiar Reviewing...", color: "#f5a623", bg: "rgba(245,166,35,0.1)",  border: "rgba(245,166,35,0.25)" },
     settled:   { label: "Quest Settled",     color: "#00e87a", bg: "rgba(0,232,122,0.1)",   border: "rgba(0,232,122,0.25)" },
     cancelled: { label: "Cancelled",          color: "#ff4757", bg: "rgba(255,71,87,0.1)",   border: "rgba(255,71,87,0.25)" },
     draft:     { label: "Draft",              color: "#a78bfa", bg: "rgba(124,92,252,0.1)",  border: "rgba(124,92,252,0.25)" },
   };
-  return map[s] ?? map.draft;
+  return map[s] ?? { ...map.draft, label: `Status: ${s.replace(/_/g, " ")}` };
 }
 
 /* ── TypewriterText ── */
@@ -210,7 +214,7 @@ function PlayerSide({
             </span>
           </div>
 
-          {evidence && (
+          {!proofRestricted && evidence && (
             <motion.div
               className="space-y-1.5"
               initial={{ opacity: 0, y: 8 }}
@@ -318,11 +322,11 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
 
   // Reveal verdict with delay for drama
   useEffect(() => {
-    if (challenge?.status === "settled" && challenge.judgments[0] && !verdictRevealed) {
+    if (!proofRestricted && ["disputed", "pending_settlement", "settled"].includes(challenge?.status ?? "") && challenge?.judgments?.[0] && !verdictRevealed) {
       const timer = setTimeout(() => setVerdictRevealed(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [challenge, verdictRevealed]);
+  }, [challenge, proofRestricted, verdictRevealed]);
 
   const creator = challenge?.participants.find((p) => p.role === "creator");
   const opponent = challenge?.participants.find((p) => p.role === "opponent");
@@ -613,10 +617,10 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
   }
 
   const status = statusConfig(challenge.status);
-  const verdictRow = challenge.judgments?.[0] ?? null;
+  const verdictRow = proofRestricted ? null : (challenge.judgments?.[0] ?? null);
   const manualDecision = verdictRow?.method === "manual";
-  const creatorEvidence = challenge.evidence.find(e => e.userId === creator?.user.id);
-  const opponentEvidence = challenge.evidence.find(e => e.userId === opponent?.user.id);
+  const creatorEvidence = proofRestricted ? undefined : challenge.evidence.find(e => e.userId === creator?.user.id);
+  const opponentEvidence = proofRestricted ? undefined : challenge.evidence.find(e => e.userId === opponent?.user.id);
 
   return (
     <div className="min-h-screen relative" style={{ background: "#06060f" }}>
@@ -1121,7 +1125,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                   </motion.div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-success">{manualDecision ? "Human review" : verdictRow.method === "rules" ? "Rule result" : "Familiar Result"}</p>
                   <h2 className="text-2xl font-black text-text-primary">
-                    Winner: <span className="text-success">@{verdictRow.winner?.username ?? "Tie / Void"}</span>
+                    {challenge.status === "settled" ? (verdictRow.winner ? "Winner: " : "Final result: ") : (verdictRow.winner ? "Proposed winner: " : "Proposed result: ")}
+                    <span className="text-success">{verdictRow.winner ? `@${verdictRow.winner.username}` : "No winner (tie / void)"}</span>
                   </h2>
                 </div>
 
@@ -1169,8 +1174,8 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
                       <path d="M5 12h14M12 5l7 7-7 7" />
                     </svg>
                     <div className="text-center">
-                      <p className="text-[9px] font-bold uppercase text-text-muted">Winner reward</p>
-                      <p className="text-sm font-black text-success">{challenge.stake * 2} cr</p>
+                      <p className="text-[9px] font-bold uppercase text-text-muted">{challenge.status === "settled" ? "Settlement status" : "Credits on hold"}</p>
+                      <p className="text-sm font-black text-success">{challenge.status === "settled" ? "Complete — see credit history" : "Not settled — no reward confirmed"}</p>
                     </div>
                   </motion.div>
                 )}
@@ -1178,6 +1183,20 @@ export default function VersusPageClient({ challengeId }: { challengeId: string 
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Player acceptance / dispute actions for a proposed Familiar result. */}
+        {verdictRow && challenge.status === "disputed" && uid && (
+          <div className="max-w-2xl mx-auto" data-testid="duel-verdict-review">
+            <VerdictReviewControls
+              challenge={challenge}
+              userId={uid}
+              onUpdated={async () => {
+                await refresh();
+                await updateSession?.();
+              }}
+            />
+          </div>
+        )}
 
         {/* ── Bottom Actions ── */}
         <motion.div
