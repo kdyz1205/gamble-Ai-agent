@@ -43,8 +43,8 @@ jobs:
         run: |
           node scripts/test-dependency-policy.cjs
           node scripts/test-dependency-runtime.cjs
-          mkdir -p output/security
-          npm audit --audit-level=low --json > output/security/dependency-audit.json
+          node scripts/test-audit-review.cjs
+          node scripts/audit-reviewed-dependencies.cjs
 
       - run: npx tsx scripts/test-evidence-receipt.ts
 
