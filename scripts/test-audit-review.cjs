@@ -43,7 +43,7 @@ assert(!new modern.Minimatch('src/**/*.tsx').match('outside/private.txt'));check
  try{
   fs.mkdirSync(path.join(dir,'nested'));fs.writeFileSync(path.join(dir,'nested','sample.txt'),'isolated tooling fixture');
   const {glob}=require('glob');
-  assert.deepEqual(await glob('**/*.txt',{cwd:dir}),['nested/sample.txt']);checks++;
+  assert.deepEqual(await glob('**/*.txt',{cwd:dir}),[path.join('nested','sample.txt')]);checks++;
   const cancelled=new AbortController();cancelled.abort(new Error('bounded-tooling-check'));
   await assert.rejects(()=>glob('**/*',{cwd:dir,signal:cancelled.signal}));checks++;
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
