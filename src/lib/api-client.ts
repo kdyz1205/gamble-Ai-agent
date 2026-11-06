@@ -552,10 +552,27 @@ export async function getNearbyUsers(lat: number, lng: number, radius = 10): Pro
 export type ChallengeDetail = ChallengeData;
 
 /* ── Stubs for features not yet wired ── */
-export async function presignEvidenceUpload(_challengeId: string, _filename: string): Promise<{ url: string; pathname: string }> {
+export interface EvidencePresignRequest {
+  challengeId: string;
+  contentType: string;
+  filename: string;
+}
+
+export interface EvidencePresignResponse {
+  configured: boolean;
+  uploadUrl?: string;
+  publicUrl?: string;
+  key?: string;
+  expiresIn?: number;
+  method?: "PUT";
+  headers?: Record<string, string>;
+}
+
+/** The S3 presign endpoint requires all three fields before it can authorize a video upload. */
+export async function presignEvidenceUpload(input: EvidencePresignRequest): Promise<EvidencePresignResponse> {
   return apiFetch(`/uploads/evidence-presign`, {
     method: "POST",
-    body: JSON.stringify({ challengeId: _challengeId, filename: _filename }),
+    body: JSON.stringify(input),
   });
 }
 

@@ -3,7 +3,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SessionProvider } from "next-auth/react";
 import VerdictReviewControls from "../src/components/VerdictReviewControls";
-import type { ChallengeData } from "../src/lib/api-client";
+import { presignEvidenceUpload, type ChallengeData } from "../src/lib/api-client";
 import EvidenceUploader from "../src/components/EvidenceUploader";
 import { mediaProofKind, proofInputError, recordingExtension, recordingMimeType } from "../src/lib/evidence-client";
 
@@ -51,3 +51,41 @@ const spectatorControls = renderToStaticMarkup(createElement(VerdictReviewContro
 assert(!spectatorControls.includes("Accept result"));
 assert(spectatorControls.includes("Only accepted players"));
 console.log("PASS actual consent controls exclude accepted spectators from counts and decisions");
+
+// The VS uploader and /api/uploads/evidence-presign must agree on the actual
+// request object. No network, storage, session or production data is touched.
+async function verifyPresignRequestContract(): Promise<void> {
+const previousFetch = globalThis.fetch;
+const observedUploads: Record<string, unknown>[] = [];
+try {
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, "/api/uploads/evidence-presign");
+    assert.equal(init?.method, "POST");
+    assert.equal(typeof init?.body, "string");
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    observedUploads.push(body);
+    return new Response(JSON.stringify({
+      configured: true,
+      uploadUrl: "https://fixture.invalid/storage-upload",
+      publicUrl: "https://fixture.invalid/video.mov",
+      method: "PUT",
+      headers: { "Content-Type": body.contentType },
+      expiresIn: 300,
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  for (const [filename, contentType] of [["312.mov", "video/quicktime"], ["match.mp4", "video/mp4"]] as const) {
+    const input = { challengeId: "synthetic-only", contentType, filename };
+    const presign = await presignEvidenceUpload(input);
+    assert.equal(presign.configured, true);
+    assert.equal(presign.method, "PUT");
+    assert.equal(presign.headers?.["Content-Type"], contentType);
+    assert.deepEqual(observedUploads.at(-1), input);
+  }
+  assert.equal(observedUploads.length, 2);
+  console.log("PASS S3 presign browser contract: MOV/MP4 include top-level challengeId, contentType, filename");
+} finally {
+  globalThis.fetch = previousFetch;
+}
+
+}
+void verifyPresignRequestContract().catch(error => { console.error(error); process.exitCode = 1; });

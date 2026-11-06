@@ -87,6 +87,7 @@ jobs:
           node -e 'let n=0; (async function check(){try{const r=await fetch("http://localhost:3000/api/auth/session");if(r.ok)return}catch{}if(++n>=60)process.exit(1);setTimeout(check,1000)})()'
           npx playwright test tests/e2e-gambles/journey-context-regressions.spec.ts tests/e2e-gambles/proof-interface-regressions.spec.ts --workers=1 --output=output/journey-proof-tests --reporter=list
           npx playwright test tests/e2e-gambles/duel-verdict-continuity.spec.ts --workers=1 --output=output/duel-verdict-tests --reporter=list
+          node scripts/qa-duel-video-upload.cjs
           node scripts/qa-journey-proof.cjs
           npx playwright test tests/e2e-gambles/invitation-recovery-regressions.spec.ts tests/e2e-gambles/companion-guidance-regressions.spec.ts --workers=1 --output=output/interaction-tests --reporter=list
           npx playwright test tests/e2e-gambles/voice-lifecycle-regressions.spec.ts tests/e2e-gambles/proof-camera-regressions.spec.ts --workers=1 --output=output/media-lifecycle-tests --reporter=list
