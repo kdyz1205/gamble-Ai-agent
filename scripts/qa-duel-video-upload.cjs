@@ -19,7 +19,7 @@ assert(buf.length>1000 && buf.length<80*1024*1024,"Fixture must be a bounded vid
 const ID = "synthetic_site312_" + Date.now();
 const A = "synthetic_creator_312", B = "synthetic_opponent_312";
 const proofURL = "https://fixture.invalid/__synthetic_312_proof__";
-const uploadURL = new URL("/__synthetic_312_upload__", base).href;
+const uploadUrl = new URL("/__synthetic_312_upload__", base).href;
 
 const challenge = {
  id:ID,title:"Video evidence upload for badminton",description:"Synthetic route fixture using a downsampled derivative of user's 312.mov; NOT a real contest",
@@ -78,8 +78,8 @@ const receipts = {date:new Date().toISOString(),testedSource:filename,fixtureSHA
    await page.waitForTimeout(900);
    receipts.message=(await page.locator("body").innerText()).slice(-1400);
    receipts.passed=receipts.presignRequests.length===1&&receipts.uploadBodies.length===1&&receipts.evidenceRows.length===1&&receipts.uploadBodies[0].sha256===expected&&challenge.evidence.length===1&&receipts.unexpectedWrites.length===0&&receipts.pageErrors.length===0;
-   const filename=path.join(root,receipts.passed?"video-upload-pass.png":"video-upload-failure.png");
-   await page.screenshot({path:filename,fullPage:true});receipts.screenshot=filename;
+   const screenshotPath=path.join(root,receipts.passed?"video-upload-pass.png":"video-upload-failure.png");
+   await page.screenshot({path:screenshotPath,fullPage:true});receipts.screenshot=screenshotPath;
    console.log("SITE_VIDEO_UPLOAD_RESULT",JSON.stringify({...receipts,message:receipts.message.slice(-400)},null,2));
    fs.writeFileSync(path.join(root,"upload-result-"+(process.env.SUM_VIDEO_QA_LABEL||"site")+".json"),JSON.stringify(receipts,null,2));
    if(!receipts.passed)process.exitCode=2;
